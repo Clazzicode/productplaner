@@ -1,0 +1,208 @@
+import { format } from "date-fns";
+import { db } from "@/lib/db";
+import { LAYER_LABELS, LAYER_SEQUENCE } from "@/lib/generation/types";
+
+// FR-19: assembled from live data on every render — no snapshot, no manual
+// rebuild. Server component shared by the on-screen and print routes.
+export default async function ExecutiveReport({ initiativeId }: { initiativeId: string }) {
+  const initiative = await db.initiative.findUniqueOrThrow({
+    where: { id: initiativeId },
+    include: {
+      intakeAnswerSet: {
+        include: {
+          capabilities: {
+            orderBy: { order: "asc" },
+            include: { dependsOnEdges: { include: { toCapability: { select: { name: true } } } } },
+          },
+        },
+      },
+      prototype: { include: { layerLocks: true } },
+      syncConnections: true,
+    },
+  });
+  const intake = initiative.intakeAnswerSet!;
+  const prototype = initiative.prototype!;
+
+  const [phases, sprints, releases, storyCount] = await Promise.all([
+    db.artifactLayer.findMany({
+      where: { prototypeId: prototype.id, type: "roadmap_phase" },
+      orderBy: { order: "asc" },
+      include: { children: { where: { type: "feature" }, orderBy: { order: "asc" } } },
+    }),
+    db.sprint.findMany({
+      where: { prototypeId: prototype.id },
+      orderBy: { sprintNumber: "asc" },
+      include: { stories: { select: { points: true } } },
+    }),
+    db.release.findMany({ where: { prototypeId: prototype.id }, orderBy: { order: "asc" } }),
+    db.artifactLayer.count({ where: { prototypeId: prototype.id, type: "story" } }),
+  ]);
+
+  const totalPlanned = sprints.reduce(
+    (n, s) => n + s.stories.reduce((m, st) => m + (st.points ?? 1), 0),
+    0,
+  );
+  const totalCapacity = sprints.reduce((n, s) => n + s.capacityPoints, 0);
+  const lockedCount = prototype.layerLocks.filter((l) => l.state === "locked").length;
+  const jira = initiative.syncConnections.find((c) => c.tool === "jira");
+  const valueRank = { critical: 0, high: 1, medium: 2, low: 3 } as Record<string, number>;
+  const rankedCaps = [...intake.capabilities].sort(
+    (a, b) => (valueRank[a.businessValue] ?? 9) - (valueRank[b.businessValue] ?? 9),
+  );
+  const depCaps = intake.capabilities.filter((c) => c.dependsOnEdges.length > 0);
+
+  return (
+    <article className="mx-auto max-w-3xl">
+      {/* Title */}
+      <header className="border-b-4 border-indigo-600 pb-6">
+        <p className="text-xs font-semibold uppercase tracking-widest text-indigo-600">
+          Executive presentation · generated {format(new Date(), "MMM d, yyyy 'at' h:mm a")}
+        </p>
+        <h1 className="mt-2 text-3xl font-bold">{initiative.name}</h1>
+        <p className="mt-3 text-neutral-600">
+          <strong>Problem:</strong> {intake.problemStatement}
+        </p>
+        <p className="mt-2 text-neutral-600">
+          <strong>Outcome:</strong> {intake.outcomeStatement}
+          {intake.outcomeMetric && (
+            <span className="text-neutral-500"> — measured by {intake.outcomeMetric}</span>
+          )}
+        </p>
+      </header>
+
+      {/* Roadmap */}
+      <Section title="Roadmap">
+        <div className="space-y-3">
+          {phases.map((phase) => (
+            <div key={phase.id} className="rounded-xl border border-neutral-200 p-4">
+              <p className="font-semibold">{phase.title}</p>
+              <p className="mt-1 text-sm text-neutral-500">
+                {phase.children.map((f) => f.title).join(" · ")}
+              </p>
+            </div>
+          ))}
+        </div>
+      </Section>
+
+      {/* Scope */}
+      <Section title="Scope">
+        <p className="text-sm text-neutral-600">
+          <strong>{intake.capabilities.filter((c) => c.isMvp).length}</strong> capabilities in
+          the MVP, <strong>{intake.capabilities.filter((c) => !c.isMvp).length}</strong>{" "}
+          sequenced after — {storyCount} sprint-ready stories in total.
+        </p>
+        <ul className="mt-3 grid gap-1.5 text-sm sm:grid-cols-2">
+          {intake.capabilities.map((c) => (
+            <li key={c.id} className="flex items-center gap-2">
+              <span
+                className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                  c.isMvp ? "bg-indigo-100 text-indigo-700" : "bg-neutral-100 text-neutral-500"
+                }`}
+              >
+                {c.isMvp ? "MVP" : "LATER"}
+              </span>
+              {c.name}
+            </li>
+          ))}
+        </ul>
+      </Section>
+
+      {/* Value */}
+      <Section title="Business value">
+        <ol className="space-y-1 text-sm text-neutral-600">
+          {rankedCaps.slice(0, 5).map((c, i) => (
+            <li key={c.id}>
+              {i + 1}. <strong>{c.name}</strong> — {c.businessValue} value
+            </li>
+          ))}
+        </ol>
+      </Section>
+
+      {/* Delivery */}
+      <Section title="Delivery plan">
+        <div className="grid gap-3 sm:grid-cols-3">
+          <Stat label="Releases" value={String(releases.length)} />
+          <Stat label="Sprints" value={String(sprints.length)} />
+          <Stat
+            label="Capacity utilization"
+            value={`${totalCapacity > 0 ? Math.round((totalPlanned / totalCapacity) * 100) : 0}%`}
+          />
+        </div>
+        <ul className="mt-4 space-y-1.5 text-sm text-neutral-600">
+          {releases.map((r) => (
+            <li key={r.id}>
+              <strong>{r.name}</strong> — ships {format(r.targetDate, "MMMM d, yyyy")}
+            </li>
+          ))}
+        </ul>
+      </Section>
+
+      {/* Dependencies */}
+      {depCaps.length > 0 && (
+        <Section title="Key dependencies">
+          <ul className="space-y-1 text-sm text-neutral-600">
+            {depCaps.map((c) => (
+              <li key={c.id}>
+                <strong>{c.name}</strong> depends on{" "}
+                {c.dependsOnEdges.map((e) => e.toCapability.name).join(", ")}
+              </li>
+            ))}
+          </ul>
+        </Section>
+      )}
+
+      {/* Status */}
+      <Section title="Plan status">
+        <ul className="space-y-1 text-sm text-neutral-600">
+          <li>
+            Waterfall layers locked: <strong>{lockedCount} of {LAYER_SEQUENCE.length}</strong>{" "}
+            ({LAYER_SEQUENCE.filter(
+              (t) => prototype.layerLocks.find((l) => l.layerType === t)?.state === "locked",
+            )
+              .map((t) => LAYER_LABELS[t])
+              .join(", ") || "none yet"})
+          </li>
+          <li>
+            Approved baseline:{" "}
+            <strong>
+              {prototype.approvedAt
+                ? `stored ${format(prototype.approvedAt, "MMM d, yyyy")}`
+                : "not yet approved"}
+            </strong>
+          </li>
+          <li>
+            Execution tool:{" "}
+            <strong>
+              {jira?.status === "connected"
+                ? `Jira connected (demo)${jira.lastSyncedAt ? `, last synced ${format(jira.lastSyncedAt, "MMM d, h:mm a")}` : ""}`
+                : "not connected"}
+            </strong>
+          </li>
+        </ul>
+      </Section>
+
+      <footer className="mt-10 border-t border-neutral-200 pt-4 text-xs text-neutral-400">
+        Generated live from the working prototype — the plan of record lives in the Guided
+        Product Planning Platform. This document is a view, not the source.
+      </footer>
+    </article>
+  );
+}
+
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <section className="mt-8">
+      <h2 className="text-sm font-bold uppercase tracking-widest text-indigo-600">{title}</h2>
+      <div className="mt-3">{children}</div>
+    </section>
+  );
+}
+
+function Stat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-xl border border-neutral-200 p-3 text-center">
+      <p className="text-2xl font-bold">{value}</p>
+      <p className="text-xs font-medium uppercase tracking-wide text-neutral-400">{label}</p>
+    </div>
+  );
+}

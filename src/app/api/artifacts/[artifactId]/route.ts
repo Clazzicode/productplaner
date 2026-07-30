@@ -1,0 +1,28 @@
+import { NextResponse } from "next/server";
+import { jsonError, zodMessage } from "@/lib/api";
+import { db } from "@/lib/db";
+import { assertArtifactEditable, LockedLayerError } from "@/lib/generation/locking";
+import type { ArtifactType } from "@/lib/generation/types";
+import { artifactPatchSchema } from "@/lib/validation/schemas";
+
+export async function PATCH(
+  request: Request,
+  { params }: { params: Promise<{ artifactId: string }> },
+) {
+  const { artifactId } = await params;
+  const parsed = artifactPatchSchema.safeParse(await request.json());
+  if (!parsed.success) return jsonError(zodMessage(parsed.error), 422);
+
+  const artifact = await db.artifactLayer.findUnique({ where: { id: artifactId } });
+  if (!artifact) return jsonError("Artifact not found.", 404);
+
+  try {
+    await assertArtifactEditable(artifact.prototypeId, artifact.type as ArtifactType);
+  } catch (err) {
+    if (err instanceof LockedLayerError) return jsonError(err.message, 409);
+    throw err;
+  }
+
+  await db.artifactLayer.update({ where: { id: artifactId }, data: parsed.data });
+  return NextResponse.json({ ok: true });
+}

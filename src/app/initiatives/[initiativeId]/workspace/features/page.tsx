@@ -1,0 +1,99 @@
+import Link from "next/link";
+import { notFound } from "next/navigation";
+import EditableArtifact from "@/components/workspace/EditableArtifact";
+import TraceBadge from "@/components/workspace/TraceBadge";
+import { db } from "@/lib/db";
+import { traceEntriesFor } from "@/lib/trace";
+import { loadWorkspace } from "@/lib/workspace";
+
+export const dynamic = "force-dynamic";
+
+export default async function FeaturesPage({
+  params,
+}: {
+  params: Promise<{ initiativeId: string }>;
+}) {
+  const { initiativeId } = await params;
+  const ws = await loadWorkspace(initiativeId);
+  if (!ws) notFound();
+  const locked = ws.isLocked("feature_hierarchy");
+
+  const phases = await db.artifactLayer.findMany({
+    where: { prototypeId: ws.prototype.id, type: "roadmap_phase" },
+    orderBy: { order: "asc" },
+    include: {
+      children: {
+        where: { type: "feature" },
+        orderBy: { order: "asc" },
+        include: { children: { where: { type: "epic" }, select: { id: true } } },
+      },
+    },
+  });
+
+  return (
+    <div>
+      <h2 className="text-xl font-bold">Feature hierarchy</h2>
+      <p className="mt-1 text-sm text-neutral-500">
+        One feature per intake capability, grouped by roadmap phase. Waterfall layer 2 of 5.
+      </p>
+
+      <div className="mt-6 space-y-6">
+        {phases.map((phase) => (
+          <section key={phase.id}>
+            <h3 className="text-sm font-semibold uppercase tracking-wide text-indigo-600">
+              {phase.title}
+            </h3>
+            <div className="mt-2 grid gap-3 sm:grid-cols-2">
+              {phase.children.map((feature) => {
+                const cap = feature.sourceCapabilityId
+                  ? ws.capViewById.get(feature.sourceCapabilityId)
+                  : null;
+                return (
+                  <div key={feature.id} className="rounded-xl border border-neutral-200 p-4">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0 flex-1">
+                        <EditableArtifact
+                          artifactId={feature.id}
+                          title={feature.title}
+                          body={feature.body}
+                          locked={locked}
+                        />
+                      </div>
+                      <TraceBadge
+                        note={feature.traceNote}
+                        entries={traceEntriesFor(feature.traceAnswerKeys, ws.intakeView, cap)}
+                      />
+                    </div>
+                    <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-neutral-500">
+                      {cap?.isMvp && (
+                        <span className="rounded-full bg-indigo-100 px-2 py-0.5 font-semibold text-indigo-700">
+                          MVP
+                        </span>
+                      )}
+                      {cap && (
+                        <span>
+                          Effort {cap.effortSize.toUpperCase()} · Value {cap.businessValue}
+                        </span>
+                      )}
+                      <Link
+                        href={`/initiatives/${initiativeId}/workspace/epics`}
+                        className="text-indigo-600 hover:underline"
+                      >
+                        {feature.children.length} epic{feature.children.length === 1 ? "" : "s"} →
+                      </Link>
+                    </div>
+                    {cap && cap.dependsOnNames.length > 0 && (
+                      <p className="mt-2 text-xs text-amber-700">
+                        Depends on: {cap.dependsOnNames.join(", ")}
+                      </p>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+        ))}
+      </div>
+    </div>
+  );
+}

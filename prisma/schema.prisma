@@ -1,0 +1,214 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// SQLite via Prisma: no native enums or scalar lists. All enum-like fields are
+// String columns constrained by TS union types + Zod (src/lib/generation/types.ts,
+// src/lib/validation). JSON payloads are serialized into String columns.
+
+model Organization {
+  id          String       @id @default(cuid())
+  name        String
+  users       User[]
+  initiatives Initiative[]
+  createdAt   DateTime     @default(now())
+}
+
+model User {
+  id             String              @id @default(cuid())
+  organizationId String
+  organization   Organization        @relation(fields: [organizationId], references: [id])
+  name           String
+  email          String              @unique
+  profiles       QualifyingProfile[]
+  initiatives    Initiative[]
+  createdAt      DateTime            @default(now())
+}
+
+model QualifyingProfile {
+  id                String       @id @default(cuid())
+  userId            String
+  user              User         @relation(fields: [userId], references: [id])
+  role              String // senior_pm | product_owner | business_analyst | project_manager | scrum_master | founder_first_timer | executive_stakeholder
+  experienceLevel   String // first_time | some_experience | experienced | expert
+  teamComposition   String // solo | small_team | multiple_teams
+  productType       String // software_product | non_product  (FR-02 gate)
+  executionTool     String // jira | azure_devops | aha | other | none
+  statedMethodology String       @default("hybrid") // hybrid | agile_scrum | waterfall | kanban | not_sure
+  isProductWork     Boolean      @default(true)
+  initiatives       Initiative[]
+  createdAt         DateTime     @default(now())
+}
+
+model Initiative {
+  id                  String             @id @default(cuid())
+  organizationId      String
+  organization        Organization       @relation(fields: [organizationId], references: [id])
+  userId              String
+  user                User               @relation(fields: [userId], references: [id])
+  qualifyingProfileId String?
+  qualifyingProfile   QualifyingProfile? @relation(fields: [qualifyingProfileId], references: [id])
+  name                String
+  description         String             @default("")
+  methodology         String             @default("hybrid")
+  status              String             @default("draft") // draft | intake_in_progress | generated
+  intakeAnswerSet     IntakeAnswerSet?
+  prototype           Prototype?
+  syncConnections     SyncConnection[]
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+}
+
+model IntakeAnswerSet {
+  id                         String       @id @default(cuid())
+  initiativeId               String       @unique
+  initiative                 Initiative   @relation(fields: [initiativeId], references: [id], onDelete: Cascade)
+  problemStatement           String       @default("") // Q1
+  targetCustomer             String       @default("") // Q2
+  outcomeStatement           String       @default("") // Q3
+  outcomeMetric              String       @default("") // Q3 optional metric
+  teamSize                   Int? // Q7
+  sprintLengthWeeks          Int          @default(2) // Q7
+  velocityPerPersonPerSprint Float        @default(8) // Q7 story points / person / sprint
+  capacityBufferPercent      Int          @default(20) // Q7
+  status                     String       @default("draft") // draft | generated
+  validatedAt                DateTime?
+  capabilities               Capability[]
+  createdAt                  DateTime     @default(now())
+  updatedAt                  DateTime     @updatedAt
+}
+
+model Capability {
+  id                String                 @id @default(cuid())
+  intakeAnswerSetId String
+  intakeAnswerSet   IntakeAnswerSet        @relation(fields: [intakeAnswerSetId], references: [id], onDelete: Cascade)
+  name              String
+  description       String                 @default("")
+  isMvp             Boolean // Q4
+  effortSize        String // Q6: xs | s | m | l | xl
+  businessValue     String // Q8: low | medium | high | critical
+  order             Int                    @default(0)
+  dependsOnEdges    CapabilityDependency[] @relation("FromCapability")
+  dependedOnBy      CapabilityDependency[] @relation("ToCapability")
+  artifacts         ArtifactLayer[]
+  createdAt         DateTime               @default(now())
+}
+
+model CapabilityDependency {
+  id               String     @id @default(cuid())
+  fromCapabilityId String // this capability...
+  fromCapability   Capability @relation("FromCapability", fields: [fromCapabilityId], references: [id], onDelete: Cascade)
+  toCapabilityId   String // ...depends on this one (must come first)
+  toCapability     Capability @relation("ToCapability", fields: [toCapabilityId], references: [id], onDelete: Cascade)
+  note             String     @default("") // Q5 free text
+
+  @@unique([fromCapabilityId, toCapabilityId])
+}
+
+model Prototype {
+  id                   String          @id @default(cuid())
+  initiativeId         String          @unique
+  initiative           Initiative      @relation(fields: [initiativeId], references: [id], onDelete: Cascade)
+  status               String          @default("active")
+  approvedBaselineJson String? // FR-13 snapshot, serialized JSON
+  approvedAt           DateTime?
+  layers               ArtifactLayer[]
+  sprints              Sprint[]
+  releases             Release[]
+  layerLocks           LayerLock[]
+  createdAt            DateTime        @default(now())
+  updatedAt            DateTime        @updatedAt
+}
+
+// One row per strict waterfall layer type. Locking is coarse-grained: the whole
+// layer locks/unlocks, matching "each layer locks before the next begins" (FR-12).
+model LayerLock {
+  id          String    @id @default(cuid())
+  prototypeId String
+  prototype   Prototype @relation(fields: [prototypeId], references: [id], onDelete: Cascade)
+  layerType   String // roadmap | feature_hierarchy | epics | stories | acceptance_criteria
+  sequence    Int // 1..5
+  state       String    @default("unlocked") // unlocked | locked
+  everLocked  Boolean   @default(false)
+  lockedAt    DateTime?
+
+  @@unique([prototypeId, layerType])
+}
+
+model ArtifactLayer {
+  id                 String          @id @default(cuid())
+  prototypeId        String
+  prototype          Prototype       @relation(fields: [prototypeId], references: [id], onDelete: Cascade)
+  type               String // roadmap | roadmap_phase | feature | epic | story | acceptance_criterion
+  parentId           String?
+  parent             ArtifactLayer?  @relation("LayerChildren", fields: [parentId], references: [id], onDelete: Cascade)
+  children           ArtifactLayer[] @relation("LayerChildren")
+  order              Int             @default(0)
+  title              String
+  body               String          @default("")
+  contentJson        String          @default("{}") // type-specific payload, serialized JSON
+  points             Int? // stories only
+  sourceCapabilityId String?
+  sourceCapability   Capability?     @relation(fields: [sourceCapabilityId], references: [id])
+  traceAnswerKeys    String          @default("") // comma-separated subset of q1..q8 (FR-10)
+  traceNote          String          @default("")
+  sprintId           String? // stories only
+  sprint             Sprint?         @relation(fields: [sprintId], references: [id], onDelete: SetNull)
+  externalRef        String? // fake Jira key once "synced" (stub)
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+
+  @@index([prototypeId, type])
+  @@index([parentId])
+}
+
+model Sprint {
+  id             String          @id @default(cuid())
+  prototypeId    String
+  prototype      Prototype       @relation(fields: [prototypeId], references: [id], onDelete: Cascade)
+  sprintNumber   Int
+  phaseNumber    Int
+  startDate      DateTime
+  endDate        DateTime
+  capacityPoints Float
+  releaseId      String?
+  release        Release?        @relation(fields: [releaseId], references: [id], onDelete: SetNull)
+  stories        ArtifactLayer[]
+  createdAt      DateTime        @default(now())
+
+  @@unique([prototypeId, sprintNumber])
+}
+
+model Release {
+  id          String    @id @default(cuid())
+  prototypeId String
+  prototype   Prototype @relation(fields: [prototypeId], references: [id], onDelete: Cascade)
+  name        String // "Release 1 (MVP)" ...
+  phaseNumber Int
+  targetDate  DateTime
+  order       Int
+  sprints     Sprint[]
+  createdAt   DateTime  @default(now())
+
+  @@unique([prototypeId, order])
+}
+
+// Jira only — Aha!/Azure DevOps intentionally not modeled (out of scope).
+model SyncConnection {
+  id             String     @id @default(cuid())
+  initiativeId   String
+  initiative     Initiative @relation(fields: [initiativeId], references: [id], onDelete: Cascade)
+  tool           String     @default("jira")
+  status         String     @default("not_connected") // not_connected | connected
+  connectedAt    DateTime?
+  lastSyncedAt   DateTime?
+  fakeProjectKey String?
+  createdAt      DateTime   @default(now())
+
+  @@unique([initiativeId, tool])
+}
