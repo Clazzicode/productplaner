@@ -3,11 +3,14 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
-// SQLite via Prisma: no native enums or scalar lists. All enum-like fields are
+// Schema originally written for SQLite (no native enums/scalar lists), now on
+// Postgres via Supabase. Kept the same String-based encoding rather than
+// switching to native enums/arrays, since it already works on both engines.
 // String columns constrained by TS union types + Zod (src/lib/generation/types.ts,
 // src/lib/validation). JSON payloads are serialized into String columns.
 
