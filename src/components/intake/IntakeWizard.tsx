@@ -281,7 +281,7 @@ export default function IntakeWizard(props: {
               : "Mapped to both waterfall phases and sprint cadence — hours-based capacity powers the dual mapping and the cost model."
           }
         >
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid gap-4 sm:grid-cols-2">
             <NumberField
               label="Team size (people)"
               value={intake.teamSize ?? ""}

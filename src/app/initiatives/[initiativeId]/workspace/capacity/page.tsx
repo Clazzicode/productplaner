@@ -112,9 +112,9 @@ export default async function CapacityPage({
           const pct = Math.min(100, (f.plannedPoints / Math.max(f.capacityPoints, 0.01)) * 100);
           const over = f.status === "over-allocated";
           return (
-            <div key={f.sprintNumber} className="flex items-center gap-4">
+            <div key={f.sprintNumber} className="flex flex-wrap items-center gap-x-4 gap-y-1">
               <span className="w-20 shrink-0 text-sm font-medium">Sprint {f.sprintNumber}</span>
-              <div className="h-5 flex-1 overflow-hidden rounded-full bg-neutral-100">
+              <div className="h-5 min-w-24 flex-1 overflow-hidden rounded-full bg-neutral-100">
                 <div
                   className={`flex h-full items-center rounded-full px-2 text-[10px] font-semibold text-white ${
                     over ? "bg-red-500" : "bg-indigo-500"
@@ -125,7 +125,7 @@ export default async function CapacityPage({
                 </div>
               </div>
               <span
-                className={`w-56 shrink-0 text-right text-xs ${
+                className={`w-full pl-24 text-right text-xs sm:w-56 sm:shrink-0 sm:pl-0 ${
                   over ? "font-semibold text-red-600" : "text-neutral-500"
                 }`}
               >

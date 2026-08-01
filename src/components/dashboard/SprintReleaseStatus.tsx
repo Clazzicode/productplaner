@@ -65,30 +65,32 @@ export default function SprintReleaseStatus(props: {
         <p className="mt-3 text-sm text-neutral-400">No sprints planned yet.</p>
       )}
 
-      <table className="mt-3 w-full text-sm">
-        <thead>
-          <tr className="text-left text-xs uppercase tracking-wide text-neutral-400">
-            <th className="py-1.5 font-semibold">Release</th>
-            <th className="py-1.5 font-semibold">Sprints</th>
-            <th className="py-1.5 font-semibold">Points</th>
-            <th className="py-1.5 font-semibold">Target</th>
-            <th className="py-1.5 font-semibold">Status</th>
-          </tr>
-        </thead>
-        <tbody>
-          {props.releases.map((r) => (
-            <tr key={r.name} className="border-t border-neutral-100">
-              <td className="py-2 font-medium">{r.name}</td>
-              <td className="py-2 text-neutral-500">{r.sprintRange}</td>
-              <td className="py-2 text-neutral-500">{r.points}</td>
-              <td className="py-2 text-neutral-500">{r.targetDate.toLocaleDateString()}</td>
-              <td className="py-2">
-                <Badge variant={healthBadgeVariant(r.health)}>{HEALTH_LABELS[r.health]}</Badge>
-              </td>
+      <div className="mt-3 overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="text-left text-xs uppercase tracking-wide text-neutral-400">
+              <th className="py-1.5 font-semibold">Release</th>
+              <th className="py-1.5 font-semibold">Sprints</th>
+              <th className="py-1.5 font-semibold">Points</th>
+              <th className="py-1.5 font-semibold">Target</th>
+              <th className="py-1.5 font-semibold">Status</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {props.releases.map((r) => (
+              <tr key={r.name} className="border-t border-neutral-100">
+                <td className="py-2 font-medium">{r.name}</td>
+                <td className="py-2 text-neutral-500">{r.sprintRange}</td>
+                <td className="py-2 text-neutral-500">{r.points}</td>
+                <td className="py-2 whitespace-nowrap text-neutral-500">{r.targetDate.toLocaleDateString()}</td>
+                <td className="py-2">
+                  <Badge variant={healthBadgeVariant(r.health)}>{HEALTH_LABELS[r.health]}</Badge>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </Card>
   );
 }

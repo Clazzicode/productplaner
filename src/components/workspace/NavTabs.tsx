@@ -29,7 +29,7 @@ export default function NavTabs({
   const pathname = usePathname();
   const overrides = LABEL_OVERRIDES[methodology ?? ""] ?? {};
   return (
-    <nav className="no-print flex flex-wrap gap-1 border-b border-neutral-200">
+    <nav className="no-print flex gap-1 overflow-x-auto no-scrollbar border-b border-neutral-200">
       {BASE_TABS.map((tab) => {
         const href = `/initiatives/${initiativeId}/workspace/${tab.slug}`;
         const active = pathname?.startsWith(href);
@@ -37,7 +37,7 @@ export default function NavTabs({
           <Link
             key={tab.slug}
             href={href}
-            className={`rounded-t-lg px-4 py-2 text-sm font-medium transition ${
+            className={`shrink-0 rounded-t-lg px-4 py-2 text-sm font-medium transition ${
               active
                 ? "border border-b-0 border-neutral-200 bg-white text-indigo-700"
                 : "text-neutral-500 hover:text-neutral-800"

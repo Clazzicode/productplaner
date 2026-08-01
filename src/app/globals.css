@@ -26,3 +26,13 @@ body {
     background: #ffffff;
   }
 }
+
+/* Hides the scrollbar on horizontally-scrollable strips (e.g. NavTabs) while
+   keeping them scrollable — content still reachable via touch/trackpad. */
+@utility no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}

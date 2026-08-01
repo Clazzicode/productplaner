@@ -96,7 +96,7 @@ export default function ConnectDemoModal(props: {
         </label>
         {isExecution && (
           <>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid gap-3 sm:grid-cols-2">
               <label className="block text-sm font-medium">
                 Project key
                 <input
@@ -116,7 +116,7 @@ export default function ConnectDemoModal(props: {
                 />
               </label>
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid gap-3 sm:grid-cols-2">
               <label className="block text-sm font-medium">
                 Board type
                 <select

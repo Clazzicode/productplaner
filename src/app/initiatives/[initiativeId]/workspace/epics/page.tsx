@@ -62,8 +62,8 @@ export default async function EpicsPage({
                   : null;
                 return (
                   <div key={epic.id} className="rounded-xl border border-neutral-200 p-4">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-start justify-between gap-2">
+                      <div className="min-w-[140px] flex-1">
                         <EditableArtifact
                           artifactId={epic.id}
                           title={epic.title}
@@ -71,7 +71,7 @@ export default async function EpicsPage({
                           locked={epicsLocked}
                         />
                       </div>
-                      <div className="flex shrink-0 items-center gap-2">
+                      <div className="flex flex-wrap shrink-0 items-center gap-2">
                         <span
                           className="rounded-full bg-neutral-100 px-2 py-0.5 text-[11px] font-medium text-neutral-600"
                           title="Epic cost: sum of its story costs (§20)"
@@ -95,14 +95,14 @@ export default async function EpicsPage({
                     </div>
                     <ul className="mt-3 divide-y divide-neutral-100 border-t border-neutral-100">
                       {epic.children.map((story) => (
-                        <li key={story.id} className="flex items-center justify-between gap-3 py-2">
+                        <li key={story.id} className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 py-2">
                           <Link
                             href={`/initiatives/${initiativeId}/workspace/stories/${story.id}`}
-                            className="min-w-0 flex-1 text-sm text-neutral-700 hover:text-indigo-700 hover:underline"
+                            className="min-w-[120px] flex-1 truncate text-sm text-neutral-700 hover:text-indigo-700 hover:underline"
                           >
                             {story.title}
                           </Link>
-                          <span className="flex shrink-0 items-center gap-2 text-xs text-neutral-400">
+                          <span className="flex flex-wrap shrink-0 items-center gap-2 text-xs text-neutral-400">
                             {story.externalRef && (
                               <span className="rounded bg-sky-100 px-1.5 py-0.5 font-semibold text-sky-800">
                                 {story.externalRef}
