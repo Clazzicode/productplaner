@@ -4,7 +4,9 @@ import {
   MIN_OUTCOME_CHARS,
   MIN_PROBLEM_CHARS,
 } from "./constants";
+import { computeEffectiveCapacity } from "./cost";
 import { findCycle } from "./dependencyGraph";
+import { isOversizedCapability } from "./scoring";
 import type { IntakeFlag, IntakeInput, IntakeValidation } from "./types";
 
 export function computeCapacityPoints(input: {
@@ -120,12 +122,18 @@ export function validateIntake(input: IntakeInput): IntakeValidation {
     });
   }
   if (errors.length === 0) {
-    const capacity = computeCapacityPoints(input);
+    const capacity = computeEffectiveCapacity(input);
     for (const cap of caps) {
       if (EFFORT_POINTS[cap.effortSize] > capacity) {
         warnings.push({
           code: "capability_exceeds_sprint",
           message: `"${cap.name}" (${cap.effortSize.toUpperCase()}, ${EFFORT_POINTS[cap.effortSize]} points) is bigger than one sprint's capacity (${capacity.toFixed(1)} points). Its sprint will be over-allocated.`,
+        });
+      }
+      if (isOversizedCapability(cap)) {
+        warnings.push({
+          code: "capability_too_broad",
+          message: `"${cap.name}" is estimated at ${EFFORT_POINTS[cap.effortSize]} points and may be too broad. Consider splitting it into smaller capabilities before planning.`,
         });
       }
     }

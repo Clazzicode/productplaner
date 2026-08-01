@@ -8,7 +8,7 @@ const TABS = [
   { slug: "features", label: "Feature Hierarchy" },
   { slug: "epics", label: "Epics & Stories" },
   { slug: "sprints", label: "Sprints & Releases" },
-  { slug: "capacity", label: "Capacity" },
+  { slug: "capacity", label: "Capacity & Cost" },
   { slug: "executive", label: "Executive View" },
 ];
 

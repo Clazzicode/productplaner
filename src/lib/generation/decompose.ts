@@ -4,6 +4,7 @@ import {
   EPIC_TEMPLATE,
   STORY_WANTS,
 } from "./constants";
+import { snapToFibonacci } from "./scoring";
 import type {
   AcKind,
   CapabilityInput,
@@ -76,7 +77,8 @@ export function buildEpicSeeds(cap: CapabilityInput, featureTitle: string): Epic
 
 export function storyPointsFor(cap: CapabilityInput): number {
   const { epicCount, storiesPerEpic } = EPIC_TEMPLATE[cap.effortSize];
-  return Math.max(1, Math.round(EFFORT_POINTS[cap.effortSize] / (epicCount * storiesPerEpic)));
+  const even = Math.max(1, Math.round(EFFORT_POINTS[cap.effortSize] / (epicCount * storiesPerEpic)));
+  return snapToFibonacci(even); // §9: points always land on the Fibonacci scale
 }
 
 const upperFirst = (t: string): string => (t.length ? t[0].toUpperCase() + t.slice(1) : t);

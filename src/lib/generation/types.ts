@@ -1,7 +1,14 @@
 // TS union types standing in for enums (SQLite/Prisma has no native enum support).
 
 export type EffortSize = "xs" | "s" | "m" | "l" | "xl";
-export type BusinessValue = "low" | "medium" | "high" | "critical";
+export type BusinessValue = "very_low" | "low" | "medium" | "high" | "critical";
+export type RiskLevel = "low" | "medium" | "high" | "critical";
+export type MvpImportance =
+  | "required_for_mvp"
+  | "strongly_preferred"
+  | "useful_not_required"
+  | "future_enhancement"
+  | "optional";
 
 export type LayerType =
   | "roadmap"
@@ -64,6 +71,12 @@ export interface CapabilityInput {
   order: number;
   /** capability ids this one depends on (they must come first) */
   dependsOn: string[];
+  /** §4 risk level — when absent (legacy fixtures) scoring falls back to legacy ordering */
+  riskLevel?: RiskLevel;
+  /** §5 optional override; derived from isMvp when null/absent */
+  mvpImportance?: MvpImportance | null;
+  /** §2 weighted score snapshot, present only when sub-factor scoring was used */
+  businessValueScore?: number | null;
 }
 
 export interface IntakeInput {
@@ -74,8 +87,14 @@ export interface IntakeInput {
   outcomeMetric: string; // Q3 (optional metric)
   teamSize: number; // Q7
   sprintLengthWeeks: number; // Q7
-  velocityPerPersonPerSprint: number; // Q7
+  velocityPerPersonPerSprint: number; // Q7 legacy points model
   capacityBufferPercent: number; // Q7
+  /** §10–12 hours model — supersedes the points model when all three are present */
+  hoursPerSprintPerMember?: number;
+  utilizationRatePercent?: number;
+  hoursPerStoryPoint?: number;
+  /** §13 optional — capacity uses min(estimated, historical) when provided */
+  historicalVelocityPoints?: number | null;
   startDate: Date;
   capabilities: CapabilityInput[]; // Q4/Q5/Q6/Q8 live per-capability
 }

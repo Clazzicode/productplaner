@@ -1,6 +1,9 @@
 import { format } from "date-fns";
 import { db } from "@/lib/db";
+import { DEFAULT_ASSUMPTIONS, PROTOTYPE_DISCLAIMER } from "@/lib/generation/constants";
+import { costHealth, HEALTH_LABELS } from "@/lib/generation/health";
 import { LAYER_LABELS, LAYER_SEQUENCE } from "@/lib/generation/types";
+import { loadCostContext } from "@/lib/workspace";
 
 // FR-19: assembled from live data on every render — no snapshot, no manual
 // rebuild. Server component shared by the on-screen and print routes.
@@ -45,7 +48,10 @@ export default async function ExecutiveReport({ initiativeId }: { initiativeId: 
   const totalCapacity = sprints.reduce((n, s) => n + s.capacityPoints, 0);
   const lockedCount = prototype.layerLocks.filter((l) => l.state === "locked").length;
   const jira = initiative.syncConnections.find((c) => c.tool === "jira");
-  const valueRank = { critical: 0, high: 1, medium: 2, low: 3 } as Record<string, number>;
+  const { model } = await loadCostContext(initiativeId, prototype.id);
+  const money = (n: number) => `$${Math.round(n).toLocaleString()}`;
+  const costStatus = costHealth(model.estimatedInitiativeCost, model.budget);
+  const valueRank = { critical: 0, high: 1, medium: 2, low: 3, very_low: 4 } as Record<string, number>;
   const rankedCaps = [...intake.capabilities].sort(
     (a, b) => (valueRank[a.businessValue] ?? 9) - (valueRank[b.businessValue] ?? 9),
   );
@@ -112,7 +118,8 @@ export default async function ExecutiveReport({ initiativeId }: { initiativeId: 
         <ol className="space-y-1 text-sm text-neutral-600">
           {rankedCaps.slice(0, 5).map((c, i) => (
             <li key={c.id}>
-              {i + 1}. <strong>{c.name}</strong> — {c.businessValue} value
+              {i + 1}. <strong>{c.name}</strong> — {c.businessValue.replace("_", " ")} value
+              {c.businessValueScore != null && ` (weighted score ${c.businessValueScore} / 5)`}
             </li>
           ))}
         </ol>
@@ -134,6 +141,41 @@ export default async function ExecutiveReport({ initiativeId }: { initiativeId: 
               <strong>{r.name}</strong> — ships {format(r.targetDate, "MMMM d, yyyy")}
             </li>
           ))}
+        </ul>
+      </Section>
+
+      {/* Cost forecast */}
+      <Section title="Cost forecast">
+        <div className="grid gap-3 sm:grid-cols-3">
+          <Stat label="Estimated initiative cost" value={money(model.estimatedInitiativeCost)} />
+          <Stat label="Cost per sprint" value={money(model.sprintLaborCost)} />
+          <Stat label="Cost per story point" value={money(model.costPerStoryPoint)} />
+        </div>
+        <ul className="mt-4 space-y-1.5 text-sm text-neutral-600">
+          <li>
+            Planned work cost: <strong>{money(model.plannedWorkCost)}</strong> across{" "}
+            {model.totalPlannedPoints} story points; unused capacity reserve{" "}
+            {money(model.unusedCapacityCost)}.
+          </li>
+          {model.budget != null && model.budgetVariance && costStatus && (
+            <li>
+              Against the {money(model.budget)} budget:{" "}
+              <strong>
+                {model.budgetVariance.amount >= 0
+                  ? `${money(model.budgetVariance.amount)} over (${model.budgetVariance.percent}%)`
+                  : `${money(Math.abs(model.budgetVariance.amount))} under`}
+              </strong>{" "}
+              — {HEALTH_LABELS[costStatus].toLowerCase()}.
+            </li>
+          )}
+          <li>
+            Assumptions: ${model.averageHourlyRate}/hr blended rate ·{" "}
+            {intake.utilizationRatePercent}% utilization · {intake.capacityBufferPercent}% buffer ·{" "}
+            {intake.hoursPerStoryPoint} hrs/story point
+            {model.averageHourlyRate === DEFAULT_ASSUMPTIONS.averageHourlyRate &&
+              " (prototype defaults)"}
+            .
+          </li>
         </ul>
       </Section>
 
@@ -182,8 +224,11 @@ export default async function ExecutiveReport({ initiativeId }: { initiativeId: 
       </Section>
 
       <footer className="mt-10 border-t border-neutral-200 pt-4 text-xs text-neutral-400">
-        Generated live from the working prototype — the plan of record lives in the Guided
-        Product Planning Platform. This document is a view, not the source.
+        <p>
+          Generated live from the working prototype — the plan of record lives in the Guided
+          Product Planning Platform. This document is a view, not the source.
+        </p>
+        <p className="mt-2">{PROTOTYPE_DISCLAIMER}</p>
       </footer>
     </article>
   );

@@ -65,7 +65,7 @@ export default async function IntakePage({
                   <span className="font-medium">{cap.name}</span>{" "}
                   <span className="text-neutral-500">
                     — {cap.isMvp ? "MVP" : "post-MVP"}, effort {cap.effortSize.toUpperCase()},
-                    value {cap.businessValue}
+                    value {cap.businessValue.replace("_", " ")}, risk {cap.riskLevel}
                     {cap.dependsOnEdges.length > 0 &&
                       `, depends on ${cap.dependsOnEdges
                         .map(
@@ -80,7 +80,7 @@ export default async function IntakePage({
           </div>
           <AnswerRow
             label="Q7 — Capacity"
-            value={`Team of ${intake.teamSize ?? "?"}, ${intake.sprintLengthWeeks}-week sprints, ${intake.velocityPerPersonPerSprint} pts/person/sprint, ${intake.capacityBufferPercent}% buffer`}
+            value={`Team of ${intake.teamSize ?? "?"}, ${intake.sprintLengthWeeks}-week sprints, ${intake.hoursPerSprintPerMember} hrs/member/sprint at ${intake.utilizationRatePercent}% utilization, ${intake.capacityBufferPercent}% buffer, ${intake.hoursPerStoryPoint} hrs/point${intake.historicalVelocityPoints ? `, historical velocity ${intake.historicalVelocityPoints} pts` : ""}`}
           />
         </dl>
       </main>
@@ -116,6 +116,10 @@ export default async function IntakePage({
           sprintLengthWeeks: intake.sprintLengthWeeks,
           velocityPerPersonPerSprint: intake.velocityPerPersonPerSprint,
           capacityBufferPercent: intake.capacityBufferPercent,
+          hoursPerSprintPerMember: intake.hoursPerSprintPerMember,
+          utilizationRatePercent: intake.utilizationRatePercent,
+          hoursPerStoryPoint: intake.hoursPerStoryPoint,
+          historicalVelocityPoints: intake.historicalVelocityPoints,
         }}
         capabilities={intake.capabilities.map((c) => ({
           id: c.id,
@@ -124,6 +128,12 @@ export default async function IntakePage({
           isMvp: c.isMvp,
           effortSize: c.effortSize,
           businessValue: c.businessValue,
+          riskLevel: c.riskLevel,
+          mvpImportance: c.mvpImportance,
+          customerImpactScore: c.customerImpactScore,
+          revenueImpactScore: c.revenueImpactScore,
+          strategicAlignmentScore: c.strategicAlignmentScore,
+          riskComplianceScore: c.riskComplianceScore,
           dependsOn: c.dependsOnEdges.map((e) => e.toCapabilityId),
         }))}
       />

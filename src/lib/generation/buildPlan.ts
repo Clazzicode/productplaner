@@ -1,7 +1,7 @@
-import { PHASE_NAMES, RELEASE_NAMES, VALUE_SCORE } from "./constants";
+import { PHASE_NAMES, RELEASE_NAMES } from "./constants";
+import { computeEffectiveCapacity } from "./cost";
 import { buildNarrativeContext, decomposeCapability } from "./decompose";
 import { orderByDependencyAndPriority } from "./dependencyGraph";
-import { computeCapacityPoints } from "./validateIntake";
 import type {
   CapabilityInput,
   GeneratedPlan,
@@ -27,10 +27,10 @@ export function partitionPhases(
 ): Map<number, CapabilityInput[]> {
   const phaseOf = new Map<string, number>();
   for (const cap of capabilities) {
-    phaseOf.set(
-      cap.id,
-      cap.isMvp ? 1 : VALUE_SCORE[cap.businessValue] >= 3 ? 2 : 3,
-    );
+    // Explicit label check: high/critical → phase 2 regardless of how the
+    // 1–5 VALUE_SCORE numbering shifts.
+    const highValue = cap.businessValue === "high" || cap.businessValue === "critical";
+    phaseOf.set(cap.id, cap.isMvp ? 1 : highValue ? 2 : 3);
   }
 
   let changed = true;
@@ -116,7 +116,7 @@ export function packSprints(args: {
 
 /** The full deterministic pipeline: intake answers → connected plan. */
 export function buildPlan(input: IntakeInput): GeneratedPlan {
-  const capacityPoints = computeCapacityPoints(input);
+  const capacityPoints = computeEffectiveCapacity(input);
   const ctx = buildNarrativeContext(input);
   const phasePartition = partitionPhases(input.capabilities);
 

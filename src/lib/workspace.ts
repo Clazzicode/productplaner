@@ -1,4 +1,7 @@
 import { db } from "@/lib/db";
+import { buildCostModel, type CostModel } from "@/lib/generation/cost";
+import { loadIntakeInput } from "@/lib/generation/engine";
+import { computePriorityScore } from "@/lib/generation/scoring";
 import type { TraceCapabilityView, TraceIntakeView } from "@/lib/trace";
 import type { LayerType } from "@/lib/generation/types";
 
@@ -44,6 +47,7 @@ export async function loadWorkspace(initiativeId: string) {
         isMvp: c.isMvp,
         effortSize: c.effortSize,
         businessValue: c.businessValue,
+        riskLevel: c.riskLevel,
         dependsOnNames: c.dependsOnEdges.map((e) => e.toCapability.name),
       },
     ]),
@@ -62,6 +66,67 @@ export async function loadWorkspace(initiativeId: string) {
     isLocked,
     jira: initiative.syncConnections.find((c) => c.tool === "jira") ?? null,
   };
+}
+
+export interface WorkspaceCostContext {
+  model: CostModel;
+  pointsByCapability: Map<string, number>;
+  costByCapability: Map<string, number>; // §25 capability cost
+  priorityByCapability: Map<string, number>; // §5 priority score
+}
+
+/**
+ * Read-time cost/priority context for workspace pages — computed live from
+ * the intake, current stories and sprints (never persisted, like the
+ * capacity forecast).
+ */
+export async function loadCostContext(
+  initiativeId: string,
+  prototypeId: string,
+): Promise<WorkspaceCostContext> {
+  const [initiative, sprintCount, stories, intakeInput] = await Promise.all([
+    db.initiative.findUnique({
+      where: { id: initiativeId },
+      select: { budget: true, averageHourlyRate: true },
+    }),
+    db.sprint.count({ where: { prototypeId } }),
+    db.artifactLayer.findMany({
+      where: { prototypeId, type: "story" },
+      select: { points: true, sourceCapabilityId: true },
+    }),
+    loadIntakeInput(initiativeId),
+  ]);
+
+  const totalPlannedPoints = stories.reduce((n, s) => n + (s.points ?? 1), 0);
+  const model = buildCostModel({
+    capacity: intakeInput,
+    averageHourlyRate: initiative?.averageHourlyRate,
+    budget: initiative?.budget,
+    totalSprints: sprintCount,
+    totalPlannedPoints,
+  });
+
+  const pointsByCapability = new Map<string, number>();
+  for (const s of stories) {
+    if (!s.sourceCapabilityId) continue;
+    pointsByCapability.set(
+      s.sourceCapabilityId,
+      (pointsByCapability.get(s.sourceCapabilityId) ?? 0) + (s.points ?? 1),
+    );
+  }
+  const costByCapability = new Map<string, number>(
+    [...pointsByCapability].map(([id, pts]) => [id, pts * model.costPerStoryPoint]),
+  );
+
+  const dependedOnBy = new Map<string, number>();
+  for (const cap of intakeInput.capabilities) {
+    for (const d of cap.dependsOn) dependedOnBy.set(d, (dependedOnBy.get(d) ?? 0) + 1);
+  }
+  const priorityByCapability = new Map<string, number>(
+    intakeInput.capabilities.map((c) => [c.id, computePriorityScore(c, dependedOnBy.get(c.id) ?? 0)]),
+  );
+
+  return { model, pointsByCapability, costByCapability, priorityByCapability };
 }
 
 export async function artifactCounts(prototypeId: string) {

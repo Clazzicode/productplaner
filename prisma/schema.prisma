@@ -16,22 +16,24 @@ datasource db {
 // src/lib/validation). JSON payloads are serialized into String columns.
 
 model Organization {
-  id          String       @id @default(cuid())
-  name        String
-  users       User[]
-  initiatives Initiative[]
-  createdAt   DateTime     @default(now())
+  id                     String                  @id @default(cuid())
+  name                   String
+  users                  User[]
+  initiatives            Initiative[]
+  integrationConnections IntegrationConnection[]
+  createdAt              DateTime                @default(now())
 }
 
 model User {
   id             String              @id @default(cuid())
   organizationId String
   organization   Organization        @relation(fields: [organizationId], references: [id])
-  name           String
-  email          String              @unique
-  profiles       QualifyingProfile[]
-  initiatives    Initiative[]
-  createdAt      DateTime            @default(now())
+  name            String
+  email           String              @unique
+  demoModeEnabled Boolean             @default(false)
+  profiles        QualifyingProfile[]
+  initiatives     Initiative[]
+  createdAt       DateTime            @default(now())
 }
 
 model QualifyingProfile {
@@ -61,9 +63,13 @@ model Initiative {
   description         String             @default("")
   methodology         String             @default("hybrid")
   status              String             @default("draft") // draft | intake_in_progress | generated
+  targetLaunchDate    DateTime? // optional, from initiative creation
+  budget              Float? // optional available budget (Planning & Cost Logic §24)
+  averageHourlyRate   Float?             @default(85) // §17/§31 prototype assumption, user-overridable
   intakeAnswerSet     IntakeAnswerSet?
   prototype           Prototype?
   syncConnections     SyncConnection[]
+  integrationConnections IntegrationConnection[]
   createdAt           DateTime           @default(now())
   updatedAt           DateTime           @updatedAt
 }
@@ -78,8 +84,12 @@ model IntakeAnswerSet {
   outcomeMetric              String       @default("") // Q3 optional metric
   teamSize                   Int? // Q7
   sprintLengthWeeks          Int          @default(2) // Q7
-  velocityPerPersonPerSprint Float        @default(8) // Q7 story points / person / sprint
-  capacityBufferPercent      Int          @default(20) // Q7
+  velocityPerPersonPerSprint Float        @default(8) // Q7 legacy points model (superseded by hours model when present)
+  capacityBufferPercent      Int          @default(15) // Q7 (§31 default)
+  hoursPerSprintPerMember    Float        @default(80) // §10 hours available per member per sprint
+  utilizationRatePercent     Int          @default(70) // §10/§31 prototype assumption
+  hoursPerStoryPoint         Float        @default(8) // §12/§31 prototype assumption
+  historicalVelocityPoints   Float? // §13 optional — replaces estimated conversion when known
   status                     String       @default("draft") // draft | generated
   validatedAt                DateTime?
   capabilities               Capability[]
@@ -95,7 +105,14 @@ model Capability {
   description       String                 @default("")
   isMvp             Boolean // Q4
   effortSize        String // Q6: xs | s | m | l | xl
-  businessValue     String // Q8: low | medium | high | critical
+  businessValue     String // Q8: very_low | low | medium | high | critical (§2 five-level scale)
+  riskLevel         String                 @default("medium") // §4: low | medium | high | critical
+  mvpImportance     String? // §5 optional override: required_for_mvp | strongly_preferred | useful_not_required | future_enhancement | optional (derived from isMvp when null)
+  customerImpactScore     Int? // §2 optional weighted sub-factors, each 1-5
+  revenueImpactScore      Int?
+  strategicAlignmentScore Int?
+  riskComplianceScore     Int?
+  businessValueScore      Float? // §2 computed weighted score, snapshotted only when sub-factors are used
   order             Int                    @default(0)
   dependsOnEdges    CapabilityDependency[] @relation("FromCapability")
   dependedOnBy      CapabilityDependency[] @relation("ToCapability")
@@ -215,4 +232,83 @@ model SyncConnection {
   createdAt      DateTime   @default(now())
 
   @@unique([initiativeId, tool])
+}
+
+// ---------- Integrations Hub (Demo Mode) — Product platform spec §2.7 ----------
+// Generic provider registry; coexists deliberately with the legacy Jira-only
+// SyncConnection above (which the workspace JiraSyncPanel still uses).
+
+model IntegrationProvider {
+  id                     String                  @id @default(cuid())
+  key                    String                  @unique // jira | aha | azure_devops | confluence | notion | slack | figma | github
+  name                   String
+  category               String // execution | documentation | design | communication | source_control | roadmap
+  description            String                  @default("")
+  logoPath               String                  @default("")
+  previewImagePath       String                  @default("")
+  statusDefault          String                  @default("available")
+  isActive               Boolean                 @default(true)
+  isFeatured             Boolean                 @default(false)
+  supportsDemoConnection Boolean                 @default(true)
+  supportsSync           Boolean                 @default(true)
+  supportsImport         Boolean                 @default(false)
+  supportsExport         Boolean                 @default(false)
+  displayOrder           Int                     @default(0)
+  capabilities           IntegrationCapability[]
+  connections            IntegrationConnection[]
+  createdAt              DateTime                @default(now())
+}
+
+model IntegrationConnection {
+  id                 String               @id @default(cuid())
+  organizationId     String
+  organization       Organization         @relation(fields: [organizationId], references: [id])
+  initiativeId       String? // nullable = org-wide connection
+  initiative         Initiative?          @relation(fields: [initiativeId], references: [id], onDelete: Cascade)
+  providerId         String
+  provider           IntegrationProvider  @relation(fields: [providerId], references: [id])
+  connectionName     String               @default("")
+  status             String               @default("available") // available | needs_configuration | demo_connected | sync_ready | sync_complete | demo_error
+  mode               String               @default("demo") // demo | live_future
+  workspaceName      String?
+  workspaceUrl       String?
+  projectKey         String?
+  projectName        String?
+  configuredByUserId String?
+  configuredAt       DateTime?
+  lastSyncAt         DateTime?
+  lastSyncStatus     String?
+  lastSyncMessage    String?
+  isEnabled          Boolean              @default(true)
+  settingsJson       String               @default("{}")
+  syncLogs           IntegrationSyncLog[]
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+
+  @@unique([organizationId, providerId, initiativeId])
+}
+
+model IntegrationCapability {
+  id                 String              @id @default(cuid())
+  providerId         String
+  provider           IntegrationProvider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  capabilityKey      String
+  capabilityLabel    String
+  description        String              @default("")
+  isEnabledByDefault Boolean             @default(true)
+
+  @@unique([providerId, capabilityKey])
+}
+
+model IntegrationSyncLog {
+  id             String                @id @default(cuid())
+  connectionId   String
+  connection     IntegrationConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  syncType       String // e.g. push_stories | push_epics | preview_mapping
+  status         String // success | error
+  itemsProcessed Int                   @default(0)
+  message        String                @default("")
+  startedAt      DateTime              @default(now())
+  finishedAt     DateTime?
+  detailsJson    String                @default("{}")
 }

@@ -4,7 +4,7 @@ import EditableArtifact from "@/components/workspace/EditableArtifact";
 import TraceBadge from "@/components/workspace/TraceBadge";
 import { db } from "@/lib/db";
 import { traceEntriesFor } from "@/lib/trace";
-import { loadWorkspace } from "@/lib/workspace";
+import { loadCostContext, loadWorkspace } from "@/lib/workspace";
 
 export const dynamic = "force-dynamic";
 
@@ -17,6 +17,7 @@ export default async function EpicsPage({
   const ws = await loadWorkspace(initiativeId);
   if (!ws) notFound();
   const epicsLocked = ws.isLocked("epics");
+  const cost = await loadCostContext(initiativeId, ws.prototype.id);
 
   const features = await db.artifactLayer.findMany({
     where: { prototypeId: ws.prototype.id, type: "feature" },
@@ -71,6 +72,16 @@ export default async function EpicsPage({
                         />
                       </div>
                       <div className="flex shrink-0 items-center gap-2">
+                        <span
+                          className="rounded-full bg-neutral-100 px-2 py-0.5 text-[11px] font-medium text-neutral-600"
+                          title="Epic cost: sum of its story costs (§20)"
+                        >
+                          ~$
+                          {Math.round(
+                            epic.children.reduce((n, s) => n + (s.points ?? 1), 0) *
+                              cost.model.costPerStoryPoint,
+                          ).toLocaleString()}
+                        </span>
                         {epic.externalRef && (
                           <span className="rounded bg-sky-100 px-2 py-0.5 text-[11px] font-semibold text-sky-800">
                             {epic.externalRef}
@@ -98,8 +109,19 @@ export default async function EpicsPage({
                               </span>
                             )}
                             <span className="rounded-full bg-neutral-100 px-2 py-0.5 font-medium">
-                              {story.points ?? 1} pts
+                              {story.points ?? 1} pts · $
+                              {Math.round(
+                                (story.points ?? 1) * cost.model.costPerStoryPoint,
+                              ).toLocaleString()}
                             </span>
+                            {(story.points ?? 1) >= 13 && (
+                              <span
+                                className="rounded-full bg-amber-100 px-2 py-0.5 font-medium text-amber-800"
+                                title="This story may be too large for a sprint and should be split (§9)."
+                              >
+                                split?
+                              </span>
+                            )}
                             {story.sprint && <span>Sprint {story.sprint.sprintNumber}</span>}
                           </span>
                         </li>

@@ -4,7 +4,7 @@ import EditableArtifact from "@/components/workspace/EditableArtifact";
 import TraceBadge from "@/components/workspace/TraceBadge";
 import { db } from "@/lib/db";
 import { traceEntriesFor } from "@/lib/trace";
-import { loadWorkspace } from "@/lib/workspace";
+import { loadCostContext, loadWorkspace } from "@/lib/workspace";
 
 export const dynamic = "force-dynamic";
 
@@ -30,6 +30,8 @@ export default async function StoryPage({
   const storiesLocked = ws.isLocked("stories");
   const acLocked = ws.isLocked("acceptance_criteria");
   const cap = story.sourceCapabilityId ? ws.capViewById.get(story.sourceCapabilityId) : null;
+  const cost = await loadCostContext(initiativeId, ws.prototype.id);
+  const storyCost = (story.points ?? 1) * cost.model.costPerStoryPoint;
 
   return (
     <div>
@@ -71,6 +73,22 @@ export default async function StoryPage({
         <span className="rounded-full bg-neutral-100 px-2.5 py-1 font-medium">
           {story.points ?? 1} story points
         </span>
+        <span
+          className="rounded-full bg-neutral-100 px-2.5 py-1 font-medium"
+          title={`Story cost (§19): ${story.points ?? 1} points × $${cost.model.costPerStoryPoint}/point — a planning estimate, not an accounting value.`}
+        >
+          ~${Math.round(storyCost).toLocaleString()}
+        </span>
+        {(story.points ?? 1) >= 13 && (
+          <span className="rounded-full bg-amber-100 px-2.5 py-1 font-medium text-amber-800">
+            May be too large for one sprint — consider splitting (§9)
+          </span>
+        )}
+        {cap?.riskLevel && (cap.riskLevel === "high" || cap.riskLevel === "critical") && (
+          <span className="rounded-full bg-red-100 px-2.5 py-1 font-medium text-red-800">
+            {cap.riskLevel} risk capability
+          </span>
+        )}
         {story.sprint && (
           <span className="rounded-full bg-amber-100 px-2.5 py-1 font-medium text-amber-800">
             Sprint {story.sprint.sprintNumber}

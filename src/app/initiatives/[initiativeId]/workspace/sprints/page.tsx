@@ -1,8 +1,9 @@
 import { format } from "date-fns";
 import { notFound } from "next/navigation";
+import ExplainCallout from "@/components/demo/ExplainCallout";
 import SprintMoveSelect from "@/components/workspace/SprintMoveSelect";
 import { db } from "@/lib/db";
-import { loadWorkspace } from "@/lib/workspace";
+import { loadCostContext, loadWorkspace } from "@/lib/workspace";
 
 export const dynamic = "force-dynamic";
 
@@ -14,6 +15,7 @@ export default async function SprintsPage({
   const { initiativeId } = await params;
   const ws = await loadWorkspace(initiativeId);
   if (!ws) notFound();
+  const cost = await loadCostContext(initiativeId, ws.prototype.id);
 
   const [sprints, releases, stories] = await Promise.all([
     db.sprint.findMany({
@@ -75,6 +77,11 @@ export default async function SprintsPage({
         stories here never restructures locked layers above. Re-locking an upper layer
         recomputes this plan.
       </p>
+      <ExplainCallout>
+        Stories were packed into sprints in strict roadmap order against the estimated sprint
+        capacity — a story only joins the current sprint if it fits, phases never mix in one
+        sprint, and each sprint shows its planned story cost against the full labor allocation.
+      </ExplainCallout>
 
       {/* Releases strip */}
       <div className="mt-5 flex flex-wrap gap-3">
@@ -129,6 +136,13 @@ export default async function SprintsPage({
               </div>
               <p className={`mt-1 text-xs ${over ? "font-semibold text-red-600" : "text-neutral-500"}`}>
                 {planned} / {sprint.capacityPoints.toFixed(1)} pts{over && " — over-allocated"}
+              </p>
+              <p
+                className="mt-0.5 text-xs text-neutral-400"
+                title="Planned story cost vs. the sprint's full labor allocation (§17/§22)"
+              >
+                ${Math.round(planned * cost.model.costPerStoryPoint).toLocaleString()} planned · $
+                {Math.round(cost.model.sprintLaborCost).toLocaleString()} allocated
               </p>
               <ul className="mt-3 space-y-1.5">
                 {sprint.stories.map((story) => (

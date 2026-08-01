@@ -9,7 +9,8 @@ import {
   buildStoriesForEpic,
   type NarrativeContext,
 } from "./decompose";
-import { computeCapacityPoints, validateIntake } from "./validateIntake";
+import { computeEffectiveCapacity } from "./cost";
+import { validateIntake } from "./validateIntake";
 import {
   LAYER_SEQUENCE,
   type CapabilityInput,
@@ -61,6 +62,10 @@ export async function loadIntakeInput(initiativeId: string): Promise<IntakeInput
     sprintLengthWeeks: intake.sprintLengthWeeks,
     velocityPerPersonPerSprint: intake.velocityPerPersonPerSprint,
     capacityBufferPercent: intake.capacityBufferPercent,
+    hoursPerSprintPerMember: intake.hoursPerSprintPerMember,
+    utilizationRatePercent: intake.utilizationRatePercent,
+    hoursPerStoryPoint: intake.hoursPerStoryPoint,
+    historicalVelocityPoints: intake.historicalVelocityPoints,
     startDate: nextMonday(),
     capabilities: intake.capabilities.map((c) => ({
       id: c.id,
@@ -69,6 +74,9 @@ export async function loadIntakeInput(initiativeId: string): Promise<IntakeInput
       isMvp: c.isMvp,
       effortSize: c.effortSize as CapabilityInput["effortSize"],
       businessValue: c.businessValue as CapabilityInput["businessValue"],
+      riskLevel: c.riskLevel as CapabilityInput["riskLevel"],
+      mvpImportance: c.mvpImportance as CapabilityInput["mvpImportance"],
+      businessValueScore: c.businessValueScore,
       order: c.order,
       dependsOn: c.dependsOnEdges.map((e) => e.toCapabilityId),
     })),
@@ -618,7 +626,7 @@ export async function repackSprints(
     }
   }
 
-  const capacityPoints = computeCapacityPoints(intake);
+  const capacityPoints = computeEffectiveCapacity(intake);
   const sprints = packSprints({
     stories: ordered.map((o) => ({ story: o.shim, phaseNumber: o.phaseNumber })),
     capacityPoints,

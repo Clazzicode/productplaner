@@ -1,6 +1,11 @@
 import { NextResponse } from "next/server";
 import { jsonError, zodMessage } from "@/lib/api";
 import { db } from "@/lib/db";
+import {
+  businessValueLevelFromScore,
+  computeBusinessValueScore,
+  valueFactorsFrom,
+} from "@/lib/generation/scoring";
 import { capabilityUpsertSchema } from "@/lib/validation/schemas";
 
 async function loadEditable(capId: string) {
@@ -29,6 +34,12 @@ export async function PATCH(
   if (error) return error;
 
   const { dependsOn, ...fields } = parsed.data;
+  if (fields.mvpImportance === "required_for_mvp" && !fields.isMvp) {
+    return jsonError('MVP importance "Required for MVP" conflicts with the Q4 answer — mark the capability as MVP or lower the importance.', 422);
+  }
+  const factors = valueFactorsFrom(fields);
+  const businessValueScore = factors ? computeBusinessValueScore(factors) : null;
+  if (businessValueScore != null) fields.businessValue = businessValueLevelFromScore(businessValueScore);
   const siblings = await db.capability.findMany({
     where: { intakeAnswerSetId: capability!.intakeAnswerSetId, NOT: { id: capId } },
     select: { id: true },
@@ -41,6 +52,7 @@ export async function PATCH(
       where: { id: capId },
       data: {
         ...fields,
+        businessValueScore,
         dependsOnEdges: { create: validDeps.map((toCapabilityId) => ({ toCapabilityId })) },
       },
     }),

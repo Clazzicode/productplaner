@@ -70,7 +70,7 @@ export default async function HomePage() {
             const jira = initiative.syncConnections.find((c) => c.tool === "jira");
             const href =
               initiative.status === "generated"
-                ? `/initiatives/${initiative.id}/workspace/roadmap`
+                ? `/initiatives/${initiative.id}/dashboard`
                 : `/initiatives/${initiative.id}/intake`;
             return (
               <li key={initiative.id}>

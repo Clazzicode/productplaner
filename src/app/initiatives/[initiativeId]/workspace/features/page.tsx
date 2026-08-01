@@ -1,10 +1,11 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { Badge, riskBadgeVariant } from "@/components/ui/Badge";
 import EditableArtifact from "@/components/workspace/EditableArtifact";
 import TraceBadge from "@/components/workspace/TraceBadge";
 import { db } from "@/lib/db";
 import { traceEntriesFor } from "@/lib/trace";
-import { loadWorkspace } from "@/lib/workspace";
+import { loadCostContext, loadWorkspace } from "@/lib/workspace";
 
 export const dynamic = "force-dynamic";
 
@@ -17,6 +18,7 @@ export default async function FeaturesPage({
   const ws = await loadWorkspace(initiativeId);
   if (!ws) notFound();
   const locked = ws.isLocked("feature_hierarchy");
+  const cost = await loadCostContext(initiativeId, ws.prototype.id);
 
   const phases = await db.artifactLayer.findMany({
     where: { prototypeId: ws.prototype.id, type: "roadmap_phase" },
@@ -72,9 +74,29 @@ export default async function FeaturesPage({
                       )}
                       {cap && (
                         <span>
-                          Effort {cap.effortSize.toUpperCase()} · Value {cap.businessValue}
+                          Effort {cap.effortSize.toUpperCase()} · Value{" "}
+                          {cap.businessValue.replace("_", " ")}
                         </span>
                       )}
+                      {cap?.riskLevel && (
+                        <Badge variant={riskBadgeVariant(cap.riskLevel)}>risk {cap.riskLevel}</Badge>
+                      )}
+                      {feature.sourceCapabilityId &&
+                        cost.priorityByCapability.has(feature.sourceCapabilityId) && (
+                          <span title="§5 priority score: value ×0.45 + MVP importance ×0.25 + dependency importance ×0.15 + risk reduction ×0.15">
+                            Priority{" "}
+                            {cost.priorityByCapability.get(feature.sourceCapabilityId)!.toFixed(2)}
+                          </span>
+                        )}
+                      {feature.sourceCapabilityId &&
+                        cost.costByCapability.has(feature.sourceCapabilityId) && (
+                          <span className="font-medium text-neutral-700">
+                            ~$
+                            {Math.round(
+                              cost.costByCapability.get(feature.sourceCapabilityId)!,
+                            ).toLocaleString()}
+                          </span>
+                        )}
                       <Link
                         href={`/initiatives/${initiativeId}/workspace/epics`}
                         className="text-indigo-600 hover:underline"

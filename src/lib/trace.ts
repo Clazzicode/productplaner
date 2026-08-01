@@ -25,6 +25,7 @@ export interface TraceCapabilityView {
   isMvp: boolean;
   effortSize: string;
   businessValue: string;
+  riskLevel?: string;
   dependsOnNames: string[];
 }
 

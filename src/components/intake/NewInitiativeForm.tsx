@@ -8,6 +8,9 @@ export default function NewInitiativeForm() {
   const router = useRouter();
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
+  const [targetLaunchDate, setTargetLaunchDate] = useState("");
+  const [budget, setBudget] = useState("");
+  const [averageHourlyRate, setAverageHourlyRate] = useState("85");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -17,7 +20,13 @@ export default function NewInitiativeForm() {
     setError(null);
     const res = await apiFetch<{ initiativeId: string }>("/api/initiatives", {
       method: "POST",
-      body: { name, description },
+      body: {
+        name,
+        description,
+        targetLaunchDate: targetLaunchDate || null,
+        budget: budget === "" ? null : Number(budget),
+        ...(averageHourlyRate === "" ? {} : { averageHourlyRate: Number(averageHourlyRate) }),
+      },
     });
     setSubmitting(false);
     if (!res.ok || !res.data) {
@@ -49,6 +58,42 @@ export default function NewInitiativeForm() {
           className="mt-2 w-full rounded-lg border border-neutral-300 px-3 py-2.5 text-base focus:border-indigo-500 focus:outline-none"
         />
       </label>
+
+      <div className="mt-5 grid gap-4 sm:grid-cols-3">
+        <label className="block text-sm font-medium">
+          Target launch date <span className="font-normal text-neutral-400">(if known)</span>
+          <input
+            type="date"
+            value={targetLaunchDate}
+            onChange={(e) => setTargetLaunchDate(e.target.value)}
+            className="mt-2 w-full rounded-lg border border-neutral-300 px-3 py-2.5 text-base focus:border-indigo-500 focus:outline-none"
+          />
+        </label>
+        <label className="block text-sm font-medium">
+          Available budget ($) <span className="font-normal text-neutral-400">(if known)</span>
+          <input
+            type="number"
+            min={0}
+            value={budget}
+            onChange={(e) => setBudget(e.target.value)}
+            placeholder="e.g. 175000"
+            className="mt-2 w-full rounded-lg border border-neutral-300 px-3 py-2.5 text-base focus:border-indigo-500 focus:outline-none"
+          />
+        </label>
+        <label className="block text-sm font-medium">
+          Avg. hourly rate ($)
+          <input
+            type="number"
+            min={1}
+            value={averageHourlyRate}
+            onChange={(e) => setAverageHourlyRate(e.target.value)}
+            className="mt-2 w-full rounded-lg border border-neutral-300 px-3 py-2.5 text-base focus:border-indigo-500 focus:outline-none"
+          />
+          <span className="mt-1 block text-xs font-normal text-neutral-400">
+            $85 is a prototype assumption — replace with your real blended rate.
+          </span>
+        </label>
+      </div>
 
       <div className="mt-6 rounded-xl bg-indigo-50 p-4 text-sm">
         <p className="font-semibold text-indigo-900">Methodology: Hybrid waterfall</p>

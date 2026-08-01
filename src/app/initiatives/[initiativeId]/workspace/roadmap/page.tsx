@@ -5,7 +5,7 @@ import EditableArtifact from "@/components/workspace/EditableArtifact";
 import TraceBadge from "@/components/workspace/TraceBadge";
 import { db } from "@/lib/db";
 import { traceEntriesFor } from "@/lib/trace";
-import { loadWorkspace } from "@/lib/workspace";
+import { loadCostContext, loadWorkspace } from "@/lib/workspace";
 
 export const dynamic = "force-dynamic";
 
@@ -26,6 +26,7 @@ export default async function RoadmapPage({
   const ws = await loadWorkspace(initiativeId);
   if (!ws) notFound();
   const locked = ws.isLocked("roadmap");
+  const cost = await loadCostContext(initiativeId, ws.prototype.id);
 
   const root = await db.artifactLayer.findFirst({
     where: { prototypeId: ws.prototype.id, type: "roadmap" },
@@ -60,6 +61,11 @@ export default async function RoadmapPage({
           const content = parse(phase.contentJson);
           const start = content.startDate ? new Date(content.startDate as string) : null;
           const end = content.endDate ? new Date(content.endDate as string) : null;
+          const phaseCost = phase.children.reduce(
+            (n, f) =>
+              n + (f.sourceCapabilityId ? (cost.costByCapability.get(f.sourceCapabilityId) ?? 0) : 0),
+            0,
+          );
           return (
             <section
               key={phase.id}
@@ -76,6 +82,14 @@ export default async function RoadmapPage({
                   />
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
+                  {phaseCost > 0 && (
+                    <span
+                      className="rounded-full bg-white px-3 py-1 text-xs font-medium text-neutral-600"
+                      title="Sum of this phase's capability costs (§25) — story points × cost per point"
+                    >
+                      ~${Math.round(phaseCost).toLocaleString()}
+                    </span>
+                  )}
                   {start && end && (
                     <span className="rounded-full bg-white px-3 py-1 text-xs font-medium text-neutral-600">
                       {format(start, "MMM d")} → {format(end, "MMM d, yyyy")}

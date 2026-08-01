@@ -11,6 +11,12 @@ export interface CapabilityView {
   isMvp: boolean;
   effortSize: string;
   businessValue: string;
+  riskLevel: string;
+  mvpImportance: string | null;
+  customerImpactScore: number | null;
+  revenueImpactScore: number | null;
+  strategicAlignmentScore: number | null;
+  riskComplianceScore: number | null;
   dependsOn: string[];
 }
 
@@ -23,6 +29,10 @@ export interface IntakeView {
   sprintLengthWeeks: number;
   velocityPerPersonPerSprint: number;
   capacityBufferPercent: number;
+  hoursPerSprintPerMember: number;
+  utilizationRatePercent: number;
+  hoursPerStoryPoint: number;
+  historicalVelocityPoints: number | null;
 }
 
 interface Flag {
@@ -39,10 +49,27 @@ const EFFORT_OPTIONS = [
 ];
 
 const VALUE_OPTIONS = [
+  { value: "very_low", label: "Very low — marginal" },
   { value: "low", label: "Low — nice to have" },
   { value: "medium", label: "Medium — clearly useful" },
   { value: "high", label: "High — moves the outcome" },
   { value: "critical", label: "Critical — the product fails without it" },
+];
+
+const RISK_OPTIONS = [
+  { value: "low", label: "Low — well understood" },
+  { value: "medium", label: "Medium — some unknowns" },
+  { value: "high", label: "High — real technical or external uncertainty" },
+  { value: "critical", label: "Critical — unproven technology or hard dependency" },
+];
+
+const MVP_IMPORTANCE_OPTIONS = [
+  { value: "", label: "Auto (from the MVP answer)" },
+  { value: "required_for_mvp", label: "Required for MVP" },
+  { value: "strongly_preferred", label: "Strongly preferred" },
+  { value: "useful_not_required", label: "Useful but not required" },
+  { value: "future_enhancement", label: "Future enhancement" },
+  { value: "optional", label: "Optional" },
 ];
 
 const STEPS = ["Problem", "Customer", "Outcome", "Capabilities", "Capacity", "Review"] as const;
@@ -105,7 +132,7 @@ export default function IntakeWizard(props: {
       void refreshValidation();
       return;
     }
-    router.push(`/initiatives/${initiativeId}/workspace/roadmap`);
+    router.push(`/initiatives/${initiativeId}/review`);
     router.refresh();
   };
 
@@ -238,8 +265,8 @@ export default function IntakeWizard(props: {
           title="What is the team's available capacity?"
           help={
             verbose
-              ? "This one answer powers both halves of the hybrid model: it sets the waterfall phase timeline AND the sprint-by-sprint plan. Velocity is how many story points one person typically completes per sprint — 8 is a sensible default if you don't track it. The buffer covers meetings, support, and the unexpected."
-              : "Mapped to both waterfall phases and sprint cadence — the dual mapping that powers the hybrid model."
+              ? "This one answer powers both halves of the hybrid model: it sets the waterfall phase timeline AND the sprint-by-sprint plan. Capacity is estimated from real hours — team size × hours per sprint × utilization — then a buffer is reserved for the unexpected, and hours convert into story points. Every default here is a labeled prototype assumption you can change."
+              : "Mapped to both waterfall phases and sprint cadence — hours-based capacity powers the dual mapping and the cost model."
           }
         >
           <div className="grid grid-cols-2 gap-4">
@@ -258,34 +285,66 @@ export default function IntakeWizard(props: {
               onChange={(v) => setIntake({ ...intake, sprintLengthWeeks: v ?? 2 })}
             />
             <NumberField
-              label="Velocity (points / person / sprint)"
-              value={intake.velocityPerPersonPerSprint}
+              label="Hours per member per sprint"
+              value={intake.hoursPerSprintPerMember}
               min={1}
-              max={40}
-              onChange={(v) => setIntake({ ...intake, velocityPerPersonPerSprint: v ?? 8 })}
+              max={400}
+              onChange={(v) => setIntake({ ...intake, hoursPerSprintPerMember: v ?? 80 })}
+            />
+            <NumberField
+              label="Utilization (%)"
+              value={intake.utilizationRatePercent}
+              min={10}
+              max={100}
+              onChange={(v) => setIntake({ ...intake, utilizationRatePercent: v ?? 70 })}
             />
             <NumberField
               label="Capacity buffer (%)"
               value={intake.capacityBufferPercent}
               min={0}
               max={90}
-              onChange={(v) => setIntake({ ...intake, capacityBufferPercent: v ?? 20 })}
+              onChange={(v) => setIntake({ ...intake, capacityBufferPercent: v ?? 15 })}
+            />
+            <NumberField
+              label="Hours per story point"
+              value={intake.hoursPerStoryPoint}
+              min={1}
+              max={40}
+              onChange={(v) => setIntake({ ...intake, hoursPerStoryPoint: v ?? 8 })}
+            />
+            <NumberField
+              label="Historical velocity (points/sprint, optional)"
+              value={intake.historicalVelocityPoints ?? ""}
+              min={0}
+              max={1000}
+              onChange={(v) => setIntake({ ...intake, historicalVelocityPoints: v })}
             />
           </div>
-          {intake.teamSize && intake.teamSize > 0 && (
-            <p className="mt-4 rounded-lg bg-indigo-50 px-3 py-2 text-sm text-indigo-800">
-              Effective sprint capacity:{" "}
-              <strong>
-                {(
-                  intake.teamSize *
-                  intake.velocityPerPersonPerSprint *
-                  (1 - intake.capacityBufferPercent / 100)
-                ).toFixed(1)}{" "}
-                points
-              </strong>{" "}
-              per {intake.sprintLengthWeeks}-week sprint.
-            </p>
-          )}
+          {intake.teamSize && intake.teamSize > 0 && (() => {
+            const available =
+              intake.teamSize *
+              intake.hoursPerSprintPerMember *
+              (intake.utilizationRatePercent / 100);
+            const usable = available * (1 - intake.capacityBufferPercent / 100);
+            const estimated = Math.max(1, Math.floor(usable / intake.hoursPerStoryPoint));
+            const capped =
+              intake.historicalVelocityPoints && intake.historicalVelocityPoints > 0
+                ? Math.min(estimated, intake.historicalVelocityPoints)
+                : estimated;
+            return (
+              <div className="mt-4 rounded-lg bg-indigo-50 px-3 py-2.5 text-sm text-indigo-800">
+                <p>
+                  {available.toFixed(0)} available hours → {usable.toFixed(0)} usable after the{" "}
+                  {intake.capacityBufferPercent}% buffer → ÷{intake.hoursPerStoryPoint} hrs/point ={" "}
+                  <strong>{capped} points</strong> per {intake.sprintLengthWeeks}-week sprint
+                  {capped !== estimated && " (capped by historical velocity)"}.
+                </p>
+                <p className="mt-1 text-xs text-indigo-600">
+                  Estimated point capacity based on prototype assumptions.
+                </p>
+              </div>
+            );
+          })()}
           <WizardNav
             busy={busy}
             onBack={() => setStep(3)}
@@ -293,8 +352,11 @@ export default function IntakeWizard(props: {
               advance({
                 teamSize: intake.teamSize,
                 sprintLengthWeeks: intake.sprintLengthWeeks,
-                velocityPerPersonPerSprint: intake.velocityPerPersonPerSprint,
                 capacityBufferPercent: intake.capacityBufferPercent,
+                hoursPerSprintPerMember: intake.hoursPerSprintPerMember,
+                utilizationRatePercent: intake.utilizationRatePercent,
+                hoursPerStoryPoint: intake.hoursPerStoryPoint,
+                historicalVelocityPoints: intake.historicalVelocityPoints,
               })
             }
           />
@@ -501,19 +563,67 @@ function CapabilityForm(props: {
     isMvp: existing?.isMvp ?? true,
     effortSize: existing?.effortSize ?? "m",
     businessValue: existing?.businessValue ?? "high",
+    riskLevel: existing?.riskLevel ?? "medium",
+    mvpImportance: existing?.mvpImportance ?? null,
+    customerImpactScore: existing?.customerImpactScore ?? null,
+    revenueImpactScore: existing?.revenueImpactScore ?? null,
+    strategicAlignmentScore: existing?.strategicAlignmentScore ?? null,
+    riskComplianceScore: existing?.riskComplianceScore ?? null,
     dependsOn: existing?.dependsOn ?? [],
   });
+  const [advancedValue, setAdvancedValue] = useState(
+    existing != null && existing.customerImpactScore != null,
+  );
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+
+  const factorScore =
+    form.customerImpactScore != null &&
+    form.revenueImpactScore != null &&
+    form.strategicAlignmentScore != null &&
+    form.riskComplianceScore != null
+      ? Math.round(
+          (form.customerImpactScore * 0.3 +
+            form.revenueImpactScore * 0.3 +
+            form.strategicAlignmentScore * 0.25 +
+            form.riskComplianceScore * 0.15) *
+            100,
+        ) / 100
+      : null;
 
   const save = async () => {
     setBusy(true);
     setError(null);
+    // The weighted level mirrors the server's §2 derivation for the local view.
+    const level =
+      factorScore == null || !advancedValue
+        ? form.businessValue
+        : factorScore >= 4.5
+          ? "critical"
+          : factorScore >= 3.5
+            ? "high"
+            : factorScore >= 2.5
+              ? "medium"
+              : factorScore >= 1.5
+                ? "low"
+                : "very_low";
+    const body = {
+      ...form,
+      businessValue: level,
+      ...(advancedValue
+        ? {}
+        : {
+            customerImpactScore: null,
+            revenueImpactScore: null,
+            strategicAlignmentScore: null,
+            riskComplianceScore: null,
+          }),
+    };
     const res = existing
-      ? await apiFetch(`/api/capabilities/${existing.id}`, { method: "PATCH", body: form })
+      ? await apiFetch(`/api/capabilities/${existing.id}`, { method: "PATCH", body })
       : await apiFetch<{ capabilityId: string }>(`/api/initiatives/${initiativeId}/capabilities`, {
           method: "POST",
-          body: form,
+          body,
         });
     setBusy(false);
     if (!res.ok) {
@@ -521,7 +631,7 @@ function CapabilityForm(props: {
       return;
     }
     const id = existing?.id ?? (res.data as { capabilityId: string }).capabilityId;
-    onSaved({ id, ...form });
+    onSaved({ id, ...body });
   };
 
   return (
@@ -584,9 +694,41 @@ function CapabilityForm(props: {
           <select
             value={form.businessValue}
             onChange={(e) => setForm({ ...form, businessValue: e.target.value })}
-            className="mt-1 w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 focus:border-indigo-500 focus:outline-none"
+            disabled={advancedValue}
+            className="mt-1 w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 focus:border-indigo-500 focus:outline-none disabled:bg-neutral-100 disabled:text-neutral-500"
           >
             {VALUE_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="block text-sm font-medium">
+          Risk level
+          <select
+            value={form.riskLevel}
+            onChange={(e) => setForm({ ...form, riskLevel: e.target.value })}
+            className="mt-1 w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 focus:border-indigo-500 focus:outline-none"
+          >
+            {RISK_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+          <span className="mt-1 block text-xs font-normal text-neutral-400">
+            High-risk MVP work is scheduled earlier to reduce uncertainty.
+          </span>
+        </label>
+        <label className="block text-sm font-medium">
+          MVP importance <span className="font-normal text-neutral-400">(optional override)</span>
+          <select
+            value={form.mvpImportance ?? ""}
+            onChange={(e) => setForm({ ...form, mvpImportance: e.target.value || null })}
+            className="mt-1 w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 focus:border-indigo-500 focus:outline-none"
+          >
+            {MVP_IMPORTANCE_OPTIONS.map((o) => (
               <option key={o.value} value={o.value}>
                 {o.label}
               </option>
@@ -621,6 +763,54 @@ function CapabilityForm(props: {
             </div>
           )}
         </div>
+      </div>
+
+      <div className="mt-4">
+        <label className="flex items-center gap-2 text-sm font-medium">
+          <input
+            type="checkbox"
+            checked={advancedValue}
+            onChange={(e) => setAdvancedValue(e.target.checked)}
+          />
+          Score business value from weighted factors (optional)
+        </label>
+        {advancedValue && (
+          <div className="mt-3 rounded-lg border border-indigo-200 bg-white p-4">
+            <div className="grid gap-3 sm:grid-cols-2">
+              {(
+                [
+                  ["customerImpactScore", "Customer impact (30%)"],
+                  ["revenueImpactScore", "Revenue or cost impact (30%)"],
+                  ["strategicAlignmentScore", "Strategic alignment (25%)"],
+                  ["riskComplianceScore", "Risk or compliance impact (15%)"],
+                ] as const
+              ).map(([key, label]) => (
+                <label key={key} className="block text-sm font-medium">
+                  {label}
+                  <select
+                    value={form[key] ?? ""}
+                    onChange={(e) =>
+                      setForm({ ...form, [key]: e.target.value === "" ? null : Number(e.target.value) })
+                    }
+                    className="mt-1 w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 focus:border-indigo-500 focus:outline-none"
+                  >
+                    <option value="">—</option>
+                    {[1, 2, 3, 4, 5].map((n) => (
+                      <option key={n} value={n}>
+                        {n}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ))}
+            </div>
+            <p className="mt-3 text-sm text-neutral-600">
+              {factorScore == null
+                ? "Score all four factors (1–5) to compute the weighted value."
+                : `Weighted business value: ${factorScore} out of 5 — sets the Q8 level automatically.`}
+            </p>
+          </div>
+        )}
       </div>
 
       {error && <p className="mt-3 text-sm text-red-600">{error}</p>}

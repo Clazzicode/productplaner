@@ -1,4 +1,5 @@
-import { EFFORT_POINTS, VALUE_SCORE } from "./constants";
+import { EFFORT_POINTS, MVP_IMPORTANCE_SCORE, VALUE_SCORE } from "./constants";
+import { computePriorityScore, deriveMvpImportance, hasScoringInputs } from "./scoring";
 import type { CapabilityInput } from "./types";
 
 /**
@@ -39,10 +40,13 @@ export function findCycle(capabilities: CapabilityInput[]): string[] {
 
 /**
  * Dependency-respecting priority order within one set of capabilities.
- * Kahn's algorithm where, among currently-available nodes, we always pick:
+ * Kahn's algorithm where, among currently-available nodes, we always pick
+ * per the §6 ordering rule: MVP importance desc → priority score desc →
  * business value desc → effort asc → original input order.
- * Dependencies pointing outside the set are treated as already satisfied
- * (they live in an earlier phase).
+ * The §5 keys only apply when a capability actually carries the new scoring
+ * inputs (riskLevel/mvpImportance) — legacy inputs without them order exactly
+ * as before. Dependencies pointing outside the set are treated as already
+ * satisfied (they live in an earlier phase).
  */
 export function orderByDependencyAndPriority(
   capabilities: CapabilityInput[],
@@ -57,13 +61,34 @@ export function orderByDependencyAndPriority(
     );
   }
 
+  // §5 dependency importance is derived from how many caps in this set
+  // depend on each capability.
+  const dependedOnBy = new Map<string, number>();
+  for (const cap of capabilities) {
+    for (const d of cap.dependsOn) {
+      if (inSet.has(d) && d !== cap.id) dependedOnBy.set(d, (dependedOnBy.get(d) ?? 0) + 1);
+    }
+  }
+
+  const scoringActive = capabilities.some(hasScoringInputs);
   const pickBest = (available: CapabilityInput[]): CapabilityInput =>
-    [...available].sort(
-      (a, b) =>
+    [...available].sort((a, b) => {
+      if (scoringActive) {
+        const mvpDiff =
+          MVP_IMPORTANCE_SCORE[deriveMvpImportance(b)] -
+          MVP_IMPORTANCE_SCORE[deriveMvpImportance(a)];
+        if (mvpDiff !== 0) return mvpDiff;
+        const priorityDiff =
+          computePriorityScore(b, dependedOnBy.get(b.id) ?? 0) -
+          computePriorityScore(a, dependedOnBy.get(a.id) ?? 0);
+        if (priorityDiff !== 0) return priorityDiff;
+      }
+      return (
         VALUE_SCORE[b.businessValue] - VALUE_SCORE[a.businessValue] ||
         EFFORT_POINTS[a.effortSize] - EFFORT_POINTS[b.effortSize] ||
-        a.order - b.order,
-    )[0];
+        a.order - b.order
+      );
+    })[0];
 
   const result: CapabilityInput[] = [];
   const done = new Set<string>();
