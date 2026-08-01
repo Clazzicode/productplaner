@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { DemoModeProvider } from "@/components/demo/DemoModeContext";
 import DemoModeToggle from "@/components/demo/DemoModeToggle";
+import StartOverButton from "@/components/demo/StartOverButton";
 import LeftNav, { type NavInitiative } from "./LeftNav";
 
 /**
@@ -75,6 +76,7 @@ export default function AppShell(props: {
             </div>
             <div className="flex items-center gap-3">
               <DemoModeToggle />
+              <StartOverButton />
               <span className="hidden items-center gap-2 text-sm text-neutral-500 sm:flex">
                 <span className="flex h-7 w-7 items-center justify-center rounded-full bg-indigo-100 text-xs font-semibold text-indigo-700">
                   {props.userName.slice(0, 1).toUpperCase()}

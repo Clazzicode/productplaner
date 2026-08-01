@@ -25,18 +25,21 @@ export default function SprintReleaseStatus(props: {
   initiativeId: string;
   currentSprint: SprintSummaryView | null;
   releases: ReleaseSummaryView[];
+  /** Kanban never has sprints — this distinguishes that steady state from an
+   * actual empty/error case for discrete-sprint methodologies. */
+  mode?: "sprints" | "continuous_flow";
 }) {
   const s = props.currentSprint;
   const usage = s && s.capacityPoints > 0 ? Math.round((s.plannedPoints / s.capacityPoints) * 100) : 0;
   return (
     <Card>
       <div className="flex items-center justify-between">
-        <CardTitle>Sprints &amp; releases</CardTitle>
+        <CardTitle>{props.mode === "continuous_flow" ? "Flow & releases" : "Sprints & releases"}</CardTitle>
         <Link
           href={`/initiatives/${props.initiativeId}/workspace/sprints`}
           className="text-xs font-medium text-indigo-600 hover:underline"
         >
-          Open sprint plan →
+          {props.mode === "continuous_flow" ? "Open flow plan →" : "Open sprint plan →"}
         </Link>
       </div>
 
@@ -54,6 +57,10 @@ export default function SprintReleaseStatus(props: {
           </p>
           <ProgressBar percent={usage} over={usage > 100} className="mt-2" />
         </div>
+      ) : props.mode === "continuous_flow" ? (
+        <p className="mt-3 text-sm text-neutral-400">
+          Continuous flow — no fixed sprints; see release forecasts below.
+        </p>
       ) : (
         <p className="mt-3 text-sm text-neutral-400">No sprints planned yet.</p>
       )}

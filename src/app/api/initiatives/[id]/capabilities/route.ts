@@ -21,9 +21,6 @@ export async function POST(
     include: { capabilities: { select: { id: true, order: true } } },
   });
   if (!intake) return jsonError("Initiative not found.", 404);
-  if (intake.status === "generated") {
-    return jsonError("Intake answers are permanent once the prototype is generated.", 409);
-  }
 
   const { dependsOn, ...fields } = parsed.data;
   if (fields.mvpImportance === "required_for_mvp" && !fields.isMvp) {

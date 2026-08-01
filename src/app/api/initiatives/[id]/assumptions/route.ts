@@ -2,7 +2,13 @@ import { NextResponse } from "next/server";
 import { jsonError, zodMessage } from "@/lib/api";
 import { db } from "@/lib/db";
 import { DEFAULT_ASSUMPTIONS } from "@/lib/generation/constants";
-import { loadIntakeInput, repackSprints } from "@/lib/generation/engine";
+import {
+  AgileLayerLockedError,
+  assertAgileLayerEditable,
+  loadIntakeInput,
+  repackSprints,
+} from "@/lib/generation/engine";
+import { resolveMethodology } from "@/lib/generation/methodology";
 import { assumptionsPatchSchema } from "@/lib/validation/schemas";
 
 // Capacity/cost assumptions (§31) stay editable after generation — they are
@@ -61,6 +67,13 @@ export async function PATCH(
   });
   if (!initiative || !initiative.intakeAnswerSet) return jsonError("Initiative not found.", 404);
 
+  try {
+    await assertAgileLayerEditable(id);
+  } catch (err) {
+    if (err instanceof AgileLayerLockedError) return jsonError(err.message, 409);
+    throw err;
+  }
+
   const initiativeData: Record<string, unknown> = {};
   const intakeData: Record<string, unknown> = {};
   for (const key of INITIATIVE_FIELDS) {
@@ -87,8 +100,9 @@ export async function PATCH(
   if (capacityChanged && initiative.prototype) {
     const intakeInput = await loadIntakeInput(id);
     const prototypeId = initiative.prototype.id;
+    const methodology = resolveMethodology(initiative.methodology);
     sprints = await db.$transaction(
-      (tx) => repackSprints(tx, prototypeId, intakeInput),
+      (tx) => repackSprints(tx, prototypeId, intakeInput, methodology),
       { timeout: 120_000 },
     );
   }

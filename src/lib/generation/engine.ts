@@ -1,6 +1,6 @@
 import type { Prisma, PrismaClient } from "@prisma/client";
 import { db } from "@/lib/db";
-import { buildPlan, packSprints } from "./buildPlan";
+import { buildPlan, packContinuousFlow, packSprints } from "./buildPlan";
 import { EPIC_NAME_SUFFIXES, PHASE_NAMES, RELEASE_NAMES } from "./constants";
 import {
   buildEpicSeeds,
@@ -10,6 +10,7 @@ import {
   type NarrativeContext,
 } from "./decompose";
 import { computeEffectiveCapacity } from "./cost";
+import { METHODOLOGY_PROFILES, resolveMethodology } from "./methodology";
 import { validateIntake } from "./validateIntake";
 import {
   LAYER_SEQUENCE,
@@ -17,6 +18,7 @@ import {
   type IntakeInput,
   type IntakeValidation,
   type LayerType,
+  type Methodology,
   type PlannedEpic,
   type PlannedFeature,
   type PlannedStory,
@@ -27,6 +29,30 @@ type Db = PrismaClient | Prisma.TransactionClient;
 export class IntakeInvalidError extends Error {
   constructor(public validation: IntakeValidation) {
     super("Intake has unresolved validation flags");
+  }
+}
+
+export class AgileLayerLockedError extends Error {}
+
+/**
+ * Waterfall's real behavioral difference: once the full baseline is
+ * approved, the agile layer (sprints/releases) freezes too — a real fixed
+ * schedule, not something you rebalance. Enforced only at user-initiated
+ * mutation entry points (move-sprint route, assumptions route,
+ * `recalculatePlan`'s all-locked case), never inside the internal repack
+ * machinery — an unlock→edit→re-lock of a waterfall layer must still be able
+ * to repack sprints internally.
+ */
+export async function assertAgileLayerEditable(initiativeId: string): Promise<void> {
+  const initiative = await db.initiative.findUniqueOrThrow({
+    where: { id: initiativeId },
+    include: { prototype: { select: { approvedAt: true } } },
+  });
+  const profile = METHODOLOGY_PROFILES[resolveMethodology(initiative.methodology)];
+  if (profile.agileLayerGate === "locked_after_baseline" && initiative.prototype?.approvedAt) {
+    throw new AgileLayerLockedError(
+      "This initiative's methodology is Waterfall — once the full baseline is approved, the sprint and release plan is a fixed schedule and can't be edited.",
+    );
   }
 }
 
@@ -250,11 +276,15 @@ async function createFeatureTree(
 // ---------- full generation (FR-08/FR-09) ----------
 
 export async function generatePrototype(initiativeId: string): Promise<{ prototypeId: string }> {
-  const intake = await loadIntakeInput(initiativeId);
+  const [intake, initiativeRow] = await Promise.all([
+    loadIntakeInput(initiativeId),
+    db.initiative.findUniqueOrThrow({ where: { id: initiativeId }, select: { methodology: true } }),
+  ]);
+  const methodology = resolveMethodology(initiativeRow.methodology);
   const validation = validateIntake(intake);
   if (validation.errors.length > 0) throw new IntakeInvalidError(validation);
 
-  const plan = buildPlan(intake);
+  const plan = buildPlan(intake, methodology);
   const capById = new Map(intake.capabilities.map((c) => [c.id, c]));
 
   const prototypeId = await db.$transaction(
@@ -392,8 +422,9 @@ export async function regenerateBelow(
 ): Promise<RegenStats> {
   const proto = await db.prototype.findUniqueOrThrow({
     where: { id: prototypeId },
-    select: { initiativeId: true },
+    select: { initiativeId: true, initiative: { select: { methodology: true } } },
   });
+  const methodology = resolveMethodology(proto.initiative.methodology);
   const intake = await loadIntakeInput(proto.initiativeId);
   const ctx = buildNarrativeContext(intake);
   const capById = new Map(intake.capabilities.map((c) => [c.id, c]));
@@ -542,7 +573,7 @@ export async function regenerateBelow(
       }
       // acceptance_criteria is the leaf — nothing beneath except the agile layers.
 
-      stats.sprints = await repackSprints(tx, prototypeId, intake);
+      stats.sprints = await repackSprints(tx, prototypeId, intake, methodology);
 
       // Downstream waterfall locks reset — must be reviewed and re-locked in order.
       const idx = LAYER_SEQUENCE.indexOf(editedLayer);
@@ -582,13 +613,18 @@ function decomposeForRegen(cap: CapabilityInput, ctx: NarrativeContext): Planned
 /**
  * Rebuilds sprints and releases from the CURRENT story rows in strict
  * roadmap order. Manual sprint moves are reset — the agile layer is always
- * recomputed when the waterfall foundation moves.
+ * recomputed when the waterfall foundation moves. Kanban (`sprintMode:
+ * "continuous_flow"`) creates no `Sprint` rows at all — every story's
+ * `sprintId` stays null, and `Release` dates come from cumulative-throughput
+ * math instead of discrete sprint spans.
  */
 export async function repackSprints(
   tx: Db,
   prototypeId: string,
   intake: IntakeInput,
+  methodology: Methodology = "hybrid",
 ): Promise<number> {
+  const profile = METHODOLOGY_PROFILES[resolveMethodology(methodology)];
   await tx.sprint.deleteMany({ where: { prototypeId } }); // SetNull clears story.sprintId
   await tx.release.deleteMany({ where: { prototypeId } });
 
@@ -627,8 +663,54 @@ export async function repackSprints(
   }
 
   const capacityPoints = computeEffectiveCapacity(intake);
+  const packableStories = ordered.map((o) => ({ story: o.shim, phaseNumber: o.phaseNumber }));
+
+  if (profile.sprintMode === "continuous_flow") {
+    const flow = packContinuousFlow({
+      stories: packableStories,
+      capacityPoints,
+      sprintLengthWeeks: intake.sprintLengthWeeks,
+      startDate: intake.startDate,
+    });
+    // Every story's sprintId is already null here — the `sprint.deleteMany`
+    // above SetNulls it, and Kanban never assigns one — so there's nothing
+    // further to update on the story rows themselves.
+    const phasesPresent = [...new Set(ordered.map((o) => o.phaseNumber))].sort((a, b) => a - b);
+    for (const [i, phaseNumber] of phasesPresent.entries()) {
+      const targetDate = flow.releaseDateByPhase.get(phaseNumber);
+      if (!targetDate) continue;
+      await tx.release.create({
+        data: {
+          prototypeId,
+          name: RELEASE_NAMES[phaseNumber] ?? `Release ${i + 1}`,
+          phaseNumber,
+          targetDate,
+          order: i + 1,
+        },
+      });
+    }
+    for (const phase of phaseRows) {
+      const content = parseJson(phase.contentJson);
+      const phaseNumber = (content.phaseNumber as number | undefined) ?? 1;
+      const range = flow.phaseDateRanges.get(phaseNumber);
+      if (range) {
+        await tx.artifactLayer.update({
+          where: { id: phase.id },
+          data: {
+            contentJson: JSON.stringify({
+              ...content,
+              startDate: range.startDate.toISOString(),
+              endDate: range.endDate.toISOString(),
+            }),
+          },
+        });
+      }
+    }
+    return 0; // zero Sprint rows for Kanban
+  }
+
   const sprints = packSprints({
-    stories: ordered.map((o) => ({ story: o.shim, phaseNumber: o.phaseNumber })),
+    stories: packableStories,
     capacityPoints,
     sprintLengthWeeks: intake.sprintLengthWeeks,
     startDate: intake.startDate,
@@ -695,4 +777,137 @@ export async function repackSprints(
   }
 
   return sprints.length;
+}
+
+// ---------- manual recalculation (the "living plan" demo action) ----------
+// Distinct from FR-11's automatic re-lock propagation above: this is a
+// user-triggered action from the workspace, available any time intake has
+// changed, not only when unlocking/re-locking a specific layer.
+
+export type RecalculateMode = "full" | "respect_locks";
+export type RecalculateDetail =
+  | "full"
+  | "repack_only"
+  | "regen_below"
+  | "full_fallback_no_locks";
+
+export class RecalculateBlockedError extends Error {}
+
+export interface RecalculateResult {
+  prototypeId: string;
+  mode: RecalculateMode;
+  detail: RecalculateDetail;
+  regenerated?: RegenStats | null;
+  sprintsRepacked?: number | null;
+}
+
+export type RespectLocksBranch =
+  | { kind: "full_fallback_no_locks" }
+  | { kind: "repack_only" }
+  | { kind: "regen_below"; anchorLayer: LayerType };
+
+/**
+ * Pure branch-selection logic for `"respect_locks"` mode, kept separate from
+ * `recalculatePlan` so it's unit-testable without a database. Locks always
+ * form a contiguous locked-prefix of `LAYER_SEQUENCE` (enforced by
+ * `unlockLayer` cascading downstream) — this never needs to handle gaps.
+ */
+export function determineRespectLocksBranch(
+  locks: { layerType: string; state: string }[],
+): RespectLocksBranch {
+  const lockedTypes = LAYER_SEQUENCE.filter(
+    (t) => locks.find((l) => l.layerType === t)?.state === "locked",
+  );
+  if (lockedTypes.length === 0) return { kind: "full_fallback_no_locks" };
+  if (lockedTypes.length === LAYER_SEQUENCE.length) return { kind: "repack_only" };
+  const anchorLayer = [...LAYER_SEQUENCE].reverse().find((t) => lockedTypes.includes(t))!;
+  return { kind: "regen_below", anchorLayer };
+}
+
+/**
+ * `regenerateBelow` trusts each existing `roadmap_phase` row's stored
+ * `capabilityIds` — it can't notice a capability added/removed since the last
+ * generation. Pure set-diff, unit-testable in isolation; reclassifying an
+ * *existing* capability in a way that would move it to a different phase
+ * isn't caught here — a documented gap, not a silent one (the confirmation
+ * UI discloses it).
+ */
+export function capabilitySetDrifted(
+  storedIds: Iterable<string>,
+  currentIds: Iterable<string>,
+): boolean {
+  const stored = new Set(storedIds);
+  const current = new Set(currentIds);
+  const added = [...current].some((id) => !stored.has(id));
+  const removed = [...stored].some((id) => !current.has(id));
+  return added || removed;
+}
+
+/**
+ * `"full"` re-runs generation from scratch (same as the original Generate step —
+ * already safe to call again). `"respect_locks"` only touches unlocked layers
+ * plus the always-flexible agile layer, per `determineRespectLocksBranch`.
+ */
+export async function recalculatePlan(
+  initiativeId: string,
+  mode: RecalculateMode,
+): Promise<RecalculateResult> {
+  if (mode === "full") {
+    const { prototypeId } = await generatePrototype(initiativeId);
+    return { prototypeId, mode: "full", detail: "full" };
+  }
+
+  const initiative = await db.initiative.findUniqueOrThrow({
+    where: { id: initiativeId },
+    include: { prototype: { include: { layerLocks: true } } },
+  });
+  if (!initiative.prototype) {
+    throw new Error("No prototype to recalculate — generate the plan first.");
+  }
+  const methodology = resolveMethodology(initiative.methodology);
+  const prototypeId = initiative.prototype.id;
+  const branch = determineRespectLocksBranch(
+    initiative.prototype.layerLocks.map((l) => ({ layerType: l.layerType, state: l.state })),
+  );
+
+  if (branch.kind === "full_fallback_no_locks") {
+    const { prototypeId: id } = await generatePrototype(initiativeId);
+    return { prototypeId: id, mode: "respect_locks", detail: "full_fallback_no_locks" };
+  }
+
+  if (branch.kind === "repack_only") {
+    // Waterfall's agile layer freezes once the baseline is approved — same
+    // guard as the assumptions/move-sprint routes.
+    await assertAgileLayerEditable(initiativeId);
+    const intake = await loadIntakeInput(initiativeId);
+    const sprints = await db.$transaction(
+      (tx) => repackSprints(tx, prototypeId, intake, methodology),
+      { timeout: 120_000 },
+    );
+    return { prototypeId, mode: "respect_locks", detail: "repack_only", sprintsRepacked: sprints };
+  }
+
+  await assertRecalculateSafe(initiativeId, prototypeId);
+  const stats = await regenerateBelow(prototypeId, branch.anchorLayer);
+  return { prototypeId, mode: "respect_locks", detail: "regen_below", regenerated: stats };
+}
+
+async function assertRecalculateSafe(initiativeId: string, prototypeId: string): Promise<void> {
+  const [intake, phaseRows] = await Promise.all([
+    loadIntakeInput(initiativeId),
+    db.artifactLayer.findMany({
+      where: { prototypeId, type: "roadmap_phase" },
+      select: { contentJson: true },
+    }),
+  ]);
+  const storedIds = phaseRows.flatMap(
+    (p) => (parseJson(p.contentJson).capabilityIds as string[] | undefined) ?? [],
+  );
+  const currentIds = intake.capabilities.map((c) => c.id);
+  if (capabilitySetDrifted(storedIds, currentIds)) {
+    throw new RecalculateBlockedError(
+      'Capabilities were added or removed since the roadmap was last generated — "Recalculate ' +
+        '— respect my locks" can\'t re-shuffle a locked roadmap. Use Full regenerate instead.',
+    );
+  }
 }

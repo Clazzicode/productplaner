@@ -2,10 +2,12 @@ import { PHASE_NAMES, RELEASE_NAMES } from "./constants";
 import { computeEffectiveCapacity } from "./cost";
 import { buildNarrativeContext, decomposeCapability } from "./decompose";
 import { orderByDependencyAndPriority } from "./dependencyGraph";
+import { METHODOLOGY_PROFILES, resolveMethodology, type MethodologyProfile } from "./methodology";
 import type {
   CapabilityInput,
   GeneratedPlan,
   IntakeInput,
+  Methodology,
   PlannedPhase,
   PlannedRelease,
   PlannedSprint,
@@ -54,6 +56,44 @@ export function partitionPhases(
     if (members.length > 0) phases.set(n, orderByDependencyAndPriority(members));
   }
   return phases;
+}
+
+/**
+ * Agile/Scrum roadmap mode: one continuous, priority-ordered backlog instead
+ * of an MVP/value gate — "Now" is just the top of the backlog. Reuses
+ * `orderByDependencyAndPriority`'s single topological+priority sort over the
+ * WHOLE capability set (not per-phase), so chunking the already-sorted array
+ * preserves "dependency before dependent" without partitionPhases's
+ * forward-dependency promotion loop.
+ */
+export function partitionPhasesContinuousBacklog(
+  capabilities: CapabilityInput[],
+  windowSize = 3,
+): Map<number, CapabilityInput[]> {
+  const ordered = orderByDependencyAndPriority(capabilities);
+  const phases = new Map<number, CapabilityInput[]>();
+  for (let i = 0; i < ordered.length; i += windowSize) {
+    phases.set(Math.floor(i / windowSize) + 1, ordered.slice(i, i + windowSize));
+  }
+  return phases;
+}
+
+function agileWindowName(phaseNumber: number): string {
+  if (phaseNumber === 1) return "Now";
+  if (phaseNumber === 2) return "Next";
+  return `Later ${phaseNumber - 2}`;
+}
+
+function phaseName(profile: MethodologyProfile, phaseNumber: number): string {
+  return profile.roadmapMode === "continuous_backlog"
+    ? agileWindowName(phaseNumber)
+    : (PHASE_NAMES[phaseNumber] ?? `Phase ${phaseNumber}`);
+}
+
+function releaseName(profile: MethodologyProfile, phaseNumber: number, index: number): string {
+  return profile.roadmapMode === "continuous_backlog"
+    ? `Release ${index + 1} (${agileWindowName(phaseNumber)})`
+    : (RELEASE_NAMES[phaseNumber] ?? `Release ${index + 1}`);
 }
 
 export interface SprintAssignable {
@@ -114,54 +154,133 @@ export function packSprints(args: {
   return sprints;
 }
 
+export interface ContinuousFlowResult {
+  phaseDateRanges: Map<number, { startDate: Date; endDate: Date }>;
+  releaseDateByPhase: Map<number, Date>;
+  throughputPerWeek: number;
+}
+
+/**
+ * Kanban's sprint mode: no discrete sprints at all. Walks the same
+ * phase-ordered, priority-sorted story list `packSprints` would, but instead
+ * of binning into fixed-length sprints, accumulates points and derives a
+ * forecasted date from a throughput rate (capacityPoints ÷ sprintLengthWeeks
+ * — the same capacity number, expressed as points/week instead of
+ * points/sprint). Every story's `sprintNumber` stays 0 (never assigned).
+ */
+export function packContinuousFlow(args: {
+  stories: PackableStory[];
+  capacityPoints: number;
+  sprintLengthWeeks: number;
+  startDate: Date;
+}): ContinuousFlowResult {
+  const { stories, capacityPoints, sprintLengthWeeks, startDate } = args;
+  const throughputPerWeek = sprintLengthWeeks > 0 ? capacityPoints / sprintLengthWeeks : capacityPoints;
+  const dateAt = (points: number): Date =>
+    throughputPerWeek > 0
+      ? new Date(startDate.getTime() + (points / throughputPerWeek) * 7 * DAY)
+      : startDate;
+
+  const phaseDateRanges = new Map<number, { startDate: Date; endDate: Date }>();
+  const releaseDateByPhase = new Map<number, Date>();
+  let cumulative = 0;
+  let currentPhase: number | null = null;
+  let phaseStartCumulative = 0;
+
+  const closePhase = (phaseNumber: number) => {
+    phaseDateRanges.set(phaseNumber, { startDate: dateAt(phaseStartCumulative), endDate: dateAt(cumulative) });
+    releaseDateByPhase.set(phaseNumber, dateAt(cumulative));
+  };
+
+  for (const { story, phaseNumber } of stories) {
+    if (currentPhase !== phaseNumber) {
+      if (currentPhase !== null) closePhase(currentPhase);
+      currentPhase = phaseNumber;
+      phaseStartCumulative = cumulative;
+    }
+    cumulative += story.points;
+  }
+  if (currentPhase !== null) closePhase(currentPhase);
+
+  return { phaseDateRanges, releaseDateByPhase, throughputPerWeek };
+}
+
 /** The full deterministic pipeline: intake answers → connected plan. */
-export function buildPlan(input: IntakeInput): GeneratedPlan {
+export function buildPlan(input: IntakeInput, methodology: Methodology = "hybrid"): GeneratedPlan {
+  const profile = METHODOLOGY_PROFILES[resolveMethodology(methodology)];
   const capacityPoints = computeEffectiveCapacity(input);
   const ctx = buildNarrativeContext(input);
-  const phasePartition = partitionPhases(input.capabilities);
+  const phasePartition =
+    profile.roadmapMode === "continuous_backlog"
+      ? partitionPhasesContinuousBacklog(input.capabilities)
+      : partitionPhases(input.capabilities);
 
   // Decompose every capability under its phase, in phase order.
   const phases: PlannedPhase[] = [...phasePartition.entries()].map(
     ([phaseNumber, caps]) => ({
       phaseNumber,
-      name: PHASE_NAMES[phaseNumber],
-      startDate: input.startDate, // refined from sprint spans below
+      name: phaseName(profile, phaseNumber),
+      startDate: input.startDate, // refined below (from sprint spans or throughput math)
       endDate: input.startDate,
       capabilityIds: caps.map((c) => c.id),
       features: caps.map((c) => decomposeCapability(c, ctx)),
     }),
   );
 
-  // Flatten stories in strict roadmap order and pack them into sprints.
+  // Flatten stories in strict roadmap order.
   const packable: PackableStory[] = phases.flatMap((phase) =>
     phase.features.flatMap((f) =>
       f.epics.flatMap((e) => e.stories.map((story) => ({ story, phaseNumber: phase.phaseNumber }))),
     ),
   );
-  const sprints = packSprints({
-    stories: packable,
-    capacityPoints,
-    sprintLengthWeeks: input.sprintLengthWeeks,
-    startDate: input.startDate,
-  });
 
-  // Phase dates come from the actual sprint spans (the same capacity number
-  // drives both the waterfall timeline and the sprint cadence).
-  for (const phase of phases) {
-    const phaseSprints = sprints.filter((s) => s.phaseNumber === phase.phaseNumber);
-    if (phaseSprints.length > 0) {
-      phase.startDate = phaseSprints[0].startDate;
-      phase.endDate = phaseSprints[phaseSprints.length - 1].endDate;
+  let sprints: PlannedSprint[];
+  let releases: PlannedRelease[];
+
+  if (profile.sprintMode === "continuous_flow") {
+    const flow = packContinuousFlow({
+      stories: packable,
+      capacityPoints,
+      sprintLengthWeeks: input.sprintLengthWeeks,
+      startDate: input.startDate,
+    });
+    for (const phase of phases) {
+      const range = flow.phaseDateRanges.get(phase.phaseNumber);
+      if (range) {
+        phase.startDate = range.startDate;
+        phase.endDate = range.endDate;
+      }
     }
+    sprints = []; // Kanban never bins stories into discrete sprints.
+    releases = phases.map((phase, i) => ({
+      order: i + 1,
+      name: releaseName(profile, phase.phaseNumber, i),
+      phaseNumber: phase.phaseNumber,
+      targetDate: flow.releaseDateByPhase.get(phase.phaseNumber) ?? phase.endDate,
+    }));
+  } else {
+    sprints = packSprints({
+      stories: packable,
+      capacityPoints,
+      sprintLengthWeeks: input.sprintLengthWeeks,
+      startDate: input.startDate,
+    });
+    // Phase dates come from the actual sprint spans (the same capacity number
+    // drives both the waterfall timeline and the sprint cadence).
+    for (const phase of phases) {
+      const phaseSprints = sprints.filter((s) => s.phaseNumber === phase.phaseNumber);
+      if (phaseSprints.length > 0) {
+        phase.startDate = phaseSprints[0].startDate;
+        phase.endDate = phaseSprints[phaseSprints.length - 1].endDate;
+      }
+    }
+    releases = phases.map((phase, i) => ({
+      order: i + 1,
+      name: releaseName(profile, phase.phaseNumber, i),
+      phaseNumber: phase.phaseNumber,
+      targetDate: phase.endDate,
+    }));
   }
-
-  // One release per phase, cut exactly at the phase's sprints.
-  const releases: PlannedRelease[] = phases.map((phase, i) => ({
-    order: i + 1,
-    name: RELEASE_NAMES[phase.phaseNumber] ?? `Release ${i + 1}`,
-    phaseNumber: phase.phaseNumber,
-    targetDate: phase.endDate,
-  }));
 
   return {
     capacityPoints,

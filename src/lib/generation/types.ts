@@ -1,5 +1,6 @@
 // TS union types standing in for enums (SQLite/Prisma has no native enum support).
 
+export type Methodology = "hybrid" | "agile_scrum" | "waterfall" | "kanban";
 export type EffortSize = "xs" | "s" | "m" | "l" | "xl";
 export type BusinessValue = "very_low" | "low" | "medium" | "high" | "critical";
 export type RiskLevel = "low" | "medium" | "high" | "critical";

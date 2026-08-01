@@ -18,6 +18,7 @@ import { computeCapacityForecast } from "@/lib/generation/capacityForecast";
 import { buildCostModel } from "@/lib/generation/cost";
 import { loadIntakeInput } from "@/lib/generation/engine";
 import { costHealth, scheduleHealth, type HealthStatus } from "@/lib/generation/health";
+import { profileFor } from "@/lib/generation/methodology";
 import { LAYER_LABELS, LAYER_SEQUENCE, type LayerType } from "@/lib/generation/types";
 import { validateIntake } from "@/lib/generation/validateIntake";
 
@@ -51,6 +52,7 @@ export default async function DashboardPage({
   const intakeRow = initiative.intakeAnswerSet;
   const prototype = initiative.prototype;
   const capabilities = intakeRow.capabilities;
+  const profile = profileFor(initiative.methodology);
 
   const [sprints, releases, stories, grouped] = await Promise.all([
     db.sprint.findMany({
@@ -328,6 +330,7 @@ export default async function DashboardPage({
               initiativeId={initiativeId}
               currentSprint={currentSprint}
               releases={releaseViews}
+              mode={profile.sprintMode === "continuous_flow" ? "continuous_flow" : "sprints"}
             />
             <ConnectedToolsWidget tools={tools} />
           </div>

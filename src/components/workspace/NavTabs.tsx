@@ -3,20 +3,34 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-const TABS = [
+const BASE_TABS = [
   { slug: "roadmap", label: "Roadmap" },
   { slug: "features", label: "Feature Hierarchy" },
   { slug: "epics", label: "Epics & Stories" },
   { slug: "sprints", label: "Sprints & Releases" },
   { slug: "capacity", label: "Capacity & Cost" },
   { slug: "executive", label: "Executive View" },
-];
+] as const;
 
-export default function NavTabs({ initiativeId }: { initiativeId: string }) {
+// Cosmetic relabeling on top of the real per-methodology generation/locking
+// differences — not a substitute for them.
+const LABEL_OVERRIDES: Record<string, Partial<Record<(typeof BASE_TABS)[number]["slug"], string>>> = {
+  agile_scrum: { roadmap: "Backlog" },
+  kanban: { sprints: "Flow & Releases" },
+};
+
+export default function NavTabs({
+  initiativeId,
+  methodology,
+}: {
+  initiativeId: string;
+  methodology?: string;
+}) {
   const pathname = usePathname();
+  const overrides = LABEL_OVERRIDES[methodology ?? ""] ?? {};
   return (
     <nav className="no-print flex flex-wrap gap-1 border-b border-neutral-200">
-      {TABS.map((tab) => {
+      {BASE_TABS.map((tab) => {
         const href = `/initiatives/${initiativeId}/workspace/${tab.slug}`;
         const active = pathname?.startsWith(href);
         return (
@@ -29,7 +43,7 @@ export default function NavTabs({ initiativeId }: { initiativeId: string }) {
                 : "text-neutral-500 hover:text-neutral-800"
             }`}
           >
-            {tab.label}
+            {overrides[tab.slug] ?? tab.label}
           </Link>
         );
       })}

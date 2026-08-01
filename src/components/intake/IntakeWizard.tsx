@@ -80,6 +80,10 @@ export default function IntakeWizard(props: {
   intake: IntakeView;
   capabilities: CapabilityView[];
   verbose: boolean;
+  /** true once a plan already exists — intake stays editable, but re-submitting here
+   * never regenerates it silently; recalculation is a separate, explicit action in
+   * the workspace (RefreshBar). */
+  alreadyGenerated: boolean;
 }) {
   const router = useRouter();
   const [step, setStep] = useState(0);
@@ -89,7 +93,7 @@ export default function IntakeWizard(props: {
   const [busy, setBusy] = useState(false);
   const [validation, setValidation] = useState<{ errors: Flag[]; warnings: Flag[] } | null>(null);
 
-  const { initiativeId, verbose } = props;
+  const { initiativeId, verbose, alreadyGenerated } = props;
 
   const saveIntake = async (fields: Partial<IntakeView>): Promise<boolean> => {
     const res = await apiFetch(`/api/initiatives/${initiativeId}/intake`, {
@@ -120,6 +124,14 @@ export default function IntakeWizard(props: {
   }, [step, refreshValidation]);
 
   const generate = async () => {
+    // Already generated: recalculation is an explicit, separate choice in the
+    // workspace (RefreshBar) — submitting the wizard again just takes you there
+    // with your edits already saved (each step already PATCHes as you go).
+    if (alreadyGenerated) {
+      router.push(`/initiatives/${initiativeId}/workspace/roadmap`);
+      router.refresh();
+      return;
+    }
     setBusy(true);
     setError(null);
     const res = await apiFetch(`/api/initiatives/${initiativeId}/generate`, {
@@ -365,10 +377,13 @@ export default function IntakeWizard(props: {
 
       {step === 5 && (
         <div className="rounded-2xl border border-neutral-200 bg-white p-8 shadow-sm">
-          <h2 className="text-xl font-semibold">Review &amp; generate</h2>
+          <h2 className="text-xl font-semibold">
+            {alreadyGenerated ? "Review your answers" : "Review & generate"}
+          </h2>
           <p className="mt-1 text-sm text-neutral-500">
-            Your answers are validated before generation (FR-05). Flags below must be resolved
-            — generation stays disabled while hard errors remain.
+            {alreadyGenerated
+              ? "Flags below reflect your current answers (FR-05). Your edits are already saved — use Recalculate in the workspace to apply them to the plan."
+              : "Your answers are validated before generation (FR-05). Flags below must be resolved — generation stays disabled while hard errors remain."}
           </p>
 
           {validation === null ? (
@@ -377,7 +392,8 @@ export default function IntakeWizard(props: {
             <div className="mt-6 space-y-3">
               {validation.errors.length === 0 && validation.warnings.length === 0 && (
                 <p className="rounded-lg bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
-                  Everything checks out. Ready to generate.
+                  Everything checks out
+                  {alreadyGenerated ? "." : ". Ready to generate."}
                 </p>
               )}
               {validation.errors.map((f, i) => (
@@ -396,10 +412,9 @@ export default function IntakeWizard(props: {
           <div className="mt-6 rounded-xl bg-neutral-50 p-4 text-sm text-neutral-600">
             <p className="font-medium text-neutral-800">What happens next</p>
             <p className="mt-1">
-              The engine generates your working prototype in hybrid waterfall sequence: Roadmap
-              → Feature Hierarchy → Epics → User Stories → Acceptance Criteria, with the Sprint
-              Plan, Release Plan and Capacity Forecast computed beneath. Every artifact stays
-              traceable to the answer that produced it. Intake answers become permanent.
+              {alreadyGenerated
+                ? "Your edits are saved as you go, but the live plan doesn't change on its own — open the workspace and use \"Full regenerate\" or \"Recalculate — respect my locks\" to apply them."
+                : "The engine generates your working prototype in hybrid waterfall sequence: Roadmap → Feature Hierarchy → Epics → User Stories → Acceptance Criteria, with the Sprint Plan, Release Plan and Capacity Forecast computed beneath. Every artifact stays traceable to the answer that produced it. You can come back and edit these answers any time."}
             </p>
           </div>
 
@@ -411,10 +426,14 @@ export default function IntakeWizard(props: {
             </button>
             <button
               onClick={generate}
-              disabled={busy || !validation || validation.errors.length > 0}
+              disabled={busy || (!alreadyGenerated && (!validation || validation.errors.length > 0))}
               className="rounded-lg bg-indigo-600 px-6 py-3 text-sm font-semibold text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-40"
             >
-              {busy ? "Generating your prototype…" : "Generate working prototype"}
+              {busy
+                ? "Generating your prototype…"
+                : alreadyGenerated
+                  ? "Save & view plan →"
+                  : "Generate working prototype"}
             </button>
           </div>
         </div>

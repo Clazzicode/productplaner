@@ -1,11 +1,13 @@
 import { db } from "@/lib/db";
 import { regenerateBelow, type RegenStats } from "./engine";
+import { METHODOLOGY_PROFILES, resolveMethodology } from "./methodology";
 import {
   LAYER_FOR_ARTIFACT,
   LAYER_LABELS,
   LAYER_SEQUENCE,
   type ArtifactType,
   type LayerType,
+  type Methodology,
 } from "./types";
 
 export class LockOrderError extends Error {}
@@ -13,13 +15,19 @@ export class LockedLayerError extends Error {}
 
 /**
  * FR-12 pure rule: a waterfall layer can only lock when the layer above it is
- * already locked. Returns an error message, or null if the lock is allowed.
- * (Pure so it can be unit-tested without a database.)
+ * already locked — UNLESS the methodology's lock gating is "unordered"
+ * (Agile/Scrum: no rigid phase-gate ceremony, layers can lock in any order).
+ * Returns an error message, or null if the lock is allowed. (Pure so it can
+ * be unit-tested without a database.)
  */
 export function lockOrderViolation(
   locks: { layerType: string; state: string }[],
   layerType: LayerType,
+  methodology: Methodology = "hybrid",
 ): string | null {
+  if (METHODOLOGY_PROFILES[resolveMethodology(methodology)].lockGating === "unordered") {
+    return null;
+  }
   const idx = LAYER_SEQUENCE.indexOf(layerType);
   if (idx <= 0) return null;
   const prevType = LAYER_SEQUENCE[idx - 1];
@@ -40,11 +48,18 @@ export async function lockLayer(
   prototypeId: string,
   layerType: LayerType,
 ): Promise<{ regenerated: RegenStats | null }> {
-  const locks = await db.layerLock.findMany({ where: { prototypeId } });
+  const [locks, prototype] = await Promise.all([
+    db.layerLock.findMany({ where: { prototypeId } }),
+    db.prototype.findUniqueOrThrow({
+      where: { id: prototypeId },
+      include: { initiative: { select: { methodology: true } } },
+    }),
+  ]);
   const lock = locks.find((l) => l.layerType === layerType);
   if (!lock) throw new Error(`Unknown layer: ${layerType}`);
 
-  const violation = lockOrderViolation(locks, layerType);
+  const methodology = resolveMethodology(prototype.initiative.methodology);
+  const violation = lockOrderViolation(locks, layerType, methodology);
   if (violation) throw new LockOrderError(violation);
 
   if (lock.state === "locked") return { regenerated: null };

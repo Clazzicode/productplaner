@@ -8,17 +8,14 @@ import {
 } from "@/lib/generation/scoring";
 import { capabilityUpsertSchema } from "@/lib/validation/schemas";
 
+// Capabilities stay editable post-generation (the "living plan" demo feature) — changes
+// only reach the actual plan once the user explicitly recalculates it.
 async function loadEditable(capId: string) {
   const capability = await db.capability.findUnique({
     where: { id: capId },
     include: { intakeAnswerSet: { select: { id: true, status: true } } },
   });
   if (!capability) return { error: jsonError("Capability not found.", 404) };
-  if (capability.intakeAnswerSet.status === "generated") {
-    return {
-      error: jsonError("Intake answers are permanent once the prototype is generated.", 409),
-    };
-  }
   return { capability };
 }
 

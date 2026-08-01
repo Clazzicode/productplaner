@@ -13,14 +13,11 @@ export async function PATCH(
 
   const intake = await db.intakeAnswerSet.findUnique({ where: { initiativeId: id } });
   if (!intake) return jsonError("Initiative not found.", 404);
-  if (intake.status === "generated") {
-    // FR-06: intake answers are permanent once the prototype exists.
-    return jsonError(
-      "Intake answers are permanent once the prototype is generated — they are the plan's source of truth.",
-      409,
-    );
-  }
 
+  // Intake stays editable even after generation (the "living plan" demo feature) —
+  // changes only take effect once the user explicitly recalculates the plan via
+  // /api/initiatives/[id]/recalculate, so editing here never silently changes a
+  // live prototype.
   await db.intakeAnswerSet.update({ where: { id: intake.id }, data: parsed.data });
   return NextResponse.json({ ok: true });
 }

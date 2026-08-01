@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Badge } from "@/components/ui/Badge";
+import MethodologySwitcher from "./MethodologySwitcher";
 
 export default function DashboardHeader(props: {
   initiativeId: string;
@@ -18,9 +19,7 @@ export default function DashboardHeader(props: {
           <p className="mt-0.5 line-clamp-2 max-w-2xl text-sm text-neutral-500">{props.description}</p>
         )}
         <p className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-neutral-500">
-          <span className="font-medium text-indigo-700">
-            {props.methodology === "hybrid" ? "Hybrid Waterfall" : props.methodology}
-          </span>
+          <MethodologySwitcher initiativeId={props.initiativeId} current={props.methodology} />
           {props.releaseTarget && (
             <>
               <span className="text-neutral-300">·</span>

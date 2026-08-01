@@ -47,7 +47,12 @@ export default function LockBar(props: {
   initiativeId: string;
   locks: LockView[];
   counts: LayerCounts;
+  /** Agile/Scrum relaxes the strict lock sequence — the client-side
+   * pre-check is skipped so it doesn't false-positive-block an order the
+   * server would actually allow. */
+  methodology?: string;
 }) {
+  const unordered = props.methodology === "agile_scrum";
   const router = useRouter();
   const [confirm, setConfirm] = useState<{ layerType: string; mode: "lock" | "unlock" } | null>(
     null,
@@ -81,9 +86,10 @@ export default function LockBar(props: {
       setConfirm({ layerType, mode: "unlock" });
       return;
     }
-    // FR-12 client-side pre-check (server enforces it authoritatively).
+    // FR-12 client-side pre-check (server enforces it authoritatively) —
+    // skipped for Agile/Scrum, which allows any lock order.
     const idx = SEQUENCE.indexOf(layerType as (typeof SEQUENCE)[number]);
-    if (idx > 0 && lockFor(SEQUENCE[idx - 1])?.state !== "locked") {
+    if (!unordered && idx > 0 && lockFor(SEQUENCE[idx - 1])?.state !== "locked") {
       setError(
         `Lock ${LABELS[SEQUENCE[idx - 1]]} first — waterfall layers lock in strict sequence.`,
       );

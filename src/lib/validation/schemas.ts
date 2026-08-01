@@ -122,6 +122,16 @@ export const syncActionSchema = z.object({
   action: z.enum(["connect", "sync"]),
 });
 
+export const recalculatePlanSchema = z.object({
+  mode: z.enum(["full", "respect_locks"]),
+});
+
+export const methodologySchema = z.enum(["hybrid", "agile_scrum", "waterfall", "kanban"]);
+
+export const methodologyChangeSchema = z.object({
+  methodology: methodologySchema,
+});
+
 export const integrationActionSchema = z.object({
   action: z.enum(["connect", "configure", "sync", "disconnect", "reconnect"]),
   connectionId: z.string().optional(),

@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import ExplainCallout from "@/components/demo/ExplainCallout";
 import SprintMoveSelect from "@/components/workspace/SprintMoveSelect";
 import { db } from "@/lib/db";
+import { profileFor } from "@/lib/generation/methodology";
 import { loadCostContext, loadWorkspace } from "@/lib/workspace";
 
 export const dynamic = "force-dynamic";
@@ -16,6 +17,9 @@ export default async function SprintsPage({
   const ws = await loadWorkspace(initiativeId);
   if (!ws) notFound();
   const cost = await loadCostContext(initiativeId, ws.prototype.id);
+  const profile = profileFor(ws.initiative.methodology);
+  const isKanban = profile.sprintMode === "continuous_flow";
+  const agileFrozen = profile.agileLayerGate === "locked_after_baseline" && ws.prototype.approvedAt != null;
 
   const [sprints, releases, stories] = await Promise.all([
     db.sprint.findMany({
@@ -69,18 +73,91 @@ export default async function SprintsPage({
 
   const sprintNumbers = sprints.map((s) => s.sprintNumber);
 
+  // Kanban: no sprints exist — fetch the story queue in true roadmap order
+  // (phase → feature → epic → story) for the continuous-flow view.
+  const flowPhases = isKanban
+    ? await (async () => {
+        const rows = await db.artifactLayer.findMany({
+          where: { prototypeId: ws.prototype.id, type: "story" },
+          orderBy: { order: "asc" },
+          select: {
+            id: true,
+            title: true,
+            points: true,
+            order: true,
+            parent: {
+              select: {
+                order: true,
+                parent: {
+                  select: {
+                    order: true,
+                    parent: { select: { order: true, contentJson: true } },
+                  },
+                },
+              },
+            },
+          },
+        });
+        const parse = (raw: string): { phaseNumber?: number } => {
+          try {
+            return JSON.parse(raw) as { phaseNumber?: number };
+          } catch {
+            return {};
+          }
+        };
+        const withOrder = rows.map((r) => ({
+          id: r.id,
+          title: r.title,
+          points: r.points ?? 1,
+          phaseNumber: parse(r.parent?.parent?.parent?.contentJson ?? "{}").phaseNumber ?? 1,
+          sortKey: [
+            r.parent?.parent?.parent?.order ?? 0,
+            r.parent?.parent?.order ?? 0,
+            r.parent?.order ?? 0,
+            r.order,
+          ] as const,
+        }));
+        withOrder.sort((a, b) => {
+          for (let i = 0; i < a.sortKey.length; i++) {
+            if (a.sortKey[i] !== b.sortKey[i]) return a.sortKey[i] - b.sortKey[i];
+          }
+          return 0;
+        });
+        const byPhase = new Map<number, typeof withOrder>();
+        for (const s of withOrder) {
+          const list = byPhase.get(s.phaseNumber) ?? [];
+          list.push(s);
+          byPhase.set(s.phaseNumber, list);
+        }
+        return [...byPhase.entries()].sort((a, b) => a[0] - b[0]);
+      })()
+    : [];
+  const throughputPerWeek =
+    isKanban && ws.intakeView.sprintLengthWeeks > 0
+      ? Math.round((cost.model.sprintPointCapacity / ws.intakeView.sprintLengthWeeks) * 10) / 10
+      : 0;
+
   return (
     <div>
-      <h2 className="text-xl font-bold">Sprint &amp; release plan</h2>
+      <h2 className="text-xl font-bold">
+        {isKanban ? "Flow & release plan" : "Sprint & release plan"}
+        {isKanban && (
+          <span className="ml-2 rounded-full bg-indigo-100 px-2.5 py-0.5 text-xs font-medium text-indigo-700">
+            {throughputPerWeek} pts/week throughput
+          </span>
+        )}
+      </h2>
       <p className="mt-1 text-sm text-neutral-500">
-        Agile execution layers — flexible beneath the locked waterfall structure. Moving
-        stories here never restructures locked layers above. Re-locking an upper layer
-        recomputes this plan.
+        {isKanban
+          ? "Kanban continuous flow — no fixed sprints. Stories are worked in priority order; release dates are forecasted from cumulative throughput."
+          : agileFrozen
+            ? "Waterfall: the sprint and release plan became a fixed schedule once the baseline was approved — it can no longer be rebalanced."
+            : "Agile execution layers — flexible beneath the locked waterfall structure. Moving stories here never restructures locked layers above. Re-locking an upper layer recomputes this plan."}
       </p>
       <ExplainCallout>
-        Stories were packed into sprints in strict roadmap order against the estimated sprint
-        capacity — a story only joins the current sprint if it fits, phases never mix in one
-        sprint, and each sprint shows its planned story cost against the full labor allocation.
+        {isKanban
+          ? "Throughput is the same estimated capacity number as everywhere else in the platform, expressed as points per week instead of points per sprint — cumulative story points divided by throughput gives each phase's forecasted completion date."
+          : "Stories were packed into sprints in strict roadmap order against the estimated sprint capacity — a story only joins the current sprint if it fits, phases never mix in one sprint, and each sprint shows its planned story cost against the full labor allocation."}
       </ExplainCallout>
 
       {/* Releases strip */}
@@ -92,13 +169,20 @@ export default async function SprintsPage({
           >
             <p className="font-semibold text-emerald-900">{rel.name}</p>
             <p className="text-xs text-emerald-700">
-              Sprint{rel.sprints.length === 1 ? "" : "s"}{" "}
-              {rel.sprints.map((s) => s.sprintNumber).join(", ")} · ships{" "}
-              {format(rel.targetDate, "MMM d, yyyy")}
+              {isKanban
+                ? "Forecasted"
+                : `Sprint${rel.sprints.length === 1 ? "" : "s"} ${rel.sprints.map((s) => s.sprintNumber).join(", ")}`}{" "}
+              · ships {format(rel.targetDate, "MMM d, yyyy")}
             </p>
           </div>
         ))}
       </div>
+
+      {agileFrozen && (
+        <div className="mt-4 rounded-xl border border-neutral-300 bg-neutral-50 p-4 text-sm text-neutral-600">
+          Baseline approved — this schedule is fixed under the Waterfall methodology.
+        </div>
+      )}
 
       {warnings.length > 0 && (
         <div className="mt-4 space-y-1 rounded-xl border border-amber-200 bg-amber-50 p-4">
@@ -111,63 +195,98 @@ export default async function SprintsPage({
         </div>
       )}
 
-      {/* Sprint columns */}
-      <div className="mt-6 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {sprints.map((sprint) => {
-          const planned = sprint.stories.reduce((n, s) => n + (s.points ?? 1), 0);
-          const over = planned > sprint.capacityPoints;
-          const pct = Math.min(100, (planned / Math.max(sprint.capacityPoints, 0.01)) * 100);
-          return (
-            <div key={sprint.id} className="rounded-2xl border border-neutral-200 p-4">
-              <div className="flex items-baseline justify-between">
-                <h3 className="font-semibold">Sprint {sprint.sprintNumber}</h3>
-                <span className="text-xs text-neutral-400">
-                  {format(sprint.startDate, "MMM d")} – {format(sprint.endDate, "MMM d")}
-                </span>
+      {isKanban ? (
+        <div className="mt-6 space-y-6">
+          {flowPhases.map(([phaseNumber, phaseStories]) => {
+            const points = phaseStories.reduce((n, s) => n + s.points, 0);
+            return (
+              <div key={phaseNumber} className="rounded-2xl border border-neutral-200 p-4">
+                <div className="flex items-baseline justify-between">
+                  <h3 className="font-semibold">Phase {phaseNumber}</h3>
+                  <span className="text-xs text-neutral-400">{points} points queued</span>
+                </div>
+                <ul className="mt-3 space-y-1.5">
+                  {phaseStories.map((story) => (
+                    <li
+                      key={story.id}
+                      className="flex items-center justify-between gap-2 rounded-lg bg-neutral-50 px-2.5 py-1.5 text-xs"
+                    >
+                      <span className="min-w-0 flex-1 truncate" title={story.title}>
+                        {story.title}
+                      </span>
+                      <span className="shrink-0 font-medium text-neutral-400">{story.points}</span>
+                    </li>
+                  ))}
+                </ul>
               </div>
-              <p className="mt-0.5 text-xs text-neutral-500">
-                {sprint.release?.name} · Phase {sprint.phaseNumber}
-              </p>
-              <div className="mt-2 h-2 overflow-hidden rounded-full bg-neutral-100">
-                <div
-                  className={`h-full rounded-full ${over ? "bg-red-500" : "bg-indigo-500"}`}
-                  style={{ width: `${pct}%` }}
-                />
+            );
+          })}
+          {flowPhases.length === 0 && (
+            <p className="text-sm text-neutral-400">No stories generated yet.</p>
+          )}
+        </div>
+      ) : (
+        <div className="mt-6 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {sprints.map((sprint) => {
+            const planned = sprint.stories.reduce((n, s) => n + (s.points ?? 1), 0);
+            const over = planned > sprint.capacityPoints;
+            const pct = Math.min(100, (planned / Math.max(sprint.capacityPoints, 0.01)) * 100);
+            return (
+              <div key={sprint.id} className="rounded-2xl border border-neutral-200 p-4">
+                <div className="flex items-baseline justify-between">
+                  <h3 className="font-semibold">Sprint {sprint.sprintNumber}</h3>
+                  <span className="text-xs text-neutral-400">
+                    {format(sprint.startDate, "MMM d")} – {format(sprint.endDate, "MMM d")}
+                  </span>
+                </div>
+                <p className="mt-0.5 text-xs text-neutral-500">
+                  {sprint.release?.name} · Phase {sprint.phaseNumber}
+                </p>
+                <div className="mt-2 h-2 overflow-hidden rounded-full bg-neutral-100">
+                  <div
+                    className={`h-full rounded-full ${over ? "bg-red-500" : "bg-indigo-500"}`}
+                    style={{ width: `${pct}%` }}
+                  />
+                </div>
+                <p className={`mt-1 text-xs ${over ? "font-semibold text-red-600" : "text-neutral-500"}`}>
+                  {planned} / {sprint.capacityPoints.toFixed(1)} pts{over && " — over-allocated"}
+                </p>
+                <p
+                  className="mt-0.5 text-xs text-neutral-400"
+                  title="Planned story cost vs. the sprint's full labor allocation (§17/§22)"
+                >
+                  ${Math.round(planned * cost.model.costPerStoryPoint).toLocaleString()} planned · $
+                  {Math.round(cost.model.sprintLaborCost).toLocaleString()} allocated
+                </p>
+                <ul className="mt-3 space-y-1.5">
+                  {sprint.stories.map((story) => (
+                    <li
+                      key={story.id}
+                      className="flex items-center justify-between gap-2 rounded-lg bg-neutral-50 px-2.5 py-1.5 text-xs"
+                    >
+                      <span className="min-w-0 flex-1 truncate" title={story.title}>
+                        {story.title}
+                      </span>
+                      <span className="shrink-0 font-medium text-neutral-400">
+                        {story.points ?? 1}
+                      </span>
+                      {agileFrozen ? (
+                        <span className="shrink-0 text-neutral-300">🔒</span>
+                      ) : (
+                        <SprintMoveSelect
+                          artifactId={story.id}
+                          currentSprintNumber={sprint.sprintNumber}
+                          sprintNumbers={sprintNumbers}
+                        />
+                      )}
+                    </li>
+                  ))}
+                </ul>
               </div>
-              <p className={`mt-1 text-xs ${over ? "font-semibold text-red-600" : "text-neutral-500"}`}>
-                {planned} / {sprint.capacityPoints.toFixed(1)} pts{over && " — over-allocated"}
-              </p>
-              <p
-                className="mt-0.5 text-xs text-neutral-400"
-                title="Planned story cost vs. the sprint's full labor allocation (§17/§22)"
-              >
-                ${Math.round(planned * cost.model.costPerStoryPoint).toLocaleString()} planned · $
-                {Math.round(cost.model.sprintLaborCost).toLocaleString()} allocated
-              </p>
-              <ul className="mt-3 space-y-1.5">
-                {sprint.stories.map((story) => (
-                  <li
-                    key={story.id}
-                    className="flex items-center justify-between gap-2 rounded-lg bg-neutral-50 px-2.5 py-1.5 text-xs"
-                  >
-                    <span className="min-w-0 flex-1 truncate" title={story.title}>
-                      {story.title}
-                    </span>
-                    <span className="shrink-0 font-medium text-neutral-400">
-                      {story.points ?? 1}
-                    </span>
-                    <SprintMoveSelect
-                      artifactId={story.id}
-                      currentSprintNumber={sprint.sprintNumber}
-                      sprintNumbers={sprintNumbers}
-                    />
-                  </li>
-                ))}
-              </ul>
-            </div>
-          );
-        })}
-      </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
