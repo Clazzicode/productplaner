@@ -78,6 +78,8 @@ export interface CapabilityInput {
   mvpImportance?: MvpImportance | null;
   /** §2 weighted score snapshot, present only when sub-factor scoring was used */
   businessValueScore?: number | null;
+  /** Timeline drag-and-drop override (1/2/3); null/absent = computed by partitionPhases. */
+  manualPhaseOverride?: number | null;
 }
 
 export interface IntakeInput {

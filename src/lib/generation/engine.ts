@@ -103,6 +103,7 @@ export async function loadIntakeInput(initiativeId: string): Promise<IntakeInput
       riskLevel: c.riskLevel as CapabilityInput["riskLevel"],
       mvpImportance: c.mvpImportance as CapabilityInput["mvpImportance"],
       businessValueScore: c.businessValueScore,
+      manualPhaseOverride: c.manualPhaseOverride,
       order: c.order,
       dependsOn: c.dependsOnEdges.map((e) => e.toCapabilityId),
     })),
@@ -853,6 +854,21 @@ export async function recalculatePlan(
   mode: RecalculateMode,
 ): Promise<RecalculateResult> {
   if (mode === "full") {
+    // generatePrototype never touches Capability rows — clear any Timeline
+    // drag-and-drop phase overrides here so "Full regenerate" actually
+    // discards them, matching what its confirm-modal copy promises
+    // (RefreshBar.tsx). Must NOT run for the "respect_locks" mode's own
+    // full_fallback_no_locks branch below — that path preserves overrides.
+    const intake = await db.intakeAnswerSet.findUnique({
+      where: { initiativeId },
+      select: { id: true },
+    });
+    if (intake) {
+      await db.capability.updateMany({
+        where: { intakeAnswerSetId: intake.id },
+        data: { manualPhaseOverride: null },
+      });
+    }
     const { prototypeId } = await generatePrototype(initiativeId);
     return { prototypeId, mode: "full", detail: "full" };
   }

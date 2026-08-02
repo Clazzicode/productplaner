@@ -2,8 +2,12 @@ import { format } from "date-fns";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import EditableArtifact from "@/components/workspace/EditableArtifact";
+import RoadmapBoard, { type BoardPhase } from "@/components/workspace/RoadmapBoard";
+import RoadmapViewToggle from "@/components/workspace/RoadmapViewToggle";
 import TraceBadge from "@/components/workspace/TraceBadge";
 import { db } from "@/lib/db";
+import { PHASE_NAMES } from "@/lib/generation/constants";
+import { profileFor } from "@/lib/generation/methodology";
 import { traceEntriesFor } from "@/lib/trace";
 import { loadCostContext, loadWorkspace } from "@/lib/workspace";
 
@@ -34,11 +38,52 @@ export default async function RoadmapPage({
   const phases = await db.artifactLayer.findMany({
     where: { prototypeId: ws.prototype.id, type: "roadmap_phase" },
     orderBy: { order: "asc" },
-    include: { children: { where: { type: "feature" }, orderBy: { order: "asc" } } },
+    include: {
+      children: {
+        where: { type: "feature" },
+        orderBy: { order: "asc" },
+        include: {
+          children: {
+            where: { type: "epic" },
+            orderBy: { order: "asc" },
+            include: { _count: { select: { children: true } } },
+          },
+        },
+      },
+    },
   });
   if (!root) notFound();
 
-  return (
+  const profile = profileFor(ws.initiative.methodology);
+  const boardPhases: BoardPhase[] = phases.map((phase) => {
+    const content = parse(phase.contentJson);
+    const phaseNumber = (content.phaseNumber as number | undefined) ?? phase.order + 1;
+    return {
+      phaseNumber,
+      name: phase.title || PHASE_NAMES[phaseNumber] || `Phase ${phaseNumber}`,
+      features: phase.children.map((feature) => {
+        const cap = feature.sourceCapabilityId ? ws.capViewById.get(feature.sourceCapabilityId) : null;
+        return {
+          id: feature.id,
+          capabilityId: feature.sourceCapabilityId,
+          title: feature.title,
+          isMvp: cap?.isMvp ?? false,
+          businessValue: cap?.businessValue ?? "medium",
+          riskLevel: cap?.riskLevel ?? null,
+          cost: feature.sourceCapabilityId
+            ? (cost.costByCapability.get(feature.sourceCapabilityId) ?? null)
+            : null,
+          epics: feature.children.map((epic) => ({
+            id: epic.id,
+            title: epic.title,
+            storyCount: epic._count.children,
+          })),
+        };
+      }),
+    };
+  });
+
+  const listView = (
     <div>
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0 flex-1">
@@ -124,4 +169,20 @@ export default async function RoadmapPage({
       </p>
     </div>
   );
+
+  const timelineView = (
+    <div>
+      {profile.roadmapMode === "continuous_backlog" ? (
+        <p className="rounded-lg bg-neutral-50 px-3 py-3 text-sm text-neutral-500">
+          The Timeline board isn&apos;t available for Agile/Scrum — its phases are a continuously
+          re-ranked backlog, not fixed categories a capability can be pinned to. Switch
+          methodology to Hybrid, Waterfall, or Kanban to use it.
+        </p>
+      ) : (
+        <RoadmapBoard initiativeId={initiativeId} phases={boardPhases} locked={locked} />
+      )}
+    </div>
+  );
+
+  return <RoadmapViewToggle list={listView} timeline={timelineView} />;
 }

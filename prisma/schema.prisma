@@ -108,6 +108,7 @@ model Capability {
   businessValue     String // Q8: very_low | low | medium | high | critical (§2 five-level scale)
   riskLevel         String                 @default("medium") // §4: low | medium | high | critical
   mvpImportance     String? // §5 optional override: required_for_mvp | strongly_preferred | useful_not_required | future_enhancement | optional (derived from isMvp when null)
+  manualPhaseOverride Int? // Timeline drag-and-drop override (1/2/3); null = computed by partitionPhases. Ignored by partitionPhasesContinuousBacklog (agile_scrum).
   customerImpactScore     Int? // §2 optional weighted sub-factors, each 1-5
   revenueImpactScore      Int?
   strategicAlignmentScore Int?

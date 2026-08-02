@@ -100,8 +100,9 @@ export default function RefreshBar(props: { initiativeId: string; locks: Refresh
                   <strong>approved baseline</strong> snapshot, any{" "}
                   <strong>inline edits</strong> you&apos;ve made directly to roadmap/feature/epic/
                   story/acceptance-criteria text, and any{" "}
-                  <strong>Jira/Integration sync stamps</strong> on individual items. This cannot
-                  be undone.
+                  <strong>Jira/Integration sync stamps</strong> on individual items, and any{" "}
+                  <strong>manual phase drags</strong> made on the Timeline view. This cannot be
+                  undone.
                 </p>
               </>
             ) : (

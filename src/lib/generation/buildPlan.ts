@@ -21,14 +21,26 @@ const addWeeks = (d: Date, weeks: number): Date => new Date(d.getTime() + weeks 
  *   Phase 1 = MVP capabilities
  *   Phase 2 = non-MVP with high/critical business value
  *   Phase 3 = remaining non-MVP
+ * A capability with `manualPhaseOverride` set (Timeline drag-and-drop) seeds
+ * from that instead of the computed MVP/value rule.
  * Then dependency closure: a capability every earlier-phase capability depends
- * on is promoted into that earlier phase, so dependencies never point forward.
+ * on is promoted into that earlier phase, so dependencies never point forward
+ * — this runs over overridden capabilities too, deliberately: it only ever
+ * pulls a dependency earlier, never pushes a dependent later, so exempting
+ * overrides would let a dependency land after its dependent and silently
+ * break the "already satisfied" assumption `orderByDependencyAndPriority`
+ * relies on for cross-phase deps. A drag that conflicts with this can get
+ * corrected back — callers should treat that as visible feedback, not hide it.
  */
 export function partitionPhases(
   capabilities: CapabilityInput[],
 ): Map<number, CapabilityInput[]> {
   const phaseOf = new Map<string, number>();
   for (const cap of capabilities) {
+    if (cap.manualPhaseOverride != null) {
+      phaseOf.set(cap.id, cap.manualPhaseOverride);
+      continue;
+    }
     // Explicit label check: high/critical → phase 2 regardless of how the
     // 1–5 VALUE_SCORE numbering shifts.
     const highValue = cap.businessValue === "high" || cap.businessValue === "critical";

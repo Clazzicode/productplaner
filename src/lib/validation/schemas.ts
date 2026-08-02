@@ -132,6 +132,10 @@ export const methodologyChangeSchema = z.object({
   methodology: methodologySchema,
 });
 
+export const movePhaseSchema = z.object({
+  targetPhase: z.number().int().min(1).max(3),
+});
+
 export const integrationActionSchema = z.object({
   action: z.enum(["connect", "configure", "sync", "disconnect", "reconnect"]),
   connectionId: z.string().optional(),
