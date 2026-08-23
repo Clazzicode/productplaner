@@ -19,6 +19,7 @@ model Organization {
   id                     String                  @id @default(cuid())
   name                   String
   users                  User[]
+  teams                  Team[]
   initiatives            Initiative[]
   integrationConnections IntegrationConnection[]
   createdAt              DateTime                @default(now())
@@ -31,9 +32,60 @@ model User {
   name            String
   email           String              @unique
   demoModeEnabled Boolean             @default(false)
+  // Step 8B (docs/V2-USERS-TEAMS.md). String + default, matching this schema's
+  // existing convention (e.g. Initiative.status) rather than a native enum.
+  // Default "org_admin" is deliberate: today there is exactly one User per
+  // Organization (the demo user, who already has unrestricted control), so
+  // backfilling to "standard_user" would migrate every existing single-user
+  // org into a zero-admin state — the one state the Step 8B safeguards
+  // explicitly exist to prevent. New invited users must set this explicitly
+  // (typically "standard_user"), not rely on the column default.
+  accessLevel     String              @default("org_admin") // standard_user | org_admin
+  // Nullable, no default, deliberately: Working Role has lived only in the
+  // Step 4 onboarding cookie (src/lib/onboarding/tempStateServer.ts) and there
+  // is no truthful value to backfill an existing User row with. Populated
+  // naturally as a user completes/updates onboarding — see docs/V2-USERS-TEAMS.md
+  // "Auth Transition" for the read-persisted-fall-back-to-cookie strategy.
+  workingRole     String?             // product_management | project_manager | developer
+  memberType      String              @default("internal") // internal | external
+  status          String              @default("active") // active | disabled | archived
   profiles        QualifyingProfile[]
   initiatives     Initiative[]
+  teamMemberships TeamMember[]
   createdAt       DateTime            @default(now())
+}
+
+// Step 8B (docs/V2-USERS-TEAMS.md, docs/V2-ORG-ADMIN-IA.md §6-7). Flat — no
+// nested teams, no team roles (deliberate MVP scope per
+// docs/V2-ACCESS-TEAMS-VISIBILITY.md §3). No status/archive field: nothing in
+// the approved admin workflow archives a team, only deletes one.
+model Team {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  name           String
+  description    String       @default("")
+  members        TeamMember[]
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+}
+
+// Join model, User <-> Team. Unique on (teamId, userId) blocks duplicate
+// membership at the database level, not just in application code (the
+// "duplicate direct grant" edge case in docs/V2-ORG-ADMIN-IA.md §20 applies
+// the same principle to InitiativeAccess in Step 8C). Cascades on delete in
+// both directions so removing a team or a user never leaves an orphaned
+// membership row — matches the cascade pattern already used throughout this
+// schema (e.g. IntakeAnswerSet -> Initiative).
+model TeamMember {
+  id        String   @id @default(cuid())
+  teamId    String
+  team      Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([teamId, userId])
 }
 
 model QualifyingProfile {

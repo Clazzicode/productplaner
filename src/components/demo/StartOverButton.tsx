@@ -2,8 +2,15 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import Button from "@/components/ui/Button";
+import Modal from "@/components/ui/Modal";
 import { apiFetch } from "@/lib/clientApi";
 
+// Migrated to the shared Modal primitive (docs/V2-DESIGN-SYSTEM.md). Accepted,
+// intentional deltas from the previous hand-rolled dialog: Modal adds an
+// X-close button and click-outside-to-dismiss, and its heading is the generic
+// style rather than a red-tinted one — the destructive intent still comes
+// through via the bold warning copy and the destructive Delete button.
 export default function StartOverButton() {
   const router = useRouter();
   const [confirming, setConfirming] = useState(false);
@@ -34,35 +41,23 @@ export default function StartOverButton() {
         Start over
       </button>
 
-      {confirming && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
-            <h3 className="text-lg font-semibold text-red-700">Start over?</h3>
-            <p className="mt-2 text-sm text-neutral-600">
-              This <strong>permanently deletes every initiative</strong> — all intake answers,
-              capabilities, generated plans, locks, and integration connections — plus your
-              qualifying profile. You&apos;ll land back on Welcome exactly like a brand-new user.{" "}
-              <strong>This cannot be undone.</strong>
-            </p>
-            {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
-            <div className="mt-5 flex justify-end gap-3">
-              <button
-                onClick={() => setConfirming(false)}
-                className="rounded-lg border border-neutral-300 px-4 py-2 text-sm font-medium hover:bg-neutral-50"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={run}
-                disabled={busy}
-                className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-50"
-              >
-                {busy ? "Deleting everything…" : "Delete everything & start over"}
-              </button>
-            </div>
-          </div>
+      <Modal open={confirming} title="Start over?" onClose={() => setConfirming(false)}>
+        <p className="text-sm text-neutral-600">
+          This <strong>permanently deletes every initiative</strong> — all intake answers,
+          capabilities, generated plans, locks, and integration connections — plus your
+          qualifying profile. You&apos;ll land back on Welcome exactly like a brand-new user.{" "}
+          <strong>This cannot be undone.</strong>
+        </p>
+        {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
+        <div className="mt-5 flex justify-end gap-3">
+          <Button variant="secondary" onClick={() => setConfirming(false)}>
+            Cancel
+          </Button>
+          <Button variant="destructive" onClick={run} disabled={busy}>
+            {busy ? "Deleting everything…" : "Delete everything & start over"}
+          </Button>
         </div>
-      )}
+      </Modal>
     </>
   );
 }

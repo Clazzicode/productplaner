@@ -1,119 +1,123 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
+import { DashboardLayout } from "@/components/layout/PageLayouts";
+import DecisionsRequiredPanel from "@/components/dashboard/DecisionsRequiredPanel";
+import RecentActivity from "@/components/dashboard/RecentActivity";
+import SprintReleaseStatus from "@/components/dashboard/SprintReleaseStatus";
+import UpcomingActions from "@/components/dashboard/UpcomingActions";
+import CurrentFocus from "@/components/dashboard/global/CurrentFocus";
+import GlobalDashboardHeader from "@/components/dashboard/global/GlobalDashboardHeader";
+import InitiativeSummaryList from "@/components/dashboard/global/InitiativeSummaryList";
+import PlanHealthSummary from "@/components/dashboard/global/PlanHealthSummary";
+import RoadmapSnapshot from "@/components/dashboard/global/RoadmapSnapshot";
+import UpcomingTimeline from "@/components/dashboard/global/UpcomingTimeline";
+import { Card, CardTitle } from "@/components/ui/Card";
+import EmptyState from "@/components/ui/EmptyState";
 import { getActiveProfile, getCurrentUser } from "@/lib/auth/session";
-import { db } from "@/lib/db";
-import { LAYER_SEQUENCE } from "@/lib/generation/types";
+import { loadGlobalDashboardData } from "@/lib/dashboard/globalDashboardData";
+import { resolveDashboardOrder, resolveMainColumnOrder, type DashboardWidgetId } from "@/lib/dashboard/widgetRegistry";
+import { readOnboardingStateServer } from "@/lib/onboarding/tempStateServer";
 
 export const dynamic = "force-dynamic";
 
-const STATUS_BADGES: Record<string, { label: string; cls: string }> = {
-  draft: { label: "Draft", cls: "bg-neutral-100 text-neutral-600" },
-  intake_in_progress: { label: "Intake in progress", cls: "bg-amber-100 text-amber-800" },
-  generated: { label: "Prototype live", cls: "bg-emerald-100 text-emerald-800" },
-};
-
+/**
+ * Standard User Dashboard (Step 7B — docs/V2-STANDARD-DASHBOARD.md): the global
+ * operational home for a normal organization member. Distinct from
+ * `/initiatives/[initiativeId]/dashboard` (unchanged, untouched by this phase),
+ * which stays the detailed view of one initiative.
+ *
+ * Authorization boundary (docs/V2-ACCESS-TEAMS-VISIBILITY.md §1, §5, §20): real
+ * per-initiative Resource Access doesn't exist yet, so `authorizedInitiativeIds`
+ * is `null` below — every initiative this demo user owns is shown. Nothing here
+ * fakes a permission check; the seam for a future authorization layer to narrow
+ * this list is in loadGlobalDashboardData, not invented here.
+ *
+ * Working Role (from the Step 4 onboarding cookie, not yet a persisted `User`
+ * field) only ever changes widget ORDER via widgetRegistry.ts — it never
+ * changes which data is fetched or shown.
+ */
 export default async function HomePage() {
   const profile = await getActiveProfile();
   if (!profile) redirect("/welcome");
   const user = await getCurrentUser();
+  const onboarding = await readOnboardingStateServer();
+  const workingRole = onboarding.workingRole ?? null;
 
-  const initiatives = await db.initiative.findMany({
-    where: { userId: user.id },
-    orderBy: { updatedAt: "desc" },
-    include: {
-      prototype: { include: { layerLocks: true } },
-      syncConnections: true,
-    },
-  });
+  const data = await loadGlobalDashboardData(user.id, null);
+
+  const mainOrder = resolveMainColumnOrder(workingRole);
+  const fullOrder = resolveDashboardOrder(workingRole);
+
+  const decisions = data.primary?.decisions ?? [];
+  const activity = data.primary?.activity ?? [];
+  const actions = data.primary?.actions ?? { now: [], next: [], later: [] };
+
+  function widget(id: DashboardWidgetId) {
+    switch (id) {
+      case "plan_health":
+        return <PlanHealthSummary primary={data.primary} />;
+      case "current_sprint":
+        return data.primary ? (
+          <SprintReleaseStatus
+            initiativeId={data.primary.id}
+            currentSprint={data.primary.currentSprint}
+            releases={data.primary.releases}
+          />
+        ) : (
+          <Card>
+            <CardTitle>Current Sprint</CardTitle>
+            <div className="mt-3">
+              <EmptyState title="No sprint yet" description="Sprint status appears once a plan is generated." />
+            </div>
+          </Card>
+        );
+      case "roadmap_snapshot":
+        return <RoadmapSnapshot primary={data.primary} />;
+      case "current_focus":
+        return <CurrentFocus primary={data.primary} />;
+      case "initiative_summary":
+        return <InitiativeSummaryList initiatives={data.initiatives} />;
+      case "attention":
+        return <DecisionsRequiredPanel items={decisions} />;
+      case "upcoming_actions":
+        return data.primary ? (
+          <UpcomingActions now={actions.now} next={actions.next} later={actions.later} />
+        ) : (
+          <Card>
+            <CardTitle>Upcoming Actions</CardTitle>
+            <div className="mt-3">
+              <EmptyState title="Nothing yet" description="Suggested next steps appear once a plan is generated." />
+            </div>
+          </Card>
+        );
+      case "recent_activity":
+        return <RecentActivity items={activity} />;
+      case "upcoming_timeline":
+        return <UpcomingTimeline entries={data.timeline} />;
+    }
+  }
 
   return (
-    <main className="mx-auto min-h-screen max-w-4xl px-6 py-10">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-widest text-indigo-600">
-            Guided Product Planning Platform
-          </p>
-          <h1 className="mt-1 text-2xl font-bold">Your initiatives</h1>
-          <p className="mt-1 text-sm text-neutral-500">
-            Plan structural status at a glance. Live plan-health against delivery actuals
-            arrives with the v1.1 living-plan release.
-          </p>
-        </div>
-        <Link
-          href="/initiatives/new"
-          className="rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700"
-        >
-          + New initiative
-        </Link>
-      </div>
+    <DashboardLayout>
+      <GlobalDashboardHeader userName={user.name} greeting={data.greeting} operationalSummary={data.operationalSummary} />
 
-      {initiatives.length === 0 ? (
-        <div className="mt-12 rounded-2xl border border-dashed border-neutral-300 bg-white p-12 text-center">
-          <h2 className="text-lg font-semibold">No initiatives yet</h2>
-          <p className="mx-auto mt-2 max-w-md text-sm text-neutral-500">
-            Create one, answer the eight guided planning questions, and get a working
-            prototype of a complete product plan — roadmap to sprint-ready stories.
-          </p>
-          <Link
-            href="/initiatives/new"
-            className="mt-6 inline-block rounded-lg bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700"
-          >
-            Start your first plan
-          </Link>
+      <div className="mt-6">
+        {/* Large desktop / standard laptop: two columns, timeline in the right rail. */}
+        <div className="hidden gap-4 xl:grid xl:grid-cols-[minmax(0,1fr)_340px]">
+          <div className="min-w-0 space-y-4">
+            {mainOrder.map((id) => (
+              <div key={id}>{widget(id)}</div>
+            ))}
+          </div>
+          <aside className="min-w-0 space-y-4">{widget("upcoming_timeline")}</aside>
         </div>
-      ) : (
-        <ul className="mt-8 space-y-3">
-          {initiatives.map((initiative) => {
-            const locks = initiative.prototype?.layerLocks ?? [];
-            const lockedCount = locks.filter((l) => l.state === "locked").length;
-            const badge = STATUS_BADGES[initiative.status] ?? STATUS_BADGES.draft;
-            const jira = initiative.syncConnections.find((c) => c.tool === "jira");
-            const href =
-              initiative.status === "generated"
-                ? `/initiatives/${initiative.id}/dashboard`
-                : `/initiatives/${initiative.id}/intake`;
-            return (
-              <li key={initiative.id}>
-                <Link
-                  href={href}
-                  className="block rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm transition hover:border-indigo-300 hover:shadow"
-                >
-                  <div className="flex items-center justify-between gap-4">
-                    <h2 className="font-semibold">{initiative.name}</h2>
-                    <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${badge.cls}`}>
-                      {badge.label}
-                    </span>
-                  </div>
-                  {initiative.description && (
-                    <p className="mt-1 line-clamp-2 text-sm text-neutral-500">
-                      {initiative.description}
-                    </p>
-                  )}
-                  <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-neutral-500">
-                    {initiative.prototype && (
-                      <span>
-                        <span className="font-medium text-neutral-700">
-                          {lockedCount}/{LAYER_SEQUENCE.length}
-                        </span>{" "}
-                        waterfall layers locked
-                      </span>
-                    )}
-                    {initiative.prototype?.approvedAt && (
-                      <span className="text-emerald-700">Baseline approved</span>
-                    )}
-                    {jira?.status === "connected" && (
-                      <span className="text-indigo-600">
-                        Jira {jira.lastSyncedAt ? "synced" : "connected"} (demo)
-                      </span>
-                    )}
-                    <span>Methodology: hybrid waterfall</span>
-                  </div>
-                </Link>
-              </li>
-            );
-          })}
-        </ul>
-      )}
-    </main>
+
+        {/* Narrow / tablet: single column, timeline takes its ranked position. */}
+        <div className="space-y-4 xl:hidden">
+          {fullOrder.map((id) => (
+            <div key={id}>{widget(id)}</div>
+          ))}
+        </div>
+      </div>
+    </DashboardLayout>
   );
 }

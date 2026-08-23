@@ -1,7 +1,8 @@
 "use client";
 
-import Link from "next/link";
 import { usePathname } from "next/navigation";
+import type { NavigationItemProps } from "./NavigationItem";
+import Sidebar from "./Sidebar";
 
 export interface NavInitiative {
   id: string;
@@ -9,17 +10,28 @@ export interface NavInitiative {
   status: string; // draft | intake_in_progress | generated
 }
 
-interface NavItem {
-  label: string;
-  href: string | null; // null = disabled with explanation
-  disabledReason?: string;
-  activePrefix?: string;
-}
+const NOT_YET_AVAILABLE = "Not yet available.";
 
 /**
- * Persistent left navigation, grouped by the planning chain
- * (Product platform spec §1.1). Initiative-scoped links follow the
+ * Persistent left navigation, grouped per docs/V2-APPLICATION-SHELL-BLUEPRINT.md §2
+ * (PLAN / INTELLIGENCE / ORGANIZATION / ADMIN). Initiative-scoped links follow the
  * initiative in the current URL, falling back to the most recent one.
+ *
+ * "Guided Intake" and "Epics & Stories" — present in the old flat nav — are
+ * deliberately not top-level items here: Epics & Stories is already reachable via
+ * NavTabs on every workspace page, and Guided Intake is reachable via the
+ * "view intake answers" link already in workspace/layout.tsx's header on every
+ * workspace page. See docs/V2-DESIGN-SYSTEM.md "Focused-Flow Exclusions".
+ *
+ * ADMIN is rendered unconditionally, every item disabled — there is no real
+ * `accessLevel` to gate on yet (docs/V2-ARCHITECTURE.md §10). This is
+ * presentation only, never authorization; do not treat it as a permission check.
+ *
+ * Implementation note (Step 7B — docs/V2-STANDARD-DASHBOARD.md): "Dashboard" now
+ * points at the global Standard Dashboard (`/home`), not the current initiative's
+ * dashboard — superseding the Step 6C "Dashboard Interim Behavior" note in
+ * docs/V2-SHELL-COHESION-QA.md. The initiative list moved to `/initiatives` so
+ * "Initiatives" could keep its own destination.
  */
 export default function LeftNav(props: { initiatives: NavInitiative[] }) {
   const pathname = usePathname() ?? "";
@@ -32,7 +44,7 @@ export default function LeftNav(props: { initiatives: NavInitiative[] }) {
     null;
   const generated = current?.status === "generated";
 
-  const scoped = (suffix: string, label: string): NavItem =>
+  const scoped = (suffix: string, label: string): NavigationItemProps =>
     current && generated
       ? { label, href: `/initiatives/${current.id}/${suffix}` }
       : {
@@ -43,83 +55,44 @@ export default function LeftNav(props: { initiatives: NavInitiative[] }) {
             : "Create an initiative first.",
         };
 
-  const groups: { title: string; items: NavItem[] }[] = [
+  const groups: { title: string; items: NavigationItemProps[] }[] = [
     {
-      title: "Overview",
-      items: [scoped("dashboard", "Dashboard"), { label: "Initiatives", href: "/home" }],
-    },
-    {
-      title: "Planning",
+      title: "Plan",
       items: [
-        current
-          ? { label: "Guided Intake", href: `/initiatives/${current.id}/intake` }
-          : { label: "Guided Intake", href: null, disabledReason: "Create an initiative first." },
+        { label: "Dashboard", href: "/home" },
+        { label: "Initiatives", href: "/initiatives" },
         scoped("workspace/roadmap", "Roadmap"),
-        scoped("workspace/features", "Features"),
-        scoped("workspace/epics", "Epics & Stories"),
-      ],
-    },
-    {
-      title: "Execution",
-      items: [
+        scoped("workspace/features", "Planning Workspace"),
         scoped("workspace/sprints", "Sprints & Releases"),
-        scoped("workspace/capacity", "Capacity & Cost"),
       ],
     },
     {
-      title: "Outputs",
-      items: [scoped("workspace/executive", "Executive Presentation")],
+      title: "Intelligence",
+      items: [
+        { label: "Risks & Blockers", href: null, disabledReason: NOT_YET_AVAILABLE },
+        { label: "Decisions", href: null, disabledReason: NOT_YET_AVAILABLE },
+        scoped("workspace/capacity", "Capacity & Cost"),
+        scoped("workspace/executive", "Reports"),
+      ],
     },
     {
-      title: "Tools",
-      items: [{ label: "Integrations", href: "/integrations" }],
+      title: "Organization",
+      items: [
+        { label: "Teams & Stakeholders", href: null, disabledReason: NOT_YET_AVAILABLE },
+        { label: "Integrations", href: "/integrations" },
+        { label: "Activity", href: null, disabledReason: NOT_YET_AVAILABLE },
+      ],
+    },
+    {
+      title: "Admin",
+      items: [
+        { label: "Users & Roles", href: null, disabledReason: NOT_YET_AVAILABLE },
+        { label: "Organization", href: null, disabledReason: NOT_YET_AVAILABLE },
+        { label: "Dashboard Configuration", href: null, disabledReason: NOT_YET_AVAILABLE },
+        { label: "Settings", href: null, disabledReason: NOT_YET_AVAILABLE },
+      ],
     },
   ];
 
-  return (
-    <nav className="no-print flex h-full w-56 shrink-0 flex-col gap-5 overflow-y-auto border-r border-neutral-200 bg-white px-3 py-5">
-      <Link href="/home" className="px-2">
-        <span className="text-xs font-semibold uppercase tracking-widest text-indigo-600">
-          Guided Planning
-        </span>
-      </Link>
-      {groups.map((group) => (
-        <div key={group.title}>
-          <p className="px-2 text-[10px] font-semibold uppercase tracking-widest text-neutral-400">
-            {group.title}
-          </p>
-          <ul className="mt-1.5 space-y-0.5">
-            {group.items.map((item) => {
-              const active =
-                item.href != null &&
-                (pathname === item.href || pathname.startsWith(`${item.href}/`));
-              return (
-                <li key={item.label}>
-                  {item.href ? (
-                    <Link
-                      href={item.href}
-                      className={`block rounded-lg px-2 py-1.5 text-sm font-medium transition ${
-                        active
-                          ? "bg-indigo-50 text-indigo-700"
-                          : "text-neutral-600 hover:bg-neutral-50 hover:text-neutral-900"
-                      }`}
-                    >
-                      {item.label}
-                    </Link>
-                  ) : (
-                    <span
-                      title={item.disabledReason}
-                      className="block cursor-not-allowed rounded-lg px-2 py-1.5 text-sm font-medium text-neutral-300"
-                    >
-                      {item.label}
-                    </span>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
-        </div>
-      ))}
-    </nav>
-  );
+  return <Sidebar groups={groups} />;
 }

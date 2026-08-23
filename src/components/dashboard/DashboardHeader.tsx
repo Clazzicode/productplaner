@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { Badge } from "@/components/ui/Badge";
+import PageHeader from "@/components/ui/PageHeader";
+import WorkspaceBreadcrumb from "@/components/workspace/WorkspaceBreadcrumb";
 import MethodologySwitcher from "./MethodologySwitcher";
 
 export default function DashboardHeader(props: {
@@ -12,35 +14,44 @@ export default function DashboardHeader(props: {
   baselineApprovedAt: Date | null;
 }) {
   return (
-    <div className="flex flex-wrap items-start justify-between gap-4">
-      <div className="min-w-0">
-        <h1 className="text-2xl font-bold">{props.name}</h1>
-        {props.description && (
-          <p className="mt-0.5 line-clamp-2 max-w-2xl text-sm text-neutral-500">{props.description}</p>
-        )}
-        <p className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-neutral-500">
-          <MethodologySwitcher initiativeId={props.initiativeId} current={props.methodology} />
-          {props.releaseTarget && (
+    <div>
+      <WorkspaceBreadcrumb initiativeId={props.initiativeId} initiativeName={props.name} />
+      <div className="mt-2">
+        <PageHeader
+          title={props.name}
+          description={
             <>
-              <span className="text-neutral-300">·</span>
-              <span>Release target: {props.releaseTarget}</span>
+              {props.description && (
+                <span className="mb-1.5 block line-clamp-2 max-w-2xl">{props.description}</span>
+              )}
+              <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                <MethodologySwitcher initiativeId={props.initiativeId} current={props.methodology} />
+                {props.releaseTarget && (
+                  <>
+                    <span className="text-neutral-300">·</span>
+                    <span>Release target: {props.releaseTarget}</span>
+                  </>
+                )}
+                <span className="text-neutral-300">·</span>
+                <span>Updated {props.updatedAt.toLocaleDateString()}</span>
+                {props.baselineApprovedAt && (
+                  <Badge variant="emerald">
+                    Baseline approved {props.baselineApprovedAt.toLocaleDateString()}
+                  </Badge>
+                )}
+              </span>
             </>
-          )}
-          <span className="text-neutral-300">·</span>
-          <span>Updated {props.updatedAt.toLocaleDateString()}</span>
-          {props.baselineApprovedAt && (
-            <Badge variant="emerald">
-              Baseline approved {props.baselineApprovedAt.toLocaleDateString()}
-            </Badge>
-          )}
-        </p>
+          }
+          primaryAction={
+            <Link
+              href={`/initiatives/${props.initiativeId}/intake`}
+              className="shrink-0 text-sm text-indigo-600 hover:underline"
+            >
+              View intake answers
+            </Link>
+          }
+        />
       </div>
-      <Link
-        href={`/initiatives/${props.initiativeId}/intake`}
-        className="shrink-0 text-sm text-indigo-600 hover:underline"
-      >
-        View intake answers
-      </Link>
     </div>
   );
 }

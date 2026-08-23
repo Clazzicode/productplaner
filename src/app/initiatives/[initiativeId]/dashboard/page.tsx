@@ -1,4 +1,5 @@
 import { notFound, redirect } from "next/navigation";
+import { DashboardLayout } from "@/components/layout/PageLayouts";
 import CapacityCostPanel from "@/components/dashboard/CapacityCostPanel";
 import ConnectedToolsWidget, { type ToolStatusView } from "@/components/dashboard/ConnectedToolsWidget";
 import DashboardHeader from "@/components/dashboard/DashboardHeader";
@@ -269,7 +270,7 @@ export default async function DashboardPage({
   }
 
   return (
-    <div className="mx-auto max-w-7xl px-6 py-8">
+    <DashboardLayout>
       <DashboardHeader
         initiativeId={initiativeId}
         name={initiative.name}
@@ -342,6 +343,6 @@ export default async function DashboardPage({
           <RecentActivity items={activity} />
         </aside>
       </div>
-    </div>
+    </DashboardLayout>
   );
 }

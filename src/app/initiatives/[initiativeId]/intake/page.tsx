@@ -1,7 +1,11 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import IntakeWizard from "@/components/intake/IntakeWizard";
+import { FocusedLayout } from "@/components/layout/PageLayouts";
+import PlanningQuestionnaire from "@/components/questionnaire/PlanningQuestionnaire";
+import WorkspaceBreadcrumb from "@/components/workspace/WorkspaceBreadcrumb";
 import { db } from "@/lib/db";
+import { depthFromExperience } from "@/lib/questionnaire/roleGuidance";
+import { readOnboardingStateServer } from "@/lib/onboarding/tempStateServer";
 
 export const dynamic = "force-dynamic";
 
@@ -11,32 +15,36 @@ export default async function IntakePage({
   params: Promise<{ initiativeId: string }>;
 }) {
   const { initiativeId } = await params;
-  const initiative = await db.initiative.findUnique({
-    where: { id: initiativeId },
-    include: {
-      qualifyingProfile: true,
-      intakeAnswerSet: {
-        include: {
-          capabilities: { orderBy: { order: "asc" }, include: { dependsOnEdges: true } },
+  const [initiative, onboarding] = await Promise.all([
+    db.initiative.findUnique({
+      where: { id: initiativeId },
+      include: {
+        qualifyingProfile: true,
+        intakeAnswerSet: {
+          include: {
+            capabilities: { orderBy: { order: "asc" }, include: { dependsOnEdges: true } },
+          },
         },
       },
-    },
-  });
+    }),
+    readOnboardingStateServer(),
+  ]);
   if (!initiative || !initiative.intakeAnswerSet) notFound();
   const intake = initiative.intakeAnswerSet;
   const alreadyGenerated = intake.status === "generated";
 
-  const verbose =
-    ["first_time", "some_experience"].includes(initiative.qualifyingProfile?.experienceLevel ?? "") ||
-    ["business_analyst", "founder_first_timer", "project_manager"].includes(
-      initiative.qualifyingProfile?.role ?? "",
-    );
+  // Guidance depth now comes from experienceLevel alone — QualifyingProfile.role no
+  // longer participates (it's a legacy placeholder value, see
+  // src/lib/questionnaire/legacyQualifyingDefaults.ts and docs/V2-QUESTIONNAIRE-MAP.md §6).
+  const verbose = depthFromExperience(initiative.qualifyingProfile?.experienceLevel);
 
   return (
-    <main className="mx-auto min-h-screen max-w-2xl px-6 py-12">
-      <Link href="/home" className="text-sm text-neutral-500 hover:text-neutral-800">
-        ← Back to initiatives
-      </Link>
+    <FocusedLayout>
+      <WorkspaceBreadcrumb
+        initiativeId={initiative.id}
+        initiativeName={initiative.name}
+        trailOverride="Guided Intake"
+      />
       <h1 className="mt-4 text-2xl font-bold">{initiative.name}</h1>
       {alreadyGenerated ? (
         <p className="mt-1 mb-8 text-sm text-neutral-500">
@@ -52,29 +60,41 @@ export default async function IntakePage({
         </p>
       ) : (
         <p className="mt-1 mb-8 text-sm text-neutral-500">
-          Guided intake — eight questions, one at a time. Your working prototype is generated
-          from these answers, and you can come back and edit them any time.
+          A planning system progressively building an understanding of your initiative — six
+          sections, and you can come back and edit any of them any time.
         </p>
       )}
-      <IntakeWizard
+      <PlanningQuestionnaire
         initiativeId={initiative.id}
-        initiativeName={initiative.name}
+        workingRole={onboarding.workingRole ?? null}
         verbose={verbose}
         alreadyGenerated={alreadyGenerated}
-        intake={{
+        initialStep={1}
+        productDirection={{
+          name: initiative.name,
+          description: initiative.description,
           problemStatement: intake.problemStatement,
           targetCustomer: intake.targetCustomer,
+        }}
+        success={{
           outcomeStatement: intake.outcomeStatement,
           outcomeMetric: intake.outcomeMetric,
-          teamSize: intake.teamSize,
+          targetLaunchDate: initiative.targetLaunchDate
+            ? initiative.targetLaunchDate.toISOString().slice(0, 10)
+            : "",
+          budget: initiative.budget != null ? String(initiative.budget) : "",
+        }}
+        delivery={{
+          teamSize: intake.teamSize ?? "",
           sprintLengthWeeks: intake.sprintLengthWeeks,
-          velocityPerPersonPerSprint: intake.velocityPerPersonPerSprint,
-          capacityBufferPercent: intake.capacityBufferPercent,
           hoursPerSprintPerMember: intake.hoursPerSprintPerMember,
           utilizationRatePercent: intake.utilizationRatePercent,
+          capacityBufferPercent: intake.capacityBufferPercent,
           hoursPerStoryPoint: intake.hoursPerStoryPoint,
-          historicalVelocityPoints: intake.historicalVelocityPoints,
+          historicalVelocityPoints: intake.historicalVelocityPoints ?? "",
+          averageHourlyRate: initiative.averageHourlyRate != null ? String(initiative.averageHourlyRate) : "",
         }}
+        currentMethodology={initiative.methodology}
         capabilities={intake.capabilities.map((c) => ({
           id: c.id,
           name: c.name,
@@ -91,6 +111,6 @@ export default async function IntakePage({
           dependsOn: c.dependsOnEdges.map((e) => e.toCapabilityId),
         }))}
       />
-    </main>
+    </FocusedLayout>
   );
 }

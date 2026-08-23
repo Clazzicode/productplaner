@@ -3,6 +3,40 @@
 :root {
   --background: #f7f7fb;
   --foreground: #1c1c28;
+
+  /* Shell surfaces — only navigation/chrome go dark; the workspace stays a
+     light neutral (--surface below), unchanged in spirit from --background.
+     See docs/V2-DESIGN-SYSTEM.md "Surface Hierarchy". */
+  --surface-nav: #14161d;
+  --surface-nav-hover: #1f2229;
+  --surface-nav-selected: #262a3a;
+  --surface-chrome: #1b1e26;
+  --surface: #f7f7fb;
+  --surface-panel: #ffffff;
+  --border-subtle: #e5e5ea;
+  --border-nav: #262a33;
+
+  /* Text */
+  --text-primary: #1c1c28;
+  --text-secondary: #52525b;
+  --text-muted: #8b8b96;
+  --text-inverse: #f4f4f6;
+  --text-inverse-muted: #9296a6;
+  --text-disabled: #b8b8c2;
+
+  /* Accent — tokenizes the app's existing indigo-600/700, not a new color. */
+  --accent: #4f46e5;
+  --accent-hover: #4338ca;
+
+  /* Health — a 4-tier semantic scale for future roadmap/product-health status.
+     Distinct hues, deliberately NOT aliases of Badge's existing emerald/amber/
+     red variants (which are shared by unrelated value/risk/initiative-status
+     badges) — see docs/V2-DESIGN-SYSTEM.md "Badge / Status Semantics" for why,
+     and which of the four map to real data today. */
+  --health-good: #15803d;
+  --health-attention: #a16207;
+  --health-warning: #c2410c;
+  --health-critical: #b91c1c;
 }
 
 @theme inline {
@@ -10,6 +44,30 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+
+  --color-nav: var(--surface-nav);
+  --color-nav-hover: var(--surface-nav-hover);
+  --color-nav-selected: var(--surface-nav-selected);
+  --color-chrome: var(--surface-chrome);
+  --color-surface: var(--surface);
+  --color-panel: var(--surface-panel);
+  --color-border-subtle: var(--border-subtle);
+  --color-border-nav: var(--border-nav);
+
+  --color-text-primary: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-muted: var(--text-muted);
+  --color-text-inverse: var(--text-inverse);
+  --color-text-inverse-muted: var(--text-inverse-muted);
+  --color-text-disabled: var(--text-disabled);
+
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+
+  --color-health-good: var(--health-good);
+  --color-health-attention: var(--health-attention);
+  --color-health-warning: var(--health-warning);
+  --color-health-critical: var(--health-critical);
 }
 
 body {

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-const BASE_TABS = [
+export const BASE_TABS = [
   { slug: "roadmap", label: "Roadmap" },
   { slug: "features", label: "Feature Hierarchy" },
   { slug: "epics", label: "Epics & Stories" },
@@ -18,6 +18,13 @@ const LABEL_OVERRIDES: Record<string, Partial<Record<(typeof BASE_TABS)[number][
   agile_scrum: { roadmap: "Backlog" },
   kanban: { sprints: "Flow & Releases" },
 };
+
+/** Shared with WorkspaceBreadcrumb so the two never drift on tab naming. */
+export function currentTabLabel(pathname: string | null, methodology?: string): string | null {
+  const overrides = LABEL_OVERRIDES[methodology ?? ""] ?? {};
+  const match = BASE_TABS.find((tab) => pathname?.includes(`/workspace/${tab.slug}`));
+  return match ? (overrides[match.slug] ?? match.label) : null;
+}
 
 export default function NavTabs({
   initiativeId,

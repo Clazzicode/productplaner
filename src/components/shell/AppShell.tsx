@@ -6,8 +6,11 @@ import { useState } from "react";
 import { DemoModeProvider } from "@/components/demo/DemoModeContext";
 import DemoModeToggle from "@/components/demo/DemoModeToggle";
 import StartOverButton from "@/components/demo/StartOverButton";
+import Avatar from "@/components/ui/Avatar";
+import { isBareRoute } from "./bareMode";
 import LeftNav, { type NavInitiative } from "./LeftNav";
 import MobileNavDrawer from "./MobileNavDrawer";
+import TopHeader from "./TopHeader";
 
 /**
  * Persistent app chrome (left nav + top bar). Rendered from the root layout;
@@ -38,19 +41,17 @@ export default function AppShell(props: {
     setDrawerOpen(false);
   }
 
-  const bare =
-    !props.hasProfile ||
-    pathname === "/" ||
-    pathname.startsWith("/welcome") ||
-    pathname.endsWith("/executive/print");
+  const urlMatch = pathname.match(/^\/initiatives\/([^/]+)/);
+  const currentId = urlMatch?.[1] ?? "";
+  const currentInitiative = props.initiatives.find((i) => i.id === currentId);
+
+  const bare = isBareRoute(pathname, props.hasProfile, currentInitiative);
 
   if (bare) {
     return <DemoModeProvider initialEnabled={props.demoModeEnabled}>{props.children}</DemoModeProvider>;
   }
 
-  const urlMatch = pathname.match(/^\/initiatives\/([^/]+)/);
-  const currentId = urlMatch?.[1] ?? "";
-  const currentName = props.initiatives.find((i) => i.id === currentId)?.name ?? "Guided Planning";
+  const currentName = currentInitiative?.name ?? "Guided Planning";
 
   const switchInitiative = (id: string) => {
     const target = props.initiatives.find((i) => i.id === id);
@@ -93,9 +94,7 @@ export default function AppShell(props: {
       <DemoModeToggle />
       <StartOverButton />
       <span className="hidden items-center gap-2 text-sm text-neutral-500 sm:flex">
-        <span className="flex h-7 w-7 items-center justify-center rounded-full bg-indigo-100 text-xs font-semibold text-indigo-700">
-          {props.userName.slice(0, 1).toUpperCase()}
-        </span>
+        <Avatar name={props.userName} />
         {props.userName}
       </span>
     </div>
@@ -115,27 +114,13 @@ export default function AppShell(props: {
           bottomContent={accountActions}
         />
         <div className="flex min-w-0 flex-1 flex-col">
-          <header className="no-print hidden items-center justify-between gap-4 border-b border-neutral-200 bg-white px-6 py-3 lg:flex">
-            {switcherAndNew}
-            {accountActions}
-          </header>
-          <header className="no-print flex items-center gap-3 border-b border-neutral-200 bg-white px-4 py-3 lg:hidden">
-            <button
-              onClick={() => setDrawerOpen(true)}
-              aria-label="Open menu"
-              className="shrink-0 rounded-lg p-1.5 text-neutral-600 hover:bg-neutral-100"
-            >
-              <span className="block h-0.5 w-5 bg-current" />
-              <span className="mt-1 block h-0.5 w-5 bg-current" />
-              <span className="mt-1 block h-0.5 w-5 bg-current" />
-            </button>
-            <span className="min-w-0 flex-1 truncate text-sm font-semibold text-neutral-800">
-              {currentName}
-            </span>
-            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-indigo-100 text-xs font-semibold text-indigo-700">
-              {props.userName.slice(0, 1).toUpperCase()}
-            </span>
-          </header>
+          <TopHeader
+            switcherAndNew={switcherAndNew}
+            accountActions={accountActions}
+            currentName={currentName}
+            userName={props.userName}
+            onOpenMenu={() => setDrawerOpen(true)}
+          />
           <main className="min-w-0 flex-1">{props.children}</main>
         </div>
       </div>

@@ -1,24 +1,23 @@
-import Link from "next/link";
-import { redirect } from "next/navigation";
-import NewInitiativeForm from "@/components/intake/NewInitiativeForm";
+import { FocusedLayout } from "@/components/layout/PageLayouts";
+import ProductDirectionBootstrap from "@/components/questionnaire/ProductDirectionBootstrap";
+import Breadcrumb from "@/components/ui/Breadcrumb";
 import { getActiveProfile } from "@/lib/auth/session";
+import { readOnboardingStateServer } from "@/lib/onboarding/tempStateServer";
 
 export const dynamic = "force-dynamic";
 
 export default async function NewInitiativePage() {
   const profile = await getActiveProfile();
-  if (!profile) redirect("/welcome");
+  const onboarding = await readOnboardingStateServer();
 
   return (
-    <main className="mx-auto min-h-screen max-w-xl px-6 py-12">
-      <Link href="/home" className="text-sm text-neutral-500 hover:text-neutral-800">
-        ← Back to initiatives
-      </Link>
+    <FocusedLayout>
+      <Breadcrumb items={[{ label: "Initiatives", href: "/initiatives" }, { label: "New Initiative" }]} />
       <h1 className="mt-4 text-2xl font-bold">New initiative</h1>
       <p className="mt-1 mb-8 text-sm text-neutral-500">
-        No blank templates ahead — naming the idea leads straight into the guided intake.
+        No blank templates ahead — a few questions build straight into your working plan.
       </p>
-      <NewInitiativeForm />
-    </main>
+      <ProductDirectionBootstrap hasProfile={profile != null} workingRole={onboarding.workingRole ?? null} />
+    </FocusedLayout>
   );
 }
