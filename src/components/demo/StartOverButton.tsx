@@ -35,7 +35,7 @@ export default function StartOverButton() {
     <>
       <button
         onClick={() => setConfirming(true)}
-        title="Delete everything and restart the demo from the beginning"
+        title="Delete everything and reset this account to a brand-new state"
         className="rounded-full border border-neutral-300 bg-white px-3 py-1.5 text-xs font-medium text-neutral-500 transition hover:border-red-300 hover:bg-red-50 hover:text-red-700"
       >
         Start over
@@ -44,8 +44,8 @@ export default function StartOverButton() {
       <Modal open={confirming} title="Start over?" onClose={() => setConfirming(false)}>
         <p className="text-sm text-neutral-600">
           This <strong>permanently deletes every initiative</strong> — all intake answers,
-          capabilities, generated plans, locks, and integration connections — plus your
-          qualifying profile. You&apos;ll land back on Welcome exactly like a brand-new user.{" "}
+          capabilities, generated plans, locks, and integration connections — plus the
+          qualifying profile. The account lands back on Welcome exactly like a brand-new user.{" "}
           <strong>This cannot be undone.</strong>
         </p>
         {error && <p className="mt-3 text-sm text-red-600">{error}</p>}

@@ -10,6 +10,8 @@ import OrgSummaryStrip from "@/components/dashboard/admin/OrgSummaryStrip";
 import PortfolioHealthTable from "@/components/dashboard/admin/PortfolioHealthTable";
 import TeamsIntelligencePanel from "@/components/dashboard/admin/TeamsIntelligencePanel";
 import UsersIntelligencePanel from "@/components/dashboard/admin/UsersIntelligencePanel";
+import StartOverButton from "@/components/demo/StartOverButton";
+import { Card, CardTitle } from "@/components/ui/Card";
 import { getActiveProfile, getCurrentUser } from "@/lib/auth/session";
 import { loadAdminDashboardData } from "@/lib/dashboard/adminDashboardData";
 import {
@@ -93,6 +95,16 @@ export default async function AdminDashboardPage() {
             <div key={id}>{widget(id)}</div>
           ))}
         </div>
+
+        <Card className="border-red-200">
+          <CardTitle className="text-red-700">Danger zone</CardTitle>
+          <p className="mt-1 text-xs text-neutral-500">
+            Admin-only account reset. Not shown anywhere else in the product.
+          </p>
+          <div className="mt-3">
+            <StartOverButton />
+          </div>
+        </Card>
       </div>
     </WideLayout>
   );
