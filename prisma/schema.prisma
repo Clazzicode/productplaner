@@ -49,6 +49,11 @@ model User {
   workingRole     String?             // product_management | project_manager | developer
   memberType      String              @default("internal") // internal | external
   status          String              @default("active") // active | disabled | archived
+  // AES-256-GCM ciphertext (src/lib/security/secretBox.ts), never the raw key —
+  // used only for this user's own document-import requests, never shared
+  // across accounts. updatedAt tracks rotation, not read for anything else.
+  anthropicApiKeyEncrypted String?
+  anthropicApiKeyUpdatedAt DateTime?
   profiles        QualifyingProfile[]
   initiatives     Initiative[]
   teamMemberships TeamMember[]

@@ -11,6 +11,7 @@ describe("isBareRoute", () => {
     expect(isBareRoute("/welcome", true, undefined)).toBe(true);
     expect(isBareRoute("/onboarding", true, undefined)).toBe(true);
     expect(isBareRoute("/onboarding/role", true, undefined)).toBe(true);
+    expect(isBareRoute("/login", true, undefined)).toBe(true);
   });
 
   it("is bare on the executive print route", () => {

@@ -24,6 +24,7 @@ export function isBareRoute(pathname: string, hasProfile: boolean, currentInitia
   if (!hasProfile) return true;
   if (pathname === "/") return true;
   if (pathname.startsWith("/welcome")) return true;
+  if (pathname.startsWith("/login")) return true;
   if (pathname.startsWith("/onboarding")) return true;
   if (pathname.endsWith("/executive/print")) return true;
   if (pathname.endsWith("/intake") && currentInitiative != null && currentInitiative.status !== "generated") {

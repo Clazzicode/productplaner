@@ -12,6 +12,7 @@ import GuidanceBanner from "./GuidanceBanner";
 import { ChoiceCard, ChoicePill } from "./Choice";
 import { FIELD_CLASS } from "./fieldStyles";
 import ProductDirectionFields, { type ProductDirectionValues } from "./ProductDirectionFields";
+import ImportIntakePanel from "./ImportIntakePanel";
 
 export interface CapabilityView {
   id: string;
@@ -242,6 +243,14 @@ export default function PlanningQuestionnaire(props: {
       {step === 0 && (
         <Card>
           <GuidanceBanner section="productDirection" workingRole={workingRole} />
+          <ImportIntakePanel
+            initiativeId={initiativeId}
+            productDirection={productDirection}
+            success={success}
+            onApplyProductDirection={(patch) => setProductDirection((v) => ({ ...v, ...patch }))}
+            onApplySuccess={(patch) => setSuccess((s) => ({ ...s, ...patch }))}
+            onCapabilityAdded={(cap) => setCaps((c) => [...c, cap])}
+          />
           <ProductDirectionFields
             values={productDirection}
             onChange={(patch) => setProductDirection((v) => ({ ...v, ...patch }))}

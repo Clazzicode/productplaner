@@ -96,6 +96,50 @@ export const capabilityUpsertSchema = z.object({
   dependsOn: z.array(z.string()).default([]),
 });
 
+// Draft extracted from an imported document (PPTX/DOCX/PDF) by the intake-import
+// AI call. Unlike intakePatchSchema/capabilityUpsertSchema above, this is lenient
+// by design: the model's output is untrusted and occasionally imprecise, but a
+// partial draft is still useful to show the user, so invalid pieces are dropped
+// (via .catch) instead of failing the whole response.
+const trimmedTextDraft = z.string().trim().min(1).optional().catch(undefined);
+
+export const intakeImportCapabilityDraftSchema = z.object({
+  name: z.string().trim().catch(""),
+  description: trimmedTextDraft,
+  isMvp: z.boolean().optional().catch(undefined),
+  effortSize: effortSizeSchema.optional().catch(undefined),
+  businessValue: businessValueSchema.optional().catch(undefined),
+  riskLevel: riskLevelSchema.optional().catch(undefined),
+});
+
+export const intakeImportDraftSchema = z.object({
+  productDirection: z
+    .object({
+      name: trimmedTextDraft,
+      problemStatement: trimmedTextDraft,
+      targetCustomer: trimmedTextDraft,
+    })
+    .optional()
+    .catch({}),
+  success: z
+    .object({
+      outcomeStatement: trimmedTextDraft,
+      outcomeMetric: trimmedTextDraft,
+      targetLaunchDate: z
+        .string()
+        .regex(/^\d{4}-\d{2}-\d{2}$/)
+        .optional()
+        .catch(undefined),
+      budget: z.number().min(0).max(1_000_000_000).optional().catch(undefined),
+    })
+    .optional()
+    .catch({}),
+  capabilities: z.array(intakeImportCapabilityDraftSchema).optional().catch([]),
+  warnings: z.array(z.string()).optional().catch([]),
+});
+
+export type IntakeImportDraft = z.infer<typeof intakeImportDraftSchema>;
+
 export const artifactPatchSchema = z
   .object({
     title: z.string().trim().min(3).optional(),
