@@ -1,5 +1,4 @@
 import { notFound } from "next/navigation";
-import ExplainCallout from "@/components/demo/ExplainCallout";
 import { Badge, healthBadgeVariant } from "@/components/ui/Badge";
 import AssumptionsEditor from "@/components/workspace/AssumptionsEditor";
 import { db } from "@/lib/db";
@@ -49,10 +48,6 @@ export default async function CapacityPage({
           ? `Capacity = ${intakeRow.teamSize ?? "?"} people × ${intakeRow.hoursPerSprintPerMember} hrs × ${intakeRow.utilizationRatePercent}% utilization − ${intakeRow.capacityBufferPercent}% buffer ÷ ${intakeRow.hoursPerStoryPoint} hrs/point = ${model.sprintPointCapacity} points/sprint.`
           : `Capacity = ${intakeRow.teamSize ?? "?"} people × ${intakeRow.velocityPerPersonPerSprint} pts/person/sprint × ${100 - intakeRow.capacityBufferPercent}%.`}
       </p>
-      <ExplainCallout>
-        One capacity number drives both halves of the hybrid model — the waterfall phase timeline
-        and the sprint packing — and the same hours convert into every dollar figure below.
-      </ExplainCallout>
 
       <div className="mt-6 grid gap-3 sm:grid-cols-3">
         <StatCard label="Total planned" value={`${totalPlanned} pts`} />

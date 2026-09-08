@@ -1,6 +1,5 @@
 import { format } from "date-fns";
 import { notFound } from "next/navigation";
-import ExplainCallout from "@/components/demo/ExplainCallout";
 import SprintMoveSelect from "@/components/workspace/SprintMoveSelect";
 import { db } from "@/lib/db";
 import { profileFor } from "@/lib/generation/methodology";
@@ -154,12 +153,6 @@ export default async function SprintsPage({
             ? "Waterfall: the sprint and release plan became a fixed schedule once the baseline was approved — it can no longer be rebalanced."
             : "Agile execution layers — flexible beneath the locked waterfall structure. Moving stories here never restructures locked layers above. Re-locking an upper layer recomputes this plan."}
       </p>
-      <ExplainCallout>
-        {isKanban
-          ? "Throughput is the same estimated capacity number as everywhere else in the platform, expressed as points per week instead of points per sprint — cumulative story points divided by throughput gives each phase's forecasted completion date."
-          : "Stories were packed into sprints in strict roadmap order against the estimated sprint capacity — a story only joins the current sprint if it fits, phases never mix in one sprint, and each sprint shows its planned story cost against the full labor allocation."}
-      </ExplainCallout>
-
       {/* Releases strip */}
       <div className="mt-5 flex flex-wrap gap-3">
         {releases.map((rel) => (

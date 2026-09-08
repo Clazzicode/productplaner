@@ -16,6 +16,7 @@ export default function MobileNavDrawer(props: {
   open: boolean;
   onClose: () => void;
   initiatives: NavInitiative[];
+  accessLevel: string;
   topContent?: React.ReactNode;
   bottomContent?: React.ReactNode;
 }) {
@@ -74,7 +75,7 @@ export default function MobileNavDrawer(props: {
           <div className="border-b border-neutral-200 px-3 py-3">{props.topContent}</div>
         )}
         <div className="min-h-0 flex-1 overflow-y-auto">
-          <LeftNav initiatives={props.initiatives} />
+          <LeftNav initiatives={props.initiatives} accessLevel={props.accessLevel} />
         </div>
         {props.bottomContent && (
           <div className="border-t border-neutral-200 px-3 py-3">{props.bottomContent}</div>

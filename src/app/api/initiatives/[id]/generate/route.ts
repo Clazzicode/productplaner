@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
+import { requireInitiativeApiAccess } from "@/lib/access/guards";
 import { jsonError } from "@/lib/api";
+import { getCurrentUser } from "@/lib/auth/session";
 import { generatePrototype, IntakeInvalidError } from "@/lib/generation/engine";
 
 export async function POST(
@@ -7,6 +9,10 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
+  const user = await getCurrentUser();
+  const guard = await requireInitiativeApiAccess(user.id, id, "edit");
+  if (!guard.ok) return guard.response;
+
   try {
     const { prototypeId } = await generatePrototype(id);
     return NextResponse.json({ prototypeId });

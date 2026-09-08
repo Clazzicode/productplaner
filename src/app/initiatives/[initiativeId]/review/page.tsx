@@ -1,5 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import GenerationReviewSummary, { type AssumptionRow } from "@/components/review/GenerationReviewSummary";
+import { requireInitiativeView } from "@/lib/access/guards";
+import { getCurrentUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { DEFAULT_ASSUMPTIONS } from "@/lib/generation/constants";
 import { computeEffectiveCapacity } from "@/lib/generation/cost";
@@ -14,6 +16,8 @@ export default async function GenerationReviewPage({
   params: Promise<{ initiativeId: string }>;
 }) {
   const { initiativeId } = await params;
+  const user = await getCurrentUser();
+  await requireInitiativeView(user.id, initiativeId);
   const initiative = await db.initiative.findUnique({
     where: { id: initiativeId },
     include: {

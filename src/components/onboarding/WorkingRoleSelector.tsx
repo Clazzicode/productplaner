@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { apiFetch } from "@/lib/clientApi";
 import { readOnboardingState, writeOnboardingState } from "@/lib/onboarding/tempStateClient";
 import type { WorkingRole } from "@/lib/onboarding/types";
 
@@ -45,6 +46,12 @@ export default function WorkingRoleSelector() {
   const submit = () => {
     if (!selected) return;
     writeOnboardingState({ workingRole: selected, complete: true });
+    // Step 8B: persist onto the real User row, not just the cookie. Fire and
+    // forget — the cookie remains the source of truth for this navigation, and
+    // a failed write here just means the dashboard falls back to the cookie
+    // until the next successful save (see docs/V2-USERS-TEAMS.md "Working
+    // Role Cookie Transition").
+    void apiFetch("/api/account/working-role", { method: "PATCH", body: { workingRole: selected } });
     router.push("/welcome");
   };
 

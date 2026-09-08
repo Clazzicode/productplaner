@@ -8,9 +8,8 @@ import { db } from "@/lib/db";
  * cascade, so profiles can't be removed first. Everything under each
  * initiative (IntakeAnswerSet, Capability, Prototype→ArtifactLayer/Sprint/
  * Release/LayerLock, SyncConnection, IntegrationConnection) cascades
- * automatically. Org-wide IntegrationConnections and the demo-mode
- * preference are deliberately left untouched — they aren't per-initiative
- * journey state.
+ * automatically. Org-wide IntegrationConnections are deliberately left
+ * untouched — they aren't per-initiative journey state.
  */
 export async function POST() {
   const user = await getCurrentUser();

@@ -1,5 +1,4 @@
 import Link from "next/link";
-import ExplainCallout from "@/components/demo/ExplainCallout";
 import { Badge, type BadgeVariant } from "@/components/ui/Badge";
 import { Card, CardTitle } from "@/components/ui/Card";
 
@@ -48,10 +47,6 @@ export default function DecisionsRequiredPanel(props: { items: DecisionItem[] })
           ))}
         </ul>
       )}
-      <ExplainCallout>
-        Everything a PM needs to act on, in one place: each item says what happened, why it
-        matters, and the recommended next step — with a link straight to the affected workspace.
-      </ExplainCallout>
     </Card>
   );
 }

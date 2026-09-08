@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
+import { requireInitiativeApiAccess } from "@/lib/access/guards";
 import { jsonError, zodMessage } from "@/lib/api";
+import { getCurrentUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { DEFAULT_ASSUMPTIONS } from "@/lib/generation/constants";
 import {
@@ -29,6 +31,10 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
+  const user = await getCurrentUser();
+  const guard = await requireInitiativeApiAccess(user.id, id, "view");
+  if (!guard.ok) return guard.response;
+
   const initiative = await db.initiative.findUnique({
     where: { id },
     include: { intakeAnswerSet: true },
@@ -58,6 +64,10 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
+  const user = await getCurrentUser();
+  const guard = await requireInitiativeApiAccess(user.id, id, "edit");
+  if (!guard.ok) return guard.response;
+
   const parsed = assumptionsPatchSchema.safeParse(await request.json());
   if (!parsed.success) return jsonError(zodMessage(parsed.error), 422);
 

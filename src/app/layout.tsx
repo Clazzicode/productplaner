@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import AppShell from "@/components/shell/AppShell";
+import { listAuthorizedInitiativeIds } from "@/lib/access/initiativeAccess";
 import { getCurrentUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import "./globals.css";
@@ -33,8 +34,12 @@ export default async function RootLayout({
   // Same cheap demo-user lookup every page already performs; the shell hides
   // itself client-side on /welcome, /, and the executive print route.
   const user = await getCurrentUser();
+  // Step 8C (docs/V2-RESOURCE-ACCESS.md §16): the switcher/nav initiative list
+  // is authorized-scoped too — it drives real navigation targets, so it must
+  // never offer an initiative a detail page would then reject.
+  const authorizedInitiativeIds = await listAuthorizedInitiativeIds(user.id);
   const initiatives = await db.initiative.findMany({
-    where: { userId: user.id },
+    where: { id: { in: authorizedInitiativeIds ?? [] } },
     orderBy: { updatedAt: "desc" },
     select: { id: true, name: true, status: true },
   });
@@ -48,8 +53,8 @@ export default async function RootLayout({
         <AppShell
           hasProfile={user.profiles.length > 0}
           userName={user.name}
+          accessLevel={user.accessLevel}
           initiatives={initiatives}
-          demoModeEnabled={user.demoModeEnabled}
         >
           {children}
         </AppShell>

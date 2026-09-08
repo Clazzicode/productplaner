@@ -8,12 +8,20 @@ import LockBar from "@/components/workspace/LockBar";
 import NavTabs from "@/components/workspace/NavTabs";
 import RefreshBar from "@/components/workspace/RefreshBar";
 import WorkspaceBreadcrumb from "@/components/workspace/WorkspaceBreadcrumb";
+import { getCurrentUser } from "@/lib/auth/session";
+import { requireInitiativeView } from "@/lib/access/guards";
 import { db } from "@/lib/db";
 import { profileFor, resolveMethodology } from "@/lib/generation/methodology";
 import { artifactCounts, loadWorkspace } from "@/lib/workspace";
 
 export const dynamic = "force-dynamic";
 
+/**
+ * Covers every workspace sub-page (roadmap/features/epics/sprints/capacity/
+ * executive/stories) with one View check, since they all render inside this
+ * shared layout — the minimum coverage docs/V2-RESOURCE-ACCESS.md §12 calls
+ * for without touching each page individually.
+ */
 export default async function WorkspaceLayout({
   children,
   params,
@@ -22,6 +30,8 @@ export default async function WorkspaceLayout({
   params: Promise<{ initiativeId: string }>;
 }) {
   const { initiativeId } = await params;
+  const user = await getCurrentUser();
+  await requireInitiativeView(user.id, initiativeId);
   const ws = await loadWorkspace(initiativeId);
   if (!ws) {
     const initiative = await db.initiative.findUnique({ where: { id: initiativeId } });

@@ -26,6 +26,10 @@ export async function POST(request: Request) {
       averageHourlyRate: parsed.data.averageHourlyRate,
       status: "intake_in_progress",
       intakeAnswerSet: { create: {} },
+      // Formalizes the creator's existing implicit ownership as a real Owner
+      // grant (docs/V2-ACCESS-TEAMS-VISIBILITY.md §19) — the same backfill
+      // Step 8C applied to the two pre-existing initiatives.
+      initiativeAccess: { create: { userId: user.id, permission: "owner" } },
     },
   });
   return NextResponse.json({ initiativeId: initiative.id });

@@ -111,11 +111,13 @@ export async function loadGlobalDashboardData(
 ): Promise<GlobalDashboardData> {
   const today = new Date();
 
+  // Step 8C: once a real authorized-initiative list is supplied, it is the
+  // *complete* filter — an Organization Admin's list legitimately includes
+  // initiatives they didn't personally create, so `userId` must not also be
+  // ANDed in here. `userId` only remains the filter for the (now purely
+  // defensive) `null` fallback — see docs/V2-RESOURCE-ACCESS.md §16.
   const initiatives = await db.initiative.findMany({
-    where: {
-      userId,
-      ...(authorizedInitiativeIds ? { id: { in: authorizedInitiativeIds } } : {}),
-    },
+    where: authorizedInitiativeIds ? { id: { in: authorizedInitiativeIds } } : { userId },
     orderBy: { updatedAt: "desc" },
     include: {
       prototype: { include: { layerLocks: true } },

@@ -1,4 +1,4 @@
-import QualifyingWizard from "@/components/qualifying/QualifyingWizard";
+import WelcomeQualifying from "@/components/qualifying/WelcomeQualifying";
 
 export const dynamic = "force-dynamic";
 
@@ -17,7 +17,7 @@ export default function WelcomePage() {
           questions build your working prototype — a live, connected plan, not a document.
         </p>
       </div>
-      <QualifyingWizard />
+      <WelcomeQualifying />
     </main>
   );
 }

@@ -1,6 +1,7 @@
+import { FIELD_CLASS } from "./fieldStyles";
+
 export interface ProductDirectionValues {
   name: string;
-  description: string;
   problemStatement: string;
   targetCustomer: string;
 }
@@ -15,31 +16,20 @@ export default function ProductDirectionFields(props: {
   const { values, onChange, verbose } = props;
   return (
     <div className="space-y-5">
-      <label className="block text-sm font-medium">
+      <label className="block text-sm font-medium text-text-primary">
         Initiative name
         <input
           value={values.name}
           onChange={(e) => onChange({ name: e.target.value })}
           placeholder="e.g. Customer Self-Service Portal"
-          className="mt-1.5 w-full rounded-lg border border-neutral-300 px-3.5 py-2.5 text-sm focus:border-indigo-500 focus:outline-none"
+          className={`mt-1.5 w-full ${FIELD_CLASS}`}
           autoFocus
         />
       </label>
 
-      <label className="block text-sm font-medium">
-        What are you building? <span className="font-normal text-neutral-400">(optional)</span>
-        <textarea
-          value={values.description}
-          onChange={(e) => onChange({ description: e.target.value })}
-          rows={2}
-          placeholder="A sentence or two — the rest of this flow draws the details out of you."
-          className="mt-1.5 w-full rounded-lg border border-neutral-300 px-3.5 py-2.5 text-sm focus:border-indigo-500 focus:outline-none"
-        />
-      </label>
-
-      <label className="block text-sm font-medium">
+      <label className="block text-sm font-medium text-text-primary">
         What problem are you solving?
-        <p className="mt-1 mb-1.5 text-xs text-neutral-500">
+        <p className="mt-1 mb-1.5 text-xs text-text-muted">
           {verbose
             ? "Describe the pain in the customer's world — not your solution. This answer anchors the whole plan: it frames the roadmap, feeds every epic description, and opens the executive narrative. Example: “Support agents juggle five disconnected tools to answer one billing question, so responses take days and customers churn.”"
             : "Anchors the whole plan — roadmap framing, epic descriptions, executive narrative."}
@@ -49,13 +39,13 @@ export default function ProductDirectionFields(props: {
           onChange={(e) => onChange({ problemStatement: e.target.value })}
           rows={3}
           placeholder="The problem, in plain language…"
-          className="w-full rounded-lg border border-neutral-300 px-3.5 py-2.5 text-sm focus:border-indigo-500 focus:outline-none"
+          className={`w-full ${FIELD_CLASS}`}
         />
       </label>
 
-      <label className="block text-sm font-medium">
+      <label className="block text-sm font-medium text-text-primary">
         Who is the target customer?
-        <p className="mt-1 mb-1.5 text-xs text-neutral-500">
+        <p className="mt-1 mb-1.5 text-xs text-text-muted">
           {verbose
             ? "Name the person, not the market. Every user story is written from this persona's point of view. Example: “billing support agents at mid-market SaaS companies.”"
             : "Drives user story personas and acceptance criteria context."}
@@ -65,7 +55,7 @@ export default function ProductDirectionFields(props: {
           onChange={(e) => onChange({ targetCustomer: e.target.value })}
           rows={2}
           placeholder="e.g. billing support agents at mid-market SaaS companies"
-          className="w-full rounded-lg border border-neutral-300 px-3.5 py-2.5 text-sm focus:border-indigo-500 focus:outline-none"
+          className={`w-full ${FIELD_CLASS}`}
         />
       </label>
     </div>

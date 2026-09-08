@@ -1,5 +1,4 @@
 import Link from "next/link";
-import ExplainCallout from "@/components/demo/ExplainCallout";
 import { Badge } from "@/components/ui/Badge";
 import { Card, CardTitle } from "@/components/ui/Card";
 
@@ -46,11 +45,6 @@ export default function PlanHealthChain(props: { levels: ChainLevel[] }) {
           </li>
         ))}
       </ol>
-      <ExplainCallout>
-        This is the actual product hierarchy, top to bottom — roadmap down to sprints and
-        releases. Waterfall layers lock in strict sequence; the agile layers underneath stay
-        flexible. Click any level to open its workspace.
-      </ExplainCallout>
     </Card>
   );
 }

@@ -9,28 +9,51 @@ export const QUESTIONNAIRE_SECTIONS = [
   "Review & Generate",
 ] as const;
 
+/** Top-of-flow progress bar — one segment per section, filled up through the
+ * current step. Completed segments double as jump-back navigation. */
 export default function SectionProgress(props: { current: number; onJump?: (i: number) => void }) {
+  const total = QUESTIONNAIRE_SECTIONS.length;
+  const percent = Math.round(((props.current + 1) / total) * 100);
+  const label = QUESTIONNAIRE_SECTIONS[props.current];
+
   return (
-    <ol className="mb-8 flex flex-wrap gap-1 text-xs">
-      {QUESTIONNAIRE_SECTIONS.map((label, i) => (
-        <li key={label} className="flex items-center gap-1">
-          <button
-            type="button"
-            onClick={() => props.onJump && i < props.current && props.onJump(i)}
-            disabled={!props.onJump || i >= props.current}
-            className={`rounded-full px-3 py-1 font-medium ${
-              i === props.current
-                ? "bg-indigo-600 text-white"
-                : i < props.current
-                  ? "bg-indigo-100 text-indigo-700 hover:bg-indigo-200"
-                  : "bg-neutral-100 text-neutral-400"
-            }`}
-          >
-            {i + 1}. {label}
-          </button>
-          {i < QUESTIONNAIRE_SECTIONS.length - 1 && <span className="text-neutral-300">→</span>}
-        </li>
-      ))}
-    </ol>
+    <div className="mb-9">
+      <div className="mb-2.5 flex items-baseline justify-between gap-4">
+        <p className="text-xs font-medium text-text-muted">
+          <span className="font-semibold text-text-primary">
+            Step {props.current + 1} of {total}
+          </span>
+          <span className="mx-1.5 text-neutral-300">—</span>
+          {label}
+        </p>
+        <p className="text-xs font-semibold tabular-nums text-accent">{percent}%</p>
+      </div>
+      <div
+        className="flex gap-1.5"
+        role="progressbar"
+        aria-valuenow={percent}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-label="Intake progress"
+      >
+        {QUESTIONNAIRE_SECTIONS.map((section, i) => {
+          const filled = i <= props.current;
+          const clickable = Boolean(props.onJump) && i < props.current;
+          return (
+            <button
+              key={section}
+              type="button"
+              title={section}
+              onClick={() => clickable && props.onJump!(i)}
+              disabled={!clickable}
+              aria-current={i === props.current ? "step" : undefined}
+              className={`h-1.5 flex-1 rounded-full transition-colors ${
+                filled ? "bg-accent" : "bg-neutral-200"
+              } ${clickable ? "cursor-pointer hover:bg-accent-hover" : ""}`}
+            />
+          );
+        })}
+      </div>
+    </div>
   );
 }

@@ -1,12 +1,19 @@
 # V2 Organization Admin — Information Architecture & Management Workflows (Step 8A)
 
-Status: **Documentation only.** No Prisma changes, no migrations, no application code, no database
-writes. This document extends `docs/V2-ACCESS-TEAMS-VISIBILITY.md` (Step 7A, the authorization
-model) and `docs/V2-STANDARD-DASHBOARD.md` (Step 7B, the widget registry Dashboard Configuration
-will eventually control) with how an Organization Admin actually manages Users, Teams, Access,
-External Users, Dashboard Configuration, and Organization Settings as one coherent experience.
-Target: organizations of roughly 10–50 users; an admin who is a product/project/PMO/ops lead, not
-a security specialist. Nothing here should feel like Azure AD, Okta, or an RBAC matrix.
+Status: **Documentation only as originally written.** No Prisma changes, no migrations, no
+application code, no database writes were made in Step 8A itself. This document extends
+`docs/V2-ACCESS-TEAMS-VISIBILITY.md` (Step 7A, the authorization model) and
+`docs/V2-STANDARD-DASHBOARD.md` (Step 7B, the widget registry Dashboard Configuration will
+eventually control) with how an Organization Admin actually manages Users, Teams, Access, External
+Users, Dashboard Configuration, and Organization Settings as one coherent experience. Target:
+organizations of roughly 10–50 users; an admin who is a product/project/PMO/ops lead, not a
+security specialist. Nothing here should feel like Azure AD, Okta, or an RBAC matrix.
+
+**Since implemented:** Users + Teams (Step 8B, `docs/V2-USERS-TEAMS.md`), Resource Access
+(Step 8C, `docs/V2-RESOURCE-ACCESS.md`), the Admin Dashboard (Step 8D,
+`docs/V2-ORG-ADMIN-DASHBOARD.md`), and Dashboard Configuration (Step 8E,
+`docs/V2-DASHBOARD-CONFIGURATION.md`) — see the "Implemented at Step 8C"/§12 notes inline in §9/§10/
+§12/§14/§16/§21/§22 below and the Implementation Sequence at the end.
 
 ---
 
@@ -202,6 +209,10 @@ refinement of presentation, not of correctness.
 
 ## 9. Resource Access Workflow
 
+**Implemented at Step 8C** (`docs/V2-RESOURCE-ACCESS.md` §15) as `/admin/access` (the picker) →
+`/admin/access/[initiativeId]` (this screen), built exactly as designed below — Teams and
+Individuals sections, no ACL jargon, Owner never offered for a team.
+
 Initiative-centric view (also reachable from the new **Access** nav item, §2, which is just an
 initiative picker in front of this same screen):
 
@@ -238,6 +249,11 @@ nothing in this phase's analysis found a reason to revisit that.
 ---
 
 ## 10. Grant / Downgrade / Revoke
+
+**Implemented at Step 8C**: the plain-text impact preview (not the richer visual diff table —
+that's still Phase 2, unchanged) is real, built on the exact same resolution function every other
+access decision uses (`docs/V2-RESOURCE-ACCESS.md` §9), and verified live for both a permission
+change and a revoke.
 
 **Permission Source — every resolved-access row shows its origin, always:**
 
@@ -320,6 +336,11 @@ Invite External User
 
 ## 12. Dashboard Configuration
 
+**Implemented at Step 8E** (`docs/V2-DASHBOARD-CONFIGURATION.md`), built exactly against the
+visibility-only, per-Working-Role scope designed below — including Reset to Default and the
+Organization → Working Role → Widget Visibility hierarchy, with no team-level or individual
+overrides added.
+
 Builds directly on `docs/V2-STANDARD-DASHBOARD.md` §5's `widgetRegistry.ts` (`DASHBOARD_WIDGETS`,
 `ROLE_WIDGET_ORDER`, `defaultVisible`).
 
@@ -375,7 +396,9 @@ phase.
 
 ## 14. Admin Dashboard Purpose
 
-Not designed this phase (Step 8D). Scope only — what it must eventually answer:
+**Implemented at Step 8D** (`docs/V2-ORG-ADMIN-DASHBOARD.md`), built exactly against the scope
+below, including the "at risk" / "releases approaching" / "access issues" signals named here.
+Scope this section originally set out — what it must eventually answer:
 
 - How many active initiatives? How many active users?
 - Which initiatives are at risk?
@@ -410,6 +433,10 @@ navigation, they're just links to the one place each piece of data actually live
 ---
 
 ## 16. Three Entry Points — One Permission System
+
+**Implemented at Step 8C, verified live**: a grant added from Team Detail's Initiative Access panel
+appeared immediately when viewing the same initiative from `/admin/access/[id]`, and vice versa —
+confirming this section's requirement held, not just that it was designed to.
 
 User-centric (§4), Team-centric (§7/§9), and Resource-centric (§9) access views **all read and
 write the identical underlying `TeamMember` and `InitiativeAccess` rows** —
@@ -478,7 +505,7 @@ Minimum for MVP: **event capture only**, per `docs/V2-ACCESS-TEAMS-VISIBILITY.md
 | Admin disabling themselves | **Blocked outright.** No defined recovery path exists yet if the only admin locks themselves out. |
 | Deleting a team that still grants resource access | Impact preview required (mirrors §8): "This team grants access to N initiatives for M members — deleting it removes that access." Confirm to proceed. |
 | Deleting a team with members | Same preview; members simply lose team-derived access per the standard revocation rule — no separate mechanism needed. |
-| Removing an initiative's Owner | **Blocked unless a new Owner is assigned in the same action** — the UI forces "Reassign Owner to…" as part of the removal, since exactly one Owner must always exist (`docs/V2-ACCESS-TEAMS-VISIBILITY.md` §4). |
+| Removing an initiative's Owner | **Implemented at Step 8C, simplified**: blocked outright (409, "grant Owner to someone else first") rather than the atomic "Reassign Owner to…" combined action originally proposed — same shape as the last-active-org-admin safeguard. Lower stakes than that one: an Organization Admin always has implicit Owner-equivalent access regardless of this grant, so this only protects the *stored* grant, never actual access to the initiative. Verified live (`docs/V2-RESOURCE-ACCESS.md` §19). |
 | External user accidentally set to Edit | **Prevented by construction** — the permission picker never renders Edit/Owner for an External grantee. Nothing to catch after the fact. |
 | User has access through multiple teams | Not an error — expected and handled by highest-wins (§10 shows all contributing sources). |
 | Duplicate direct grant on the same initiative | **Prevented by construction** — `InitiativeAccess` is unique per (initiative, grantee); "Add Access" detects an existing grant and offers "Change" instead of creating a second row. |
@@ -565,4 +592,10 @@ Otherwise there's a real risk one screen gets built against ad hoc logic first a
 have to be retrofitted onto the shared module later — exactly the kind of drift §16 says must not
 happen.
 
-Not started this phase.
+**Confirmed correct in practice at Step 8C**: `src/lib/access/resolution.ts` was built first, the
+DB-facing wrapper and mutation layer second, and all three UI entry points (User Detail, Team
+Detail, `/admin/access`) were built against that one already-existing module — never the ad hoc
+order this refinement warned against. See `docs/V2-RESOURCE-ACCESS.md` for the full result.
+
+8C complete. 8D (Org Admin Dashboard, `docs/V2-ORG-ADMIN-DASHBOARD.md`) complete. 8E (Dashboard
+Configuration, `docs/V2-DASHBOARD-CONFIGURATION.md`) complete.

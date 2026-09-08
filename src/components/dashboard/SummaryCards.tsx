@@ -1,4 +1,3 @@
-import ExplainCallout from "@/components/demo/ExplainCallout";
 import { Badge, healthBadgeVariant } from "@/components/ui/Badge";
 import { Card } from "@/components/ui/Card";
 import { ProgressBar } from "@/components/ui/ProgressBar";
@@ -114,11 +113,6 @@ export default function SummaryCards(props: {
           )}
         </Card>
       </div>
-      <ExplainCallout>
-        These four cards answer: where is the plan, how complete is it, is it realistic, and what
-        does it cost? Every number is computed live from your intake answers, the generated plan,
-        and labeled prototype assumptions — nothing is typed in by hand.
-      </ExplainCallout>
     </div>
   );
 }

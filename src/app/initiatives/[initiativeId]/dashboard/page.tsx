@@ -13,6 +13,8 @@ import SprintReleaseStatus, {
 } from "@/components/dashboard/SprintReleaseStatus";
 import SummaryCards from "@/components/dashboard/SummaryCards";
 import UpcomingActions, { type UpcomingAction } from "@/components/dashboard/UpcomingActions";
+import { requireInitiativeView } from "@/lib/access/guards";
+import { getCurrentUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { PHASE_NAMES } from "@/lib/generation/constants";
 import { computeCapacityForecast } from "@/lib/generation/capacityForecast";
@@ -31,6 +33,8 @@ export default async function DashboardPage({
   params: Promise<{ initiativeId: string }>;
 }) {
   const { initiativeId } = await params;
+  const user = await getCurrentUser();
+  await requireInitiativeView(user.id, initiativeId);
   const initiative = await db.initiative.findUnique({
     where: { id: initiativeId },
     include: {
@@ -283,6 +287,7 @@ export default async function DashboardPage({
         }
         updatedAt={initiative.updatedAt}
         baselineApprovedAt={prototype.approvedAt}
+        isOrgAdmin={user.accessLevel === "org_admin"}
       />
 
       <div className="mt-6 grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">

@@ -2,7 +2,6 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import ExplainCallout from "@/components/demo/ExplainCallout";
 import { Badge, type BadgeVariant } from "@/components/ui/Badge";
 import { apiFetch } from "@/lib/clientApi";
 import ConnectDemoModal from "./ConnectDemoModal";
@@ -271,12 +270,6 @@ export default function IntegrationsHub(props: {
           </p>
         )}
       </div>
-
-      <ExplainCallout>
-        The hub behaves like a real connection system — configuration modals, statuses, sync logs
-        and fake issue keys — but every action is simulated locally: no OAuth, no credentials, no
-        outbound calls (spec §2.10).
-      </ExplainCallout>
 
       {modalProvider && (
         <ConnectDemoModal

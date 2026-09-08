@@ -1,13 +1,18 @@
 import { format } from "date-fns";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import EmptyState from "@/components/ui/EmptyState";
 import EditableArtifact from "@/components/workspace/EditableArtifact";
 import RoadmapBoard, { type BoardPhase } from "@/components/workspace/RoadmapBoard";
-import RoadmapViewToggle from "@/components/workspace/RoadmapViewToggle";
+import RoadmapLegacyViews from "@/components/workspace/RoadmapLegacyViews";
+import RoadmapToolbar from "@/components/workspace/RoadmapToolbar";
+import RoadmapViewSwitcher from "@/components/workspace/RoadmapViewSwitcher";
 import TraceBadge from "@/components/workspace/TraceBadge";
+import TimelineRoadmap from "@/components/workspace/timeline/TimelineRoadmap";
 import { db } from "@/lib/db";
 import { PHASE_NAMES } from "@/lib/generation/constants";
 import { profileFor } from "@/lib/generation/methodology";
+import { loadRoadmapTimelineData, serializeTimelineData } from "@/lib/roadmap/loadRoadmapTimelineData";
 import { traceEntriesFor } from "@/lib/trace";
 import { loadCostContext, loadWorkspace } from "@/lib/workspace";
 
@@ -170,13 +175,13 @@ export default async function RoadmapPage({
     </div>
   );
 
-  const timelineView = (
+  const boardView = (
     <div>
       {profile.roadmapMode === "continuous_backlog" ? (
         <p className="rounded-lg bg-neutral-50 px-3 py-3 text-sm text-neutral-500">
-          The Timeline board isn&apos;t available for Agile/Scrum — its phases are a continuously
-          re-ranked backlog, not fixed categories a capability can be pinned to. Switch
-          methodology to Hybrid, Waterfall, or Kanban to use it.
+          The Board isn&apos;t available for Agile/Scrum — its phases are a continuously re-ranked
+          backlog, not fixed categories a capability can be pinned to. Switch methodology to
+          Hybrid, Waterfall, or Kanban to use it.
         </p>
       ) : (
         <RoadmapBoard initiativeId={initiativeId} phases={boardPhases} locked={locked} />
@@ -184,5 +189,31 @@ export default async function RoadmapPage({
     </div>
   );
 
-  return <RoadmapViewToggle list={listView} timeline={timelineView} />;
+  const timelineData = await loadRoadmapTimelineData(initiativeId, ws.prototype.id, ws.initiative.methodology);
+  const timelineView = (
+    <TimelineRoadmap initiativeId={initiativeId} data={serializeTimelineData(timelineData)} />
+  );
+
+  const milestonesView = (
+    <EmptyState
+      title="Milestones is coming in Step 9C"
+      description="Releases, the target launch date, and the approved-baseline checkpoint will plot on one strategic timeline here — not built yet."
+    />
+  );
+  const connectionsView = (
+    <EmptyState
+      title="Connections is coming in Step 9D"
+      description="Capability dependencies will render as a relationship map here — not built yet."
+    />
+  );
+
+  return (
+    <RoadmapToolbar
+      title="Roadmap"
+      description="One page, three lenses over the same plan — Timeline for scanning work over time, Milestones for strategic checkpoints, Connections for dependencies."
+    >
+      <RoadmapViewSwitcher timeline={timelineView} milestones={milestonesView} connections={connectionsView} />
+      <RoadmapLegacyViews list={listView} board={boardView} />
+    </RoadmapToolbar>
+  );
 }

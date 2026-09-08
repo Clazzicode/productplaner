@@ -16,13 +16,14 @@ datasource db {
 // src/lib/validation). JSON payloads are serialized into String columns.
 
 model Organization {
-  id                     String                  @id @default(cuid())
-  name                   String
-  users                  User[]
-  teams                  Team[]
-  initiatives            Initiative[]
-  integrationConnections IntegrationConnection[]
-  createdAt              DateTime                @default(now())
+  id                      String                   @id @default(cuid())
+  name                    String
+  users                   User[]
+  teams                   Team[]
+  initiatives             Initiative[]
+  integrationConnections  IntegrationConnection[]
+  dashboardConfigurations DashboardConfiguration[]
+  createdAt               DateTime                 @default(now())
 }
 
 model User {
@@ -31,7 +32,6 @@ model User {
   organization   Organization        @relation(fields: [organizationId], references: [id])
   name            String
   email           String              @unique
-  demoModeEnabled Boolean             @default(false)
   // Step 8B (docs/V2-USERS-TEAMS.md). String + default, matching this schema's
   // existing convention (e.g. Initiative.status) rather than a native enum.
   // Default "org_admin" is deliberate: today there is exactly one User per
@@ -52,6 +52,7 @@ model User {
   profiles        QualifyingProfile[]
   initiatives     Initiative[]
   teamMemberships TeamMember[]
+  initiativeAccess InitiativeAccess[]
   createdAt       DateTime            @default(now())
 }
 
@@ -66,6 +67,7 @@ model Team {
   name           String
   description    String       @default("")
   members        TeamMember[]
+  initiativeAccess InitiativeAccess[]
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
 }
@@ -86,6 +88,31 @@ model TeamMember {
   createdAt DateTime @default(now())
 
   @@unique([teamId, userId])
+}
+
+// Step 8C (docs/V2-RESOURCE-ACCESS.md). One shared grant table for both direct
+// and team grants, per docs/V2-ACCESS-TEAMS-VISIBILITY.md §17 (explicitly
+// rejected: separate UserInitiativeAccess/TeamInitiativeAccess tables). Every
+// row's grantee is exactly one of userId/teamId — enforced at the app layer
+// (src/lib/access/mutations.ts) plus a database CHECK constraint added by hand
+// to this migration (Prisma's schema DSL has no @@check primitive). The two
+// partial-unique indexes below rely on Postgres treating NULL as distinct per
+// row, so a teamId-only row never collides with a userId-only row on the same
+// initiative, and each real grantee can still only appear once.
+model InitiativeAccess {
+  id           String     @id @default(cuid())
+  initiativeId String
+  initiative   Initiative @relation(fields: [initiativeId], references: [id], onDelete: Cascade)
+  userId       String?
+  user         User?      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  teamId       String?
+  team         Team?      @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  permission   String // owner | edit | view
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  @@unique([initiativeId, userId])
+  @@unique([initiativeId, teamId])
 }
 
 model QualifyingProfile {
@@ -122,6 +149,7 @@ model Initiative {
   prototype           Prototype?
   syncConnections     SyncConnection[]
   integrationConnections IntegrationConnection[]
+  initiativeAccess    InitiativeAccess[]
   createdAt           DateTime           @default(now())
   updatedAt           DateTime           @updatedAt
 }
@@ -364,4 +392,26 @@ model IntegrationSyncLog {
   startedAt      DateTime              @default(now())
   finishedAt     DateTime?
   detailsJson    String                @default("{}")
+}
+
+// Step 8E (docs/V2-DASHBOARD-CONFIGURATION.md). Presentation only — never an
+// authorization signal (docs/V2-STANDARD-DASHBOARD.md §8/§9,
+// docs/V2-ACCESS-TEAMS-VISIBILITY.md §13/§18). Deliberately no userId, no
+// teamId, no permission level: this table controls which already-authorized
+// Standard Dashboard widgets render, never what data a user may reach.
+// widgetId is validated in application code against
+// src/lib/dashboard/widgetRegistry.ts's DASHBOARD_WIDGETS, not enforced by a
+// database constraint (same "String + app-level validation" convention this
+// schema already uses throughout, e.g. Initiative.status).
+model DashboardConfiguration {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workingRole    String // product_management | project_manager | developer
+  widgetId       String // must match a DASHBOARD_WIDGETS id
+  visible        Boolean
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@unique([organizationId, workingRole, widgetId])
 }

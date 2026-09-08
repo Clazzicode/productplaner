@@ -1,5 +1,4 @@
 import Link from "next/link";
-import ExplainCallout from "@/components/demo/ExplainCallout";
 import { Badge, riskBadgeVariant, valueBadgeVariant } from "@/components/ui/Badge";
 import { Card, CardTitle } from "@/components/ui/Card";
 import { VALUE_LABELS } from "@/lib/generation/constants";
@@ -74,11 +73,6 @@ export default function RoadmapTimeline(props: { initiativeId: string; phases: T
           </div>
         ))}
       </div>
-      <ExplainCallout>
-        Each roadmap phase groups the capabilities required for one release: Phase 1 is the MVP,
-        Phase 2 high-value enhancements, Phase 3 future work. The cost figure per capability is
-        its story points × the estimated cost per point.
-      </ExplainCallout>
     </Card>
   );
 }

@@ -7,6 +7,11 @@ Prisma changes, no migrations, no writes — every widget reads existing tables 
 generation-engine functions. `/initiatives/[initiativeId]/dashboard` (the initiative-scoped
 dashboard) is unchanged.
 
+**Since implemented:** real authorization (Step 8C, `docs/V2-RESOURCE-ACCESS.md`) and Dashboard
+Configuration (Step 8E, `docs/V2-DASHBOARD-CONFIGURATION.md`) both now sit in front of this
+dashboard exactly where §8/§9 originally anticipated — see the inline "Since Step 8C/8E" notes
+below rather than treating this document as fully current on its own.
+
 ## 1. Purpose
 
 The Standard User Dashboard is the global, everyday home screen for a normal organization member.
@@ -60,16 +65,18 @@ within the main column only (§7). No dedicated Capacity/Cost widget was built (
 `src/lib/dashboard/widgetRegistry.ts` — pure data, no React, unit-tested
 (`src/lib/dashboard/__tests__/widgetRegistry.test.ts`):
 
-- `DASHBOARD_WIDGETS`: id, title, `defaultVisible` (always `true` today — no persisted
-  Dashboard Configuration exists yet, see §9).
+- `DASHBOARD_WIDGETS`: id, title, `description` (business-purpose copy, added Step 8E for the
+  Dashboard Configuration admin UI — the single source of truth for widget copy), `defaultVisible`
+  (every widget's code-level fallback; **since Step 8E** a per-organization/per-role
+  `DashboardConfiguration` override can win instead — see §9).
 - `ROLE_WIDGET_ORDER`: one ordered id list per Working Role.
 - `resolveDashboardOrder(role)` / `resolveMainColumnOrder(role)`: the full stacked order, and the
   same order with `upcoming_timeline` excluded (it has its own fixed right-rail slot on desktop —
   §11).
 
 This is deliberately not a drag-and-drop builder or a database table — it's the smallest thing
-that lets `src/app/home/page.tsx` render widgets in role order today, and that a future Step 8
-Dashboard Configuration model can override without any dashboard code changing (§15).
+that lets `src/app/home/page.tsx` render widgets in role order, filtered by the Step 8E visibility
+resolver (§9), without the registry itself becoming stateful.
 
 ## 6. Widget Data Classification
 
@@ -110,8 +117,13 @@ a neutral default order is used instead of guessing.
 ## 8. Authorization Boundary
 
 Per `docs/V2-ACCESS-TEAMS-VISIBILITY.md` §1/§12: `Authorization → Dashboard Configuration →
-Working Role`. Authorization is not implemented yet (no `Team`/`InitiativeAccess` model, no
-`accessLevel`/`memberType` fields), so nothing here fakes it:
+Working Role`. As originally written (Step 7B), authorization was not implemented yet; both halves
+of that chain are now real — **Authorization since Step 8C** (`docs/V2-RESOURCE-ACCESS.md`,
+`Team`/`InitiativeAccess`/`accessLevel`/`memberType` all real) and **Dashboard Configuration since
+Step 8E** (`docs/V2-DASHBOARD-CONFIGURATION.md`) — and the chain holds exactly as designed: this
+page calls `loadGlobalDashboardData` (authorization) first, then filters its already-authorized
+widget order through `getEffectiveWidgetVisibility` (configuration, §9) — never the reverse, and
+never the same function.
 
 - `loadGlobalDashboardData(userId, authorizedInitiativeIds)`
   (`src/lib/dashboard/globalDashboardData.ts`) takes an explicit `authorizedInitiativeIds: string[]
@@ -126,18 +138,30 @@ Working Role`. Authorization is not implemented yet (no `Team`/`InitiativeAccess
   Attention widget reuses the initiative dashboard's decision signals **minus** its budget-overrun
   item.
 - Working Role never gates data — it only reorders widgets that were already going to render (§7).
-- Dashboard Configuration doesn't exist as a persisted concept yet (§9) — nothing here reads it as
-  an authorization signal, because there's nothing to read.
+- **Since Step 8E**: Dashboard Configuration is a real, persisted concept (below) — and it is still
+  never read as an authorization signal. `getEffectiveWidgetVisibility()` takes only
+  `organizationId`/`workingRole`; it has no parameter through which `accessLevel`, `memberType`, or
+  `authorizedInitiativeIds` could reach it, and it can only hide an already-authorized widget, never
+  reveal one authorization withheld.
 
 ## 9. Dashboard Configuration Boundary
 
-No `DashboardConfiguration` model or admin UI was built — out of scope for this phase and
-explicitly listed under "No Admin Controls" in the brief. `widgetRegistry.ts`'s
-`defaultVisible: true` on every widget is the seam: a future Step 8 model can override which
-widgets render per role/org without any dashboard component changing, but nothing persists a
-choice today. Dashboard Configuration must never be read as authorization (§8) — this dashboard
-doesn't currently have a configuration layer to accidentally conflate with authorization in the
-first place, which is the safest state to leave it in until Step 8.
+**Implemented at Step 8E** (`docs/V2-DASHBOARD-CONFIGURATION.md`) — as originally written here, no
+`DashboardConfiguration` model or admin UI existed yet; this section described only the seam
+`widgetRegistry.ts`'s `defaultVisible: true` left for a future phase to plug into. That phase has
+now happened:
+
+- `src/app/home/page.tsx` resolves `getEffectiveWidgetVisibility(user.organizationId, workingRole)`
+  (all-defaults when `workingRole` is `null`) and filters `resolveMainColumnOrder`/
+  `resolveDashboardOrder`'s output through it via `filterVisible()` — one extra step, no redesign of
+  ordering or data-loading.
+- `ADMIN → Dashboard Configuration` is the real admin UI: per-Working-Role widget visibility
+  toggles, Save, and Reset to Defaults.
+- The rule this section originally protected still holds, now provably rather than by construction-
+  through-absence: Dashboard Configuration must never be read as authorization (§8) — see
+  `docs/V2-DASHBOARD-CONFIGURATION.md` §2/§13 for the full statement and its current honest limits
+  (no Standard Dashboard widget carries sensitive data today, so there is nothing yet for a
+  misconfigured toggle to expose).
 
 ## 10. Multiple Initiative Handling
 
@@ -219,9 +243,10 @@ What a future phase needs before it can safely extend this dashboard:
   `authorizedInitiativeIds` is the only call site that needs to change.
   Capacity/Cost widget (deferred here) should only be added once `sensitiveDataVisible` resolution
   exists to gate it per viewer.
-- A persisted `DashboardConfiguration` model would let an Org Admin override
-  `widgetRegistry.ts`'s per-role defaults per organization — the registry's `defaultVisible` flag
-  and `resolveDashboardOrder()` signature are the intended extension points.
+- ~~A persisted `DashboardConfiguration` model~~ — **delivered at Step 8E**
+  (`docs/V2-DASHBOARD-CONFIGURATION.md`), using exactly the extension points anticipated here:
+  the registry's `defaultVisible` flag (now overridable per organization/Working Role) and a filter
+  applied to `resolveDashboardOrder()`'s output (not a change to its signature).
 - `User.workingRole` as a real persisted field (rather than a cookie) once Step 3B/5+ auth and
   schema work lands, per `docs/V2-ARCHITECTURE.md` §12.
 - Real per-user story assignment, to replace the Current Focus widget's temporary substitute (§14).

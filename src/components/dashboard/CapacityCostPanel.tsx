@@ -1,5 +1,4 @@
 import Link from "next/link";
-import ExplainCallout from "@/components/demo/ExplainCallout";
 import { Card, CardTitle } from "@/components/ui/Card";
 import type { CostModel } from "@/lib/generation/cost";
 
@@ -51,11 +50,6 @@ export default function CapacityCostPanel(props: {
         Estimated from configurable prototype assumptions ($
         {m.averageHourlyRate}/hr, {m.usingHoursModel ? "hours-based capacity" : "legacy points capacity"}).
       </p>
-      <ExplainCallout>
-        The cost estimate is based on team capacity, sprint length, average labor rate, and
-        story-point allocation: hours × rate gives the sprint cost, and dividing by sprint
-        capacity gives the cost per story point that every artifact&apos;s estimate rolls up from.
-      </ExplainCallout>
     </Card>
   );
 }

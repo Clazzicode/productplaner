@@ -73,3 +73,15 @@ export function healthTokenVariant(status: "on_track" | "attention" | "at_risk")
   if (status === "attention") return "health-attention";
   return "health-critical";
 }
+
+// Step 9B (docs/V2-ROADMAP-TIMELINE.md §8) — Timeline's Feature-level health is
+// the first real consumer of the reserved `health-warning` token: it's a 4th
+// state genuinely derivable at read time (over capacity but not yet due, vs.
+// over capacity and already past due — see src/lib/roadmap/timelineDerivation.ts),
+// not a forced mapping of the real 3-value HealthStatus domain above.
+export function timelineHealthTokenVariant(status: "on_track" | "attention" | "warning" | "critical"): BadgeVariant {
+  if (status === "on_track") return "health-good";
+  if (status === "attention") return "health-attention";
+  if (status === "warning") return "health-warning";
+  return "health-critical";
+}

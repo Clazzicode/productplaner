@@ -6,8 +6,11 @@ import { apiFetch } from "@/lib/clientApi";
 import type { WorkingRole } from "@/lib/onboarding/types";
 import { isAdvancedScoringComplete } from "@/lib/questionnaire/capabilityScoring";
 import { mapMethodologyAnswer, type MethodologyAnswer } from "@/lib/questionnaire/methodologyMapping";
+import Button from "@/components/ui/Button";
 import SectionProgress from "./SectionProgress";
 import GuidanceBanner from "./GuidanceBanner";
+import { ChoiceCard, ChoicePill } from "./Choice";
+import { FIELD_CLASS } from "./fieldStyles";
 import ProductDirectionFields, { type ProductDirectionValues } from "./ProductDirectionFields";
 
 export interface CapabilityView {
@@ -135,7 +138,7 @@ export default function PlanningQuestionnaire(props: {
     const [a, b] = await Promise.all([
       apiFetch(`/api/initiatives/${initiativeId}`, {
         method: "PATCH",
-        body: { name: productDirection.name, description: productDirection.description },
+        body: { name: productDirection.name },
       }),
       apiFetch(`/api/initiatives/${initiativeId}/intake`, {
         method: "PATCH",
@@ -252,9 +255,9 @@ export default function PlanningQuestionnaire(props: {
         <Card>
           <GuidanceBanner section="success" workingRole={workingRole} />
           <div className="space-y-5">
-            <label className="block text-sm font-medium">
+            <label className="block text-sm font-medium text-text-primary">
               Desired outcome
-              <p className="mt-1 mb-1.5 text-xs text-neutral-500">
+              <p className="mt-1 mb-1.5 text-xs text-text-muted">
                 {verbose
                   ? "The measurable goal the roadmap and release plan are sequenced against."
                   : "Sequences the roadmap and release plan."}
@@ -264,37 +267,37 @@ export default function PlanningQuestionnaire(props: {
                 onChange={(e) => setSuccess((s) => ({ ...s, outcomeStatement: e.target.value }))}
                 rows={3}
                 placeholder="The outcome you want…"
-                className="w-full rounded-lg border border-neutral-300 px-3.5 py-2.5 text-sm focus:border-indigo-500 focus:outline-none"
+                className={`w-full ${FIELD_CLASS}`}
               />
             </label>
-            <label className="block text-sm font-medium">
-              How will you know this worked? <span className="font-normal text-neutral-400">(optional but recommended)</span>
+            <label className="block text-sm font-medium text-text-primary">
+              How will you know this worked? <span className="font-normal text-text-muted">(optional but recommended)</span>
               <input
                 value={success.outcomeMetric}
                 onChange={(e) => setSuccess((s) => ({ ...s, outcomeMetric: e.target.value }))}
                 placeholder="e.g. median resolution time under 10 minutes"
-                className="mt-1.5 w-full rounded-lg border border-neutral-300 px-3.5 py-2.5 text-sm focus:border-indigo-500 focus:outline-none"
+                className={`mt-1.5 w-full ${FIELD_CLASS}`}
               />
             </label>
             <div className="grid gap-4 sm:grid-cols-2">
-              <label className="block text-sm font-medium">
-                Target launch date <span className="font-normal text-neutral-400">(optional)</span>
+              <label className="block text-sm font-medium text-text-primary">
+                Target launch date <span className="font-normal text-text-muted">(optional)</span>
                 <input
                   type="date"
                   value={success.targetLaunchDate}
                   onChange={(e) => setSuccess((s) => ({ ...s, targetLaunchDate: e.target.value }))}
-                  className="mt-1.5 w-full rounded-lg border border-neutral-300 px-3.5 py-2.5 text-sm focus:border-indigo-500 focus:outline-none"
+                  className={`mt-1.5 w-full ${FIELD_CLASS}`}
                 />
               </label>
-              <label className="block text-sm font-medium">
-                Budget ($) <span className="font-normal text-neutral-400">(optional)</span>
+              <label className="block text-sm font-medium text-text-primary">
+                Budget ($) <span className="font-normal text-text-muted">(optional)</span>
                 <input
                   type="number"
                   min={0}
                   value={success.budget}
                   onChange={(e) => setSuccess((s) => ({ ...s, budget: e.target.value }))}
                   placeholder="e.g. 175000"
-                  className="mt-1.5 w-full rounded-lg border border-neutral-300 px-3.5 py-2.5 text-sm focus:border-indigo-500 focus:outline-none"
+                  className={`mt-1.5 w-full ${FIELD_CLASS}`}
                 />
               </label>
             </div>
@@ -329,12 +332,12 @@ export default function PlanningQuestionnaire(props: {
           <button
             type="button"
             onClick={() => setAdvancedOpen((o) => !o)}
-            className="mt-6 text-sm font-medium text-indigo-600 hover:underline"
+            className="mt-6 text-sm font-semibold text-accent hover:text-accent-hover"
           >
             {advancedOpen ? "▾" : "▸"} Advanced planning assumptions
           </button>
           {advancedOpen && (
-            <div className="mt-3 grid gap-4 rounded-xl border border-neutral-200 bg-neutral-50 p-4 sm:grid-cols-2">
+            <div className="mt-3 grid gap-4 rounded-2xl border border-neutral-200 bg-neutral-50 p-5 sm:grid-cols-2">
               <NumberField label="Sprint length (weeks)" value={delivery.sprintLengthWeeks} min={1} max={4}
                 onChange={(v) => setDelivery((d) => ({ ...d, sprintLengthWeeks: v ?? 2 }))} />
               <NumberField label="Hours per member per sprint" value={delivery.hoursPerSprintPerMember} min={1} max={400}
@@ -347,14 +350,14 @@ export default function PlanningQuestionnaire(props: {
                 onChange={(v) => setDelivery((d) => ({ ...d, hoursPerStoryPoint: v ?? 8 }))} />
               <NumberField label="Historical velocity (points/sprint, optional)" value={delivery.historicalVelocityPoints} min={0} max={1000}
                 onChange={(v) => setDelivery((d) => ({ ...d, historicalVelocityPoints: v ?? "" }))} />
-              <label className="block text-sm font-medium">
+              <label className="block text-sm font-medium text-text-primary">
                 Average hourly rate ($)
                 <input
                   type="number"
                   min={1}
                   value={delivery.averageHourlyRate}
                   onChange={(e) => setDelivery((d) => ({ ...d, averageHourlyRate: e.target.value }))}
-                  className="mt-1 w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none"
+                  className={`mt-1 w-full ${FIELD_CLASS}`}
                 />
               </label>
             </div>
@@ -369,38 +372,30 @@ export default function PlanningQuestionnaire(props: {
       {step === 4 && (
         <Card>
           <GuidanceBanner section="execution" workingRole={workingRole} />
-          <p className="mb-2 text-sm font-medium">Methodology</p>
-          <div className="grid gap-2 sm:grid-cols-2">
+          <p className="mb-2.5 text-sm font-medium text-text-primary">Methodology</p>
+          <div className="grid gap-3 sm:grid-cols-2">
             {METHODOLOGY_OPTIONS.map((o) => (
-              <button
+              <ChoiceCard
                 key={o.value}
-                type="button"
+                selected={methodology === o.value}
                 onClick={() => setMethodology(o.value)}
-                className={`rounded-xl border p-3 text-left text-sm ${
-                  methodology === o.value ? "border-indigo-500 bg-indigo-50" : "border-neutral-200 bg-white"
-                }`}
-              >
-                <p className="font-medium">{o.label}</p>
-                <p className="mt-0.5 text-xs text-neutral-500">{o.hint}</p>
-              </button>
+                label={o.label}
+                hint={o.hint}
+              />
             ))}
           </div>
 
-          <p className="mt-6 mb-2 text-sm font-medium">
-            Where does your team track execution? <span className="font-normal text-neutral-400">(context only — integrations come later)</span>
+          <p className="mt-7 mb-2.5 text-sm font-medium text-text-primary">
+            Where does your team track execution? <span className="font-normal text-text-muted">(context only — integrations come later)</span>
           </p>
-          <div className="grid gap-2 sm:grid-cols-4">
+          <div className="flex flex-wrap gap-2">
             {EXECUTION_TOOL_OPTIONS.map((o) => (
-              <button
+              <ChoicePill
                 key={o.value}
-                type="button"
+                selected={executionTool === o.value}
                 onClick={() => setExecutionTool(o.value)}
-                className={`rounded-lg border px-3 py-2 text-sm ${
-                  executionTool === o.value ? "border-indigo-500 bg-indigo-50 font-medium" : "border-neutral-200 bg-white"
-                }`}
-              >
-                {o.label}
-              </button>
+                label={o.label}
+              />
             ))}
           </div>
 
@@ -461,31 +456,31 @@ function CapabilitiesSection(props: {
   return (
     <Card>
       <GuidanceBanner section="capabilities" workingRole={workingRole} />
-      <p className="text-sm text-neutral-500">
+      <p className="text-sm text-text-secondary">
         {verbose
           ? "List each capability the product needs. Effort size drives how big it becomes in the plan (epics/stories); MVP, business value, and risk drive what ships first and in what order — not how big it is."
           : "Effort size drives decomposition size; MVP/value/risk drive ordering and phase, not size."}
       </p>
 
-      <ul className="mt-6 space-y-2">
+      <ul className="mt-6 space-y-2.5">
         {caps.map((cap) => (
-          <li key={cap.id} className="flex items-start justify-between gap-3 rounded-xl border border-neutral-200 px-4 py-3">
+          <li key={cap.id} className="flex items-start justify-between gap-3 rounded-2xl border border-neutral-200 px-4 py-3.5">
             <div>
-              <p className="font-medium">
+              <p className="font-medium text-text-primary">
                 {cap.name}{" "}
                 {cap.isMvp && (
-                  <span className="ml-1 rounded-full bg-indigo-100 px-2 py-0.5 text-xs font-semibold text-indigo-700">MVP</span>
+                  <span className="ml-1 rounded-full bg-accent/10 px-2 py-0.5 text-xs font-semibold text-accent-hover">MVP</span>
                 )}
               </p>
-              <p className="mt-0.5 text-xs text-neutral-500">
+              <p className="mt-0.5 text-xs text-text-muted">
                 Effort {cap.effortSize.toUpperCase()} · Value {cap.businessValue}
                 {cap.dependsOn.length > 0 &&
                   ` · requires ${cap.dependsOn.map((d) => caps.find((c) => c.id === d)?.name ?? "?").join(", ")}`}
               </p>
             </div>
             <div className="flex shrink-0 gap-2 text-xs">
-              <button onClick={() => { setEditing(cap); setAdding(false); }} className="text-indigo-600 hover:underline">Edit</button>
-              <button onClick={() => remove(cap.id)} className="text-red-500 hover:underline">Remove</button>
+              <button onClick={() => { setEditing(cap); setAdding(false); }} className="font-medium text-accent hover:underline">Edit</button>
+              <button onClick={() => remove(cap.id)} className="font-medium text-red-500 hover:underline">Remove</button>
             </div>
           </li>
         ))}
@@ -507,7 +502,7 @@ function CapabilitiesSection(props: {
       )}
 
       {!adding && !editing && (
-        <button onClick={() => setAdding(true)} className="mt-4 rounded-lg border border-dashed border-indigo-300 px-4 py-2 text-sm font-medium text-indigo-600 hover:bg-indigo-50">
+        <button onClick={() => setAdding(true)} className="mt-4 rounded-xl border border-dashed border-accent/40 px-4 py-2.5 text-sm font-semibold text-accent hover:bg-accent/5">
           + Add a capability
         </button>
       )}
@@ -594,108 +589,122 @@ function CapabilityForm(props: {
   };
 
   return (
-    <div className="mt-4 rounded-xl border border-indigo-200 bg-indigo-50/40 p-5">
-      <p className="text-xs font-semibold uppercase tracking-wide text-indigo-600">Basics</p>
-      <label className="mt-2 block text-sm font-medium">
+    <div className="mt-4 rounded-2xl border border-accent/20 bg-accent/[0.03] p-5">
+      <p className="text-xs font-semibold uppercase tracking-wide text-accent">Basics</p>
+      <label className="mt-2 block text-sm font-medium text-text-primary">
         Capability name
         <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })}
           placeholder="e.g. Bulk CSV import"
-          className="mt-1 w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 focus:border-indigo-500 focus:outline-none" autoFocus />
+          className={`mt-1 w-full ${FIELD_CLASS}`} autoFocus />
       </label>
-      <label className="mt-3 block text-sm font-medium">
-        What it does <span className="font-normal text-neutral-400">(optional)</span>
+      <label className="mt-3 block text-sm font-medium text-text-primary">
+        What it does <span className="font-normal text-text-muted">(optional)</span>
         <input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })}
           placeholder="One sentence"
-          className="mt-1 w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 focus:border-indigo-500 focus:outline-none" />
+          className={`mt-1 w-full ${FIELD_CLASS}`} />
       </label>
 
-      <p className="mt-5 text-xs font-semibold uppercase tracking-wide text-indigo-600">Sizing &amp; Priority</p>
+      <p className="mt-5 text-xs font-semibold uppercase tracking-wide text-accent">Sizing &amp; Priority</p>
       <div className="mt-2 grid gap-4 sm:grid-cols-2">
         <div>
-          <p className="text-sm font-medium">Required for the MVP?</p>
-          <div className="mt-1 flex gap-2">
+          <p className="text-sm font-medium text-text-primary">Required for the MVP?</p>
+          <div className="mt-1.5 flex gap-2">
             {[true, false].map((v) => (
-              <button key={String(v)} onClick={() => setForm({ ...form, isMvp: v })}
-                className={`rounded-lg border px-4 py-1.5 text-sm ${form.isMvp === v ? "border-indigo-500 bg-indigo-100 font-semibold text-indigo-800" : "border-neutral-300 bg-white"}`}>
-                {v ? "Yes — MVP" : "No — later"}
-              </button>
+              <ChoicePill key={String(v)} selected={form.isMvp === v} onClick={() => setForm({ ...form, isMvp: v })}
+                label={v ? "Yes — MVP" : "No — later"} />
             ))}
           </div>
         </div>
-        <label className="block text-sm font-medium">
-          Level of effort
-          <select value={form.effortSize} onChange={(e) => setForm({ ...form, effortSize: e.target.value })}
-            className="mt-1 w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 focus:border-indigo-500 focus:outline-none">
-            {EFFORT_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-          </select>
-        </label>
-        <label className="block text-sm font-medium">
-          Business value
-          <select value={form.businessValue} onChange={(e) => setForm({ ...form, businessValue: e.target.value })} disabled={advancedValue}
-            className="mt-1 w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 focus:border-indigo-500 focus:outline-none disabled:bg-neutral-100 disabled:text-neutral-500">
-            {VALUE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-          </select>
-        </label>
-        <label className="block text-sm font-medium">
-          Risk level
-          <select value={form.riskLevel} onChange={(e) => setForm({ ...form, riskLevel: e.target.value })}
-            className="mt-1 w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 focus:border-indigo-500 focus:outline-none">
-            {RISK_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-          </select>
-          <span className="mt-1 block text-xs font-normal text-neutral-400">High-risk MVP work is scheduled earlier to reduce uncertainty.</span>
-        </label>
-        <label className="block text-sm font-medium">
-          MVP importance <span className="font-normal text-neutral-400">(optional override)</span>
-          <select value={form.mvpImportance ?? ""} onChange={(e) => setForm({ ...form, mvpImportance: e.target.value || null })}
-            className="mt-1 w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 focus:border-indigo-500 focus:outline-none">
-            {MVP_IMPORTANCE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-          </select>
-        </label>
+        <div>
+          <p className="text-sm font-medium text-text-primary">Level of effort</p>
+          <div className="mt-1.5 flex flex-wrap gap-2">
+            {EFFORT_OPTIONS.map((o) => (
+              <ChoicePill key={o.value} selected={form.effortSize === o.value}
+                onClick={() => setForm({ ...form, effortSize: o.value })} label={o.label} />
+            ))}
+          </div>
+        </div>
+        <div className="sm:col-span-2">
+          <p className="text-sm font-medium text-text-primary">
+            Business value {advancedValue && <span className="font-normal text-text-muted">(set from weighted factors below)</span>}
+          </p>
+          <div className={`mt-1.5 flex flex-wrap gap-2 ${advancedValue ? "opacity-50" : ""}`}>
+            {VALUE_OPTIONS.map((o) => (
+              <ChoicePill key={o.value} selected={form.businessValue === o.value}
+                onClick={() => !advancedValue && setForm({ ...form, businessValue: o.value })} label={o.label} />
+            ))}
+          </div>
+        </div>
+        <div className="sm:col-span-2">
+          <p className="text-sm font-medium text-text-primary">Risk level</p>
+          <p className="mt-0.5 text-xs text-text-muted">High-risk MVP work is scheduled earlier to reduce uncertainty.</p>
+          <div className="mt-1.5 flex flex-wrap gap-2">
+            {RISK_OPTIONS.map((o) => (
+              <ChoicePill key={o.value} selected={form.riskLevel === o.value}
+                onClick={() => setForm({ ...form, riskLevel: o.value })} label={o.label} />
+            ))}
+          </div>
+        </div>
+        <div className="sm:col-span-2">
+          <p className="text-sm font-medium text-text-primary">
+            MVP importance <span className="font-normal text-text-muted">(optional override)</span>
+          </p>
+          <div className="mt-1.5 flex flex-wrap gap-2">
+            {MVP_IMPORTANCE_OPTIONS.map((o) => (
+              <ChoicePill key={o.value} selected={(form.mvpImportance ?? "") === o.value}
+                onClick={() => setForm({ ...form, mvpImportance: o.value || null })} label={o.label} />
+            ))}
+          </div>
+        </div>
       </div>
 
-      <p className="mt-5 text-xs font-semibold uppercase tracking-wide text-indigo-600">Dependencies</p>
+      <p className="mt-5 text-xs font-semibold uppercase tracking-wide text-accent">Dependencies</p>
       <div className="mt-2">
-        <p className="text-sm font-medium">Does this capability require another capability to exist first?</p>
+        <p className="text-sm font-medium text-text-primary">Does this capability require another capability to exist first?</p>
         {others.length === 0 ? (
-          <p className="mt-1 text-xs text-neutral-500">No other capabilities yet — add more to set dependencies.</p>
+          <p className="mt-1 text-xs text-text-muted">No other capabilities yet — add more to set dependencies.</p>
         ) : (
-          <div className="mt-1 space-y-1">
+          <div className="mt-1.5 flex flex-wrap gap-2">
             {others.map((o) => (
-              <label key={o.id} className="flex items-center gap-2 text-sm">
-                <input type="checkbox" checked={form.dependsOn.includes(o.id)}
-                  onChange={(e) => setForm({ ...form, dependsOn: e.target.checked ? [...form.dependsOn, o.id] : form.dependsOn.filter((d) => d !== o.id) })} />
-                {o.name}
-              </label>
+              <ChoicePill key={o.id} selected={form.dependsOn.includes(o.id)}
+                onClick={() => setForm({
+                  ...form,
+                  dependsOn: form.dependsOn.includes(o.id)
+                    ? form.dependsOn.filter((d) => d !== o.id)
+                    : [...form.dependsOn, o.id],
+                })}
+                label={o.name} />
             ))}
           </div>
         )}
       </div>
 
       <div className="mt-5">
-        <label className="flex items-center gap-2 text-sm font-medium">
+        <label className="flex items-center gap-2 text-sm font-medium text-text-primary">
           <input type="checkbox" checked={advancedValue} onChange={(e) => setAdvancedValue(e.target.checked)} />
           Score business value from weighted factors (optional)
         </label>
         {advancedValue && (
-          <div className="mt-3 rounded-lg border border-indigo-200 bg-white p-4">
-            <div className="grid gap-3 sm:grid-cols-2">
+          <div className="mt-3 rounded-xl border border-accent/20 bg-white p-4">
+            <div className="grid gap-4 sm:grid-cols-2">
               {([
                 ["customerImpactScore", "Customer impact (30%)"],
                 ["revenueImpactScore", "Revenue or cost impact (30%)"],
                 ["strategicAlignmentScore", "Strategic alignment (25%)"],
                 ["riskComplianceScore", "Risk or compliance impact (15%)"],
               ] as const).map(([key, label]) => (
-                <label key={key} className="block text-sm font-medium">
-                  {label}
-                  <select value={form[key] ?? ""} onChange={(e) => setForm({ ...form, [key]: e.target.value === "" ? null : Number(e.target.value) })}
-                    className="mt-1 w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 focus:border-indigo-500 focus:outline-none">
-                    <option value="">—</option>
-                    {[1, 2, 3, 4, 5].map((n) => <option key={n} value={n}>{n}</option>)}
-                  </select>
-                </label>
+                <div key={key}>
+                  <p className="text-sm font-medium text-text-primary">{label}</p>
+                  <div className="mt-1.5 flex gap-1.5">
+                    {[1, 2, 3, 4, 5].map((n) => (
+                      <ChoicePill key={n} selected={form[key] === n}
+                        onClick={() => setForm({ ...form, [key]: n })} label={String(n)} />
+                    ))}
+                  </div>
+                </div>
               ))}
             </div>
-            <p className="mt-3 text-sm text-neutral-600">
+            <p className="mt-3 text-sm text-text-secondary">
               {!scoringComplete
                 ? "Score all four factors (1–5) — a partial set is not used."
                 : `Weighted business value: ${factorScore} out of 5 — sets the level above automatically.`}
@@ -706,12 +715,11 @@ function CapabilityForm(props: {
 
       {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
 
-      <div className="mt-4 flex justify-end gap-3">
-        <button onClick={onCancel} className="text-sm text-neutral-500 hover:text-neutral-800">Cancel</button>
-        <button onClick={save} disabled={busy || form.name.trim().length < 3 || (advancedValue && !scoringComplete)}
-          className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-40">
+      <div className="mt-5 flex justify-end gap-3">
+        <Button variant="ghost" onClick={onCancel}>Cancel</Button>
+        <Button onClick={save} disabled={busy || form.name.trim().length < 3 || (advancedValue && !scoringComplete)}>
           {busy ? "Saving…" : existing ? "Save changes" : "Add capability"}
-        </button>
+        </Button>
       </div>
     </div>
   );
@@ -739,9 +747,12 @@ function ReviewSection(props: {
   const executionToolLabel = EXECUTION_TOOL_OPTIONS.find((o) => o.value === executionTool)?.label ?? executionTool;
 
   return (
-    <div className="rounded-2xl border border-neutral-200 bg-white p-8 shadow-sm">
-      <h2 className="text-xl font-semibold">{alreadyGenerated ? "Review your plan" : "Review & generate"}</h2>
-      <p className="mt-1 text-sm text-neutral-500">
+    <div className="rounded-3xl border border-neutral-200 bg-white p-8 shadow-md md:p-10">
+      <p className="text-xs font-semibold uppercase tracking-wide text-accent">Complete</p>
+      <h2 className="mt-1.5 text-2xl font-semibold tracking-tight text-text-primary">
+        {alreadyGenerated ? "Review your plan" : "Review & generate"}
+      </h2>
+      <p className="mt-2 text-sm leading-relaxed text-text-secondary">
         {alreadyGenerated
           ? "Your edits are saved as you go — use Recalculate in the workspace to apply them to the live plan."
           : "Everything below feeds the generator. Edit any section, then generate when ready."}
@@ -749,7 +760,6 @@ function ReviewSection(props: {
 
       <ReviewBlock title="Product Direction" onEdit={() => onEdit(0)}>
         <ReviewRow label="Initiative" value={productDirection.name} />
-        <ReviewRow label="What you're building" value={productDirection.description || "—"} />
         <ReviewRow label="Problem" value={productDirection.problemStatement || "—"} />
         <ReviewRow label="Target customer" value={productDirection.targetCustomer || "—"} />
       </ReviewBlock>
@@ -792,34 +802,34 @@ function ReviewSection(props: {
       </ReviewBlock>
 
       {validation === null ? (
-        <p className="mt-6 text-sm text-neutral-500">Checking your answers…</p>
+        <p className="mt-6 text-sm text-text-muted">Checking your answers…</p>
       ) : (
         <div className="mt-6 space-y-3">
           {validation.errors.length === 0 && validation.warnings.length === 0 && (
-            <p className="rounded-lg bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+            <p className="rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
               Everything checks out{alreadyGenerated ? "." : ". Ready to generate."}
             </p>
           )}
           {validation.errors.map((f, i) => (
-            <p key={`e${i}`} className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-800"><strong>Fix required:</strong> {f.message}</p>
+            <p key={`e${i}`} className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-800"><strong>Fix required:</strong> {f.message}</p>
           ))}
           {validation.warnings.map((f, i) => (
-            <p key={`w${i}`} className="rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-800"><strong>Heads-up:</strong> {f.message}</p>
+            <p key={`w${i}`} className="rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-800"><strong>Heads-up:</strong> {f.message}</p>
           ))}
         </div>
       )}
 
       {error && <p className="mt-4 text-sm text-red-600">{error}</p>}
 
-      <div className="mt-6 flex items-center justify-between">
-        <button onClick={onBack} className="text-sm text-neutral-500 hover:text-neutral-800">← Back</button>
-        <button
+      <div className="mt-7 flex items-center justify-between">
+        <Button variant="ghost" onClick={onBack}>← Back</Button>
+        <Button
           onClick={onGenerate}
           disabled={busy || (!alreadyGenerated && (!validation || validation.errors.length > 0))}
-          className="rounded-lg bg-indigo-600 px-6 py-3 text-sm font-semibold text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-40"
+          className="px-6 py-3"
         >
           {busy ? "Generating your prototype…" : alreadyGenerated ? "Save & view plan →" : "Generate working prototype"}
-        </button>
+        </Button>
       </div>
     </div>
   );
@@ -829,8 +839,8 @@ function ReviewBlock(props: { title: string; onEdit: () => void; children: React
   return (
     <div className="mt-6 border-t border-neutral-100 pt-5 first:mt-5 first:border-0 first:pt-0">
       <div className="flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-neutral-800">{props.title}</h3>
-        <button onClick={props.onEdit} className="text-xs font-medium text-indigo-600 hover:underline">Edit</button>
+        <h3 className="text-sm font-semibold text-text-primary">{props.title}</h3>
+        <button onClick={props.onEdit} className="text-xs font-semibold text-accent hover:underline">Edit</button>
       </div>
       <div className="mt-2">{props.children}</div>
     </div>
@@ -840,8 +850,8 @@ function ReviewBlock(props: { title: string; onEdit: () => void; children: React
 function ReviewRow(props: { label: string; value: string }) {
   return (
     <p className="text-sm">
-      <span className="text-neutral-500">{props.label}: </span>
-      <span className="text-neutral-800">{props.value}</span>
+      <span className="text-text-muted">{props.label}: </span>
+      <span className="text-text-primary">{props.value}</span>
     </p>
   );
 }
@@ -849,29 +859,25 @@ function ReviewRow(props: { label: string; value: string }) {
 // ---------- shared pieces ----------
 
 function Card(props: { children: React.ReactNode }) {
-  return <div className="rounded-2xl border border-neutral-200 bg-white p-8 shadow-sm">{props.children}</div>;
+  return <div className="rounded-3xl border border-neutral-200 bg-white p-8 shadow-md md:p-10">{props.children}</div>;
 }
 
 function Nav(props: { busy: boolean; onBack?: () => void; onNext: () => void; nextDisabled?: boolean }) {
   return (
-    <div className="mt-6 flex items-center justify-between">
+    <div className="mt-8 flex items-center justify-between">
       {props.onBack ? (
-        <button onClick={props.onBack} className="text-sm text-neutral-500 hover:text-neutral-800">← Back</button>
+        <Button variant="ghost" onClick={props.onBack}>← Back</Button>
       ) : <span />}
-      <button
-        onClick={props.onNext}
-        disabled={props.busy || props.nextDisabled}
-        className="rounded-lg bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50"
-      >
+      <Button onClick={props.onNext} disabled={props.busy || props.nextDisabled} className="px-6 py-3">
         {props.busy ? "Saving…" : "Continue →"}
-      </button>
+      </Button>
     </div>
   );
 }
 
 function NumberField(props: { label: string; value: number | ""; min: number; max: number; onChange: (v: number | null) => void }) {
   return (
-    <label className="block text-sm font-medium">
+    <label className="block text-sm font-medium text-text-primary">
       {props.label}
       <input
         type="number"
@@ -879,7 +885,7 @@ function NumberField(props: { label: string; value: number | ""; min: number; ma
         min={props.min}
         max={props.max}
         onChange={(e) => props.onChange(e.target.value === "" ? null : Number(e.target.value))}
-        className="mt-1 w-full rounded-lg border border-neutral-300 px-3 py-2 focus:border-indigo-500 focus:outline-none"
+        className={`mt-1 w-full ${FIELD_CLASS}`}
       />
     </label>
   );
@@ -893,13 +899,13 @@ function CapacityPreview(props: { delivery: DeliveryValues }) {
   const estimated = Math.max(1, Math.floor(usable / d.hoursPerStoryPoint));
   const capped = d.historicalVelocityPoints && d.historicalVelocityPoints > 0 ? Math.min(estimated, d.historicalVelocityPoints) : estimated;
   return (
-    <div className="mt-4 rounded-lg bg-indigo-50 px-3 py-2.5 text-sm text-indigo-800">
+    <div className="mt-4 rounded-xl bg-accent/[0.06] px-4 py-3 text-sm text-accent-hover">
       <p>
         {available.toFixed(0)} available hours → {usable.toFixed(0)} usable after the {d.capacityBufferPercent}% buffer → ÷{d.hoursPerStoryPoint}{" "}
         hrs/point = <strong>{capped} points</strong> per {d.sprintLengthWeeks}-week sprint
         {capped !== estimated && " (capped by historical velocity)"}.
       </p>
-      <p className="mt-1 text-xs text-indigo-600">Estimated point capacity based on current planning assumptions.</p>
+      <p className="mt-1 text-xs text-accent">Estimated point capacity based on current planning assumptions.</p>
     </div>
   );
 }

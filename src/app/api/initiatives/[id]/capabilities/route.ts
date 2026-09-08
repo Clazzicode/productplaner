@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
+import { requireInitiativeApiAccess } from "@/lib/access/guards";
 import { jsonError, zodMessage } from "@/lib/api";
+import { getCurrentUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import {
   businessValueLevelFromScore,
@@ -13,6 +15,10 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
+  const user = await getCurrentUser();
+  const guard = await requireInitiativeApiAccess(user.id, id, "edit");
+  if (!guard.ok) return guard.response;
+
   const parsed = capabilityUpsertSchema.safeParse(await request.json());
   if (!parsed.success) return jsonError(zodMessage(parsed.error), 422);
 

@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
+import { requireInitiativeApiAccess } from "@/lib/access/guards";
 import { jsonError, zodMessage } from "@/lib/api";
+import { getCurrentUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import {
   businessValueLevelFromScore,
@@ -13,7 +15,9 @@ import { capabilityUpsertSchema } from "@/lib/validation/schemas";
 async function loadEditable(capId: string) {
   const capability = await db.capability.findUnique({
     where: { id: capId },
-    include: { intakeAnswerSet: { select: { id: true, status: true } } },
+    include: {
+      intakeAnswerSet: { select: { id: true, status: true, initiative: { select: { id: true } } } },
+    },
   });
   if (!capability) return { error: jsonError("Capability not found.", 404) };
   return { capability };
@@ -29,6 +33,10 @@ export async function PATCH(
 
   const { capability, error } = await loadEditable(capId);
   if (error) return error;
+
+  const user = await getCurrentUser();
+  const guard = await requireInitiativeApiAccess(user.id, capability!.intakeAnswerSet.initiative.id, "edit");
+  if (!guard.ok) return guard.response;
 
   const { dependsOn, ...fields } = parsed.data;
   if (fields.mvpImportance === "required_for_mvp" && !fields.isMvp) {
@@ -62,8 +70,13 @@ export async function DELETE(
   { params }: { params: Promise<{ capId: string }> },
 ) {
   const { capId } = await params;
-  const { error } = await loadEditable(capId);
+  const { capability, error } = await loadEditable(capId);
   if (error) return error;
+
+  const user = await getCurrentUser();
+  const guard = await requireInitiativeApiAccess(user.id, capability!.intakeAnswerSet.initiative.id, "edit");
+  if (!guard.ok) return guard.response;
+
   await db.capability.delete({ where: { id: capId } });
   return NextResponse.json({ ok: true });
 }

@@ -3,8 +3,6 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
-import { DemoModeProvider } from "@/components/demo/DemoModeContext";
-import DemoModeToggle from "@/components/demo/DemoModeToggle";
 import StartOverButton from "@/components/demo/StartOverButton";
 import Avatar from "@/components/ui/Avatar";
 import { isBareRoute } from "./bareMode";
@@ -24,8 +22,8 @@ import TopHeader from "./TopHeader";
 export default function AppShell(props: {
   hasProfile: boolean;
   userName: string;
+  accessLevel: string;
   initiatives: NavInitiative[];
-  demoModeEnabled: boolean;
   children: React.ReactNode;
 }) {
   const pathname = usePathname() ?? "";
@@ -48,7 +46,7 @@ export default function AppShell(props: {
   const bare = isBareRoute(pathname, props.hasProfile, currentInitiative);
 
   if (bare) {
-    return <DemoModeProvider initialEnabled={props.demoModeEnabled}>{props.children}</DemoModeProvider>;
+    return props.children;
   }
 
   const currentName = currentInitiative?.name ?? "Guided Planning";
@@ -91,7 +89,6 @@ export default function AppShell(props: {
 
   const accountActions = (
     <div className="flex items-center gap-3">
-      <DemoModeToggle />
       <StartOverButton />
       <span className="hidden items-center gap-2 text-sm text-neutral-500 sm:flex">
         <Avatar name={props.userName} />
@@ -101,29 +98,28 @@ export default function AppShell(props: {
   );
 
   return (
-    <DemoModeProvider initialEnabled={props.demoModeEnabled}>
-      <div className="flex min-h-screen">
-        <div className="hidden lg:contents">
-          <LeftNav initiatives={props.initiatives} />
-        </div>
-        <MobileNavDrawer
-          open={drawerOpen}
-          onClose={() => setDrawerOpen(false)}
-          initiatives={props.initiatives}
-          topContent={switcherAndNew}
-          bottomContent={accountActions}
-        />
-        <div className="flex min-w-0 flex-1 flex-col">
-          <TopHeader
-            switcherAndNew={switcherAndNew}
-            accountActions={accountActions}
-            currentName={currentName}
-            userName={props.userName}
-            onOpenMenu={() => setDrawerOpen(true)}
-          />
-          <main className="min-w-0 flex-1">{props.children}</main>
-        </div>
+    <div className="flex min-h-screen">
+      <div className="hidden lg:contents">
+        <LeftNav initiatives={props.initiatives} accessLevel={props.accessLevel} />
       </div>
-    </DemoModeProvider>
+      <MobileNavDrawer
+        open={drawerOpen}
+        onClose={() => setDrawerOpen(false)}
+        initiatives={props.initiatives}
+        accessLevel={props.accessLevel}
+        topContent={switcherAndNew}
+        bottomContent={accountActions}
+      />
+      <div className="flex min-w-0 flex-1 flex-col">
+        <TopHeader
+          switcherAndNew={switcherAndNew}
+          accountActions={accountActions}
+          currentName={currentName}
+          userName={props.userName}
+          onOpenMenu={() => setDrawerOpen(true)}
+        />
+        <main className="min-w-0 flex-1">{props.children}</main>
+      </div>
+    </div>
   );
 }

@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
+import { requireInitiativeApiAccess } from "@/lib/access/guards";
 import { jsonError, zodMessage } from "@/lib/api";
+import { getCurrentUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { AgileLayerLockedError, assertAgileLayerEditable } from "@/lib/generation/engine";
 import { moveSprintSchema } from "@/lib/validation/schemas";
@@ -23,6 +25,11 @@ export async function POST(
     where: { id: story.prototypeId },
     select: { initiativeId: true },
   });
+
+  const user = await getCurrentUser();
+  const guard = await requireInitiativeApiAccess(user.id, prototype.initiativeId, "edit");
+  if (!guard.ok) return guard.response;
+
   try {
     await assertAgileLayerEditable(prototype.initiativeId);
   } catch (err) {

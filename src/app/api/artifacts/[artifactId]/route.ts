@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
+import { requireInitiativeApiAccess } from "@/lib/access/guards";
 import { jsonError, zodMessage } from "@/lib/api";
+import { getCurrentUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { assertArtifactEditable, LockedLayerError } from "@/lib/generation/locking";
 import type { ArtifactType } from "@/lib/generation/types";
@@ -13,8 +15,15 @@ export async function PATCH(
   const parsed = artifactPatchSchema.safeParse(await request.json());
   if (!parsed.success) return jsonError(zodMessage(parsed.error), 422);
 
-  const artifact = await db.artifactLayer.findUnique({ where: { id: artifactId } });
+  const artifact = await db.artifactLayer.findUnique({
+    where: { id: artifactId },
+    include: { prototype: { select: { initiativeId: true } } },
+  });
   if (!artifact) return jsonError("Artifact not found.", 404);
+
+  const user = await getCurrentUser();
+  const guard = await requireInitiativeApiAccess(user.id, artifact.prototype.initiativeId, "edit");
+  if (!guard.ok) return guard.response;
 
   try {
     await assertArtifactEditable(artifact.prototypeId, artifact.type as ArtifactType);

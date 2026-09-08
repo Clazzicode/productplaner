@@ -3,18 +3,27 @@ import { notFound } from "next/navigation";
 import { FocusedLayout } from "@/components/layout/PageLayouts";
 import PlanningQuestionnaire from "@/components/questionnaire/PlanningQuestionnaire";
 import WorkspaceBreadcrumb from "@/components/workspace/WorkspaceBreadcrumb";
+import { requireInitiativeView } from "@/lib/access/guards";
+import { getCurrentUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { depthFromExperience } from "@/lib/questionnaire/roleGuidance";
 import { readOnboardingStateServer } from "@/lib/onboarding/tempStateServer";
 
 export const dynamic = "force-dynamic";
 
+/** Gated at View, not Edit: this page also serves the "view intake answers"
+ * link reachable from every workspace page, which a View-only user should be
+ * able to open. The actual write path (POST /api/initiatives/[id]/intake) is
+ * separately gated at Edit — that's the real enforcement boundary for
+ * mutating answers, not this page render. */
 export default async function IntakePage({
   params,
 }: {
   params: Promise<{ initiativeId: string }>;
 }) {
   const { initiativeId } = await params;
+  const user = await getCurrentUser();
+  await requireInitiativeView(user.id, initiativeId);
   const [initiative, onboarding] = await Promise.all([
     db.initiative.findUnique({
       where: { id: initiativeId },
@@ -72,7 +81,6 @@ export default async function IntakePage({
         initialStep={1}
         productDirection={{
           name: initiative.name,
-          description: initiative.description,
           problemStatement: intake.problemStatement,
           targetCustomer: intake.targetCustomer,
         }}

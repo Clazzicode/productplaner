@@ -218,10 +218,11 @@ be different routes/areas per Section 7, not one shared ADMIN section with condi
 
 ## 10. Existing Schema Assessment
 
-Full inventory of current models (`prisma/schema.prisma`, unchanged): `Organization`, `User`,
+Full inventory of current models (`prisma/schema.prisma`): `Organization`, `User`,
 `QualifyingProfile`, `Initiative`, `IntakeAnswerSet`, `Capability`, `CapabilityDependency`,
 `Prototype`, `LayerLock`, `ArtifactLayer`, `Sprint`, `Release`, `SyncConnection`,
-`IntegrationProvider`, `IntegrationConnection`, `IntegrationCapability`, `IntegrationSyncLog`.
+`IntegrationProvider`, `IntegrationConnection`, `IntegrationCapability`, `IntegrationSyncLog`,
+`Team`, `TeamMember` (added Step 8B), **`InitiativeAccess`** (added Step 8C).
 
 **Already supports the target architecture (reusable as-is):**
 - `Organization` as the tenant root, with `users[]` / `initiatives[]` relations.
@@ -230,50 +231,61 @@ Full inventory of current models (`prisma/schema.prisma`, unchanged): `Organizat
 - `Initiative.organizationId` + `Initiative.userId` — tenant- and owner-scoped planning work.
 - `IntegrationConnection`'s dual org-level/initiative-level scoping (see Section 5).
 
-**Gaps — nothing currently exists for:**
-- **No role or access-level field anywhere.** `User` has no field distinguishing Standard User,
-  Organization Admin, or Super Admin.
-- **No Working Role field.** Nothing on `User` records Product Management / Project Manager /
-  Developer (and, as noted in Section 4, `QualifyingProfile.role` is a different, pre-existing
-  concept and shouldn't be reused for this).
+**Implemented at Step 8B (`docs/V2-USERS-TEAMS.md`):**
+- `User.accessLevel` (`standard_user | org_admin`) — real, and now the first field with genuine
+  server-side enforcement (`/api/admin/*` routes check it; see `docs/V2-USERS-TEAMS.md` §15 for
+  the exact, narrow scope of what that enforcement covers today).
+- `User.workingRole` (`product_management | project_manager | developer | null`) — nullable, no
+  fabricated default; still distinct from `QualifyingProfile.role` as originally specified.
+- `User.memberType` (`internal | external`) and `User.status` (`active | disabled | archived`).
+- `Team` and `TeamMember` (`User` ↔ `Team`, unique per pair) — flat, no nesting, no team roles.
+
+**Implemented at Step 8C (`docs/V2-RESOURCE-ACCESS.md`):**
+- `InitiativeAccess` (`initiativeId`, `userId?`, `teamId?`, `permission: owner|edit|view`) — the
+  shared direct/team grant table, with a database `CHECK` constraint enforcing exactly one grantee
+  and two NULL-tolerant unique indexes preventing duplicate grants.
+- One canonical permission-resolution function (`src/lib/access/resolution.ts`) that every route,
+  page, and admin screen now calls — real server-side enforcement (not just UI hiding) on the
+  initiative dashboard, the entire workspace route tree, and the initiative-scoped API routes that
+  matter most (see `docs/V2-RESOURCE-ACCESS.md` §12 for the full coverage table).
+- `ADMIN → Access`, plus real Resource Access sections on User Detail (read-only, resolved) and
+  Team Detail (writable, same underlying grants).
+
+**Implemented at Step 8E (`docs/V2-DASHBOARD-CONFIGURATION.md`):**
+- `DashboardConfiguration` (`organizationId`, `workingRole`, `widgetId`, `visible`) — presentation
+  only, per Section 8's distinction; no `userId`, `teamId`, or permission level, and never consulted
+  as an authorization signal. Sparse storage: a row exists only when its value differs from
+  `widgetRegistry.ts`'s code-level default.
+- `ADMIN → Dashboard Configuration` — per-Working-Role widget visibility toggles, wired into
+  `/home`'s widget-order resolution as a pure filter step on top of the existing, unchanged
+  authorization/ordering logic.
+
+**Gaps — still nothing currently exists for:**
 - **No real authentication linkage.** `User` has no identity-provider field (e.g. a Supabase auth
   user id) and no password/session data. The current implementation
   (`src/lib/auth/session.ts`) auto-creates and reuses a single hardcoded demo user/organization
   (`demo@planning.local` / "Demo Organization") — there is no login, and no way today to have more
-  than one distinguishable user. The Supabase Auth-related keys present in `.env`
+  than one distinguishable session. The Supabase Auth-related keys present in `.env`
   (`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SECRET_KEY`,
   `NEXT_PUBLIC_SUPABASE_JWKS_URL`) are not referenced anywhere in `src/` today — provisioned but
-  unused.
-- **No Team model.** "Teams & Stakeholders" in the proposed navigation has no backing table.
-- **No status/lifecycle fields.** Neither `Organization` nor `User` has an active/suspended/
-  invited state, so admin flows like invite, offboard, or suspend have nothing to persist against.
+  unused. This is why both Step 8B's `accessLevel` check and Step 8C's initiative-level
+  authorization, while genuinely real, have never been exercised against an actual second user —
+  see `docs/V2-RESOURCE-ACCESS.md` §20 for exactly what that does and doesn't prove.
 - **No audit/activity log model.** The proposed "Activity" nav item and Super Admin's "platform
   activity" have no backing table.
-- **No dashboard configuration storage.** Nothing persists per-organization or per-role widget
-  visibility choices.
 - **No cross-organization concept for Super Admin.** There is currently exactly one implicit
   organization, so nothing today prevents or scopes cross-tenant queries — but there's also no
   representation of a platform-operator identity distinct from a tenant-scoped `User` row.
+- **No `Organization.status`.** Only `User.status` was added at Step 8B — org-level
+  provisioning/offboarding state remains a future addition if it's ever needed.
 
 **Likely future additions (listed only — not implemented):**
-- `User.accessLevel` (`standard_user | org_admin`), following the existing String + Zod
-  convention.
-- `User.workingRole` (`product_management | project_manager | developer`), separate from
-  `QualifyingProfile.role`.
 - A Super Admin representation that is not a tenant-scoped `User` row (design deferred).
-- `Organization.status` and `User.status` for provisioning/onboarding/offboarding.
-- A `Team` model (and a `User` ↔ `Team` relation) to back "Teams & Stakeholders."
-- A `DashboardConfiguration` model (org- or role-scoped) for widget visibility, kept explicitly
-  separate from any permissions data per Section 8.
 - An `ActivityLog`/`AuditLog` model.
 - An identity-provider linkage field on `User` (e.g. `supabaseUserId`) once Supabase Auth is
   actually wired in.
 - A code-level permissions mapping (Section 6) — not a database table, unless a future phase
   finds the static approach insufficient.
-
-**Changes that must wait until the isolated V2 database exists:** all of the above. Every one of
-them requires a Prisma migration, and per Section 11, no migration may run against the currently
-shared database.
 
 ## 11. Shared Database Model (corrected at Step 8B)
 
@@ -325,9 +337,12 @@ None of them were started in Step 2:
   (name, company size, industry) and working-role selection (`docs/V2-ONBOARDING.md`). All four
   values are cookie-only — zero database writes. Real persistence still waits on Step 3B/5+ (auth +
   schema changes on the isolated V2 database).
-- Application shell
-- Standard dashboard
-- Organization admin
+- Application shell — **built, Step 6A/6B/6C**
+- Standard dashboard — **built, Step 7B** (`docs/V2-STANDARD-DASHBOARD.md`)
+- Organization admin — **information architecture designed (Step 8A), Users + Teams built
+  (Step 8B), Resource Access built (Step 8C), Admin Dashboard built (Step 8D,
+  `docs/V2-ORG-ADMIN-DASHBOARD.md`), Dashboard Configuration built (Step 8E,
+  `docs/V2-DASHBOARD-CONFIGURATION.md`)**
 - Roadmap (combined timeline/milestones/connections view, per the given direction — built on top
   of, not replacing, the existing roadmap generation logic)
 - Planning workspace

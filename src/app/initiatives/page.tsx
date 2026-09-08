@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { ContainedLayout } from "@/components/layout/PageLayouts";
 import { Badge, type BadgeVariant } from "@/components/ui/Badge";
 import PageHeader from "@/components/ui/PageHeader";
+import { listAuthorizedInitiativeIds } from "@/lib/access/initiativeAccess";
 import { getActiveProfile, getCurrentUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { LAYER_SEQUENCE } from "@/lib/generation/types";
@@ -14,6 +15,10 @@ export const dynamic = "force-dynamic";
 // previous /home — this remains the simple initiative list; reworking it into
 // the dense "Data Table" layout (docs/V2-APPLICATION-SHELL-BLUEPRINT.md §9) is
 // still a separate, future step, not done here.
+//
+// Step 8C (docs/V2-RESOURCE-ACCESS.md §16): filtered through the same
+// authorized-initiative set the dashboard uses, not raw `userId` ownership —
+// a global list must not show initiatives a detail page would then reject.
 
 const STATUS_META: Record<string, { label: string; variant: BadgeVariant }> = {
   draft: { label: "Draft", variant: "neutral" },
@@ -25,9 +30,10 @@ export default async function InitiativesPage() {
   const profile = await getActiveProfile();
   if (!profile) redirect("/welcome");
   const user = await getCurrentUser();
+  const authorizedInitiativeIds = await listAuthorizedInitiativeIds(user.id);
 
   const initiatives = await db.initiative.findMany({
-    where: { userId: user.id },
+    where: { id: { in: authorizedInitiativeIds ?? [] } },
     orderBy: { updatedAt: "desc" },
     include: {
       prototype: { include: { layerLocks: true } },
