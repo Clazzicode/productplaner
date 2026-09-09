@@ -65,7 +65,7 @@ export default function RoadmapBoard(props: {
     });
     setBusy(false);
     if (!res.ok) {
-      setMessage({ kind: "error", text: res.error ?? "Could not move that capability." });
+      setMessage({ kind: "error", text: res.error ?? "Could not move that feature." });
       return;
     }
     const warnings = res.data?.warnings ?? [];

@@ -135,7 +135,7 @@ export default async function RoadmapPage({
                   {phaseCost > 0 && (
                     <span
                       className="rounded-full bg-white px-3 py-1 text-xs font-medium text-neutral-600"
-                      title="Sum of this phase's capability costs (§25) — story points × cost per point"
+                      title="Sum of this phase's feature costs (§25) — story points × cost per point"
                     >
                       ~${Math.round(phaseCost).toLocaleString()}
                     </span>
@@ -180,7 +180,7 @@ export default async function RoadmapPage({
       {profile.roadmapMode === "continuous_backlog" ? (
         <p className="rounded-lg bg-neutral-50 px-3 py-3 text-sm text-neutral-500">
           The Board isn&apos;t available for Agile/Scrum — its phases are a continuously re-ranked
-          backlog, not fixed categories a capability can be pinned to. Switch methodology to
+          backlog, not fixed categories a feature can be pinned to. Switch methodology to
           Hybrid, Waterfall, or Kanban to use it.
         </p>
       ) : (
@@ -197,13 +197,13 @@ export default async function RoadmapPage({
   const milestonesView = (
     <EmptyState
       title="Milestones is coming in Step 9C"
-      description="Releases, the target launch date, and the approved-baseline checkpoint will plot on one strategic timeline here — not built yet."
+      description="Releases, the projected go-live date, and the approved-baseline checkpoint will plot on one strategic timeline here — not built yet."
     />
   );
   const connectionsView = (
     <EmptyState
       title="Connections is coming in Step 9D"
-      description="Capability dependencies will render as a relationship map here — not built yet."
+      description="Feature dependencies will render as a relationship map here — not built yet."
     />
   );
 

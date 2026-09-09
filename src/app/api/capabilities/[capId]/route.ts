@@ -19,7 +19,7 @@ async function loadEditable(capId: string) {
       intakeAnswerSet: { select: { id: true, status: true, initiative: { select: { id: true } } } },
     },
   });
-  if (!capability) return { error: jsonError("Capability not found.", 404) };
+  if (!capability) return { error: jsonError("Feature not found.", 404) };
   return { capability };
 }
 
@@ -40,7 +40,7 @@ export async function PATCH(
 
   const { dependsOn, ...fields } = parsed.data;
   if (fields.mvpImportance === "required_for_mvp" && !fields.isMvp) {
-    return jsonError('MVP importance "Required for MVP" conflicts with the Q4 answer — mark the capability as MVP or lower the importance.', 422);
+    return jsonError('MVP importance "Required for MVP" conflicts with the Q4 answer — mark the feature as MVP or lower the importance.', 422);
   }
   const factors = valueFactorsFrom(fields);
   const businessValueScore = factors ? computeBusinessValueScore(factors) : null;

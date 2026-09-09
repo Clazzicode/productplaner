@@ -8,7 +8,7 @@ export const ACCESS_LEVEL_LABELS: Record<string, string> = {
 export const WORKING_ROLE_LABELS: Record<string, string> = {
   product_management: "Product Management",
   project_manager: "Project Manager",
-  developer: "Developer",
+  product_owner: "Product Owner",
 };
 
 export const MEMBER_TYPE_LABELS: Record<string, string> = {

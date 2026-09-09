@@ -8,7 +8,7 @@ import {
 describe("resolveDashboardOrder", () => {
   it("returns a permutation of every registered widget for each working role", () => {
     const ids = DASHBOARD_WIDGETS.map((w) => w.id).sort();
-    for (const role of ["product_management", "project_manager", "developer"] as const) {
+    for (const role of ["product_management", "project_manager", "product_owner"] as const) {
       expect(resolveDashboardOrder(role).slice().sort()).toEqual(ids);
     }
   });
@@ -23,8 +23,8 @@ describe("resolveDashboardOrder", () => {
     expect(resolveDashboardOrder("project_manager")[0]).toBe("upcoming_timeline");
   });
 
-  it("puts Current Sprint first for Developer", () => {
-    expect(resolveDashboardOrder("developer")[0]).toBe("current_sprint");
+  it("puts Current Sprint first for Product Owner", () => {
+    expect(resolveDashboardOrder("product_owner")[0]).toBe("current_sprint");
   });
 
   it("puts Plan Health first for Product Management", () => {
@@ -34,7 +34,7 @@ describe("resolveDashboardOrder", () => {
 
 describe("resolveMainColumnOrder", () => {
   it("excludes upcoming_timeline, which renders in its own right-rail slot", () => {
-    for (const role of ["product_management", "project_manager", "developer", null] as const) {
+    for (const role of ["product_management", "project_manager", "product_owner", null] as const) {
       expect(resolveMainColumnOrder(role)).not.toContain("upcoming_timeline");
     }
   });

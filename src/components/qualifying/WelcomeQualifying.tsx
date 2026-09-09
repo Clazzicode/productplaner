@@ -10,7 +10,7 @@ import Button from "@/components/ui/Button";
 import { ChoiceCard } from "@/components/questionnaire/Choice";
 
 const ROLE_OPTIONS: { value: WorkingRole; label: string; hint: string }[] = [
-  { value: "developer", label: "Development", hint: "Focus on what's assigned and shippable now." },
+  { value: "product_owner", label: "Product Owner", hint: "Own the backlog and translate strategy into shippable work." },
   { value: "product_management", label: "Product Management", hint: "Own the roadmap and product outcomes." },
   { value: "project_manager", label: "Project Manager", hint: "Keep delivery on schedule and on budget." },
 ];
@@ -25,11 +25,18 @@ const EXPERIENCE_OPTIONS = [
 /** Same role + experience questions as Step 1 of the initiative-creation
  * questionnaire (ProductDirectionBootstrap), but scoped to qualifying only —
  * this page never creates an initiative, it just establishes the profile
- * and returns to /home, matching the old QualifyingWizard's behavior. */
-export default function WelcomeQualifying() {
+ * and returns to /home, matching the old QualifyingWizard's behavior.
+ *
+ * The role question is skipped when `workingRole` already came out of V2
+ * onboarding (`/onboarding/role`) — every user who reaches /welcome has
+ * already answered it once, so asking again here would just be a duplicate
+ * of that question. Mirrors the same known-role skip ProductDirectionBootstrap
+ * already does for the initiative-creation flow. */
+export default function WelcomeQualifying(props: { workingRole: WorkingRole | null }) {
   const router = useRouter();
-  const [step, setStep] = useState<0 | 1>(0);
-  const [roleAnswer, setRoleAnswer] = useState<WorkingRole | "something_else" | null>(null);
+  const roleKnown = props.workingRole != null;
+  const [step, setStep] = useState<0 | 1>(roleKnown ? 1 : 0);
+  const [roleAnswer, setRoleAnswer] = useState<WorkingRole | "something_else" | null>(props.workingRole);
   const [experienceLevel, setExperienceLevel] = useState("some_experience");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -57,17 +64,24 @@ export default function WelcomeQualifying() {
     router.refresh();
   };
 
+  const totalQuestions = roleKnown ? 1 : 2;
+  const currentQuestionNumber = roleKnown ? 1 : step + 1;
+
   return (
     <div className="mx-auto max-w-2xl">
       <div className="mb-9">
         <div className="mb-2.5 flex items-baseline justify-between gap-4">
           <p className="text-xs font-medium text-text-muted">
-            <span className="font-semibold text-text-primary">Question {step + 1} of 2</span>
+            <span className="font-semibold text-text-primary">
+              Question {currentQuestionNumber} of {totalQuestions}
+            </span>
           </p>
-          <p className="text-xs font-semibold tabular-nums text-accent">{step === 0 ? 50 : 100}%</p>
+          <p className="text-xs font-semibold tabular-nums text-accent">
+            {Math.round((currentQuestionNumber / totalQuestions) * 100)}%
+          </p>
         </div>
         <div className="flex gap-1.5">
-          <div className="h-1.5 flex-1 rounded-full bg-accent" />
+          {!roleKnown && <div className="h-1.5 flex-1 rounded-full bg-accent" />}
           <div className={`h-1.5 flex-1 rounded-full ${step === 1 ? "bg-accent" : "bg-neutral-200"}`} />
         </div>
       </div>
@@ -111,7 +125,9 @@ export default function WelcomeQualifying() {
 
         {step === 1 && (
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-accent">Question 2</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-accent">
+              Question {currentQuestionNumber}
+            </p>
             <h2 className="mt-1.5 text-2xl font-semibold tracking-tight text-text-primary">
               How much product planning experience do you have?
             </h2>
@@ -131,9 +147,13 @@ export default function WelcomeQualifying() {
             </div>
             {error && <p className="mt-4 text-sm text-red-600">{error}</p>}
             <div className="mt-8 flex items-center justify-between">
-              <Button type="button" variant="ghost" onClick={() => setStep(0)}>
-                ← Back
-              </Button>
+              {roleKnown ? (
+                <div />
+              ) : (
+                <Button type="button" variant="ghost" onClick={() => setStep(0)}>
+                  ← Back
+                </Button>
+              )}
               <Button type="button" onClick={submit} disabled={submitting} className="px-6 py-3">
                 {submitting ? "Saving…" : "Continue →"}
               </Button>

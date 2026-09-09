@@ -224,8 +224,8 @@ export default async function DashboardPage({
   for (const w of warnings.filter((w) => w.code === "capability_too_broad")) {
     decisions.push({
       title: w.message.split(".")[0],
-      impact: "Broad capabilities produce coarse estimates and risky sprints.",
-      action: "Split the capability in the intake before re-generating.",
+      impact: "Broad features produce coarse estimates and risky sprints.",
+      action: "Split the feature in the intake before re-generating.",
       href: `/initiatives/${initiativeId}/intake`,
       severity: "warning",
     });
@@ -241,10 +241,10 @@ export default async function DashboardPage({
     ...(prototype.approvedAt ? [{ when: prototype.approvedAt, label: "Baseline approved" }] : []),
     ...initiative.syncConnections
       .filter((c) => c.lastSyncedAt)
-      .map((c) => ({ when: c.lastSyncedAt!, label: "Jira demo sync completed" })),
+      .map((c) => ({ when: c.lastSyncedAt!, label: "Jira sync completed" })),
     ...initiative.integrationConnections
       .filter((c) => c.lastSyncAt)
-      .map((c) => ({ when: c.lastSyncAt!, label: `${c.provider.name} demo sync completed` })),
+      .map((c) => ({ when: c.lastSyncAt!, label: `${c.provider.name} sync completed` })),
   ]
     .sort((a, b) => b.when.getTime() - a.when.getTime())
     .slice(0, 7);
@@ -263,7 +263,7 @@ export default async function DashboardPage({
   }
   next.push({ label: "Review capacity & cost assumptions", href: ws("capacity") });
   later.push({ label: "Generate executive presentation", href: ws("executive") });
-  later.push({ label: "Run a demo integration sync", href: "/integrations" });
+  later.push({ label: "Run an integration sync", href: "/integrations" });
 
   // ---------- connected tools ----------
   const tools: ToolStatusView[] = initiative.integrationConnections.map((c) => ({
@@ -272,7 +272,7 @@ export default async function DashboardPage({
   }));
   const legacyJira = initiative.syncConnections.find((c) => c.tool === "jira");
   if (tools.length === 0 && legacyJira?.status === "connected") {
-    tools.push({ name: "Jira (workspace demo)", status: legacyJira.lastSyncedAt ? "sync_complete" : "demo_connected" });
+    tools.push({ name: "Jira", status: legacyJira.lastSyncedAt ? "sync_complete" : "demo_connected" });
   }
 
   // ---------- dashboard accordion: everything past the top summary lives here,

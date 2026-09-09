@@ -10,7 +10,7 @@ import {
 import { DASHBOARD_WIDGETS } from "@/lib/dashboard/widgetRegistry";
 import type { WorkingRole } from "@/lib/onboarding/types";
 
-const WORKING_ROLES: readonly WorkingRole[] = ["product_management", "project_manager", "developer"];
+const WORKING_ROLES: readonly WorkingRole[] = ["product_management", "project_manager", "product_owner"];
 const WIDGET_IDS = DASHBOARD_WIDGETS.map((w) => w.id) as [string, ...string[]];
 
 const saveSchema = z.object({

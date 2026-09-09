@@ -49,7 +49,7 @@ export default function RefreshBar(props: { initiativeId: string; locks: Refresh
     ? "Nothing is locked yet, so this has the same effect as Full regenerate — it rebuilds the whole plan from your current intake answers."
     : allLocked
       ? "All waterfall layers are locked, so only the sprint & release plan recomputes from your current capacity, budget, and rate — nothing above changes."
-      : `${lastLockedLabel} and everything above stay exactly as-is. Everything below regenerates from your current intake data, including sprints and releases. Note: adding, removing, or reclassifying capabilities since your last generation won't be reflected here — use Full regenerate for that.`;
+      : `${lastLockedLabel} and everything above stay exactly as-is. Everything below regenerates from your current intake data, including sprints and releases. Note: adding, removing, or reclassifying features since your last generation won't be reflected here — use Full regenerate for that.`;
 
   const run = async (action: Action) => {
     setBusy(true);

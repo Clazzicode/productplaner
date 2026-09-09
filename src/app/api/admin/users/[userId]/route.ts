@@ -8,7 +8,7 @@ import { isLastActiveOrgAdmin } from "@/lib/admin/safeguards";
 const userPatchSchema = z
   .object({
     accessLevel: z.enum(["standard_user", "org_admin"]).optional(),
-    workingRole: z.enum(["product_management", "project_manager", "developer"]).nullable().optional(),
+    workingRole: z.enum(["product_management", "project_manager", "product_owner"]).nullable().optional(),
     memberType: z.enum(["internal", "external"]).optional(),
     status: z.enum(["active", "disabled", "archived"]).optional(),
   })

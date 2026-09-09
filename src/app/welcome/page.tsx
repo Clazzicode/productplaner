@@ -1,8 +1,15 @@
 import WelcomeQualifying from "@/components/qualifying/WelcomeQualifying";
+import { getCurrentUser } from "@/lib/auth/session";
+import { resolveWorkingRole } from "@/lib/onboarding/resolveWorkingRole";
+import { readOnboardingStateServer } from "@/lib/onboarding/tempStateServer";
 
 export const dynamic = "force-dynamic";
 
-export default function WelcomePage() {
+export default async function WelcomePage() {
+  const user = await getCurrentUser();
+  const onboarding = await readOnboardingStateServer();
+  const workingRole = resolveWorkingRole(user.workingRole, onboarding.workingRole);
+
   return (
     <main className="min-h-screen px-6 py-12">
       <div className="mx-auto mb-10 max-w-xl text-center">
@@ -17,7 +24,7 @@ export default function WelcomePage() {
           questions build your working prototype — a live, connected plan, not a document.
         </p>
       </div>
-      <WelcomeQualifying />
+      <WelcomeQualifying workingRole={workingRole} />
     </main>
   );
 }

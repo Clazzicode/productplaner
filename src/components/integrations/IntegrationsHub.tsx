@@ -61,10 +61,10 @@ const PROVIDER_BRAND: Record<string, string> = {
 const STATUS_META: Record<string, { label: string; variant: BadgeVariant }> = {
   available: { label: "Available", variant: "neutral" },
   needs_configuration: { label: "Needs configuration", variant: "amber" },
-  demo_connected: { label: "Demo connected", variant: "indigo" },
+  demo_connected: { label: "Connected", variant: "indigo" },
   sync_ready: { label: "Sync ready", variant: "indigo" },
   sync_complete: { label: "Sync complete", variant: "emerald" },
-  demo_error: { label: "Demo error", variant: "red" },
+  demo_error: { label: "Error", variant: "red" },
 };
 
 export default function IntegrationsHub(props: {
@@ -177,7 +177,6 @@ export default function IntegrationsHub(props: {
                         {provider.category.replace("_", " ")}
                       </span>
                       {provider.isFeatured && <Badge variant="indigo">Featured</Badge>}
-                      <Badge variant="neutral">Demo available</Badge>
                     </p>
                     <p className="mt-0.5 text-sm text-neutral-500">{provider.description}</p>
                     <p className="mt-1 text-xs text-neutral-400">
@@ -225,7 +224,7 @@ export default function IntegrationsHub(props: {
                         }
                         busy={busy("reconnect")}
                       >
-                        {conn && !conn.isEnabled ? "Reconnect" : "Connect demo"}
+                        {conn && !conn.isEnabled ? "Reconnect" : "Connect"}
                       </ActionButton>
                     )}
                     {connected && (
@@ -239,7 +238,7 @@ export default function IntegrationsHub(props: {
                             onClick={() => act(provider, { action: "sync", connectionId: conn!.id }, "sync")}
                             busy={busy("sync")}
                           >
-                            Run demo sync
+                            Sync now
                           </ActionButton>
                         )}
                         <ActionButton
@@ -290,7 +289,7 @@ export default function IntegrationsHub(props: {
           onClose={() => setModalProvider(null)}
           onSaved={() => {
             setModalProvider(null);
-            setToast(`${modalProvider.name} demo connection saved.`);
+            setToast(`${modalProvider.name} connection saved.`);
             router.refresh();
           }}
         />

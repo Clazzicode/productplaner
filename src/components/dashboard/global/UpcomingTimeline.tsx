@@ -7,7 +7,7 @@ import type { TimelineEntry } from "@/lib/dashboard/globalDashboardData";
 const KIND_META: Record<TimelineEntry["kind"], { label: string; variant: BadgeVariant }> = {
   sprint: { label: "Sprint", variant: "neutral" },
   release: { label: "Release", variant: "indigo" },
-  launch: { label: "Launch", variant: "emerald" },
+  launch: { label: "Go-Live", variant: "emerald" },
 };
 
 /**
@@ -30,7 +30,7 @@ export default function UpcomingTimeline(props: { entries: TimelineEntry[] }) {
         <div className="mt-3">
           <EmptyState
             title="Nothing scheduled yet"
-            description="Sprint, release, and launch dates will appear here once a plan is generated."
+            description="Sprint, release, and go-live dates will appear here once a plan is generated."
           />
         </div>
       ) : (

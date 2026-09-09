@@ -72,7 +72,7 @@ export const DASHBOARD_WIDGETS: DashboardWidgetDefinition[] = [
   {
     id: "upcoming_timeline",
     title: "Upcoming Timeline",
-    description: "Shows upcoming sprint, release, and launch dates.",
+    description: "Shows upcoming sprint, release, and go-live dates.",
     defaultVisible: true,
   },
   {
@@ -128,7 +128,7 @@ export const ROLE_WIDGET_ORDER: Record<WorkingRole, DashboardWidgetId[]> = {
     "current_focus",
     "recent_activity",
   ],
-  developer: [
+  product_owner: [
     "current_sprint",
     "current_focus",
     "attention",

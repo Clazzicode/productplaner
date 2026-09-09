@@ -93,7 +93,7 @@ export default async function ExecutiveReport({ initiativeId }: { initiativeId: 
       {/* Scope */}
       <Section title="Scope">
         <p className="text-sm text-neutral-600">
-          <strong>{intake.capabilities.filter((c) => c.isMvp).length}</strong> capabilities in
+          <strong>{intake.capabilities.filter((c) => c.isMvp).length}</strong> features in
           the MVP, <strong>{intake.capabilities.filter((c) => !c.isMvp).length}</strong>{" "}
           sequenced after — {storyCount} sprint-ready stories in total.
         </p>
@@ -216,7 +216,7 @@ export default async function ExecutiveReport({ initiativeId }: { initiativeId: 
             Execution tool:{" "}
             <strong>
               {jira?.status === "connected"
-                ? `Jira connected (demo)${jira.lastSyncedAt ? `, last synced ${format(jira.lastSyncedAt, "MMM d, h:mm a")}` : ""}`
+                ? `Jira connected${jira.lastSyncedAt ? `, last synced ${format(jira.lastSyncedAt, "MMM d, h:mm a")}` : ""}`
                 : "not connected"}
             </strong>
           </li>

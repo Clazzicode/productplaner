@@ -74,7 +74,7 @@ export default async function IntegrationsPage() {
     <ContainedLayout>
       <PageHeader
         title="Integrations"
-        description={`Demo-mode connection hub — ${connectedCount} of ${hubProviders.length} tools connected. The platform stays the system of record; execution tools receive the work.`}
+        description={`Connection hub — ${connectedCount} of ${hubProviders.length} tools connected. The platform stays the system of record; execution tools receive the work.`}
       />
       <div className="mt-6">
         <IntegrationsHub

@@ -29,7 +29,7 @@ export default function JiraSyncPanel(props: {
       return;
     }
     if (action === "sync" && res.data?.pushed !== undefined) {
-      setLastResult(`Pushed ${res.data.pushed} items to ${res.data.projectKey} (demo)`);
+      setLastResult(`Pushed ${res.data.pushed} items to ${res.data.projectKey}`);
     }
     router.refresh();
   };
@@ -43,7 +43,7 @@ export default function JiraSyncPanel(props: {
             : "bg-neutral-100 text-neutral-500"
         }`}
       >
-        Jira: {props.status === "connected" ? "connected (demo)" : "not connected"}
+        Jira: {props.status === "connected" ? "connected" : "not connected"}
       </span>
       {props.status !== "connected" ? (
         <button
@@ -51,7 +51,7 @@ export default function JiraSyncPanel(props: {
           disabled={busy !== null}
           className="rounded-lg border border-indigo-300 px-3 py-1 font-medium text-indigo-700 hover:bg-indigo-50 disabled:opacity-50"
         >
-          {busy === "connect" ? "Connecting…" : "Connect (demo)"}
+          {busy === "connect" ? "Connecting…" : "Connect"}
         </button>
       ) : (
         <button

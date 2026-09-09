@@ -277,10 +277,10 @@ export async function loadGlobalDashboardData(
       ...(prototype.approvedAt ? [{ when: prototype.approvedAt, label: "Baseline approved" }] : []),
       ...primaryInitiative.syncConnections
         .filter((c) => c.lastSyncedAt)
-        .map((c) => ({ when: c.lastSyncedAt!, label: "Jira demo sync completed" })),
+        .map((c) => ({ when: c.lastSyncedAt!, label: "Jira sync completed" })),
       ...primaryInitiative.integrationConnections
         .filter((c) => c.lastSyncAt)
-        .map((c) => ({ when: c.lastSyncAt!, label: `${c.provider.name} demo sync completed` })),
+        .map((c) => ({ when: c.lastSyncAt!, label: `${c.provider.name} sync completed` })),
     ]
       .sort((a, b) => b.when.getTime() - a.when.getTime())
       .slice(0, 6);
@@ -292,7 +292,7 @@ export async function loadGlobalDashboardData(
     if (overAllocated.length > 0) next.push({ label: `Rebalance sprint ${overAllocated[0].sprintNumber}`, href: ws("sprints") });
     next.push({ label: "Review capacity assumptions", href: ws("capacity") });
     later.push({ label: "Generate executive presentation", href: ws("executive") });
-    later.push({ label: "Run a demo integration sync", href: "/integrations" });
+    later.push({ label: "Run an integration sync", href: "/integrations" });
 
     primary = {
       id: primaryInitiative.id,
@@ -361,7 +361,7 @@ export async function loadGlobalDashboardData(
       .filter((i) => i.targetLaunchDate != null && i.targetLaunchDate >= today)
       .map((i) => ({
         date: i.targetLaunchDate!,
-        label: `${i.name} launch target`,
+        label: `${i.name} go-live target`,
         kind: "launch" as const,
         initiativeName: multiInitiative ? i.name : null,
         href: i.status === "generated" ? `/initiatives/${i.id}/dashboard` : `/initiatives/${i.id}/intake`,

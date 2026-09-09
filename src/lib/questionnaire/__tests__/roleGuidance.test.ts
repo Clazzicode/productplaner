@@ -24,7 +24,7 @@ describe("guidanceFor", () => {
     "execution",
     "review",
   ] as const;
-  const roles = ["product_management", "project_manager", "developer"] as const;
+  const roles = ["product_management", "project_manager", "product_owner"] as const;
 
   it("returns a non-empty, role-specific string for every section/role pair", () => {
     for (const section of sections) {

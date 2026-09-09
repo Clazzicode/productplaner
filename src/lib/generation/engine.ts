@@ -1,3 +1,4 @@
+import { randomUUID } from "crypto";
 import type { Prisma, PrismaClient } from "@prisma/client";
 import { db } from "@/lib/db";
 import { buildPlan, packContinuousFlow, packSprints } from "./buildPlan";
@@ -123,7 +124,7 @@ const traceFor = {
   }),
   feature: (cap: { name: string; isMvp: boolean }) => ({
     keys: "q4",
-    note: `From capability "${cap.name}" — marked ${cap.isMvp ? "required for MVP" : "post-MVP"} in intake (Q4).`,
+    note: `From feature "${cap.name}" — marked ${cap.isMvp ? "required for MVP" : "post-MVP"} in intake (Q4).`,
   }),
   epic: (cap: { name: string; effortSize: string }) => ({
     keys: "q1,q4,q6",
@@ -140,9 +141,38 @@ const traceFor = {
 };
 
 // ---------- tree creation helpers (shared by generate + regenerate) ----------
+//
+// These build plain row objects with client-generated ids instead of
+// awaiting one `create()` per row: a hosted-Postgres round trip per
+// feature/epic/story/AC made drag-and-drop moves and edits noticeably slow
+// once a plan had more than a handful of features. Rows accumulate into a
+// `TreeBatch` and are flushed with one `createMany` per layer type — parent
+// rows must land before children because `parentId` is a real FK, so
+// `flushTreeBatch` writes features, then epics, then stories, then ACs, in
+// that order.
 
-async function createStoryTree(
-  tx: Db,
+type ArtifactLayerRow = Prisma.ArtifactLayerCreateManyInput;
+
+interface TreeBatch {
+  features: ArtifactLayerRow[];
+  epics: ArtifactLayerRow[];
+  stories: ArtifactLayerRow[];
+  acs: ArtifactLayerRow[];
+}
+
+function newTreeBatch(): TreeBatch {
+  return { features: [], epics: [], stories: [], acs: [] };
+}
+
+async function flushTreeBatch(tx: Db, batch: TreeBatch): Promise<void> {
+  if (batch.features.length > 0) await tx.artifactLayer.createMany({ data: batch.features });
+  if (batch.epics.length > 0) await tx.artifactLayer.createMany({ data: batch.epics });
+  if (batch.stories.length > 0) await tx.artifactLayer.createMany({ data: batch.stories });
+  if (batch.acs.length > 0) await tx.artifactLayer.createMany({ data: batch.acs });
+}
+
+function addStoryTree(
+  batch: TreeBatch,
   args: {
     prototypeId: string;
     parentEpicId: string;
@@ -151,50 +181,49 @@ async function createStoryTree(
     cap: CapabilityInput;
     sprintIdByNumber: Map<number, string>;
   },
-): Promise<void> {
+): void {
   const { prototypeId, parentEpicId, story, order, cap, sprintIdByNumber } = args;
   const trace = traceFor.story(cap);
-  const storyRow = await tx.artifactLayer.create({
-    data: {
-      prototypeId,
-      type: "story",
-      parentId: parentEpicId,
-      order,
-      title: story.title,
-      body: story.body,
-      points: story.points,
-      contentJson: JSON.stringify({
-        persona: story.persona,
-        want: story.want,
-        benefit: story.benefit,
-      }),
-      sourceCapabilityId: cap.id,
-      traceAnswerKeys: trace.keys,
-      traceNote: trace.note,
-      sprintId: sprintIdByNumber.get(story.sprintNumber) ?? null,
-    },
+  const storyId = randomUUID();
+  batch.stories.push({
+    id: storyId,
+    prototypeId,
+    type: "story",
+    parentId: parentEpicId,
+    order,
+    title: story.title,
+    body: story.body,
+    points: story.points,
+    contentJson: JSON.stringify({
+      persona: story.persona,
+      want: story.want,
+      benefit: story.benefit,
+    }),
+    sourceCapabilityId: cap.id,
+    traceAnswerKeys: trace.keys,
+    traceNote: trace.note,
+    sprintId: sprintIdByNumber.get(story.sprintNumber) ?? null,
   });
   const acTrace = traceFor.ac();
   for (const [ai, ac] of story.acs.entries()) {
-    await tx.artifactLayer.create({
-      data: {
-        prototypeId,
-        type: "acceptance_criterion",
-        parentId: storyRow.id,
-        order: ai,
-        title: ac.title,
-        body: ac.body,
-        contentJson: JSON.stringify({ kind: ac.kind }),
-        sourceCapabilityId: cap.id,
-        traceAnswerKeys: acTrace.keys,
-        traceNote: acTrace.note,
-      },
+    batch.acs.push({
+      id: randomUUID(),
+      prototypeId,
+      type: "acceptance_criterion",
+      parentId: storyId,
+      order: ai,
+      title: ac.title,
+      body: ac.body,
+      contentJson: JSON.stringify({ kind: ac.kind }),
+      sourceCapabilityId: cap.id,
+      traceAnswerKeys: acTrace.keys,
+      traceNote: acTrace.note,
     });
   }
 }
 
-async function createEpicTree(
-  tx: Db,
+function addEpicTree(
+  batch: TreeBatch,
   args: {
     prototypeId: string;
     parentFeatureId: string;
@@ -204,27 +233,27 @@ async function createEpicTree(
     cap: CapabilityInput;
     sprintIdByNumber: Map<number, string>;
   },
-): Promise<void> {
+): void {
   const { prototypeId, parentFeatureId, epic, epicIndex, epicCount, cap, sprintIdByNumber } = args;
   const trace = traceFor.epic(cap);
-  const epicRow = await tx.artifactLayer.create({
-    data: {
-      prototypeId,
-      type: "epic",
-      parentId: parentFeatureId,
-      order: epicIndex,
-      title: epic.title,
-      body: epic.body,
-      contentJson: JSON.stringify({ epicIndex, epicCount }),
-      sourceCapabilityId: cap.id,
-      traceAnswerKeys: trace.keys,
-      traceNote: trace.note,
-    },
+  const epicId = randomUUID();
+  batch.epics.push({
+    id: epicId,
+    prototypeId,
+    type: "epic",
+    parentId: parentFeatureId,
+    order: epicIndex,
+    title: epic.title,
+    body: epic.body,
+    contentJson: JSON.stringify({ epicIndex, epicCount }),
+    sourceCapabilityId: cap.id,
+    traceAnswerKeys: trace.keys,
+    traceNote: trace.note,
   });
   for (const [si, story] of epic.stories.entries()) {
-    await createStoryTree(tx, {
+    addStoryTree(batch, {
       prototypeId,
-      parentEpicId: epicRow.id,
+      parentEpicId: epicId,
       story,
       order: si,
       cap,
@@ -233,8 +262,8 @@ async function createEpicTree(
   }
 }
 
-async function createFeatureTree(
-  tx: Db,
+function addFeatureTree(
+  batch: TreeBatch,
   args: {
     prototypeId: string;
     parentPhaseId: string;
@@ -244,27 +273,27 @@ async function createFeatureTree(
     cap: CapabilityInput;
     sprintIdByNumber: Map<number, string>;
   },
-): Promise<void> {
+): void {
   const { prototypeId, parentPhaseId, phaseNumber, feature, order, cap, sprintIdByNumber } = args;
   const trace = traceFor.feature(cap);
-  const featureRow = await tx.artifactLayer.create({
-    data: {
-      prototypeId,
-      type: "feature",
-      parentId: parentPhaseId,
-      order,
-      title: feature.title,
-      body: feature.body,
-      contentJson: JSON.stringify({ phaseNumber }),
-      sourceCapabilityId: cap.id,
-      traceAnswerKeys: trace.keys,
-      traceNote: trace.note,
-    },
+  const featureId = randomUUID();
+  batch.features.push({
+    id: featureId,
+    prototypeId,
+    type: "feature",
+    parentId: parentPhaseId,
+    order,
+    title: feature.title,
+    body: feature.body,
+    contentJson: JSON.stringify({ phaseNumber }),
+    sourceCapabilityId: cap.id,
+    traceAnswerKeys: trace.keys,
+    traceNote: trace.note,
   });
   for (const [ei, epic] of feature.epics.entries()) {
-    await createEpicTree(tx, {
+    addEpicTree(batch, {
       prototypeId,
-      parentFeatureId: featureRow.id,
+      parentFeatureId: featureId,
       epic,
       epicIndex: ei,
       epicCount: feature.epics.length,
@@ -294,41 +323,37 @@ export async function generatePrototype(initiativeId: string): Promise<{ prototy
       await tx.prototype.deleteMany({ where: { initiativeId } });
       const proto = await tx.prototype.create({ data: { initiativeId } });
 
-      for (const [i, layerType] of LAYER_SEQUENCE.entries()) {
-        await tx.layerLock.create({
-          data: { prototypeId: proto.id, layerType, sequence: i + 1 },
-        });
-      }
+      await tx.layerLock.createMany({
+        data: LAYER_SEQUENCE.map((layerType, i) => ({
+          prototypeId: proto.id,
+          layerType,
+          sequence: i + 1,
+        })),
+      });
 
-      const releaseIdByPhase = new Map<number, string>();
-      for (const rel of plan.releases) {
-        const row = await tx.release.create({
-          data: {
-            prototypeId: proto.id,
-            name: rel.name,
-            phaseNumber: rel.phaseNumber,
-            targetDate: rel.targetDate,
-            order: rel.order,
-          },
-        });
-        releaseIdByPhase.set(rel.phaseNumber, row.id);
-      }
+      const releaseRows = plan.releases.map((rel) => ({
+        id: randomUUID(),
+        prototypeId: proto.id,
+        name: rel.name,
+        phaseNumber: rel.phaseNumber,
+        targetDate: rel.targetDate,
+        order: rel.order,
+      }));
+      if (releaseRows.length > 0) await tx.release.createMany({ data: releaseRows });
+      const releaseIdByPhase = new Map(releaseRows.map((r) => [r.phaseNumber, r.id]));
 
-      const sprintIdByNumber = new Map<number, string>();
-      for (const sprint of plan.sprints) {
-        const row = await tx.sprint.create({
-          data: {
-            prototypeId: proto.id,
-            sprintNumber: sprint.sprintNumber,
-            phaseNumber: sprint.phaseNumber,
-            startDate: sprint.startDate,
-            endDate: sprint.endDate,
-            capacityPoints: sprint.capacityPoints,
-            releaseId: releaseIdByPhase.get(sprint.phaseNumber) ?? null,
-          },
-        });
-        sprintIdByNumber.set(sprint.sprintNumber, row.id);
-      }
+      const sprintRows = plan.sprints.map((sprint) => ({
+        id: randomUUID(),
+        prototypeId: proto.id,
+        sprintNumber: sprint.sprintNumber,
+        phaseNumber: sprint.phaseNumber,
+        startDate: sprint.startDate,
+        endDate: sprint.endDate,
+        capacityPoints: sprint.capacityPoints,
+        releaseId: releaseIdByPhase.get(sprint.phaseNumber) ?? null,
+      }));
+      if (sprintRows.length > 0) await tx.sprint.createMany({ data: sprintRows });
+      const sprintIdByNumber = new Map(sprintRows.map((r) => [r.sprintNumber, r.id]));
 
       const rootTrace = traceFor.roadmap();
       const root = await tx.artifactLayer.create({
@@ -343,31 +368,36 @@ export async function generatePrototype(initiativeId: string): Promise<{ prototy
         },
       });
 
-      for (const [pi, phase] of plan.phases.entries()) {
+      const phaseRows = plan.phases.map((phase, pi) => {
         const phaseTrace = traceFor.phase(phase.phaseNumber);
-        const phaseRow = await tx.artifactLayer.create({
-          data: {
-            prototypeId: proto.id,
-            type: "roadmap_phase",
-            parentId: root.id,
-            order: pi,
-            title: phase.name,
-            body: `${phase.features.length} ${phase.features.length === 1 ? "capability" : "capabilities"}, sequenced by dependencies and business value.`,
-            contentJson: JSON.stringify({
-              phaseNumber: phase.phaseNumber,
-              startDate: phase.startDate.toISOString(),
-              endDate: phase.endDate.toISOString(),
-              capabilityIds: phase.capabilityIds,
-            }),
-            traceAnswerKeys: phaseTrace.keys,
-            traceNote: phaseTrace.note,
-          },
-        });
+        return {
+          id: randomUUID(),
+          prototypeId: proto.id,
+          type: "roadmap_phase",
+          parentId: root.id,
+          order: pi,
+          title: phase.name,
+          body: `${phase.features.length} ${phase.features.length === 1 ? "feature" : "features"}, sequenced by dependencies and business value.`,
+          contentJson: JSON.stringify({
+            phaseNumber: phase.phaseNumber,
+            startDate: phase.startDate.toISOString(),
+            endDate: phase.endDate.toISOString(),
+            capabilityIds: phase.capabilityIds,
+          }),
+          traceAnswerKeys: phaseTrace.keys,
+          traceNote: phaseTrace.note,
+        };
+      });
+      if (phaseRows.length > 0) await tx.artifactLayer.createMany({ data: phaseRows });
+
+      const batch = newTreeBatch();
+      for (const [pi, phase] of plan.phases.entries()) {
+        const parentPhaseId = phaseRows[pi].id;
         for (const [fi, feature] of phase.features.entries()) {
           const cap = capById.get(feature.capabilityId)!;
-          await createFeatureTree(tx, {
+          addFeatureTree(batch, {
             prototypeId: proto.id,
-            parentPhaseId: phaseRow.id,
+            parentPhaseId,
             phaseNumber: phase.phaseNumber,
             feature,
             order: fi,
@@ -376,6 +406,7 @@ export async function generatePrototype(initiativeId: string): Promise<{ prototy
           });
         }
       }
+      await flushTreeBatch(tx, batch);
 
       await tx.initiative.update({
         where: { id: initiativeId },
@@ -440,6 +471,7 @@ export async function regenerateBelow(
           where: { prototypeId, type: "roadmap_phase" },
           orderBy: { order: "asc" },
         });
+        const batch = newTreeBatch();
         for (const phaseRow of phases) {
           const content = parseJson(phaseRow.contentJson);
           const capIds = (content.capabilityIds as string[] | undefined) ?? [];
@@ -448,7 +480,7 @@ export async function regenerateBelow(
             .filter((c): c is CapabilityInput => Boolean(c));
           for (const [fi, cap] of caps.entries()) {
             const feature = { ...decomposeForRegen(cap, ctx) };
-            await createFeatureTree(tx, {
+            addFeatureTree(batch, {
               prototypeId,
               parentPhaseId: phaseRow.id,
               phaseNumber: (content.phaseNumber as number | undefined) ?? 1,
@@ -465,12 +497,14 @@ export async function regenerateBelow(
             }
           }
         }
+        await flushTreeBatch(tx, batch);
       } else if (editedLayer === "feature_hierarchy") {
         await tx.artifactLayer.deleteMany({ where: { prototypeId, type: "epic" } });
         const features = await tx.artifactLayer.findMany({
           where: { prototypeId, type: "feature" },
           orderBy: { order: "asc" },
         });
+        const batch = newTreeBatch();
         for (const f of features) {
           const cap = f.sourceCapabilityId ? capById.get(f.sourceCapabilityId) : undefined;
           if (!cap) continue;
@@ -487,7 +521,7 @@ export async function regenerateBelow(
                 ctx,
               }),
             };
-            await createEpicTree(tx, {
+            addEpicTree(batch, {
               prototypeId,
               parentFeatureId: f.id,
               epic,
@@ -501,6 +535,7 @@ export async function regenerateBelow(
             stats.acs += epic.stories.reduce((n, s) => n + s.acs.length, 0);
           }
         }
+        await flushTreeBatch(tx, batch);
       } else if (editedLayer === "epics") {
         await tx.artifactLayer.deleteMany({ where: { prototypeId, type: "story" } });
         const epics = await tx.artifactLayer.findMany({
@@ -508,6 +543,7 @@ export async function regenerateBelow(
           orderBy: { order: "asc" },
           include: { parent: { select: { title: true } } },
         });
+        const batch = newTreeBatch();
         for (const e of epics) {
           const cap = e.sourceCapabilityId ? capById.get(e.sourceCapabilityId) : undefined;
           if (!cap) continue;
@@ -525,7 +561,7 @@ export async function regenerateBelow(
             ctx,
           });
           for (const [si, story] of stories.entries()) {
-            await createStoryTree(tx, {
+            addStoryTree(batch, {
               prototypeId,
               parentEpicId: e.id,
               story,
@@ -537,6 +573,7 @@ export async function regenerateBelow(
           stats.stories += stories.length;
           stats.acs += stories.reduce((n, s) => n + s.acs.length, 0);
         }
+        await flushTreeBatch(tx, batch);
       } else if (editedLayer === "stories") {
         await tx.artifactLayer.deleteMany({
           where: { prototypeId, type: "acceptance_criterion" },
@@ -546,6 +583,7 @@ export async function regenerateBelow(
           orderBy: { order: "asc" },
         });
         const acTrace = traceFor.ac();
+        const acRows: ArtifactLayerRow[] = [];
         for (const s of stories) {
           const content = parseJson(s.contentJson);
           const acs = buildACsForStory({
@@ -554,23 +592,23 @@ export async function regenerateBelow(
             benefit: (content.benefit as string | undefined) ?? ctx.outcomeShort,
           });
           for (const [ai, ac] of acs.entries()) {
-            await tx.artifactLayer.create({
-              data: {
-                prototypeId,
-                type: "acceptance_criterion",
-                parentId: s.id,
-                order: ai,
-                title: ac.title,
-                body: ac.body,
-                contentJson: JSON.stringify({ kind: ac.kind }),
-                sourceCapabilityId: s.sourceCapabilityId,
-                traceAnswerKeys: acTrace.keys,
-                traceNote: acTrace.note,
-              },
+            acRows.push({
+              id: randomUUID(),
+              prototypeId,
+              type: "acceptance_criterion",
+              parentId: s.id,
+              order: ai,
+              title: ac.title,
+              body: ac.body,
+              contentJson: JSON.stringify({ kind: ac.kind }),
+              sourceCapabilityId: s.sourceCapabilityId,
+              traceAnswerKeys: acTrace.keys,
+              traceNote: acTrace.note,
             });
           }
           stats.acs += acs.length;
         }
+        if (acRows.length > 0) await tx.artifactLayer.createMany({ data: acRows });
       }
       // acceptance_criteria is the leaf — nothing beneath except the agile layers.
 
@@ -594,7 +632,7 @@ function decomposeForRegen(cap: CapabilityInput, ctx: NarrativeContext): Planned
   return {
     capabilityId: cap.id,
     title: cap.name,
-    body: cap.description.trim().length > 0 ? cap.description.trim() : `Delivers the "${cap.name}" capability.`,
+    body: cap.description.trim().length > 0 ? cap.description.trim() : `Delivers the "${cap.name}" feature.`,
     isMvp: cap.isMvp,
     epics: seeds.map((seed) => ({
       title: seed.title,
@@ -677,19 +715,22 @@ export async function repackSprints(
     // above SetNulls it, and Kanban never assigns one — so there's nothing
     // further to update on the story rows themselves.
     const phasesPresent = [...new Set(ordered.map((o) => o.phaseNumber))].sort((a, b) => a - b);
-    for (const [i, phaseNumber] of phasesPresent.entries()) {
-      const targetDate = flow.releaseDateByPhase.get(phaseNumber);
-      if (!targetDate) continue;
-      await tx.release.create({
-        data: {
+    const releaseRows = phasesPresent
+      .map((phaseNumber, i) => {
+        const targetDate = flow.releaseDateByPhase.get(phaseNumber);
+        if (!targetDate) return null;
+        return {
+          id: randomUUID(),
           prototypeId,
           name: RELEASE_NAMES[phaseNumber] ?? `Release ${i + 1}`,
           phaseNumber,
           targetDate,
           order: i + 1,
-        },
-      });
-    }
+        };
+      })
+      .filter((r): r is NonNullable<typeof r> => r != null);
+    if (releaseRows.length > 0) await tx.release.createMany({ data: releaseRows });
+
     for (const phase of phaseRows) {
       const content = parseJson(phase.contentJson);
       const phaseNumber = (content.phaseNumber as number | undefined) ?? 1;
@@ -718,43 +759,45 @@ export async function repackSprints(
   });
 
   // Releases: one per phase present, cut at that phase's sprints.
-  const releaseIdByPhase = new Map<number, string>();
   const phasesPresent = [...new Set(sprints.map((s) => s.phaseNumber))].sort((a, b) => a - b);
-  for (const [i, phaseNumber] of phasesPresent.entries()) {
+  const releaseRows = phasesPresent.map((phaseNumber, i) => {
     const phaseSprints = sprints.filter((s) => s.phaseNumber === phaseNumber);
-    const row = await tx.release.create({
-      data: {
-        prototypeId,
-        name: RELEASE_NAMES[phaseNumber] ?? `Release ${i + 1}`,
-        phaseNumber,
-        targetDate: phaseSprints[phaseSprints.length - 1].endDate,
-        order: i + 1,
-      },
-    });
-    releaseIdByPhase.set(phaseNumber, row.id);
-  }
+    return {
+      id: randomUUID(),
+      prototypeId,
+      name: RELEASE_NAMES[phaseNumber] ?? `Release ${i + 1}`,
+      phaseNumber,
+      targetDate: phaseSprints[phaseSprints.length - 1].endDate,
+      order: i + 1,
+    };
+  });
+  if (releaseRows.length > 0) await tx.release.createMany({ data: releaseRows });
+  const releaseIdByPhase = new Map(releaseRows.map((r) => [r.phaseNumber, r.id]));
 
-  const sprintIdByNumber = new Map<number, string>();
-  for (const sprint of sprints) {
-    const row = await tx.sprint.create({
-      data: {
-        prototypeId,
-        sprintNumber: sprint.sprintNumber,
-        phaseNumber: sprint.phaseNumber,
-        startDate: sprint.startDate,
-        endDate: sprint.endDate,
-        capacityPoints: sprint.capacityPoints,
-        releaseId: releaseIdByPhase.get(sprint.phaseNumber) ?? null,
-      },
-    });
-    sprintIdByNumber.set(sprint.sprintNumber, row.id);
-  }
+  const sprintRows = sprints.map((sprint) => ({
+    id: randomUUID(),
+    prototypeId,
+    sprintNumber: sprint.sprintNumber,
+    phaseNumber: sprint.phaseNumber,
+    startDate: sprint.startDate,
+    endDate: sprint.endDate,
+    capacityPoints: sprint.capacityPoints,
+    releaseId: releaseIdByPhase.get(sprint.phaseNumber) ?? null,
+  }));
+  if (sprintRows.length > 0) await tx.sprint.createMany({ data: sprintRows });
+  const sprintIdByNumber = new Map(sprintRows.map((r) => [r.sprintNumber, r.id]));
 
+  // Group by resolved sprintId so each distinct sprint needs one updateMany
+  // instead of one update per story row.
+  const rowIdsBySprintId = new Map<string | null, string[]>();
   for (const o of ordered) {
-    await tx.artifactLayer.update({
-      where: { id: o.rowId },
-      data: { sprintId: sprintIdByNumber.get(o.shim.sprintNumber) ?? null },
-    });
+    const sprintId = sprintIdByNumber.get(o.shim.sprintNumber) ?? null;
+    const list = rowIdsBySprintId.get(sprintId) ?? [];
+    list.push(o.rowId);
+    rowIdsBySprintId.set(sprintId, list);
+  }
+  for (const [sprintId, rowIds] of rowIdsBySprintId) {
+    await tx.artifactLayer.updateMany({ where: { id: { in: rowIds } }, data: { sprintId } });
   }
 
   // Refresh phase date ranges from the repacked sprints (display data only —

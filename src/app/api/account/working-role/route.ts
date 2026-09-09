@@ -5,7 +5,7 @@ import { getCurrentUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 
 const workingRoleSchema = z.object({
-  workingRole: z.enum(["product_management", "project_manager", "developer"]),
+  workingRole: z.enum(["product_management", "project_manager", "product_owner"]),
 });
 
 /**

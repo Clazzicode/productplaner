@@ -17,8 +17,8 @@ export default async function LoginPage() {
         </p>
         <h1 className="mt-2 text-3xl font-bold">Choose an account</h1>
         <p className="mt-3 text-neutral-500">
-          Prototype accounts — no password. This just lets you test account-scoped settings
-          (like your own Anthropic API key) as distinct accounts.
+          No password required — pick an account to continue, or create one to keep your own
+          settings (like your Anthropic API key) separate.
         </p>
       </div>
       <LoginForm users={users} />

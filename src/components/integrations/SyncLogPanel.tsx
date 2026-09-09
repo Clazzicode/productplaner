@@ -13,7 +13,7 @@ export default function SyncLogPanel(props: { logs: SyncLogView[] }) {
   return (
     <div className="mt-3 rounded-xl bg-neutral-50 p-3">
       <p className="text-xs font-semibold uppercase tracking-wide text-neutral-400">
-        Demo sync history
+        Sync history
       </p>
       <ul className="mt-2 space-y-1.5">
         {props.logs.map((log) => (

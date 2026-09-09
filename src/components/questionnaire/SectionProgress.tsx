@@ -3,7 +3,7 @@
 export const QUESTIONNAIRE_SECTIONS = [
   "Product Direction",
   "Success",
-  "Capabilities",
+  "Features",
   "Delivery",
   "Execution Preferences",
   "Review & Generate",

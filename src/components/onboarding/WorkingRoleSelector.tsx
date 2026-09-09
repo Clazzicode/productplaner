@@ -11,7 +11,7 @@ const ROLES: { value: WorkingRole; label: string; blurb: string; focus: string[]
     value: "product_management",
     label: "Product Management",
     blurb: "Own the roadmap and product outcomes.",
-    focus: ["Roadmap", "Capabilities & features", "Product health", "Decisions", "Releases", "Outcomes"],
+    focus: ["Roadmap", "Features", "Product health", "Decisions", "Releases", "Outcomes"],
   },
   {
     value: "project_manager",
@@ -20,10 +20,10 @@ const ROLES: { value: WorkingRole; label: string; blurb: string; focus: string[]
     focus: ["Schedules", "Milestones", "Dependencies", "Risks", "Capacity", "Delivery health"],
   },
   {
-    value: "developer",
-    label: "Developer",
-    blurb: "Focus on what's assigned and shippable now.",
-    focus: ["Assigned work", "User stories", "Sprint work", "Blockers", "Dependencies", "Recent changes"],
+    value: "product_owner",
+    label: "Product Owner",
+    blurb: "Own the backlog and translate strategy into shippable work.",
+    focus: ["Feature backlog", "User stories", "Acceptance criteria", "Sprint work", "Dependencies", "Decisions"],
   },
 ];
 

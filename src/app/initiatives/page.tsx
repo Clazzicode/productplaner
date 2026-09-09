@@ -111,7 +111,7 @@ export default async function InitiativesPage() {
                     )}
                     {jira?.status === "connected" && (
                       <span className="text-indigo-600">
-                        Jira {jira.lastSyncedAt ? "synced" : "connected"} (demo)
+                        Jira {jira.lastSyncedAt ? "synced" : "connected"}
                       </span>
                     )}
                     <span>Methodology: hybrid waterfall</span>

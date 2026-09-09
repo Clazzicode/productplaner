@@ -298,7 +298,7 @@ export async function loadAdminDashboardData(organizationId: string): Promise<Ad
 
     if (init.targetLaunchDate && init.targetLaunchDate >= today) {
       const launchHref = init.status === "generated" ? `/initiatives/${init.id}/dashboard` : `/initiatives/${init.id}/intake`;
-      timeline.push({ date: init.targetLaunchDate, label: `${init.name} launch target`, kind: "launch", initiativeName: init.name, href: launchHref });
+      timeline.push({ date: init.targetLaunchDate, label: `${init.name} go-live target`, kind: "launch", initiativeName: init.name, href: launchHref });
       approachingLaunch.push({ name: init.name, date: init.targetLaunchDate, href: launchHref });
     }
 

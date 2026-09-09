@@ -290,7 +290,7 @@ export default function PlanningQuestionnaire(props: {
             </label>
             <div className="grid gap-4 sm:grid-cols-2">
               <label className="block text-sm font-medium text-text-primary">
-                Target launch date <span className="font-normal text-text-muted">(optional)</span>
+                Projected go-live date <span className="font-normal text-text-muted">(optional)</span>
                 <input
                   type="date"
                   value={success.targetLaunchDate}
@@ -467,7 +467,7 @@ function CapabilitiesSection(props: {
       <GuidanceBanner section="capabilities" workingRole={workingRole} />
       <p className="text-sm text-text-secondary">
         {verbose
-          ? "List each capability the product needs. Effort size drives how big it becomes in the plan (epics/stories); MVP, business value, and risk drive what ships first and in what order — not how big it is."
+          ? "List each feature the product needs. Effort size drives how big it becomes in the plan (epics/stories); MVP, business value, and risk drive what ships first and in what order — not how big it is."
           : "Effort size drives decomposition size; MVP/value/risk drive ordering and phase, not size."}
       </p>
 
@@ -512,12 +512,12 @@ function CapabilitiesSection(props: {
 
       {!adding && !editing && (
         <button onClick={() => setAdding(true)} className="mt-4 rounded-xl border border-dashed border-accent/40 px-4 py-2.5 text-sm font-semibold text-accent hover:bg-accent/5">
-          + Add a capability
+          + Add a feature
         </button>
       )}
 
       {caps.length > 0 && !hasMvp && (
-        <p className="mt-4 text-sm text-amber-700">Mark at least one capability as MVP to continue.</p>
+        <p className="mt-4 text-sm text-amber-700">Mark at least one feature as MVP to continue.</p>
       )}
       {error && <p className="mt-4 text-sm text-red-600">{error}</p>}
 
@@ -601,7 +601,7 @@ function CapabilityForm(props: {
     <div className="mt-4 rounded-2xl border border-accent/20 bg-accent/[0.03] p-5">
       <p className="text-xs font-semibold uppercase tracking-wide text-accent">Basics</p>
       <label className="mt-2 block text-sm font-medium text-text-primary">
-        Capability name
+        Feature name
         <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })}
           placeholder="e.g. Bulk CSV import"
           className={`mt-1 w-full ${FIELD_CLASS}`} autoFocus />
@@ -669,9 +669,9 @@ function CapabilityForm(props: {
 
       <p className="mt-5 text-xs font-semibold uppercase tracking-wide text-accent">Dependencies</p>
       <div className="mt-2">
-        <p className="text-sm font-medium text-text-primary">Does this capability require another capability to exist first?</p>
+        <p className="text-sm font-medium text-text-primary">Does this feature require another feature to exist first?</p>
         {others.length === 0 ? (
-          <p className="mt-1 text-xs text-text-muted">No other capabilities yet — add more to set dependencies.</p>
+          <p className="mt-1 text-xs text-text-muted">No other features yet — add more to set dependencies.</p>
         ) : (
           <div className="mt-1.5 flex flex-wrap gap-2">
             {others.map((o) => (
@@ -727,7 +727,7 @@ function CapabilityForm(props: {
       <div className="mt-5 flex justify-end gap-3">
         <Button variant="ghost" onClick={onCancel}>Cancel</Button>
         <Button onClick={save} disabled={busy || form.name.trim().length < 3 || (advancedValue && !scoringComplete)}>
-          {busy ? "Saving…" : existing ? "Save changes" : "Add capability"}
+          {busy ? "Saving…" : existing ? "Save changes" : "Add feature"}
         </Button>
       </div>
     </div>
@@ -776,11 +776,11 @@ function ReviewSection(props: {
       <ReviewBlock title="Success" onEdit={() => onEdit(1)}>
         <ReviewRow label="Outcome" value={success.outcomeStatement || "—"} />
         <ReviewRow label="Metric" value={success.outcomeMetric || "—"} />
-        <ReviewRow label="Launch date" value={success.targetLaunchDate || "—"} />
+        <ReviewRow label="Projected go-live date" value={success.targetLaunchDate || "—"} />
         <ReviewRow label="Budget" value={success.budget ? `$${success.budget}` : "—"} />
       </ReviewBlock>
 
-      <ReviewBlock title={`Capabilities (${caps.length})`} onEdit={() => onEdit(2)}>
+      <ReviewBlock title={`Features (${caps.length})`} onEdit={() => onEdit(2)}>
         {caps.length === 0 ? (
           <p className="text-sm text-neutral-500">None yet.</p>
         ) : (

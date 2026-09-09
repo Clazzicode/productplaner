@@ -36,7 +36,7 @@ export default async function FeaturesPage({
     <div>
       <h2 className="text-xl font-bold">Feature hierarchy</h2>
       <p className="mt-1 text-sm text-neutral-500">
-        One feature per intake capability, grouped by roadmap phase. Waterfall layer 2 of 5.
+        Each feature from intake appears once here, grouped by roadmap phase. Waterfall layer 2 of 5.
       </p>
 
       <div className="mt-6 space-y-6">

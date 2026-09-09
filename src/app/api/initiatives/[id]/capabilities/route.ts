@@ -30,7 +30,7 @@ export async function POST(
 
   const { dependsOn, ...fields } = parsed.data;
   if (fields.mvpImportance === "required_for_mvp" && !fields.isMvp) {
-    return jsonError('MVP importance "Required for MVP" conflicts with the Q4 answer — mark the capability as MVP or lower the importance.', 422);
+    return jsonError('MVP importance "Required for MVP" conflicts with the Q4 answer — mark the feature as MVP or lower the importance.', 422);
   }
   // §2: when all four sub-factors are given, the weighted score determines the level.
   const factors = valueFactorsFrom(fields);

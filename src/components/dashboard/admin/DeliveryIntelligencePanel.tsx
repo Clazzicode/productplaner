@@ -27,10 +27,10 @@ export default function DeliveryIntelligencePanel(props: { data: DeliveryIntelli
         </div>
       </div>
 
-      <p className="mt-4 text-xs font-semibold uppercase tracking-wide text-text-muted">Approaching launch</p>
+      <p className="mt-4 text-xs font-semibold uppercase tracking-wide text-text-muted">Approaching go-live</p>
       {d.approachingLaunch.length === 0 ? (
         <div className="mt-2">
-          <EmptyState title="Nothing scheduled" description="No initiative has an upcoming target launch date." />
+          <EmptyState title="Nothing scheduled" description="No initiative has an upcoming projected go-live date." />
         </div>
       ) : (
         <ul className="mt-2 space-y-1.5">

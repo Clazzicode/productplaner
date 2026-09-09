@@ -63,7 +63,7 @@ export async function POST(
       },
     },
   });
-  if (!capability) return jsonError("Capability not found.", 404);
+  if (!capability) return jsonError("Feature not found.", 404);
   const initiative = capability.intakeAnswerSet.initiative;
 
   const user = await getCurrentUser();
@@ -151,10 +151,10 @@ export async function POST(
               parentId: root.id,
               order: n - 1,
               title: PHASE_NAMES[n] ?? `Phase ${n}`,
-              body: `${capabilityIds.length} ${capabilityIds.length === 1 ? "capability" : "capabilities"}, sequenced by dependencies and business value.`,
+              body: `${capabilityIds.length} ${capabilityIds.length === 1 ? "feature" : "features"}, sequenced by dependencies and business value.`,
               contentJson,
               traceAnswerKeys: "q3,q4",
-              traceNote: "Created when a capability was dragged into this phase on the Timeline view.",
+              traceNote: "Created when a feature was dragged into this phase on the Timeline view.",
             },
           });
         }

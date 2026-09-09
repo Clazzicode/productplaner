@@ -70,7 +70,7 @@ function buildFieldRows(
     },
     draft.success?.targetLaunchDate != null && {
       key: "success.targetLaunchDate",
-      label: "Target launch date",
+      label: "Projected go-live date",
       current: success.targetLaunchDate,
       suggested: draft.success.targetLaunchDate,
     },
@@ -209,7 +209,7 @@ export default function ImportIntakePanel(props: {
     setBusy(false);
     const fieldsApplied = Object.keys(pdPatch).length + Object.keys(successPatch).length;
     setApplied(
-      `Applied ${fieldsApplied} field${fieldsApplied === 1 ? "" : "s"} and ${capsApplied} capabilit${capsApplied === 1 ? "y" : "ies"} from ${sourceFileName}.`,
+      `Applied ${fieldsApplied} field${fieldsApplied === 1 ? "" : "s"} and ${capsApplied} feature${capsApplied === 1 ? "" : "s"} from ${sourceFileName}.`,
     );
     setDraft(null);
   };
@@ -294,7 +294,7 @@ export default function ImportIntakePanel(props: {
               {capabilityDrafts.length > 0 && (
                 <div className="mt-5">
                   <p className="text-xs font-semibold uppercase tracking-wide text-accent">
-                    Capabilities ({capabilityDrafts.length})
+                    Features ({capabilityDrafts.length})
                   </p>
                   <ul className="mt-2 space-y-2.5">
                     {capabilityDrafts.map((c, i) => (

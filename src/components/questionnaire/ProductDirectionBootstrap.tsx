@@ -14,7 +14,7 @@ import { ChoiceCard } from "./Choice";
 import ProductDirectionFields, { type ProductDirectionValues } from "./ProductDirectionFields";
 
 const ROLE_OPTIONS: { value: WorkingRole; label: string; hint: string }[] = [
-  { value: "developer", label: "Development", hint: "Focus on what's assigned and shippable now." },
+  { value: "product_owner", label: "Product Owner", hint: "Own the backlog and translate strategy into shippable work." },
   { value: "product_management", label: "Product Management", hint: "Own the roadmap and product outcomes." },
   { value: "project_manager", label: "Project Manager", hint: "Keep delivery on schedule and on budget." },
 ];

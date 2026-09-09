@@ -28,7 +28,7 @@ export async function syncToJira(initiativeId: string): Promise<{
     where: { initiativeId_tool: { initiativeId, tool: "jira" } },
   });
   if (!conn || conn.status !== "connected") {
-    throw new Error("Connect the Jira demo connection before syncing.");
+    throw new Error("Connect Jira before syncing.");
   }
   const prototype = await db.prototype.findUnique({ where: { initiativeId } });
   if (!prototype) throw new Error("Nothing to sync — generate the prototype first.");

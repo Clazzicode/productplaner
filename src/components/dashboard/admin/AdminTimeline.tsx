@@ -7,7 +7,7 @@ import type { AdminTimelineEntry } from "@/lib/dashboard/adminDashboardData";
 const KIND_META: Record<AdminTimelineEntry["kind"], { label: string; variant: BadgeVariant }> = {
   sprint: { label: "Sprint", variant: "neutral" },
   release: { label: "Release", variant: "indigo" },
-  launch: { label: "Launch", variant: "emerald" },
+  launch: { label: "Go-Live", variant: "emerald" },
 };
 
 /** Organization-wide checkpoints across every initiative (Zone: right rail),
@@ -27,7 +27,7 @@ export default function AdminTimeline(props: { entries: AdminTimelineEntry[] }) 
       </div>
       {props.entries.length === 0 ? (
         <div className="mt-3">
-          <EmptyState title="Nothing scheduled yet" description="Sprint, release, and launch checkpoints appear here once a plan is generated." />
+          <EmptyState title="Nothing scheduled yet" description="Sprint, release, and go-live checkpoints appear here once a plan is generated." />
         </div>
       ) : (
         <ol className="mt-4 space-y-0">

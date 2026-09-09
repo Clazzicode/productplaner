@@ -41,14 +41,14 @@ describe("getEffectiveWidgetVisibility", () => {
 
   it("applies a persisted override", async () => {
     findMany.mockResolvedValue([{ widgetId: "current_focus", visible: false }]);
-    const result = await getEffectiveWidgetVisibility(ORG, "developer");
+    const result = await getEffectiveWidgetVisibility(ORG, "product_owner");
     expect(result.current_focus).toBe(false);
     expect(result.plan_health).toBe(true);
   });
 
   it("ignores a row whose widgetId no longer matches the registry", async () => {
     findMany.mockResolvedValue([{ widgetId: "not_a_real_widget", visible: false }]);
-    const result = await getEffectiveWidgetVisibility(ORG, "developer");
+    const result = await getEffectiveWidgetVisibility(ORG, "product_owner");
     for (const w of DASHBOARD_WIDGETS) expect(result[w.id]).toBe(true);
   });
 });
@@ -62,18 +62,18 @@ describe("role and organization isolation", () => {
     );
   });
 
-  it("a Developer override query never reads Product Management's rows (different where clause)", async () => {
+  it("a Product Owner override query never reads Product Management's rows (different where clause)", async () => {
     findMany.mockResolvedValue([]);
-    await getEffectiveWidgetVisibility(ORG, "developer");
+    await getEffectiveWidgetVisibility(ORG, "product_owner");
     const call = findMany.mock.calls[0][0];
-    expect(call.where.workingRole).toBe("developer");
+    expect(call.where.workingRole).toBe("product_owner");
     expect(call.where.workingRole).not.toBe("product_management");
   });
 
   it("a different organization's config never leaks in (scoped by organizationId in the query)", async () => {
     findMany.mockResolvedValue([]);
-    await getEffectiveWidgetVisibility(OTHER_ORG, "developer");
-    expect(findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { organizationId: OTHER_ORG, workingRole: "developer" } }));
+    await getEffectiveWidgetVisibility(OTHER_ORG, "product_owner");
+    expect(findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { organizationId: OTHER_ORG, workingRole: "product_owner" } }));
   });
 });
 
@@ -127,10 +127,10 @@ describe("saveRoleConfiguration", () => {
   it("only writes rows for the widgets it was given, never other roles", async () => {
     upsert.mockResolvedValue({});
     // current_sprint defaults to visible — false is a genuine override.
-    await saveRoleConfiguration(ORG, "developer", [{ id: "current_sprint", visible: false }]);
+    await saveRoleConfiguration(ORG, "product_owner", [{ id: "current_sprint", visible: false }]);
     expect(upsert).toHaveBeenCalledTimes(1);
     const arg = upsert.mock.calls[0][0];
-    expect(arg.create.workingRole).toBe("developer");
+    expect(arg.create.workingRole).toBe("product_owner");
   });
 
   it("clears (never stores) a widget whose submitted value matches its registry default", async () => {

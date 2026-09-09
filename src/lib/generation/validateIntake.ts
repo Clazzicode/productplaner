@@ -56,13 +56,13 @@ export function validateIntake(input: IntakeInput): IntakeValidation {
     errors.push({
       code: "no_capabilities",
       message:
-        "Add at least one capability. Capabilities are the features your product needs — each becomes a branch of the plan.",
+        "Add at least one feature. Features are what your product needs — each becomes a branch of the plan.",
     });
   } else if (!caps.some((c) => c.isMvp)) {
     errors.push({
       code: "no_mvp",
       message:
-        "Mark at least one capability as required for the MVP — Phase 1 of the roadmap and Release 1 are built from your MVP scope.",
+        "Mark at least one feature as required for the MVP — Phase 1 of the roadmap and Release 1 are built from your MVP scope.",
     });
   }
 
@@ -71,7 +71,7 @@ export function validateIntake(input: IntakeInput): IntakeValidation {
     const names = cycleIds.map((id) => `"${byId.get(id)?.name ?? id}"`).join(", ");
     errors.push({
       code: "dependency_cycle",
-      message: `These capabilities depend on each other in a circle: ${names}. Break the loop by removing one of the dependencies — nothing can be sequenced first when everything waits on everything else.`,
+      message: `These features depend on each other in a circle: ${names}. Break the loop by removing one of the dependencies — nothing can be sequenced first when everything waits on everything else.`,
     });
   }
 
@@ -133,7 +133,7 @@ export function validateIntake(input: IntakeInput): IntakeValidation {
       if (isOversizedCapability(cap)) {
         warnings.push({
           code: "capability_too_broad",
-          message: `"${cap.name}" is estimated at ${EFFORT_POINTS[cap.effortSize]} points and may be too broad. Consider splitting it into smaller capabilities before planning.`,
+          message: `"${cap.name}" is estimated at ${EFFORT_POINTS[cap.effortSize]} points and may be too broad. Consider splitting it into smaller features before planning.`,
         });
       }
     }

@@ -86,7 +86,7 @@ export default async function StoryPage({
         )}
         {cap?.riskLevel && (cap.riskLevel === "high" || cap.riskLevel === "critical") && (
           <span className="rounded-full bg-red-100 px-2.5 py-1 font-medium text-red-800">
-            {cap.riskLevel} risk capability
+            {cap.riskLevel} risk feature
           </span>
         )}
         {story.sprint && (
@@ -96,7 +96,7 @@ export default async function StoryPage({
         )}
         {cap && (
           <span className="rounded-full bg-neutral-100 px-2.5 py-1">
-            From capability: {cap.name}
+            From feature: {cap.name}
           </span>
         )}
       </div>

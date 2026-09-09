@@ -10,7 +10,7 @@ import type { WorkingRole } from "@/lib/onboarding/types";
 
 export const dynamic = "force-dynamic";
 
-const WORKING_ROLES: readonly WorkingRole[] = ["product_management", "project_manager", "developer"];
+const WORKING_ROLES: readonly WorkingRole[] = ["product_management", "project_manager", "product_owner"];
 const DEFAULT_ROLE: WorkingRole = "product_management";
 
 function parseRole(value: string | undefined): WorkingRole {
