@@ -2,23 +2,32 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { jsonError, zodMessage } from "@/lib/api";
 import { provisionSoloWorkspace } from "@/lib/auth/session";
+import { usernameSchema, usernameToPlaceholderEmail } from "@/lib/auth/username";
 import { db, establishAuthContext } from "@/lib/db";
 import { createSupabaseServerClient, createSupabaseServiceClient } from "@/lib/supabase/server";
 
 const signUpSchema = z.object({
-  name: z.string().trim().min(1, "Name is required.").max(200),
-  email: z.string().trim().email("Enter a valid email."),
+  username: usernameSchema,
   password: z.string().min(8, "Password must be at least 8 characters."),
 });
 
 export async function POST(request: Request) {
   const parsed = signUpSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return jsonError(zodMessage(parsed.error), 422);
-  const { name, email, password } = parsed.data;
+  const { username, password } = parsed.data;
+  const email = usernameToPlaceholderEmail(username);
 
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase.auth.signUp({ email, password });
-  if (error || !data.user) return jsonError(error?.message ?? "Could not create account.", 400);
+  if (error) {
+    // Supabase reports a taken placeholder address the same way it would a
+    // real duplicate email — translate that back into username terms.
+    const message = /already registered|already exists/i.test(error.message)
+      ? "That username is already taken."
+      : error.message;
+    return jsonError(message, 400);
+  }
+  if (!data.user) return jsonError("Could not create account.", 400);
 
   // Supabase always creates the auth.users row immediately, even when email
   // confirmation is required before a session is issued — so the app-side
@@ -28,17 +37,14 @@ export async function POST(request: Request) {
   establishAuthContext(data.user.id);
   const existing = await db.user.findUnique({ where: { authUserId: data.user.id } });
   if (!existing) {
-    await provisionSoloWorkspace({ authUserId: data.user.id, name, email });
+    await provisionSoloWorkspace({ authUserId: data.user.id, name: username, email });
   }
 
   if (!data.session) {
-    // Email confirmation is required by the Supabase project today, but
-    // outbound confirmation delivery isn't reliable yet (tracked separately —
-    // not fixed here). Rather than leave a newly-created account stuck until
-    // that's sorted out, auto-confirm it via the Admin API and sign the user
-    // straight in, the same way sign-in does. The confirmation email itself
-    // still gets sent by Supabase; nothing here depends on the user ever
-    // opening it. Remove this once real email confirmation is ready to enforce.
+    // Temporary username+password auth (no real email collected at all) —
+    // there is no inbox to confirm, so always auto-confirm via the Admin API
+    // and sign the user straight in, the same way sign-in does. Revisit
+    // alongside src/lib/auth/username.ts once real email sign-up is ready.
     try {
       const adminClient = createSupabaseServiceClient();
       const { error: confirmError } = await adminClient.auth.admin.updateUserById(data.user.id, {
@@ -49,12 +55,9 @@ export async function POST(request: Request) {
       const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
       if (signInError) throw signInError;
     } catch {
-      // Auto-confirm/sign-in didn't work — the account was still created, so
-      // fall back to the original "check your email" flow instead of failing
-      // signup outright.
-      return NextResponse.json({ ok: true, needsEmailConfirmation: true });
+      return jsonError("Account created, but signing you in automatically failed — try signing in.", 500);
     }
   }
 
-  return NextResponse.json({ ok: true, needsEmailConfirmation: false });
+  return NextResponse.json({ ok: true });
 }

@@ -23,7 +23,7 @@ export default async function AccountSettingsPage() {
     <FocusedLayout>
       <h1 className="text-2xl font-bold">Settings</h1>
       <p className="mt-1 mb-8 text-sm text-neutral-500">
-        Personal to {user.name} ({user.email}) — not shared with any other account.
+        Personal to {user.name} — not shared with any other account.
       </p>
       <AnthropicKeySettings hasKey={user.anthropicApiKeyEncrypted != null} last4={last4} />
     </FocusedLayout>
