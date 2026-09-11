@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { requireInitiativeApiAccess } from "@/lib/access/guards";
 import { jsonError, zodMessage } from "@/lib/api";
-import { getCurrentUser } from "@/lib/auth/session";
-import { db } from "@/lib/db";
+import { requireCurrentUserApi } from "@/lib/auth/session";
+import { db, establishAuthContext, withTransaction } from "@/lib/db";
 import { DEFAULT_ASSUMPTIONS } from "@/lib/generation/constants";
 import {
   AgileLayerLockedError,
@@ -31,8 +31,10 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
-  const user = await getCurrentUser();
-  const guard = await requireInitiativeApiAccess(user.id, id, "view");
+  const authGuard = await requireCurrentUserApi();
+  if (!authGuard.ok) return authGuard.response;
+  establishAuthContext(authGuard.user.authUserId);
+  const guard = await requireInitiativeApiAccess(authGuard.user, id, "view");
   if (!guard.ok) return guard.response;
 
   const initiative = await db.initiative.findUnique({
@@ -64,8 +66,10 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
-  const user = await getCurrentUser();
-  const guard = await requireInitiativeApiAccess(user.id, id, "edit");
+  const authGuard = await requireCurrentUserApi();
+  if (!authGuard.ok) return authGuard.response;
+  establishAuthContext(authGuard.user.authUserId);
+  const guard = await requireInitiativeApiAccess(authGuard.user, id, "edit");
   if (!guard.ok) return guard.response;
 
   const parsed = assumptionsPatchSchema.safeParse(await request.json());
@@ -111,7 +115,7 @@ export async function PATCH(
     const intakeInput = await loadIntakeInput(id);
     const prototypeId = initiative.prototype.id;
     const methodology = resolveMethodology(initiative.methodology);
-    sprints = await db.$transaction(
+    sprints = await withTransaction(
       (tx) => repackSprints(tx, prototypeId, intakeInput, methodology),
       { timeout: 120_000 },
     );

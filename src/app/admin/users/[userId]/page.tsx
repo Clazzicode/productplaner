@@ -7,8 +7,8 @@ import { Card, CardTitle } from "@/components/ui/Card";
 import PageHeader from "@/components/ui/PageHeader";
 import UserDetailForm from "@/components/admin/UserDetailForm";
 import { formatAccessLabel, listResolvedAccessForUser } from "@/lib/access/initiativeAccess";
-import { getActiveProfile, getCurrentUser } from "@/lib/auth/session";
-import { db } from "@/lib/db";
+import { requireCurrentUser } from "@/lib/auth/session";
+import { db, establishAuthContext } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
@@ -19,16 +19,16 @@ export default async function UserDetailPage({
   params: Promise<{ userId: string }>;
 }) {
   const { userId } = await params;
-  const profile = await getActiveProfile();
-  if (!profile) redirect("/welcome");
-  const actor = await getCurrentUser();
+  const actor = await requireCurrentUser();
+  establishAuthContext(actor.authUserId);
+  if (actor.profiles.length === 0) redirect("/welcome");
   if (actor.accessLevel !== "org_admin") redirect("/home");
 
   const target = await db.user.findUnique({
     where: { id: userId },
     include: { teamMemberships: { include: { team: { select: { id: true, name: true } } } } },
   });
-  if (!target || target.organizationId !== actor.organizationId) notFound();
+  if (!target || target.homeOrganizationId !== actor.organizationId) notFound();
 
   const [orgTeams, resolvedAccess] = await Promise.all([
     db.team.findMany({

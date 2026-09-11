@@ -3,7 +3,8 @@ import { redirect } from "next/navigation";
 import { ContainedLayout } from "@/components/layout/PageLayouts";
 import PageHeader from "@/components/ui/PageHeader";
 import DashboardConfigEditor from "@/components/admin/DashboardConfigEditor";
-import { getActiveProfile, getCurrentUser } from "@/lib/auth/session";
+import { requireCurrentUser } from "@/lib/auth/session";
+import { establishAuthContext } from "@/lib/db";
 import { getRoleConfigurationView } from "@/lib/dashboard/dashboardConfiguration";
 import { WORKING_ROLE_LABELS } from "@/lib/admin/labels";
 import type { WorkingRole } from "@/lib/onboarding/types";
@@ -32,9 +33,9 @@ export default async function DashboardConfigurationPage({
 }: {
   searchParams: Promise<{ role?: string }>;
 }) {
-  const profile = await getActiveProfile();
-  if (!profile) redirect("/welcome");
-  const user = await getCurrentUser();
+  const user = await requireCurrentUser();
+  establishAuthContext(user.authUserId);
+  if (user.profiles.length === 0) redirect("/welcome");
   if (user.accessLevel !== "org_admin" || user.status !== "active") redirect("/home");
 
   const { role: rawRole } = await searchParams;

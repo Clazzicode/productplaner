@@ -42,8 +42,8 @@ export async function grantDirectAccess(
   if (!(await assertSameOrgInitiative(target.initiativeId, target.organizationId))) {
     return { ok: false, reason: "cross_tenant" };
   }
-  const user = await db.user.findUnique({ where: { id: target.userId }, select: { organizationId: true } });
-  if (!user || user.organizationId !== target.organizationId) return { ok: false, reason: "cross_tenant" };
+  const user = await db.user.findUnique({ where: { id: target.userId }, select: { homeOrganizationId: true } });
+  if (!user || user.homeOrganizationId !== target.organizationId) return { ok: false, reason: "cross_tenant" };
   if (await wouldExceedExternalCeiling(target.userId, target.permission)) {
     return { ok: false, reason: "external_above_view" };
   }
@@ -163,14 +163,19 @@ async function resolveExcludingOrOverriding(
   grantId: string,
   overridePermission: PermissionLevel | null,
 ): Promise<ResolvedAccess> {
-  const actor: ActorRow | null = await db.user.findUnique({
+  // `userId` here is always someone the impact preview is inspecting (the
+  // grantee or a team's members), never the current session's actor — this
+  // deliberately uses their home organization, same reasoning as
+  // listResolvedAccessForUser in initiativeAccess.ts.
+  const row = await db.user.findUnique({
     where: { id: userId },
-    select: { id: true, organizationId: true, accessLevel: true, status: true, memberType: true },
+    select: { id: true, homeOrganizationId: true, accessLevel: true, status: true, memberType: true },
   });
   const initiative = await db.initiative.findUnique({ where: { id: initiativeId }, select: { organizationId: true } });
-  if (!actor || !initiative) {
+  if (!row || !initiative) {
     return { level: "none", sources: [], sourceLabel: "", externallyCapped: false };
   }
+  const actor: ActorRow = { ...row, organizationId: row.homeOrganizationId };
 
   const directRow = await db.initiativeAccess.findUnique({ where: { initiativeId_userId: { initiativeId, userId } } });
   const directGrant =

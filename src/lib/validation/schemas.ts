@@ -190,3 +190,33 @@ export const integrationActionSchema = z.object({
   projectName: z.string().trim().max(120).optional(),
   settings: z.record(z.string(), z.unknown()).optional(),
 });
+
+// AI Foundation (docs/V2-AI-FOUNDATION.md). The ANALYZE_INTAKE response
+// shape — validated strictly (req #11), unlike the lenient `.catch()`-based
+// intakeImportDraftSchema above: that draft is a human-reviewed preview
+// before anything is saved, this result is saved directly, so a malformed
+// response must fail loudly rather than silently save partial/wrong data.
+// Deliberately has no date/sprint/story-point/capacity field anywhere — the
+// shape itself makes it structurally impossible for a saved AI response to
+// carry a deterministic-calculation value (req #13).
+export const analyzeIntakeResultSchema = z.object({
+  summary: z.string().min(1),
+  assumptions: z.array(z.string().min(1)).max(20),
+  missingInformation: z.array(z.string().min(1)).max(20),
+  risks: z.array(
+    z.object({
+      description: z.string().min(1),
+      severity: z.enum(["low", "medium", "high"]),
+    }),
+  ).max(20),
+  recommendedRoadmapPhases: z.array(
+    z.object({
+      name: z.string().min(1),
+      description: z.string().min(1),
+      relatedCapabilities: z.array(z.string()).max(30).default([]),
+    }),
+  ).max(10),
+  rationale: z.string().min(1),
+});
+
+export type AnalyzeIntakeResult = z.infer<typeof analyzeIntakeResultSchema>;

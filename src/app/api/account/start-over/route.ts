@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { getCurrentUser } from "@/lib/auth/session";
-import { db } from "@/lib/db";
+import { requireCurrentUserApi } from "@/lib/auth/session";
+import { establishAuthContext, withTransaction } from "@/lib/db";
 
 /**
  * Full demo reset. Initiatives must be deleted before qualifying profiles —
@@ -12,10 +12,15 @@ import { db } from "@/lib/db";
  * untouched — they aren't per-initiative journey state.
  */
 export async function POST() {
-  const user = await getCurrentUser();
-  await db.$transaction([
-    db.initiative.deleteMany({ where: { userId: user.id } }),
-    db.qualifyingProfile.deleteMany({ where: { userId: user.id } }),
-  ]);
+  const authGuard = await requireCurrentUserApi();
+  if (!authGuard.ok) return authGuard.response;
+  const user = authGuard.user;
+  establishAuthContext(user.authUserId);
+  await withTransaction((tx) =>
+    Promise.all([
+      tx.initiative.deleteMany({ where: { userId: user.id } }),
+      tx.qualifyingProfile.deleteMany({ where: { userId: user.id } }),
+    ]),
+  );
   return NextResponse.json({ ok: true });
 }

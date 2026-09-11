@@ -4,8 +4,8 @@ import { ContainedLayout } from "@/components/layout/PageLayouts";
 import { Badge, type BadgeVariant } from "@/components/ui/Badge";
 import EmptyState from "@/components/ui/EmptyState";
 import PageHeader from "@/components/ui/PageHeader";
-import { getActiveProfile, getCurrentUser } from "@/lib/auth/session";
-import { db } from "@/lib/db";
+import { requireCurrentUser } from "@/lib/auth/session";
+import { db, establishAuthContext } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
@@ -23,9 +23,9 @@ const STATUS_META: Record<string, { label: string; variant: BadgeVariant }> = {
  * screen regardless of how you arrived.
  */
 export default async function AdminAccessPage() {
-  const profile = await getActiveProfile();
-  if (!profile) redirect("/welcome");
-  const user = await getCurrentUser();
+  const user = await requireCurrentUser();
+  establishAuthContext(user.authUserId);
+  if (user.profiles.length === 0) redirect("/welcome");
   if (user.accessLevel !== "org_admin") redirect("/home");
 
   const initiatives = await db.initiative.findMany({

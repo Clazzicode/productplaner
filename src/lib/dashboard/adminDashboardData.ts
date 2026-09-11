@@ -148,7 +148,7 @@ export async function loadAdminDashboardData(organizationId: string): Promise<Ad
     await Promise.all([
       db.organization.findUnique({ where: { id: organizationId }, select: { name: true } }),
       db.user.findMany({
-        where: { organizationId },
+        where: { homeOrganizationId: organizationId },
         select: {
           id: true,
           name: true,

@@ -8,5 +8,8 @@ export interface OnboardingState {
   companySize?: string;
   industry?: string;
   workingRole?: WorkingRole;
+  /** Solo vs Team/Organization, asked as the first onboarding question.
+   * "solo" skips the org name/size/industry fields entirely. */
+  workspaceType?: "solo" | "team";
   complete?: boolean;
 }

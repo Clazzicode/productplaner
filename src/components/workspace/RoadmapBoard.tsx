@@ -4,6 +4,8 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Badge, riskBadgeVariant, valueBadgeVariant } from "@/components/ui/Badge";
 import { apiFetch } from "@/lib/clientApi";
+import type { BusinessValue, RiskLevel } from "@/lib/generation/types";
+import { businessValueGuidance, riskLevelGuidance } from "@/lib/questionnaire/valueRiskGuidance";
 
 export interface BoardEpic {
   id: string;
@@ -154,11 +156,17 @@ export default function RoadmapBoard(props: {
                       </div>
                       <div className="mt-1 flex flex-wrap items-center gap-1 px-1">
                         {feature.isMvp && <Badge variant="indigo">MVP</Badge>}
-                        <Badge variant={valueBadgeVariant(feature.businessValue)}>
+                        <Badge
+                          variant={valueBadgeVariant(feature.businessValue)}
+                          title={businessValueGuidance(feature.businessValue as BusinessValue, false)}
+                        >
                           {feature.businessValue.replace("_", " ")}
                         </Badge>
                         {feature.riskLevel && (
-                          <Badge variant={riskBadgeVariant(feature.riskLevel)}>
+                          <Badge
+                            variant={riskBadgeVariant(feature.riskLevel)}
+                            title={riskLevelGuidance(feature.riskLevel as RiskLevel, false)}
+                          >
                             risk {feature.riskLevel}
                           </Badge>
                         )}

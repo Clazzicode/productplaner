@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { requireInitiativeApiAccess } from "@/lib/access/guards";
 import { jsonError } from "@/lib/api";
-import { getCurrentUser } from "@/lib/auth/session";
+import { requireCurrentUserApi } from "@/lib/auth/session";
+import { establishAuthContext } from "@/lib/db";
 import { generatePrototype, IntakeInvalidError } from "@/lib/generation/engine";
 
 export async function POST(
@@ -9,8 +10,11 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
-  const user = await getCurrentUser();
-  const guard = await requireInitiativeApiAccess(user.id, id, "edit");
+  const authGuard = await requireCurrentUserApi();
+  if (!authGuard.ok) return authGuard.response;
+  const user = authGuard.user;
+  establishAuthContext(user.authUserId);
+  const guard = await requireInitiativeApiAccess(user, id, "edit");
   if (!guard.ok) return guard.response;
 
   try {

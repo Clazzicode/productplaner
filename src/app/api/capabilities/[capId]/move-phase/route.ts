@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { requireInitiativeApiAccess } from "@/lib/access/guards";
 import { jsonError, zodMessage } from "@/lib/api";
-import { getCurrentUser } from "@/lib/auth/session";
-import { db } from "@/lib/db";
+import { requireCurrentUserApi } from "@/lib/auth/session";
+import { db, establishAuthContext, withTransaction } from "@/lib/db";
 import { partitionPhases } from "@/lib/generation/buildPlan";
 import { PHASE_NAMES } from "@/lib/generation/constants";
 import { loadIntakeInput, regenerateBelow } from "@/lib/generation/engine";
@@ -51,6 +51,10 @@ export async function POST(
   if (!parsed.success) return jsonError(zodMessage(parsed.error), 422);
   const { targetPhase } = parsed.data;
 
+  const authGuard = await requireCurrentUserApi();
+  if (!authGuard.ok) return authGuard.response;
+  establishAuthContext(authGuard.user.authUserId);
+
   const capability = await db.capability.findUnique({
     where: { id: capId },
     include: {
@@ -66,8 +70,7 @@ export async function POST(
   if (!capability) return jsonError("Feature not found.", 404);
   const initiative = capability.intakeAnswerSet.initiative;
 
-  const user = await getCurrentUser();
-  const guard = await requireInitiativeApiAccess(user.id, initiative.id, "edit");
+  const guard = await requireInitiativeApiAccess(authGuard.user, initiative.id, "edit");
   if (!guard.ok) return guard.response;
 
   if (!initiative.prototype) {
@@ -117,7 +120,7 @@ export async function POST(
   // Step 3: rewrite every roadmap_phase row's stored membership, creating a
   // phase row if the target phase never existed yet (regenerateBelow only
   // iterates existing rows, it doesn't create them).
-  await db.$transaction(
+  await withTransaction(
     async (tx) => {
       const existingRows = await tx.artifactLayer.findMany({
         where: { prototypeId, type: "roadmap_phase" },

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { jsonError, zodMessage } from "@/lib/api";
-import { getCurrentUser } from "@/lib/auth/session";
+import { requireCurrentUserApi } from "@/lib/auth/session";
+import { establishAuthContext } from "@/lib/db";
 import { ensureProvidersSeeded } from "@/lib/sync/integrationSeed";
 import {
   connectDemo,
@@ -18,8 +19,11 @@ export async function POST(
   const parsed = integrationActionSchema.safeParse(await request.json());
   if (!parsed.success) return jsonError(zodMessage(parsed.error), 422);
 
+  const authGuard = await requireCurrentUserApi();
+  if (!authGuard.ok) return authGuard.response;
+  const user = authGuard.user;
+  establishAuthContext(user.authUserId);
   await ensureProvidersSeeded();
-  const user = await getCurrentUser();
   const body = parsed.data;
 
   try {

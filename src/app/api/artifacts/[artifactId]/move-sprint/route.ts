@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { requireInitiativeApiAccess } from "@/lib/access/guards";
 import { jsonError, zodMessage } from "@/lib/api";
-import { getCurrentUser } from "@/lib/auth/session";
-import { db } from "@/lib/db";
+import { requireCurrentUserApi } from "@/lib/auth/session";
+import { db, establishAuthContext } from "@/lib/db";
 import { AgileLayerLockedError, assertAgileLayerEditable } from "@/lib/generation/engine";
 import { moveSprintSchema } from "@/lib/validation/schemas";
 
@@ -18,6 +18,10 @@ export async function POST(
   const parsed = moveSprintSchema.safeParse(await request.json());
   if (!parsed.success) return jsonError(zodMessage(parsed.error), 422);
 
+  const authGuard = await requireCurrentUserApi();
+  if (!authGuard.ok) return authGuard.response;
+  establishAuthContext(authGuard.user.authUserId);
+
   const story = await db.artifactLayer.findUnique({ where: { id: artifactId } });
   if (!story || story.type !== "story") return jsonError("Story not found.", 404);
 
@@ -26,8 +30,7 @@ export async function POST(
     select: { initiativeId: true },
   });
 
-  const user = await getCurrentUser();
-  const guard = await requireInitiativeApiAccess(user.id, prototype.initiativeId, "edit");
+  const guard = await requireInitiativeApiAccess(authGuard.user, prototype.initiativeId, "edit");
   if (!guard.ok) return guard.response;
 
   try {

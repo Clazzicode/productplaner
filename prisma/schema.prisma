@@ -18,20 +18,50 @@ datasource db {
 model Organization {
   id                      String                   @id @default(cuid())
   name                    String
-  users                   User[]
+  // Step [AUTH] (docs/V2-MULTI-TENANT-AUTH.md). "solo" = auto-created personal
+  // workspace behind a solo signup; "team" = everything else, including every
+  // Organization that existed before this field was added (see migration
+  // backfill note on OrganizationMember below). Informational only — never an
+  // authorization signal by itself, membership is what RLS/app code check.
+  workspaceType           String                   @default("team") // solo | team
+  ownerUserId             String?
+  owner                   User?                    @relation("OrganizationOwner", fields: [ownerUserId], references: [id], onDelete: SetNull)
+  // Renamed relation (was `users`) now that User.organizationId -> homeOrganizationId:
+  // this is "users whose home/default workspace is this org," not "members of
+  // this org" — membership (including users whose home org is elsewhere) lives
+  // in OrganizationMember below.
+  homeUsers               User[]                   @relation("OrganizationHomeUsers")
+  members                 OrganizationMember[]
   teams                   Team[]
   initiatives             Initiative[]
   integrationConnections  IntegrationConnection[]
   dashboardConfigurations DashboardConfiguration[]
+  aiUsageEvents           AiUsageEvent[]
+  aiRequestLocks          AiRequestLock[]
   createdAt               DateTime                 @default(now())
 }
 
 model User {
-  id             String              @id @default(cuid())
-  organizationId String
-  organization   Organization        @relation(fields: [organizationId], references: [id])
-  name            String
-  email           String              @unique
+  id                       String               @id @default(cuid())
+  // Step [AUTH]. Bridges to Supabase Auth's auth.users.id. Nullable until the
+  // one-time backfill (docs/V2-MULTI-TENANT-AUTH.md) links every existing User
+  // row to a real auth.users row; required for every row created afterward.
+  // Deliberately NOT the primary key: User.id (cuid) is already referenced by
+  // 7+ other tables' FKs, and existing ids aren't valid UUID text, so bridging
+  // via a separate column is additive and leaves every existing FK untouched.
+  authUserId               String?              @unique @db.Uuid
+  // Renamed from `organizationId`: this is now the user's *default* workspace,
+  // not their only one — see OrganizationMember for actual (possibly
+  // multi-org) membership. @map keeps the underlying column name unchanged
+  // (no data migration needed) while forcing every direct Prisma read of the
+  // old field name to fail to compile, so each call site gets an explicit,
+  // reviewed decision: "home org" or "resolved active org" (getCurrentUser()).
+  homeOrganizationId       String               @map("organizationId")
+  homeOrganization         Organization         @relation("OrganizationHomeUsers", fields: [homeOrganizationId], references: [id])
+  ownedOrganizations       Organization[]       @relation("OrganizationOwner")
+  memberships              OrganizationMember[]
+  name                     String
+  email                    String               @unique
   // Step 8B (docs/V2-USERS-TEAMS.md). String + default, matching this schema's
   // existing convention (e.g. Initiative.status) rather than a native enum.
   // Default "org_admin" is deliberate: today there is exactly one User per
@@ -40,25 +70,56 @@ model User {
   // org into a zero-admin state — the one state the Step 8B safeguards
   // explicitly exist to prevent. New invited users must set this explicitly
   // (typically "standard_user"), not rely on the column default.
-  accessLevel     String              @default("org_admin") // standard_user | org_admin
+  // Step [AUTH]: this column is now a fallback/seed value only. The
+  // authoritative, per-organization permission role is OrganizationMember.role
+  // (owner|admin|member) — getCurrentUser() derives this field fresh each
+  // request from the resolved active org's membership row, so existing
+  // `accessLevel === "org_admin"` checks throughout the codebase keep working
+  // unchanged. New code should read OrganizationMember.role directly.
+  accessLevel              String               @default("org_admin") // standard_user | org_admin
   // Nullable, no default, deliberately: Working Role has lived only in the
   // Step 4 onboarding cookie (src/lib/onboarding/tempStateServer.ts) and there
   // is no truthful value to backfill an existing User row with. Populated
   // naturally as a user completes/updates onboarding — see docs/V2-USERS-TEAMS.md
   // "Auth Transition" for the read-persisted-fall-back-to-cookie strategy.
-  workingRole     String?             // product_management | project_manager | developer
-  memberType      String              @default("internal") // internal | external
-  status          String              @default("active") // active | disabled | archived
+  workingRole              String? // product_management | project_manager | product_owner
+  memberType               String               @default("internal") // internal | external
+  status                   String               @default("active") // active | disabled | archived
   // AES-256-GCM ciphertext (src/lib/security/secretBox.ts), never the raw key —
   // used only for this user's own document-import requests, never shared
   // across accounts. updatedAt tracks rotation, not read for anything else.
   anthropicApiKeyEncrypted String?
   anthropicApiKeyUpdatedAt DateTime?
-  profiles        QualifyingProfile[]
-  initiatives     Initiative[]
-  teamMemberships TeamMember[]
-  initiativeAccess InitiativeAccess[]
-  createdAt       DateTime            @default(now())
+  profiles                 QualifyingProfile[]
+  initiatives              Initiative[]
+  teamMemberships          TeamMember[]
+  initiativeAccess         InitiativeAccess[]
+  aiUsageEvents            AiUsageEvent[]
+  aiRequestLocks           AiRequestLock[]
+  intakeAiAnalyses         IntakeAiAnalysis[]
+  createdAt                DateTime             @default(now())
+}
+
+// Step [AUTH] (docs/V2-MULTI-TENANT-AUTH.md). Real multi-org membership: one
+// person can belong to more than one Organization, with a different `role` in
+// each — the thing User.homeOrganizationId alone can no longer express. Named
+// OrganizationMember (not the brief's literal "organization_members") to match
+// this schema's existing PascalCase-model / TeamMember-style convention.
+// Related on `authUserId` (not User.id) so it lines up directly with
+// auth.uid() for RLS helper functions with no extra join.
+model OrganizationMember {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  authUserId     String       @db.Uuid
+  user           User         @relation(fields: [authUserId], references: [authUserId], onDelete: Cascade)
+  role           String       @default("member") // owner | admin | member
+  status         String       @default("active") // active | disabled
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@unique([organizationId, authUserId])
+  @@index([authUserId])
 }
 
 // Step 8B (docs/V2-USERS-TEAMS.md, docs/V2-ORG-ADMIN-IA.md §6-7). Flat — no
@@ -66,15 +127,15 @@ model User {
 // docs/V2-ACCESS-TEAMS-VISIBILITY.md §3). No status/archive field: nothing in
 // the approved admin workflow archives a team, only deletes one.
 model Team {
-  id             String       @id @default(cuid())
-  organizationId String
-  organization   Organization @relation(fields: [organizationId], references: [id])
-  name           String
-  description    String       @default("")
-  members        TeamMember[]
+  id               String             @id @default(cuid())
+  organizationId   String
+  organization     Organization       @relation(fields: [organizationId], references: [id])
+  name             String
+  description      String             @default("")
+  members          TeamMember[]
   initiativeAccess InitiativeAccess[]
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
 }
 
 // Join model, User <-> Team. Unique on (teamId, userId) blocks duplicate
@@ -136,27 +197,31 @@ model QualifyingProfile {
 }
 
 model Initiative {
-  id                  String             @id @default(cuid())
-  organizationId      String
-  organization        Organization       @relation(fields: [organizationId], references: [id])
-  userId              String
-  user                User               @relation(fields: [userId], references: [id])
-  qualifyingProfileId String?
-  qualifyingProfile   QualifyingProfile? @relation(fields: [qualifyingProfileId], references: [id])
-  name                String
-  description         String             @default("")
-  methodology         String             @default("hybrid")
-  status              String             @default("draft") // draft | intake_in_progress | generated
-  targetLaunchDate    DateTime? // optional, from initiative creation
-  budget              Float? // optional available budget (Planning & Cost Logic §24)
-  averageHourlyRate   Float?             @default(85) // §17/§31 prototype assumption, user-overridable
-  intakeAnswerSet     IntakeAnswerSet?
-  prototype           Prototype?
-  syncConnections     SyncConnection[]
-  integrationConnections IntegrationConnection[]
-  initiativeAccess    InitiativeAccess[]
-  createdAt           DateTime           @default(now())
-  updatedAt           DateTime           @updatedAt
+  id                      String                   @id @default(cuid())
+  organizationId          String
+  organization            Organization             @relation(fields: [organizationId], references: [id])
+  userId                  String
+  user                    User                     @relation(fields: [userId], references: [id])
+  qualifyingProfileId     String?
+  qualifyingProfile       QualifyingProfile?       @relation(fields: [qualifyingProfileId], references: [id])
+  name                    String
+  description             String                   @default("")
+  methodology             String                   @default("hybrid")
+  status                  String                   @default("draft") // draft | intake_in_progress | generated
+  targetLaunchDate        DateTime? // optional, from initiative creation
+  budget                  Float? // optional available budget (Planning & Cost Logic §24)
+  averageHourlyRate       Float?                   @default(85) // §17/§31 prototype assumption, user-overridable
+  intakeAnswerSet         IntakeAnswerSet?
+  prototype               Prototype?
+  syncConnections         SyncConnection[]
+  integrationConnections  IntegrationConnection[]
+  initiativeAccess        InitiativeAccess[]
+  aiUsageEvents           AiUsageEvent[]
+  aiRequestLocks          AiRequestLock[]
+  intakeAiAnalyses        IntakeAiAnalysis[]
+  planningWeightOverrides PlanningWeightOverride[]
+  createdAt               DateTime                 @default(now())
+  updatedAt               DateTime                 @updatedAt
 }
 
 model IntakeAnswerSet {
@@ -183,27 +248,27 @@ model IntakeAnswerSet {
 }
 
 model Capability {
-  id                String                 @id @default(cuid())
-  intakeAnswerSetId String
-  intakeAnswerSet   IntakeAnswerSet        @relation(fields: [intakeAnswerSetId], references: [id], onDelete: Cascade)
-  name              String
-  description       String                 @default("")
-  isMvp             Boolean // Q4
-  effortSize        String // Q6: xs | s | m | l | xl
-  businessValue     String // Q8: very_low | low | medium | high | critical (§2 five-level scale)
-  riskLevel         String                 @default("medium") // §4: low | medium | high | critical
-  mvpImportance     String? // §5 optional override: required_for_mvp | strongly_preferred | useful_not_required | future_enhancement | optional (derived from isMvp when null)
-  manualPhaseOverride Int? // Timeline drag-and-drop override (1/2/3); null = computed by partitionPhases. Ignored by partitionPhasesContinuousBacklog (agile_scrum).
+  id                      String                 @id @default(cuid())
+  intakeAnswerSetId       String
+  intakeAnswerSet         IntakeAnswerSet        @relation(fields: [intakeAnswerSetId], references: [id], onDelete: Cascade)
+  name                    String
+  description             String                 @default("")
+  isMvp                   Boolean // Q4
+  effortSize              String // Q6: xs | s | m | l | xl
+  businessValue           String // Q8: very_low | low | medium | high | critical (§2 five-level scale)
+  riskLevel               String                 @default("medium") // §4: low | medium | high | critical
+  mvpImportance           String? // §5 optional override: required_for_mvp | strongly_preferred | useful_not_required | future_enhancement | optional (derived from isMvp when null)
+  manualPhaseOverride     Int? // Timeline drag-and-drop override (1/2/3); null = computed by partitionPhases. Ignored by partitionPhasesContinuousBacklog (agile_scrum).
   customerImpactScore     Int? // §2 optional weighted sub-factors, each 1-5
   revenueImpactScore      Int?
   strategicAlignmentScore Int?
   riskComplianceScore     Int?
   businessValueScore      Float? // §2 computed weighted score, snapshotted only when sub-factors are used
-  order             Int                    @default(0)
-  dependsOnEdges    CapabilityDependency[] @relation("FromCapability")
-  dependedOnBy      CapabilityDependency[] @relation("ToCapability")
-  artifacts         ArtifactLayer[]
-  createdAt         DateTime               @default(now())
+  order                   Int                    @default(0)
+  dependsOnEdges          CapabilityDependency[] @relation("FromCapability")
+  dependedOnBy            CapabilityDependency[] @relation("ToCapability")
+  artifacts               ArtifactLayer[]
+  createdAt               DateTime               @default(now())
 }
 
 model CapabilityDependency {
@@ -419,4 +484,115 @@ model DashboardConfiguration {
   updatedAt      DateTime     @updatedAt
 
   @@unique([organizationId, workingRole, widgetId])
+}
+
+// Explicit Planning Rules / Explainable Scoring foundations. Initiative-scoped
+// (not org-scoped, unlike DashboardConfiguration) so "appropriate experience
+// or permissions" can be checked against that initiative's own
+// QualifyingProfile.experienceLevel and InitiativeAccess — see
+// src/lib/planningWeights/permissions.ts. Stores a WHOLE weight set per row
+// (never a per-factor sparse override, unlike DashboardConfiguration's
+// per-widget rows): weights must sum to ~1.0, and a partial override could
+// silently break that invariant. weightSetId/weightsJson are validated in
+// application code against src/lib/planningWeights/weightRegistry.ts, not
+// enforced by a database constraint (same convention as DashboardConfiguration
+// above). No new numeric default is introduced anywhere by this table — an
+// initiative that never customizes a set has zero rows and falls through to
+// the code-level defaults (VALUE_FACTOR_WEIGHTS / PRIORITY_WEIGHTS).
+model PlanningWeightOverride {
+  id           String     @id @default(cuid())
+  initiativeId String
+  initiative   Initiative @relation(fields: [initiativeId], references: [id], onDelete: Cascade)
+  weightSetId  String // valueFactorWeights | priorityWeights
+  weightsJson  String // serialized Record<string, number>; all keys present, sums to ~1.0
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  @@unique([initiativeId, weightSetId])
+}
+
+// ---------- AI Foundation (docs/V2-AI-FOUNDATION.md) ----------
+// Server-side only: every call uses the server ANTHROPIC_API_KEY env var,
+// never a value exposed to the client. Deliberately separate from
+// User.anthropicApiKeyEncrypted above, which stays dedicated to the
+// existing per-user intake-document-import feature (src/lib/intakeImport) —
+// that flow is untouched by this section.
+
+model AiCapability {
+  id                       String   @id @default(cuid())
+  action                   String   @unique // AiActionKey, e.g. "ANALYZE_INTAKE"
+  enabled                  Boolean  @default(true)
+  maxOutputTokens          Int      @default(4096)
+  userMonthlyLimit         Int      @default(50)
+  organizationMonthlyLimit Int      @default(500)
+  description              String   @default("")
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+}
+
+// One row per finished AI attempt (never "processing" — see AiRequestLock
+// for the in-flight marker), so usage history and limit-counting queries
+// never need to filter out in-progress rows.
+model AiUsageEvent {
+  id             String       @id @default(cuid())
+  userId         String
+  user           User         @relation(fields: [userId], references: [id])
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  initiativeId   String?
+  initiative     Initiative?  @relation(fields: [initiativeId], references: [id], onDelete: Cascade)
+  action         String // AiActionKey
+  success        Boolean
+  inputTokens    Int          @default(0)
+  outputTokens   Int          @default(0)
+  errorMessage   String?
+  createdAt      DateTime     @default(now())
+
+  @@index([userId, action, createdAt])
+  @@index([organizationId, action, createdAt])
+}
+
+// Ephemeral duplicate-request guard. scopeKey is the initiativeId for an
+// initiative-scoped action (so two users triggering the same initiative's
+// analysis at once are serialized, not just double-clicks from one user),
+// else the userId for a future user-scoped action. The unique constraint is
+// the actual dedup mechanism (correct across concurrent serverless
+// invocations); a row older than a few minutes is treated as abandoned by
+// application code and cleared before retry.
+model AiRequestLock {
+  id             String       @id @default(cuid())
+  scopeKey       String
+  action         String
+  userId         String
+  organizationId String
+  initiativeId   String?
+  startedAt      DateTime     @default(now())
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  user           User         @relation(fields: [userId], references: [id])
+  initiative     Initiative?  @relation(fields: [initiativeId], references: [id])
+
+  @@unique([scopeKey, action])
+}
+
+// Validated ANALYZE_INTAKE output. Additive-only alongside IntakeAnswerSet/
+// Capability — never written to by anything that also writes those tables,
+// so an AI analysis can never overwrite original user-entered intake data.
+// JSON payloads serialized into String columns, matching this schema's
+// existing convention (see header comment).
+model IntakeAiAnalysis {
+  id                     String     @id @default(cuid())
+  initiativeId           String
+  initiative             Initiative @relation(fields: [initiativeId], references: [id], onDelete: Cascade)
+  generatedByUserId      String
+  generatedByUser        User       @relation(fields: [generatedByUserId], references: [id])
+  summary                String
+  assumptionsJson        String // JSON string[]
+  missingInformationJson String // JSON string[]
+  risksJson              String // JSON array of {description, severity}
+  recommendedPhasesJson  String // JSON array of {name, description, relatedCapabilities[]}
+  rationale              String
+  modelUsed              String
+  createdAt              DateTime   @default(now())
+
+  @@index([initiativeId, createdAt])
 }

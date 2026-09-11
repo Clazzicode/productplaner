@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { jsonError, zodMessage } from "@/lib/api";
-import { getCurrentUser } from "@/lib/auth/session";
+import { requireCurrentUserApi } from "@/lib/auth/session";
+import { establishAuthContext } from "@/lib/db";
 import {
   getRoleConfigurationView,
   resetRoleConfiguration,
@@ -39,7 +40,10 @@ function parseWorkingRole(value: string): WorkingRole | null {
  */
 export async function POST(request: Request, { params }: { params: Promise<{ workingRole: string }> }) {
   const { workingRole: rawRole } = await params;
-  const actor = await getCurrentUser();
+  const authGuard = await requireCurrentUserApi();
+  if (!authGuard.ok) return authGuard.response;
+  const actor = authGuard.user;
+  establishAuthContext(actor.authUserId);
   if (actor.accessLevel !== "org_admin" || actor.status !== "active") {
     return jsonError("Only an active Organization Admin can update Dashboard Configuration.", 403);
   }
@@ -57,7 +61,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ wor
 
 export async function DELETE(_request: Request, { params }: { params: Promise<{ workingRole: string }> }) {
   const { workingRole: rawRole } = await params;
-  const actor = await getCurrentUser();
+  const authGuard = await requireCurrentUserApi();
+  if (!authGuard.ok) return authGuard.response;
+  const actor = authGuard.user;
+  establishAuthContext(actor.authUserId);
   if (actor.accessLevel !== "org_admin" || actor.status !== "active") {
     return jsonError("Only an active Organization Admin can update Dashboard Configuration.", 403);
   }

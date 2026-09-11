@@ -5,7 +5,7 @@
 // Keeps Prisma's row shape out of the Standard Dashboard and the admin UI —
 // both call these functions, never `db.dashboardConfiguration` directly.
 
-import { db } from "@/lib/db";
+import { db, withTransaction } from "@/lib/db";
 import type { WorkingRole } from "@/lib/onboarding/types";
 import { resolveWidgetVisibility, type WidgetVisibilityMap } from "./dashboardConfigResolution";
 import { DASHBOARD_WIDGETS, type DashboardWidgetId } from "./widgetRegistry";
@@ -95,22 +95,24 @@ export async function saveRoleConfiguration(
   const toUpsert = valid.filter((w) => defaultsById.get(w.id as DashboardWidgetId) !== w.visible);
   const toClear = valid.filter((w) => defaultsById.get(w.id as DashboardWidgetId) === w.visible);
 
-  await db.$transaction([
-    ...toUpsert.map((w) =>
-      db.dashboardConfiguration.upsert({
-        where: { organizationId_workingRole_widgetId: { organizationId, workingRole, widgetId: w.id } },
-        create: { organizationId, workingRole, widgetId: w.id, visible: w.visible },
-        update: { visible: w.visible },
-      }),
-    ),
-    ...(toClear.length > 0
-      ? [
-          db.dashboardConfiguration.deleteMany({
-            where: { organizationId, workingRole, widgetId: { in: toClear.map((w) => w.id) } },
-          }),
-        ]
-      : []),
-  ]);
+  await withTransaction((tx) =>
+    Promise.all([
+      ...toUpsert.map((w) =>
+        tx.dashboardConfiguration.upsert({
+          where: { organizationId_workingRole_widgetId: { organizationId, workingRole, widgetId: w.id } },
+          create: { organizationId, workingRole, widgetId: w.id, visible: w.visible },
+          update: { visible: w.visible },
+        }),
+      ),
+      ...(toClear.length > 0
+        ? [
+            tx.dashboardConfiguration.deleteMany({
+              where: { organizationId, workingRole, widgetId: { in: toClear.map((w) => w.id) } },
+            }),
+          ]
+        : []),
+    ]),
+  );
 }
 
 /**

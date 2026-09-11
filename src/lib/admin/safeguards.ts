@@ -15,7 +15,7 @@ export async function isLastActiveOrgAdmin(userId: string, organizationId: strin
 
   const otherActiveAdmins = await db.user.count({
     where: {
-      organizationId,
+      homeOrganizationId: organizationId,
       accessLevel: "org_admin",
       status: "active",
       id: { not: userId },

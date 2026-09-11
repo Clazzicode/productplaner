@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { jsonError, zodMessage } from "@/lib/api";
 import { grantDirectAccess, grantTeamAccess } from "@/lib/access/mutations";
-import { getCurrentUser } from "@/lib/auth/session";
+import { requireCurrentUserApi } from "@/lib/auth/session";
+import { establishAuthContext } from "@/lib/db";
 
 const grantSchema = z.object({
   granteeType: z.enum(["user", "team"]),
@@ -23,7 +24,10 @@ export async function POST(
   { params }: { params: Promise<{ initiativeId: string }> },
 ) {
   const { initiativeId } = await params;
-  const actor = await getCurrentUser();
+  const authGuard = await requireCurrentUserApi();
+  if (!authGuard.ok) return authGuard.response;
+  const actor = authGuard.user;
+  establishAuthContext(actor.authUserId);
   if (actor.accessLevel !== "org_admin") return jsonError("Only an Organization Admin can manage access.", 403);
 
   const parsed = grantSchema.safeParse(await request.json());

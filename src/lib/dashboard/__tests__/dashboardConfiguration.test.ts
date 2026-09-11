@@ -4,13 +4,15 @@ import { DASHBOARD_WIDGETS } from "../widgetRegistry";
 const findMany = vi.fn();
 const upsert = vi.fn();
 const deleteMany = vi.fn();
-const $transaction = vi.fn((ops: Promise<unknown>[]) => Promise.all(ops));
+const withTransaction = vi.fn((fn: (tx: unknown) => unknown) =>
+  fn({ dashboardConfiguration: { findMany, upsert, deleteMany } }),
+);
 
 vi.mock("@/lib/db", () => ({
   db: {
     dashboardConfiguration: { findMany, upsert, deleteMany },
-    $transaction,
   },
+  withTransaction,
 }));
 
 const { getEffectiveWidgetVisibility, getRoleConfigurationView, saveRoleConfiguration, resetRoleConfiguration } =
@@ -108,7 +110,7 @@ describe("saveRoleConfiguration", () => {
   it("upserts one row per widget, keyed on the compound unique constraint", async () => {
     upsert.mockResolvedValue({});
     await saveRoleConfiguration(ORG, "product_management", [{ id: "plan_health", visible: false }]);
-    expect($transaction).toHaveBeenCalledTimes(1);
+    expect(withTransaction).toHaveBeenCalledTimes(1);
     expect(upsert).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { organizationId_workingRole_widgetId: { organizationId: ORG, workingRole: "product_management", widgetId: "plan_health" } },

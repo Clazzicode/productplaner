@@ -1,12 +1,12 @@
 import { FocusedLayout } from "@/components/layout/PageLayouts";
 import AnthropicKeySettings from "@/components/settings/AnthropicKeySettings";
-import { getCurrentUser } from "@/lib/auth/session";
+import { requireCurrentUser } from "@/lib/auth/session";
 import { decryptSecret } from "@/lib/security/secretBox";
 
 export const dynamic = "force-dynamic";
 
 export default async function AccountSettingsPage() {
-  const user = await getCurrentUser();
+  const user = await requireCurrentUser();
 
   // Decrypted only to compute a last4 preview for display — the plaintext key
   // never leaves the server and is never sent to the client.

@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { jsonError, zodMessage } from "@/lib/api";
-import { getCurrentUser } from "@/lib/auth/session";
-import { db } from "@/lib/db";
+import { requireCurrentUserApi } from "@/lib/auth/session";
+import { db, establishAuthContext } from "@/lib/db";
 
 const workingRoleSchema = z.object({
   workingRole: z.enum(["product_management", "project_manager", "product_owner"]),
@@ -18,7 +18,10 @@ export async function PATCH(request: Request) {
   const parsed = workingRoleSchema.safeParse(await request.json());
   if (!parsed.success) return jsonError(zodMessage(parsed.error), 422);
 
-  const user = await getCurrentUser();
+  const authGuard = await requireCurrentUserApi();
+  if (!authGuard.ok) return authGuard.response;
+  const user = authGuard.user;
+  establishAuthContext(user.authUserId);
   await db.user.update({
     where: { id: user.id },
     data: { workingRole: parsed.data.workingRole },

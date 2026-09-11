@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { jsonError, zodMessage } from "@/lib/api";
-import { getCurrentUser } from "@/lib/auth/session";
-import { db } from "@/lib/db";
+import { requireCurrentUserApi } from "@/lib/auth/session";
+import { db, establishAuthContext } from "@/lib/db";
 import { qualifyingSchema } from "@/lib/validation/schemas";
 
 export async function POST(request: Request) {
@@ -17,9 +17,23 @@ export async function POST(request: Request) {
     );
   }
 
-  const user = await getCurrentUser();
+  const authGuard = await requireCurrentUserApi();
+  if (!authGuard.ok) return authGuard.response;
+  const user = authGuard.user;
+  establishAuthContext(user.authUserId);
   const profile = await db.qualifyingProfile.create({
     data: { userId: user.id, ...data, isProductWork: true },
   });
+  // Solo vs Team/Organization, captured during onboarding as teamComposition.
+  // Organization.workspaceType defaults to "solo" for every signup (a personal
+  // workspace is auto-provisioned); flip it once the user confirms they're
+  // actually planning as part of a team/org. Never flipped back to "solo" —
+  // workspaceType is informational only, never an authorization signal.
+  if (data.teamComposition !== "solo") {
+    await db.organization.update({
+      where: { id: user.organizationId },
+      data: { workspaceType: "team" },
+    });
+  }
   return NextResponse.json({ profileId: profile.id });
 }

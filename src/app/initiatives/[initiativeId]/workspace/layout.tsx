@@ -8,9 +8,9 @@ import LockBar from "@/components/workspace/LockBar";
 import NavTabs from "@/components/workspace/NavTabs";
 import RefreshBar from "@/components/workspace/RefreshBar";
 import WorkspaceBreadcrumb from "@/components/workspace/WorkspaceBreadcrumb";
-import { getCurrentUser } from "@/lib/auth/session";
+import { requireCurrentUser } from "@/lib/auth/session";
 import { requireInitiativeView } from "@/lib/access/guards";
-import { db } from "@/lib/db";
+import { db, establishAuthContext } from "@/lib/db";
 import { profileFor, resolveMethodology } from "@/lib/generation/methodology";
 import { artifactCounts, loadWorkspace } from "@/lib/workspace";
 
@@ -30,8 +30,9 @@ export default async function WorkspaceLayout({
   params: Promise<{ initiativeId: string }>;
 }) {
   const { initiativeId } = await params;
-  const user = await getCurrentUser();
-  await requireInitiativeView(user.id, initiativeId);
+  const user = await requireCurrentUser();
+  establishAuthContext(user.authUserId);
+  await requireInitiativeView(user, initiativeId);
   const ws = await loadWorkspace(initiativeId);
   if (!ws) {
     const initiative = await db.initiative.findUnique({ where: { id: initiativeId } });

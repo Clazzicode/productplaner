@@ -3,7 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import AppShell from "@/components/shell/AppShell";
 import { listAuthorizedInitiativeIds } from "@/lib/access/initiativeAccess";
 import { getCurrentUser } from "@/lib/auth/session";
-import { db } from "@/lib/db";
+import { db, establishAuthContext } from "@/lib/db";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -31,18 +31,23 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  // Same cheap demo-user lookup every page already performs; the shell hides
-  // itself client-side on /welcome, /, and the executive print route.
+  // Deliberately getCurrentUser(), not requireCurrentUser(): this layout also
+  // wraps /login itself, so it must render (bare, chrome-free — bareMode.ts
+  // hides the shell whenever hasProfile is false) rather than redirect when
+  // signed out. Each page enforces its own auth requirement.
   const user = await getCurrentUser();
+  if (user) establishAuthContext(user.authUserId);
   // Step 8C (docs/V2-RESOURCE-ACCESS.md §16): the switcher/nav initiative list
   // is authorized-scoped too — it drives real navigation targets, so it must
   // never offer an initiative a detail page would then reject.
-  const authorizedInitiativeIds = await listAuthorizedInitiativeIds(user.id);
-  const initiatives = await db.initiative.findMany({
-    where: { id: { in: authorizedInitiativeIds ?? [] } },
-    orderBy: { updatedAt: "desc" },
-    select: { id: true, name: true, status: true },
-  });
+  const authorizedInitiativeIds = user ? await listAuthorizedInitiativeIds(user) : [];
+  const initiatives = user
+    ? await db.initiative.findMany({
+        where: { id: { in: authorizedInitiativeIds ?? [] } },
+        orderBy: { updatedAt: "desc" },
+        select: { id: true, name: true, status: true },
+      })
+    : [];
 
   return (
     <html
@@ -51,9 +56,9 @@ export default async function RootLayout({
     >
       <body className="min-h-full flex flex-col">
         <AppShell
-          hasProfile={user.profiles.length > 0}
-          userName={user.name}
-          accessLevel={user.accessLevel}
+          hasProfile={(user?.profiles.length ?? 0) > 0}
+          userName={user?.name ?? ""}
+          accessLevel={user?.accessLevel ?? "standard_user"}
           initiatives={initiatives}
         >
           {children}

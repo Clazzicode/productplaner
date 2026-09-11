@@ -2,7 +2,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import EditableArtifact from "@/components/workspace/EditableArtifact";
 import TraceBadge from "@/components/workspace/TraceBadge";
-import { db } from "@/lib/db";
+import { requireCurrentUser } from "@/lib/auth/session";
+import { db, establishAuthContext } from "@/lib/db";
 import { traceEntriesFor } from "@/lib/trace";
 import { loadCostContext, loadWorkspace } from "@/lib/workspace";
 
@@ -14,6 +15,8 @@ export default async function EpicsPage({
   params: Promise<{ initiativeId: string }>;
 }) {
   const { initiativeId } = await params;
+  const user = await requireCurrentUser();
+  establishAuthContext(user.authUserId);
   const ws = await loadWorkspace(initiativeId);
   if (!ws) notFound();
   const epicsLocked = ws.isLocked("epics");

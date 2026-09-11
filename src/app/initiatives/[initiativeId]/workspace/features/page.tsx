@@ -2,8 +2,12 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Badge, riskBadgeVariant } from "@/components/ui/Badge";
 import EditableArtifact from "@/components/workspace/EditableArtifact";
+import ExplainBadge from "@/components/workspace/ExplainBadge";
 import TraceBadge from "@/components/workspace/TraceBadge";
-import { db } from "@/lib/db";
+import { requireCurrentUser } from "@/lib/auth/session";
+import { db, establishAuthContext } from "@/lib/db";
+import type { RiskLevel } from "@/lib/generation/types";
+import { riskLevelGuidance } from "@/lib/questionnaire/valueRiskGuidance";
 import { traceEntriesFor } from "@/lib/trace";
 import { loadCostContext, loadWorkspace } from "@/lib/workspace";
 
@@ -15,6 +19,8 @@ export default async function FeaturesPage({
   params: Promise<{ initiativeId: string }>;
 }) {
   const { initiativeId } = await params;
+  const user = await requireCurrentUser();
+  establishAuthContext(user.authUserId);
   const ws = await loadWorkspace(initiativeId);
   if (!ws) notFound();
   const locked = ws.isLocked("feature_hierarchy");
@@ -79,13 +85,22 @@ export default async function FeaturesPage({
                         </span>
                       )}
                       {cap?.riskLevel && (
-                        <Badge variant={riskBadgeVariant(cap.riskLevel)}>risk {cap.riskLevel}</Badge>
+                        <Badge
+                          variant={riskBadgeVariant(cap.riskLevel)}
+                          title={riskLevelGuidance(cap.riskLevel as RiskLevel, false)}
+                        >
+                          risk {cap.riskLevel}
+                        </Badge>
                       )}
                       {feature.sourceCapabilityId &&
                         cost.priorityByCapability.has(feature.sourceCapabilityId) && (
-                          <span title="§5 priority score: value ×0.45 + MVP importance ×0.25 + dependency importance ×0.15 + risk reduction ×0.15">
-                            Priority{" "}
-                            {cost.priorityByCapability.get(feature.sourceCapabilityId)!.toFixed(2)}
+                          <span className="inline-flex items-center gap-1">
+                            Priority {cost.priorityByCapability.get(feature.sourceCapabilityId)!.toFixed(2)}
+                            {cost.priorityExplanationByCapability.has(feature.sourceCapabilityId) && (
+                              <ExplainBadge
+                                explanation={cost.priorityExplanationByCapability.get(feature.sourceCapabilityId)!}
+                              />
+                            )}
                           </span>
                         )}
                       {feature.sourceCapabilityId &&

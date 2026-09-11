@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { requireInitiativeApiAccess } from "@/lib/access/guards";
 import { jsonError } from "@/lib/api";
-import { getCurrentUser } from "@/lib/auth/session";
-import { db } from "@/lib/db";
+import { requireCurrentUserApi } from "@/lib/auth/session";
+import { db, establishAuthContext } from "@/lib/db";
 import { lockLayer, LockOrderError } from "@/lib/generation/locking";
 import { layerTypeSchema } from "@/lib/validation/schemas";
 
@@ -11,8 +11,10 @@ export async function POST(
   { params }: { params: Promise<{ id: string; layerType: string }> },
 ) {
   const { id, layerType } = await params;
-  const user = await getCurrentUser();
-  const guard = await requireInitiativeApiAccess(user.id, id, "edit");
+  const authGuard = await requireCurrentUserApi();
+  if (!authGuard.ok) return authGuard.response;
+  establishAuthContext(authGuard.user.authUserId);
+  const guard = await requireInitiativeApiAccess(authGuard.user, id, "edit");
   if (!guard.ok) return guard.response;
 
   const parsedLayer = layerTypeSchema.safeParse(layerType);

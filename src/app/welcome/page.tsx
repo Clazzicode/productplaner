@@ -1,12 +1,12 @@
 import WelcomeQualifying from "@/components/qualifying/WelcomeQualifying";
-import { getCurrentUser } from "@/lib/auth/session";
+import { requireCurrentUser } from "@/lib/auth/session";
 import { resolveWorkingRole } from "@/lib/onboarding/resolveWorkingRole";
 import { readOnboardingStateServer } from "@/lib/onboarding/tempStateServer";
 
 export const dynamic = "force-dynamic";
 
 export default async function WelcomePage() {
-  const user = await getCurrentUser();
+  const user = await requireCurrentUser();
   const onboarding = await readOnboardingStateServer();
   const workingRole = resolveWorkingRole(user.workingRole, onboarding.workingRole);
 

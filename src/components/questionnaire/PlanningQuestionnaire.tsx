@@ -6,6 +6,13 @@ import { apiFetch } from "@/lib/clientApi";
 import type { WorkingRole } from "@/lib/onboarding/types";
 import { isAdvancedScoringComplete } from "@/lib/questionnaire/capabilityScoring";
 import { mapMethodologyAnswer, type MethodologyAnswer } from "@/lib/questionnaire/methodologyMapping";
+import {
+  BUSINESS_VALUE_GUIDANCE,
+  RISK_LEVEL_GUIDANCE,
+  businessValueGuidance,
+  riskLevelGuidance,
+} from "@/lib/questionnaire/valueRiskGuidance";
+import type { BusinessValue, RiskLevel } from "@/lib/generation/types";
 import Button from "@/components/ui/Button";
 import SectionProgress from "./SectionProgress";
 import GuidanceBanner from "./GuidanceBanner";
@@ -500,6 +507,7 @@ function CapabilitiesSection(props: {
           key={editing?.id ?? "new"}
           initiativeId={initiativeId}
           existing={editing}
+          verbose={verbose}
           others={caps.filter((c) => c.id !== editing?.id)}
           onSaved={(saved) => {
             setCaps((c) => (editing ? c.map((x) => (x.id === saved.id ? saved : x)) : [...c, saved]));
@@ -530,10 +538,11 @@ function CapabilityForm(props: {
   initiativeId: string;
   existing: CapabilityView | null;
   others: CapabilityView[];
+  verbose: boolean;
   onSaved: (cap: CapabilityView) => void;
   onCancel: () => void;
 }) {
-  const { initiativeId, existing, others, onSaved, onCancel } = props;
+  const { initiativeId, existing, others, verbose, onSaved, onCancel } = props;
   const [form, setForm] = useState<Omit<CapabilityView, "id">>({
     name: existing?.name ?? "",
     description: existing?.description ?? "",
@@ -636,6 +645,15 @@ function CapabilityForm(props: {
         <div className="sm:col-span-2">
           <p className="text-sm font-medium text-text-primary">
             Business value {advancedValue && <span className="font-normal text-text-muted">(set from weighted factors below)</span>}
+            <span
+              title={BUSINESS_VALUE_GUIDANCE[form.businessValue as BusinessValue].long}
+              className="ml-1 cursor-help text-text-muted"
+            >
+              ⓘ
+            </span>
+          </p>
+          <p className="mt-0.5 text-xs text-text-muted">
+            {businessValueGuidance(form.businessValue as BusinessValue, verbose)}
           </p>
           <div className={`mt-1.5 flex flex-wrap gap-2 ${advancedValue ? "opacity-50" : ""}`}>
             {VALUE_OPTIONS.map((o) => (
@@ -645,8 +663,16 @@ function CapabilityForm(props: {
           </div>
         </div>
         <div className="sm:col-span-2">
-          <p className="text-sm font-medium text-text-primary">Risk level</p>
-          <p className="mt-0.5 text-xs text-text-muted">High-risk MVP work is scheduled earlier to reduce uncertainty.</p>
+          <p className="text-sm font-medium text-text-primary">
+            Risk level
+            <span
+              title={RISK_LEVEL_GUIDANCE[form.riskLevel as RiskLevel].long}
+              className="ml-1 cursor-help text-text-muted"
+            >
+              ⓘ
+            </span>
+          </p>
+          <p className="mt-0.5 text-xs text-text-muted">{riskLevelGuidance(form.riskLevel as RiskLevel, verbose)}</p>
           <div className="mt-1.5 flex flex-wrap gap-2">
             {RISK_OPTIONS.map((o) => (
               <ChoicePill key={o.value} selected={form.riskLevel === o.value}

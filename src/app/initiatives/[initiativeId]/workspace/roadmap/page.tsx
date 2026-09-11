@@ -9,7 +9,8 @@ import RoadmapToolbar from "@/components/workspace/RoadmapToolbar";
 import RoadmapViewSwitcher from "@/components/workspace/RoadmapViewSwitcher";
 import TraceBadge from "@/components/workspace/TraceBadge";
 import TimelineRoadmap from "@/components/workspace/timeline/TimelineRoadmap";
-import { db } from "@/lib/db";
+import { requireCurrentUser } from "@/lib/auth/session";
+import { db, establishAuthContext } from "@/lib/db";
 import { PHASE_NAMES } from "@/lib/generation/constants";
 import { profileFor } from "@/lib/generation/methodology";
 import { loadRoadmapTimelineData, serializeTimelineData } from "@/lib/roadmap/loadRoadmapTimelineData";
@@ -32,6 +33,8 @@ export default async function RoadmapPage({
   params: Promise<{ initiativeId: string }>;
 }) {
   const { initiativeId } = await params;
+  const user = await requireCurrentUser();
+  establishAuthContext(user.authUserId);
   const ws = await loadWorkspace(initiativeId);
   if (!ws) notFound();
   const locked = ws.isLocked("roadmap");

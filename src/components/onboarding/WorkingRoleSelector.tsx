@@ -4,28 +4,10 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/clientApi";
 import { readOnboardingState, writeOnboardingState } from "@/lib/onboarding/tempStateClient";
+import { WORKING_ROLE_META } from "@/lib/onboarding/roleOptions";
 import type { WorkingRole } from "@/lib/onboarding/types";
 
-const ROLES: { value: WorkingRole; label: string; blurb: string; focus: string[] }[] = [
-  {
-    value: "product_management",
-    label: "Product Management",
-    blurb: "Own the roadmap and product outcomes.",
-    focus: ["Roadmap", "Features", "Product health", "Decisions", "Releases", "Outcomes"],
-  },
-  {
-    value: "project_manager",
-    label: "Project Manager",
-    blurb: "Keep delivery on schedule and on budget.",
-    focus: ["Schedules", "Milestones", "Dependencies", "Risks", "Capacity", "Delivery health"],
-  },
-  {
-    value: "product_owner",
-    label: "Product Owner",
-    blurb: "Own the backlog and translate strategy into shippable work.",
-    focus: ["Feature backlog", "User stories", "Acceptance criteria", "Sprint work", "Dependencies", "Decisions"],
-  },
-];
+const ROLE_ORDER: WorkingRole[] = ["product_management", "project_manager", "product_owner"];
 
 export default function WorkingRoleSelector() {
   const router = useRouter();
@@ -58,30 +40,33 @@ export default function WorkingRoleSelector() {
   return (
     <div className="mx-auto max-w-3xl">
       <div className="grid gap-4 sm:grid-cols-3">
-        {ROLES.map((role) => (
-          <button
-            key={role.value}
-            type="button"
-            onClick={() => pick(role.value)}
-            aria-pressed={selected === role.value}
-            className={`rounded-2xl border p-5 text-left transition hover:border-indigo-400 hover:bg-indigo-50 ${
-              selected === role.value
-                ? "border-indigo-500 bg-indigo-50 ring-1 ring-indigo-500"
-                : "border-neutral-200 bg-white"
-            }`}
-          >
-            <h3 className="font-semibold">{role.label}</h3>
-            <p className="mt-1 text-sm text-neutral-500">{role.blurb}</p>
-            <ul className="mt-4 space-y-1 text-xs text-neutral-500">
-              {role.focus.map((item) => (
-                <li key={item} className="flex items-center gap-1.5">
-                  <span className="h-1 w-1 shrink-0 rounded-full bg-neutral-400" />
-                  {item}
-                </li>
-              ))}
-            </ul>
-          </button>
-        ))}
+        {ROLE_ORDER.map((value) => {
+          const meta = WORKING_ROLE_META[value];
+          return (
+            <button
+              key={value}
+              type="button"
+              onClick={() => pick(value)}
+              aria-pressed={selected === value}
+              className={`rounded-2xl border p-5 text-left transition hover:border-indigo-400 hover:bg-indigo-50 ${
+                selected === value
+                  ? "border-indigo-500 bg-indigo-50 ring-1 ring-indigo-500"
+                  : "border-neutral-200 bg-white"
+              }`}
+            >
+              <h3 className="font-semibold">{meta.label}</h3>
+              <p className="mt-1 text-sm text-neutral-500">{meta.description}</p>
+              <ul className="mt-4 space-y-1 text-xs text-neutral-500">
+                {meta.focus.map((item) => (
+                  <li key={item} className="flex items-center gap-1.5">
+                    <span className="h-1 w-1 shrink-0 rounded-full bg-neutral-400" />
+                    {item}
+                  </li>
+                ))}
+              </ul>
+            </button>
+          );
+        })}
       </div>
 
       <div className="mt-8 flex items-center justify-between">

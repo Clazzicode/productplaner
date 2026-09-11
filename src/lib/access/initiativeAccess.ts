@@ -8,19 +8,21 @@ import { resolveInitiativeAccess, type PermissionLevel, type ResolvedAccess } fr
 export type { PermissionLevel, ResolvedAccess } from "./resolution";
 export { formatAccessLabel, higherPermission, LEVEL_LABELS } from "./resolution";
 
-interface ActorRow {
+/**
+ * Shape of the *acting* user, already resolved to their current active
+ * organization (getCurrentUser()'s return value satisfies this directly —
+ * see docs/V2-MULTI-TENANT-AUTH.md). Deliberately NOT re-queried by userId
+ * here: a multi-org user's `organizationId` must reflect whichever
+ * organization they're currently switched into, not always their home one,
+ * or a legitimately-switched-in member would be denied access to the very
+ * organization they just switched to.
+ */
+export interface ActorRow {
   id: string;
   organizationId: string;
   accessLevel: string;
   status: string;
   memberType: string;
-}
-
-async function loadActor(userId: string): Promise<ActorRow | null> {
-  return db.user.findUnique({
-    where: { id: userId },
-    select: { id: true, organizationId: true, accessLevel: true, status: true, memberType: true },
-  });
 }
 
 async function loadTeamGrants(userId: string, initiativeId: string) {
@@ -41,19 +43,16 @@ async function loadTeamGrants(userId: string, initiativeId: string) {
  * never reveal whether a cross-org resource exists.
  */
 export async function getResolvedAccess(
-  userId: string,
+  actor: ActorRow,
   initiativeId: string,
 ): Promise<ResolvedAccess | "not_found"> {
-  const [actor, initiative] = await Promise.all([
-    loadActor(userId),
-    db.initiative.findUnique({ where: { id: initiativeId }, select: { id: true, organizationId: true } }),
-  ]);
-  if (!actor || !initiative) return "not_found";
+  const initiative = await db.initiative.findUnique({ where: { id: initiativeId }, select: { id: true, organizationId: true } });
+  if (!initiative) return "not_found";
   if (actor.organizationId !== initiative.organizationId) return "not_found";
 
   const [directGrantRow, teamGrants] = await Promise.all([
-    db.initiativeAccess.findUnique({ where: { initiativeId_userId: { initiativeId, userId } } }),
-    loadTeamGrants(userId, initiativeId),
+    db.initiativeAccess.findUnique({ where: { initiativeId_userId: { initiativeId, userId: actor.id } } }),
+    loadTeamGrants(actor.id, initiativeId),
   ]);
 
   return resolveInitiativeAccess({
@@ -71,10 +70,7 @@ export async function getResolvedAccess(
  * Standard Dashboard and any global initiative list must filter through this,
  * not through raw organization/userId ownership.
  */
-export async function listAuthorizedInitiativeIds(userId: string): Promise<string[] | null> {
-  const actor = await loadActor(userId);
-  if (!actor) return null;
-
+export async function listAuthorizedInitiativeIds(actor: ActorRow): Promise<string[] | null> {
   if (actor.status !== "active") return [];
 
   if (actor.accessLevel === "org_admin") {
@@ -86,8 +82,8 @@ export async function listAuthorizedInitiativeIds(userId: string): Promise<strin
   }
 
   const [directGrants, memberships] = await Promise.all([
-    db.initiativeAccess.findMany({ where: { userId }, select: { initiativeId: true } }),
-    db.teamMember.findMany({ where: { userId }, select: { teamId: true } }),
+    db.initiativeAccess.findMany({ where: { userId: actor.id }, select: { initiativeId: true } }),
+    db.teamMember.findMany({ where: { userId: actor.id }, select: { teamId: true } }),
   ]);
   const teamIds = memberships.map((m) => m.teamId);
   const teamGrants =
@@ -104,11 +100,20 @@ export async function listAuthorizedInitiativeIds(userId: string): Promise<strin
 export async function listResolvedAccessForUser(
   userId: string,
 ): Promise<{ initiativeId: string; initiativeName: string; access: ResolvedAccess }[]> {
-  const actor = await loadActor(userId);
+  // `userId` here is a target being inspected by an admin (e.g. User Detail),
+  // never the current session's actor — so this deliberately uses their home
+  // organization, not an "active org" concept that only applies to a live
+  // session.
+  const actor = await db.user.findUnique({
+    where: { id: userId },
+    select: { id: true, homeOrganizationId: true, accessLevel: true, status: true, memberType: true },
+  });
   if (!actor) return [];
+  const organizationId = actor.homeOrganizationId;
+  const resolveActor: ActorRow = { ...actor, organizationId };
 
   const initiatives = await db.initiative.findMany({
-    where: { organizationId: actor.organizationId },
+    where: { organizationId },
     select: { id: true, name: true },
     orderBy: { name: "asc" },
   });
@@ -137,8 +142,8 @@ export async function listResolvedAccessForUser(
   for (const init of initiatives) {
     const direct = directByInitiative.get(init.id);
     const access = resolveInitiativeAccess({
-      actor,
-      initiativeOrganizationId: actor.organizationId,
+      actor: resolveActor,
+      initiativeOrganizationId: organizationId,
       directGrant: direct ? { permission: direct } : null,
       teamGrants: teamGrantsByInitiative.get(init.id) ?? [],
     });

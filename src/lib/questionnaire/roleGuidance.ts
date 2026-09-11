@@ -62,3 +62,11 @@ export function guidanceFor(section: QuestionnaireSection, role: WorkingRole | n
 export function depthFromExperience(experienceLevel: string | null | undefined): boolean {
   return experienceLevel === "first_time" || experienceLevel === "some_experience";
 }
+
+/** Same first_time/some_experience split as depthFromExperience, exposed under a name
+ * that reflects what it now also decides: whether the simplified 5-question intake
+ * (SimplifiedIntakeWizard) renders instead of the full PlanningQuestionnaire. "expert"
+ * (a retired UI choice, still valid on old rows) is treated identically to "experienced". */
+export function isSimplifiedIntakeExperience(experienceLevel: string | null | undefined): boolean {
+  return depthFromExperience(experienceLevel);
+}

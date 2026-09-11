@@ -4,23 +4,14 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { apiFetch } from "@/lib/clientApi";
 import { LEGACY_QUALIFYING_PROFILE_DEFAULTS } from "@/lib/questionnaire/legacyQualifyingDefaults";
-import { writeOnboardingState } from "@/lib/onboarding/tempStateClient";
+import { readOnboardingState, writeOnboardingState } from "@/lib/onboarding/tempStateClient";
+import { WORKING_ROLE_META } from "@/lib/onboarding/roleOptions";
+import { EXPERIENCE_LEVEL_OPTIONS } from "@/lib/onboarding/experienceOptions";
 import type { WorkingRole } from "@/lib/onboarding/types";
 import Button from "@/components/ui/Button";
 import { ChoiceCard } from "@/components/questionnaire/Choice";
 
-const ROLE_OPTIONS: { value: WorkingRole; label: string; hint: string }[] = [
-  { value: "product_owner", label: "Product Owner", hint: "Own the backlog and translate strategy into shippable work." },
-  { value: "product_management", label: "Product Management", hint: "Own the roadmap and product outcomes." },
-  { value: "project_manager", label: "Project Manager", hint: "Keep delivery on schedule and on budget." },
-];
-
-const EXPERIENCE_OPTIONS = [
-  { value: "first_time", label: "This is my first formal plan" },
-  { value: "some_experience", label: "Some experience", hint: "I've put plans together before, informally or with light process." },
-  { value: "experienced", label: "Experienced", hint: "I plan products regularly and know the terrain." },
-  { value: "expert", label: "Expert — I could teach this" },
-];
+const ROLE_ORDER: WorkingRole[] = ["product_owner", "product_management", "project_manager"];
 
 /** Same role + experience questions as Step 1 of the initiative-creation
  * questionnaire (ProductDirectionBootstrap), but scoped to qualifying only —
@@ -51,9 +42,15 @@ export default function WelcomeQualifying(props: { workingRole: WorkingRole | nu
   const submit = async () => {
     setSubmitting(true);
     setError(null);
+    const workspaceType = readOnboardingState().workspaceType;
     const res = await apiFetch("/api/qualifying", {
       method: "POST",
-      body: { ...LEGACY_QUALIFYING_PROFILE_DEFAULTS, productType: "software_product", experienceLevel },
+      body: {
+        ...LEGACY_QUALIFYING_PROFILE_DEFAULTS,
+        teamComposition: workspaceType === "solo" ? "solo" : "small_team",
+        productType: "software_product",
+        experienceLevel,
+      },
     });
     if (!res.ok) {
       setSubmitting(false);
@@ -109,8 +106,14 @@ export default function WelcomeQualifying(props: { workingRole: WorkingRole | nu
               </div>
             ) : (
               <div className="mt-6 grid gap-3 sm:grid-cols-2">
-                {ROLE_OPTIONS.map((o) => (
-                  <ChoiceCard key={o.value} selected={false} onClick={() => pickRole(o.value)} label={o.label} hint={o.hint} />
+                {ROLE_ORDER.map((value) => (
+                  <ChoiceCard
+                    key={value}
+                    selected={false}
+                    onClick={() => pickRole(value)}
+                    label={WORKING_ROLE_META[value].label}
+                    hint={WORKING_ROLE_META[value].description}
+                  />
                 ))}
                 <ChoiceCard
                   selected={false}
@@ -135,7 +138,7 @@ export default function WelcomeQualifying(props: { workingRole: WorkingRole | nu
               Calibrates how much explanation you see throughout — not what&apos;s asked.
             </p>
             <div className="mt-5 grid gap-3 sm:grid-cols-2">
-              {EXPERIENCE_OPTIONS.map((o) => (
+              {EXPERIENCE_LEVEL_OPTIONS.map((o) => (
                 <ChoiceCard
                   key={o.value}
                   selected={experienceLevel === o.value}

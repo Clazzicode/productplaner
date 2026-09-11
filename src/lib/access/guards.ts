@@ -4,7 +4,7 @@
 
 import { notFound, redirect } from "next/navigation";
 import { NextResponse } from "next/server";
-import { getResolvedAccess } from "./initiativeAccess";
+import { getResolvedAccess, type ActorRow } from "./initiativeAccess";
 import { meetsMinimum, type PermissionLevel, type ResolvedAccess } from "./resolution";
 
 /**
@@ -15,11 +15,11 @@ import { meetsMinimum, type PermissionLevel, type ResolvedAccess } from "./resol
  * caller can render level-appropriate UI without a second lookup.
  */
 export async function requireInitiativePageAccess(
-  userId: string,
+  actor: ActorRow,
   initiativeId: string,
   minimum: PermissionLevel,
 ): Promise<ResolvedAccess> {
-  const access = await getResolvedAccess(userId, initiativeId);
+  const access = await getResolvedAccess(actor, initiativeId);
   if (access === "not_found") notFound();
   if (!meetsMinimum(access.level, minimum)) {
     redirect(`/access-denied?initiativeId=${encodeURIComponent(initiativeId)}`);
@@ -27,12 +27,12 @@ export async function requireInitiativePageAccess(
   return access;
 }
 
-export const requireInitiativeView = (userId: string, initiativeId: string) =>
-  requireInitiativePageAccess(userId, initiativeId, "view");
-export const requireInitiativeEdit = (userId: string, initiativeId: string) =>
-  requireInitiativePageAccess(userId, initiativeId, "edit");
-export const requireInitiativeOwner = (userId: string, initiativeId: string) =>
-  requireInitiativePageAccess(userId, initiativeId, "owner");
+export const requireInitiativeView = (actor: ActorRow, initiativeId: string) =>
+  requireInitiativePageAccess(actor, initiativeId, "view");
+export const requireInitiativeEdit = (actor: ActorRow, initiativeId: string) =>
+  requireInitiativePageAccess(actor, initiativeId, "edit");
+export const requireInitiativeOwner = (actor: ActorRow, initiativeId: string) =>
+  requireInitiativePageAccess(actor, initiativeId, "owner");
 
 /**
  * API route guard. Returns either the resolved access to proceed with, or a
@@ -41,11 +41,11 @@ export const requireInitiativeOwner = (userId: string, initiativeId: string) =>
  * `const guard = await requireInitiativeApiAccess(...); if (!guard.ok) return guard.response;`
  */
 export async function requireInitiativeApiAccess(
-  userId: string,
+  actor: ActorRow,
   initiativeId: string,
   minimum: PermissionLevel,
 ): Promise<{ ok: true; access: ResolvedAccess } | { ok: false; response: NextResponse }> {
-  const access = await getResolvedAccess(userId, initiativeId);
+  const access = await getResolvedAccess(actor, initiativeId);
   if (access === "not_found") {
     return { ok: false, response: NextResponse.json({ error: "Not found." }, { status: 404 }) };
   }

@@ -2,8 +2,8 @@ import { redirect } from "next/navigation";
 import { ContainedLayout } from "@/components/layout/PageLayouts";
 import PageHeader from "@/components/ui/PageHeader";
 import TeamsList from "@/components/admin/TeamsList";
-import { getActiveProfile, getCurrentUser } from "@/lib/auth/session";
-import { db } from "@/lib/db";
+import { requireCurrentUser } from "@/lib/auth/session";
+import { db, establishAuthContext } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
@@ -15,9 +15,9 @@ export const dynamic = "force-dynamic";
  * what this page renders.
  */
 export default async function TeamsPage() {
-  const profile = await getActiveProfile();
-  if (!profile) redirect("/welcome");
-  const user = await getCurrentUser();
+  const user = await requireCurrentUser();
+  establishAuthContext(user.authUserId);
+  if (user.profiles.length === 0) redirect("/welcome");
 
   const teams = await db.team.findMany({
     where: { organizationId: user.organizationId },

@@ -4,8 +4,8 @@ import Breadcrumb from "@/components/ui/Breadcrumb";
 import PageHeader from "@/components/ui/PageHeader";
 import InitiativeAccessPanel from "@/components/admin/InitiativeAccessPanel";
 import { listGrantsForInitiative } from "@/lib/access/initiativeAccess";
-import { getActiveProfile, getCurrentUser } from "@/lib/auth/session";
-import { db } from "@/lib/db";
+import { requireCurrentUser } from "@/lib/auth/session";
+import { db, establishAuthContext } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
@@ -21,9 +21,9 @@ export default async function InitiativeAccessPage({
   params: Promise<{ initiativeId: string }>;
 }) {
   const { initiativeId } = await params;
-  const profile = await getActiveProfile();
-  if (!profile) redirect("/welcome");
-  const actor = await getCurrentUser();
+  const actor = await requireCurrentUser();
+  establishAuthContext(actor.authUserId);
+  if (actor.profiles.length === 0) redirect("/welcome");
   if (actor.accessLevel !== "org_admin") redirect("/home");
 
   const initiative = await db.initiative.findUnique({
@@ -35,7 +35,7 @@ export default async function InitiativeAccessPage({
   const [grants, orgUsers, orgTeams] = await Promise.all([
     listGrantsForInitiative(initiativeId),
     db.user.findMany({
-      where: { organizationId: actor.organizationId },
+      where: { homeOrganizationId: actor.organizationId },
       orderBy: { name: "asc" },
       select: { id: true, name: true, email: true, memberType: true },
     }),

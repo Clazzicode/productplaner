@@ -3,11 +3,13 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { readOnboardingState, writeOnboardingState } from "@/lib/onboarding/tempStateClient";
+import WorkspaceTypeStep from "./WorkspaceTypeStep";
 
 const COMPANY_SIZES = ["1-10", "11-50", "51-200", "201-1000", "1000+"];
 
 export default function OrganizationSetupForm() {
   const router = useRouter();
+  const [workspaceType, setWorkspaceType] = useState<"solo" | "team" | null>(null);
   const [name, setName] = useState("");
   const [companySize, setCompanySize] = useState("");
   const [industry, setIndustry] = useState("");
@@ -17,10 +19,21 @@ export default function OrganizationSetupForm() {
   // organization name is not persisted in this phase. See docs/V2-ONBOARDING.md.
   useEffect(() => {
     const state = readOnboardingState();
+    if (state.workspaceType) setWorkspaceType(state.workspaceType);
     if (state.organizationName) setName(state.organizationName);
     if (state.companySize) setCompanySize(state.companySize);
     if (state.industry) setIndustry(state.industry);
   }, []);
+
+  const pickWorkspaceType = (value: "solo" | "team") => {
+    writeOnboardingState({ workspaceType: value });
+    if (value === "solo") {
+      // A solo workspace already exists from signup — nothing else to collect.
+      router.push("/onboarding/role");
+      return;
+    }
+    setWorkspaceType("team");
+  };
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -30,15 +43,26 @@ export default function OrganizationSetupForm() {
       return;
     }
     setError(null);
-    writeOnboardingState({ organizationName: trimmed, companySize, industry });
+    writeOnboardingState({ workspaceType: "team", organizationName: trimmed, companySize, industry });
     router.push("/onboarding/role");
   };
+
+  if (workspaceType === null) {
+    return <WorkspaceTypeStep onPick={pickWorkspaceType} />;
+  }
 
   return (
     <form
       onSubmit={submit}
       className="mx-auto max-w-xl rounded-2xl border border-neutral-200 bg-white p-8 shadow-sm"
     >
+      <button
+        type="button"
+        onClick={() => setWorkspaceType(null)}
+        className="mb-5 text-sm text-neutral-500 hover:text-neutral-800"
+      >
+        ← Change (Solo / Team)
+      </button>
       <label className="block">
         <span className="text-sm font-medium text-neutral-700">Organization name</span>
         <input

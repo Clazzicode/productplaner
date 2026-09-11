@@ -33,7 +33,7 @@ describe("tenant isolation (docs/V2-RESOURCE-ACCESS.md §10)", () => {
 
   it("blocks a direct grant when the grantee user belongs to a different organization", async () => {
     initiative.findUnique.mockResolvedValue({ organizationId: ORG });
-    user.findUnique.mockResolvedValue({ organizationId: OTHER_ORG });
+    user.findUnique.mockResolvedValue({ homeOrganizationId: OTHER_ORG });
     const result = await grantDirectAccess({
       organizationId: ORG,
       initiativeId: "init-1",
@@ -74,7 +74,7 @@ describe("external ceiling on direct grants (docs/V2-RESOURCE-ACCESS.md §5)", (
   it("blocks a direct Edit grant to an external user", async () => {
     initiative.findUnique.mockResolvedValue({ organizationId: ORG });
     user.findUnique
-      .mockResolvedValueOnce({ organizationId: ORG }) // tenant check
+      .mockResolvedValueOnce({ homeOrganizationId: ORG }) // tenant check
       .mockResolvedValueOnce({ memberType: "external" }); // ceiling check
     const result = await grantDirectAccess({
       organizationId: ORG,
@@ -89,7 +89,7 @@ describe("external ceiling on direct grants (docs/V2-RESOURCE-ACCESS.md §5)", (
   it("allows a direct View grant to an external user", async () => {
     initiative.findUnique.mockResolvedValue({ organizationId: ORG });
     user.findUnique
-      .mockResolvedValueOnce({ organizationId: ORG })
+      .mockResolvedValueOnce({ homeOrganizationId: ORG })
       .mockResolvedValueOnce({ memberType: "external" });
     initiativeAccess.create.mockResolvedValue({ id: "grant-1" });
     const result = await grantDirectAccess({

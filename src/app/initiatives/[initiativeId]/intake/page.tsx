@@ -4,8 +4,8 @@ import { FocusedLayout } from "@/components/layout/PageLayouts";
 import PlanningQuestionnaire from "@/components/questionnaire/PlanningQuestionnaire";
 import WorkspaceBreadcrumb from "@/components/workspace/WorkspaceBreadcrumb";
 import { requireInitiativeView } from "@/lib/access/guards";
-import { getCurrentUser } from "@/lib/auth/session";
-import { db } from "@/lib/db";
+import { requireCurrentUser } from "@/lib/auth/session";
+import { db, establishAuthContext } from "@/lib/db";
 import { depthFromExperience } from "@/lib/questionnaire/roleGuidance";
 import { readOnboardingStateServer } from "@/lib/onboarding/tempStateServer";
 
@@ -22,8 +22,9 @@ export default async function IntakePage({
   params: Promise<{ initiativeId: string }>;
 }) {
   const { initiativeId } = await params;
-  const user = await getCurrentUser();
-  await requireInitiativeView(user.id, initiativeId);
+  const user = await requireCurrentUser();
+  establishAuthContext(user.authUserId);
+  await requireInitiativeView(user, initiativeId);
   const [initiative, onboarding] = await Promise.all([
     db.initiative.findUnique({
       where: { id: initiativeId },

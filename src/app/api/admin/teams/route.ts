@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { jsonError, zodMessage } from "@/lib/api";
-import { getCurrentUser } from "@/lib/auth/session";
-import { db } from "@/lib/db";
+import { requireCurrentUserApi } from "@/lib/auth/session";
+import { db, establishAuthContext } from "@/lib/db";
 
 const teamCreateSchema = z.object({
   name: z.string().trim().min(1, "Team name is required.").max(80),
@@ -11,7 +11,10 @@ const teamCreateSchema = z.object({
 
 /** Flat teams only — no nesting, no team roles (docs/V2-ACCESS-TEAMS-VISIBILITY.md §3). */
 export async function POST(request: Request) {
-  const actor = await getCurrentUser();
+  const authGuard = await requireCurrentUserApi();
+  if (!authGuard.ok) return authGuard.response;
+  const actor = authGuard.user;
+  establishAuthContext(actor.authUserId);
   if (actor.accessLevel !== "org_admin") return jsonError("Only an Organization Admin can create teams.", 403);
 
   const parsed = teamCreateSchema.safeParse(await request.json());

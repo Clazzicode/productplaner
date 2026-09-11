@@ -6,8 +6,8 @@ import PageHeader from "@/components/ui/PageHeader";
 import TeamDetailPanel from "@/components/admin/TeamDetailPanel";
 import TeamInitiativeAccessPanel from "@/components/admin/TeamInitiativeAccessPanel";
 import { listGrantsForTeam } from "@/lib/access/initiativeAccess";
-import { getActiveProfile, getCurrentUser } from "@/lib/auth/session";
-import { db } from "@/lib/db";
+import { requireCurrentUser } from "@/lib/auth/session";
+import { db, establishAuthContext } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
@@ -18,9 +18,9 @@ export default async function TeamDetailPage({
   params: Promise<{ teamId: string }>;
 }) {
   const { teamId } = await params;
-  const profile = await getActiveProfile();
-  if (!profile) redirect("/welcome");
-  const user = await getCurrentUser();
+  const user = await requireCurrentUser();
+  establishAuthContext(user.authUserId);
+  if (user.profiles.length === 0) redirect("/welcome");
 
   const team = await db.team.findUnique({
     where: { id: teamId },
@@ -30,7 +30,7 @@ export default async function TeamDetailPage({
 
   const [orgUsers, initiativeGrants, orgInitiatives] = await Promise.all([
     db.user.findMany({
-      where: { organizationId: user.organizationId },
+      where: { homeOrganizationId: user.organizationId },
       orderBy: { name: "asc" },
       select: { id: true, name: true, email: true },
     }),

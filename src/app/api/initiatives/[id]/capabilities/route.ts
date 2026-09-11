@@ -1,13 +1,15 @@
 import { NextResponse } from "next/server";
 import { requireInitiativeApiAccess } from "@/lib/access/guards";
 import { jsonError, zodMessage } from "@/lib/api";
-import { getCurrentUser } from "@/lib/auth/session";
-import { db } from "@/lib/db";
+import { requireCurrentUserApi } from "@/lib/auth/session";
+import { db, establishAuthContext } from "@/lib/db";
+import { VALUE_FACTOR_WEIGHTS } from "@/lib/generation/constants";
 import {
   businessValueLevelFromScore,
   computeBusinessValueScore,
   valueFactorsFrom,
 } from "@/lib/generation/scoring";
+import { getEffectiveWeights } from "@/lib/planningWeights/planningWeights";
 import { capabilityUpsertSchema } from "@/lib/validation/schemas";
 
 export async function POST(
@@ -15,8 +17,10 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
-  const user = await getCurrentUser();
-  const guard = await requireInitiativeApiAccess(user.id, id, "edit");
+  const authGuard = await requireCurrentUserApi();
+  if (!authGuard.ok) return authGuard.response;
+  establishAuthContext(authGuard.user.authUserId);
+  const guard = await requireInitiativeApiAccess(authGuard.user, id, "edit");
   if (!guard.ok) return guard.response;
 
   const parsed = capabilityUpsertSchema.safeParse(await request.json());
@@ -34,7 +38,10 @@ export async function POST(
   }
   // §2: when all four sub-factors are given, the weighted score determines the level.
   const factors = valueFactorsFrom(fields);
-  const businessValueScore = factors ? computeBusinessValueScore(factors) : null;
+  const weights = factors
+    ? ((await getEffectiveWeights(id, "valueFactorWeights")) as typeof VALUE_FACTOR_WEIGHTS)
+    : null;
+  const businessValueScore = factors && weights ? computeBusinessValueScore(factors, weights) : null;
   if (businessValueScore != null) fields.businessValue = businessValueLevelFromScore(businessValueScore);
   const validDeps = dependsOn.filter((d) => intake.capabilities.some((c) => c.id === d));
   const nextOrder = intake.capabilities.reduce((m, c) => Math.max(m, c.order + 1), 0);

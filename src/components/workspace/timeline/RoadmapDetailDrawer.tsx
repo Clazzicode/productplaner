@@ -3,6 +3,8 @@
 import { format } from "date-fns";
 import Link from "next/link";
 import { Badge, riskBadgeVariant, timelineHealthTokenVariant, valueBadgeVariant } from "@/components/ui/Badge";
+import type { BusinessValue, RiskLevel } from "@/lib/generation/types";
+import { businessValueGuidance, riskLevelGuidance } from "@/lib/questionnaire/valueRiskGuidance";
 import type { ClientTimelineFeature } from "@/lib/roadmap/loadRoadmapTimelineData";
 import { TIMELINE_HEALTH_LABELS } from "@/lib/roadmap/timelineDerivation";
 
@@ -58,11 +60,19 @@ export default function RoadmapDetailDrawer(props: {
           <section>
             <div className="flex flex-wrap items-center gap-1.5">
               {feature.isMvp && <Badge variant="indigo">MVP</Badge>}
-              <Badge variant={valueBadgeVariant(feature.businessValue)}>
+              <Badge
+                variant={valueBadgeVariant(feature.businessValue)}
+                title={businessValueGuidance(feature.businessValue as BusinessValue, false)}
+              >
                 {feature.businessValue.replace("_", " ")} value
               </Badge>
               {feature.riskLevel && (
-                <Badge variant={riskBadgeVariant(feature.riskLevel)}>risk {feature.riskLevel}</Badge>
+                <Badge
+                  variant={riskBadgeVariant(feature.riskLevel)}
+                  title={riskLevelGuidance(feature.riskLevel as RiskLevel, false)}
+                >
+                  risk {feature.riskLevel}
+                </Badge>
               )}
               {feature.health && (
                 <Badge variant={timelineHealthTokenVariant(feature.health)}>

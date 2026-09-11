@@ -12,7 +12,8 @@ import TeamsIntelligencePanel from "@/components/dashboard/admin/TeamsIntelligen
 import UsersIntelligencePanel from "@/components/dashboard/admin/UsersIntelligencePanel";
 import StartOverButton from "@/components/demo/StartOverButton";
 import { Card, CardTitle } from "@/components/ui/Card";
-import { getActiveProfile, getCurrentUser } from "@/lib/auth/session";
+import { requireCurrentUser } from "@/lib/auth/session";
+import { establishAuthContext } from "@/lib/db";
 import { loadAdminDashboardData } from "@/lib/dashboard/adminDashboardData";
 import {
   ADMIN_DASHBOARD_ORDER,
@@ -40,9 +41,9 @@ export const dynamic = "force-dynamic";
  * admin-only pages already use — no new access-denied pattern invented.
  */
 export default async function AdminDashboardPage() {
-  const profile = await getActiveProfile();
-  if (!profile) redirect("/welcome");
-  const user = await getCurrentUser();
+  const user = await requireCurrentUser();
+  establishAuthContext(user.authUserId);
+  if (user.profiles.length === 0) redirect("/welcome");
   if (user.accessLevel !== "org_admin" || user.status !== "active") redirect("/home");
 
   const data = await loadAdminDashboardData(user.organizationId);

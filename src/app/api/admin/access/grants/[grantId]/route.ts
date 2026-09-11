@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { jsonError, zodMessage } from "@/lib/api";
 import { changeGrantPermission, revokeGrant } from "@/lib/access/mutations";
-import { getCurrentUser } from "@/lib/auth/session";
+import { requireCurrentUserApi } from "@/lib/auth/session";
+import { establishAuthContext } from "@/lib/db";
 
 const changeSchema = z.object({ permission: z.enum(["owner", "edit", "view"]) });
 
@@ -13,7 +14,10 @@ export async function PATCH(
   { params }: { params: Promise<{ grantId: string }> },
 ) {
   const { grantId } = await params;
-  const actor = await getCurrentUser();
+  const authGuard = await requireCurrentUserApi();
+  if (!authGuard.ok) return authGuard.response;
+  const actor = authGuard.user;
+  establishAuthContext(actor.authUserId);
   if (actor.accessLevel !== "org_admin") return jsonError("Only an Organization Admin can manage access.", 403);
 
   const parsed = changeSchema.safeParse(await request.json());
@@ -33,7 +37,10 @@ export async function DELETE(
   { params }: { params: Promise<{ grantId: string }> },
 ) {
   const { grantId } = await params;
-  const actor = await getCurrentUser();
+  const authGuard = await requireCurrentUserApi();
+  if (!authGuard.ok) return authGuard.response;
+  const actor = authGuard.user;
+  establishAuthContext(actor.authUserId);
   if (actor.accessLevel !== "org_admin") return jsonError("Only an Organization Admin can manage access.", 403);
 
   const result = await revokeGrant(grantId, actor.organizationId);

@@ -1,5 +1,6 @@
 import { format } from "date-fns";
-import { db } from "@/lib/db";
+import { requireCurrentUser } from "@/lib/auth/session";
+import { db, establishAuthContext } from "@/lib/db";
 import { DEFAULT_ASSUMPTIONS, PROTOTYPE_DISCLAIMER } from "@/lib/generation/constants";
 import { costHealth, HEALTH_LABELS } from "@/lib/generation/health";
 import { LAYER_LABELS, LAYER_SEQUENCE } from "@/lib/generation/types";
@@ -7,7 +8,15 @@ import { loadCostContext } from "@/lib/workspace";
 
 // FR-19: assembled from live data on every render — no snapshot, no manual
 // rebuild. Server component shared by the on-screen and print routes.
+//
+// Rendered as JSX (<ExecutiveReport .../>) from two page wrappers — that's
+// its own separate async-component render as far as RLS auth context is
+// concerned (same reason a layout can't establish context for its child
+// page — see src/lib/db.ts), so it resolves the user and establishes context
+// itself rather than trusting its caller to have done so.
 export default async function ExecutiveReport({ initiativeId }: { initiativeId: string }) {
+  const user = await requireCurrentUser();
+  establishAuthContext(user.authUserId);
   const initiative = await db.initiative.findUniqueOrThrow({
     where: { id: initiativeId },
     include: {

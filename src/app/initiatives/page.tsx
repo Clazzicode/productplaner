@@ -4,8 +4,8 @@ import { ContainedLayout } from "@/components/layout/PageLayouts";
 import { Badge, type BadgeVariant } from "@/components/ui/Badge";
 import PageHeader from "@/components/ui/PageHeader";
 import { listAuthorizedInitiativeIds } from "@/lib/access/initiativeAccess";
-import { getActiveProfile, getCurrentUser } from "@/lib/auth/session";
-import { db } from "@/lib/db";
+import { requireCurrentUser } from "@/lib/auth/session";
+import { db, establishAuthContext } from "@/lib/db";
 import { LAYER_SEQUENCE } from "@/lib/generation/types";
 
 export const dynamic = "force-dynamic";
@@ -27,10 +27,10 @@ const STATUS_META: Record<string, { label: string; variant: BadgeVariant }> = {
 };
 
 export default async function InitiativesPage() {
-  const profile = await getActiveProfile();
-  if (!profile) redirect("/welcome");
-  const user = await getCurrentUser();
-  const authorizedInitiativeIds = await listAuthorizedInitiativeIds(user.id);
+  const user = await requireCurrentUser();
+  establishAuthContext(user.authUserId);
+  if (user.profiles.length === 0) redirect("/welcome");
+  const authorizedInitiativeIds = await listAuthorizedInitiativeIds(user);
 
   const initiatives = await db.initiative.findMany({
     where: { id: { in: authorizedInitiativeIds ?? [] } },

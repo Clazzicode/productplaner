@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { jsonError, zodMessage } from "@/lib/api";
-import { getCurrentUser } from "@/lib/auth/session";
-import { db } from "@/lib/db";
+import { requireCurrentUserApi } from "@/lib/auth/session";
+import { db, establishAuthContext } from "@/lib/db";
 import { encryptSecret } from "@/lib/security/secretBox";
 
 // Self-scoped like /api/account/start-over: whichever user getCurrentUser()
@@ -15,7 +15,10 @@ export async function PATCH(request: Request) {
   const parsed = bodySchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return jsonError(zodMessage(parsed.error), 422);
 
-  const user = await getCurrentUser();
+  const authGuard = await requireCurrentUserApi();
+  if (!authGuard.ok) return authGuard.response;
+  const user = authGuard.user;
+  establishAuthContext(user.authUserId);
   let encrypted: string;
   try {
     encrypted = encryptSecret(parsed.data.apiKey);
@@ -32,7 +35,10 @@ export async function PATCH(request: Request) {
 }
 
 export async function DELETE() {
-  const user = await getCurrentUser();
+  const authGuard = await requireCurrentUserApi();
+  if (!authGuard.ok) return authGuard.response;
+  const user = authGuard.user;
+  establishAuthContext(user.authUserId);
   await db.user.update({
     where: { id: user.id },
     data: { anthropicApiKeyEncrypted: null, anthropicApiKeyUpdatedAt: null },

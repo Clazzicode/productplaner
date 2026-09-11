@@ -4,27 +4,19 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { apiFetch } from "@/lib/clientApi";
 import { LEGACY_QUALIFYING_PROFILE_DEFAULTS } from "@/lib/questionnaire/legacyQualifyingDefaults";
-import { depthFromExperience } from "@/lib/questionnaire/roleGuidance";
-import { writeOnboardingState } from "@/lib/onboarding/tempStateClient";
+import { depthFromExperience, isSimplifiedIntakeExperience } from "@/lib/questionnaire/roleGuidance";
+import { readOnboardingState, writeOnboardingState } from "@/lib/onboarding/tempStateClient";
+import { WORKING_ROLE_META } from "@/lib/onboarding/roleOptions";
+import { EXPERIENCE_LEVEL_OPTIONS, type SimplifiedExperienceLevel } from "@/lib/onboarding/experienceOptions";
 import type { WorkingRole } from "@/lib/onboarding/types";
 import Button from "@/components/ui/Button";
 import SectionProgress from "./SectionProgress";
 import GuidanceBanner from "./GuidanceBanner";
 import { ChoiceCard } from "./Choice";
 import ProductDirectionFields, { type ProductDirectionValues } from "./ProductDirectionFields";
+import SimplifiedIntakeWizard from "./SimplifiedIntakeWizard";
 
-const ROLE_OPTIONS: { value: WorkingRole; label: string; hint: string }[] = [
-  { value: "product_owner", label: "Product Owner", hint: "Own the backlog and translate strategy into shippable work." },
-  { value: "product_management", label: "Product Management", hint: "Own the roadmap and product outcomes." },
-  { value: "project_manager", label: "Project Manager", hint: "Keep delivery on schedule and on budget." },
-];
-
-const EXPERIENCE_OPTIONS = [
-  { value: "first_time", label: "This is my first formal plan" },
-  { value: "some_experience", label: "Some experience", hint: "I've put plans together before, informally or with light process." },
-  { value: "experienced", label: "Experienced", hint: "I plan products regularly and know the terrain." },
-  { value: "expert", label: "Expert — I could teach this" },
-];
+const ROLE_ORDER: WorkingRole[] = ["product_owner", "product_management", "project_manager"];
 
 export default function ProductDirectionBootstrap(props: { hasProfile: boolean; workingRole: WorkingRole | null }) {
   const router = useRouter();
@@ -42,6 +34,7 @@ export default function ProductDirectionBootstrap(props: { hasProfile: boolean; 
   const [error, setError] = useState<string | null>(null);
 
   const verbose = depthFromExperience(props.hasProfile ? undefined : experienceLevel);
+  const showSimplifiedWizard = !props.hasProfile && isSimplifiedIntakeExperience(experienceLevel);
 
   const pickRole = (value: WorkingRole) => {
     setRoleAnswer(value);
@@ -55,9 +48,15 @@ export default function ProductDirectionBootstrap(props: { hasProfile: boolean; 
     setError(null);
 
     if (!props.hasProfile) {
+      const workspaceType = readOnboardingState().workspaceType;
       const profileRes = await apiFetch("/api/qualifying", {
         method: "POST",
-        body: { ...LEGACY_QUALIFYING_PROFILE_DEFAULTS, productType: "software_product", experienceLevel },
+        body: {
+          ...LEGACY_QUALIFYING_PROFILE_DEFAULTS,
+          teamComposition: workspaceType === "solo" ? "solo" : "small_team",
+          productType: "software_product",
+          experienceLevel,
+        },
       });
       if (!profileRes.ok) {
         setSubmitting(false);
@@ -116,13 +115,13 @@ export default function ProductDirectionBootstrap(props: { hasProfile: boolean; 
               </div>
             ) : (
               <div className="mt-6 grid gap-3 sm:grid-cols-2">
-                {ROLE_OPTIONS.map((o) => (
+                {ROLE_ORDER.map((value) => (
                   <ChoiceCard
-                    key={o.value}
+                    key={value}
                     selected={false}
-                    onClick={() => pickRole(o.value)}
-                    label={o.label}
-                    hint={o.hint}
+                    onClick={() => pickRole(value)}
+                    label={WORKING_ROLE_META[value].label}
+                    hint={WORKING_ROLE_META[value].description}
                   />
                 ))}
                 <ChoiceCard
@@ -148,7 +147,7 @@ export default function ProductDirectionBootstrap(props: { hasProfile: boolean; 
                   Calibrates how much explanation you see throughout — not what&apos;s asked.
                 </p>
                 <div className="mt-5 grid gap-3 sm:grid-cols-2">
-                  {EXPERIENCE_OPTIONS.map((o) => (
+                  {EXPERIENCE_LEVEL_OPTIONS.map((o) => (
                     <ChoiceCard
                       key={o.value}
                       selected={experienceLevel === o.value}
@@ -161,31 +160,45 @@ export default function ProductDirectionBootstrap(props: { hasProfile: boolean; 
               </div>
             )}
 
-            <div className="border-t border-neutral-100 pt-7 first:border-0 first:pt-0">
-              <p className="text-xs font-semibold uppercase tracking-wide text-accent">
-                {props.hasProfile ? "New initiative" : "Question 3"}
-              </p>
-              <h2 className="mt-1.5 text-2xl font-semibold tracking-tight text-text-primary">
-                What&apos;s the core idea?
-              </h2>
-              <GuidanceBanner section="productDirection" workingRole={props.workingRole} />
-              <ProductDirectionFields
-                values={values}
-                onChange={(patch) => setValues((v) => ({ ...v, ...patch }))}
-                verbose={verbose}
-              />
-            </div>
+            {!showSimplifiedWizard && (
+              <>
+                <div className="border-t border-neutral-100 pt-7 first:border-0 first:pt-0">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-accent">
+                    {props.hasProfile ? "New initiative" : "Question 3"}
+                  </p>
+                  <h2 className="mt-1.5 text-2xl font-semibold tracking-tight text-text-primary">
+                    What&apos;s the core idea?
+                  </h2>
+                  <GuidanceBanner section="productDirection" workingRole={props.workingRole} />
+                  <ProductDirectionFields
+                    values={values}
+                    onChange={(patch) => setValues((v) => ({ ...v, ...patch }))}
+                    verbose={verbose}
+                  />
+                </div>
 
-            {error && <p className="mt-4 text-sm text-red-600">{error}</p>}
+                {error && <p className="mt-4 text-sm text-red-600">{error}</p>}
 
-            <div className="mt-8 flex justify-end">
-              <Button type="submit" disabled={submitting || values.name.trim().length < 3} className="px-6 py-3">
-                {submitting ? "Creating…" : "Continue →"}
-              </Button>
-            </div>
+                <div className="mt-8 flex justify-end">
+                  <Button type="submit" disabled={submitting || values.name.trim().length < 3} className="px-6 py-3">
+                    {submitting ? "Creating…" : "Continue →"}
+                  </Button>
+                </div>
+              </>
+            )}
           </>
         )}
       </form>
+
+      {showSimplifiedWizard && (
+        <div className="mt-6">
+          <SimplifiedIntakeWizard
+            hasProfile={false}
+            workingRole={roleAnswer as WorkingRole}
+            experienceLevel={experienceLevel as SimplifiedExperienceLevel}
+          />
+        </div>
+      )}
     </div>
   );
 }

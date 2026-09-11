@@ -13,7 +13,8 @@ import UpcomingTimeline from "@/components/dashboard/global/UpcomingTimeline";
 import { Card, CardTitle } from "@/components/ui/Card";
 import EmptyState from "@/components/ui/EmptyState";
 import { listAuthorizedInitiativeIds } from "@/lib/access/initiativeAccess";
-import { getActiveProfile, getCurrentUser } from "@/lib/auth/session";
+import { requireCurrentUser } from "@/lib/auth/session";
+import { establishAuthContext } from "@/lib/db";
 import { getEffectiveWidgetVisibility } from "@/lib/dashboard/dashboardConfiguration";
 import { resolveWidgetVisibility, filterVisible } from "@/lib/dashboard/dashboardConfigResolution";
 import { loadGlobalDashboardData } from "@/lib/dashboard/globalDashboardData";
@@ -51,13 +52,13 @@ export const dynamic = "force-dynamic";
  * entirely and uses pure registry defaults — never a guessed role.
  */
 export default async function HomePage() {
-  const profile = await getActiveProfile();
-  if (!profile) redirect("/welcome");
-  const user = await getCurrentUser();
+  const user = await requireCurrentUser();
+  establishAuthContext(user.authUserId);
+  if (user.profiles.length === 0) redirect("/welcome");
   const onboarding = await readOnboardingStateServer();
   const workingRole = resolveWorkingRole(user.workingRole, onboarding.workingRole);
 
-  const authorizedInitiativeIds = await listAuthorizedInitiativeIds(user.id);
+  const authorizedInitiativeIds = await listAuthorizedInitiativeIds(user);
   const data = await loadGlobalDashboardData(user.id, authorizedInitiativeIds);
 
   const visibility = workingRole

@@ -4,15 +4,16 @@ import IntegrationsHub, {
 } from "@/components/integrations/IntegrationsHub";
 import { ContainedLayout } from "@/components/layout/PageLayouts";
 import PageHeader from "@/components/ui/PageHeader";
-import { getCurrentUser } from "@/lib/auth/session";
-import { db } from "@/lib/db";
+import { requireCurrentUser } from "@/lib/auth/session";
+import { db, establishAuthContext } from "@/lib/db";
 import { ensureProvidersSeeded } from "@/lib/sync/integrationSeed";
 
 export const dynamic = "force-dynamic";
 
 export default async function IntegrationsPage() {
+  const user = await requireCurrentUser();
+  establishAuthContext(user.authUserId);
   await ensureProvidersSeeded();
-  const user = await getCurrentUser();
 
   const [providers, connections, initiatives] = await Promise.all([
     db.integrationProvider.findMany({

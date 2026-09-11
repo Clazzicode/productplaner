@@ -1,6 +1,6 @@
 import { randomUUID } from "crypto";
 import type { Prisma, PrismaClient } from "@prisma/client";
-import { db } from "@/lib/db";
+import { db, withTransaction } from "@/lib/db";
 import { buildPlan, packContinuousFlow, packSprints } from "./buildPlan";
 import { EPIC_NAME_SUFFIXES, PHASE_NAMES, RELEASE_NAMES } from "./constants";
 import {
@@ -317,7 +317,7 @@ export async function generatePrototype(initiativeId: string): Promise<{ prototy
   const plan = buildPlan(intake, methodology);
   const capById = new Map(intake.capabilities.map((c) => [c.id, c]));
 
-  const prototypeId = await db.$transaction(
+  const prototypeId = await withTransaction(
     async (tx) => {
       // Idempotent: regenerating from intake replaces any prior prototype.
       await tx.prototype.deleteMany({ where: { initiativeId } });
@@ -462,7 +462,7 @@ export async function regenerateBelow(
   const capById = new Map(intake.capabilities.map((c) => [c.id, c]));
   const stats: RegenStats = { features: 0, epics: 0, stories: 0, acs: 0, sprints: 0 };
 
-  await db.$transaction(
+  await withTransaction(
     async (tx) => {
       if (editedLayer === "roadmap") {
         // Rebuild features (and everything beneath) under the surviving phases.
@@ -939,7 +939,7 @@ export async function recalculatePlan(
     // guard as the assumptions/move-sprint routes.
     await assertAgileLayerEditable(initiativeId);
     const intake = await loadIntakeInput(initiativeId);
-    const sprints = await db.$transaction(
+    const sprints = await withTransaction(
       (tx) => repackSprints(tx, prototypeId, intake, methodology),
       { timeout: 120_000 },
     );

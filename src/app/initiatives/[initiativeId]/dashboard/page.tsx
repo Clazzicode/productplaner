@@ -9,6 +9,7 @@ import DashboardHeader from "@/components/dashboard/DashboardHeader";
 import DecisionsRequiredPanel, { type DecisionItem } from "@/components/dashboard/DecisionsRequiredPanel";
 import RecentActivity, { type ActivityItem } from "@/components/dashboard/RecentActivity";
 import RoadmapTimeline, { type TimelinePhase } from "@/components/dashboard/RoadmapTimeline";
+import RoleRoadmapPanel from "@/components/dashboard/roleRoadmap/RoleRoadmapPanel";
 import SprintReleaseStatus, {
   type ReleaseSummaryView,
   type SprintSummaryView,
@@ -16,16 +17,28 @@ import SprintReleaseStatus, {
 import SummaryCards from "@/components/dashboard/SummaryCards";
 import UpcomingActions, { type UpcomingAction } from "@/components/dashboard/UpcomingActions";
 import { requireInitiativeView } from "@/lib/access/guards";
-import { getCurrentUser } from "@/lib/auth/session";
-import { db } from "@/lib/db";
+import { requireCurrentUser } from "@/lib/auth/session";
+import { db, establishAuthContext } from "@/lib/db";
 import { PHASE_NAMES } from "@/lib/generation/constants";
 import { computeCapacityForecast } from "@/lib/generation/capacityForecast";
 import { buildCostModel } from "@/lib/generation/cost";
+import { findCycle } from "@/lib/generation/dependencyGraph";
 import { loadIntakeInput } from "@/lib/generation/engine";
 import { costHealth, HEALTH_LABELS, scheduleHealth, type HealthStatus } from "@/lib/generation/health";
 import { profileFor } from "@/lib/generation/methodology";
 import { LAYER_LABELS, LAYER_SEQUENCE, type LayerType } from "@/lib/generation/types";
 import { validateIntake } from "@/lib/generation/validateIntake";
+import { resolveWorkingRole } from "@/lib/onboarding/resolveWorkingRole";
+import { readOnboardingStateServer } from "@/lib/onboarding/tempStateServer";
+import { deriveRoleRoadmapView, type RoleRoadmapCapability, type RoleRoadmapInput } from "@/lib/roadmap/roleRoadmapView";
+
+const parseContentJson = (raw: string): Record<string, unknown> => {
+  try {
+    return JSON.parse(raw) as Record<string, unknown>;
+  } catch {
+    return {};
+  }
+};
 
 function LockChip(props: { label: string; locked: boolean | null }) {
   return (
@@ -43,8 +56,9 @@ export default async function DashboardPage({
   params: Promise<{ initiativeId: string }>;
 }) {
   const { initiativeId } = await params;
-  const user = await getCurrentUser();
-  await requireInitiativeView(user.id, initiativeId);
+  const user = await requireCurrentUser();
+  establishAuthContext(user.authUserId);
+  await requireInitiativeView(user, initiativeId);
   const initiative = await db.initiative.findUnique({
     where: { id: initiativeId },
     include: {
@@ -69,7 +83,7 @@ export default async function DashboardPage({
   const capabilities = intakeRow.capabilities;
   const profile = profileFor(initiative.methodology);
 
-  const [sprints, releases, stories, grouped] = await Promise.all([
+  const [sprints, releases, stories, grouped, phaseArtifacts, onboarding] = await Promise.all([
     db.sprint.findMany({
       where: { prototypeId: prototype.id },
       orderBy: { sprintNumber: "asc" },
@@ -82,15 +96,35 @@ export default async function DashboardPage({
     }),
     db.artifactLayer.findMany({
       where: { prototypeId: prototype.id, type: "story" },
-      select: { points: true, sourceCapabilityId: true, sprint: { select: { phaseNumber: true } } },
+      select: {
+        points: true,
+        sourceCapabilityId: true,
+        sprint: { select: { phaseNumber: true, sprintNumber: true } },
+      },
     }),
     db.artifactLayer.groupBy({
       by: ["type"],
       where: { prototypeId: prototype.id },
       _count: { _all: true },
     }),
+    // Real phase titles (methodology-aware — e.g. "Now"/"Next"/"Later N" for
+    // agile_scrum) for the role roadmap panel below, since PHASE_NAMES[n] alone
+    // (used by the existing `phases`/TimelinePhase computation a few lines down)
+    // mislabels agile_scrum initiatives. Same pattern as workspace/roadmap/page.tsx.
+    db.artifactLayer.findMany({
+      where: { prototypeId: prototype.id, type: "roadmap_phase" },
+      select: { title: true, contentJson: true },
+    }),
+    readOnboardingStateServer(),
   ]);
   const count = (t: string) => grouped.find((g) => g.type === t)?._count._all ?? 0;
+  const workingRole = resolveWorkingRole(user.workingRole, onboarding.workingRole);
+  const phaseTitleByNumber = new Map<number, string>();
+  for (const p of phaseArtifacts) {
+    const content = parseContentJson(p.contentJson);
+    const phaseNumber = typeof content.phaseNumber === "number" ? content.phaseNumber : null;
+    if (phaseNumber != null) phaseTitleByNumber.set(phaseNumber, p.title);
+  }
 
   const intakeInput = await loadIntakeInput(initiativeId);
   const warnings = validateIntake(intakeInput).warnings;
@@ -131,6 +165,13 @@ export default async function DashboardPage({
   for (const s of stories) {
     if (s.sourceCapabilityId && s.sprint) capPhase.set(s.sourceCapabilityId, s.sprint.phaseNumber);
   }
+  const capSprintNumbers = new Map<string, Set<number>>();
+  for (const s of stories) {
+    if (!s.sourceCapabilityId || !s.sprint) continue;
+    const set = capSprintNumbers.get(s.sourceCapabilityId) ?? new Set<number>();
+    set.add(s.sprint.sprintNumber);
+    capSprintNumbers.set(s.sourceCapabilityId, set);
+  }
   const phases: TimelinePhase[] = [1, 2, 3]
     .map((n) => ({
       name: PHASE_NAMES[n],
@@ -152,6 +193,53 @@ export default async function DashboardPage({
   const ws = (slug: string) => `/initiatives/${initiativeId}/workspace/${slug}`;
   const oversizedStories = stories.filter((s) => (s.points ?? 1) >= 13).length;
   const broadCapabilityWarnings = warnings.filter((w) => w.code === "capability_too_broad").length;
+
+  // ---------- role-differentiated roadmap panel ----------
+  // Same underlying capabilities/cost/dependency data as the "Roadmap & Features"
+  // section above, reshaped per Working Role by deriveRoleRoadmapView — never a
+  // second data path, never a change to the generation engine.
+  const overAllocatedSprintNumbers = new Set(overAllocated.map((f) => f.sprintNumber));
+  const sprintStartDatesByPhase = new Map<number, Date[]>();
+  for (const s of sprints) {
+    const arr = sprintStartDatesByPhase.get(s.phaseNumber) ?? [];
+    arr.push(s.startDate);
+    sprintStartDatesByPhase.set(s.phaseNumber, arr);
+  }
+  const roleRoadmapPhases: RoleRoadmapInput["phases"] = [1, 2, 3].map((n) => ({
+    phaseNumber: n,
+    name: phaseTitleByNumber.get(n) || PHASE_NAMES[n],
+    sprintStartDates: sprintStartDatesByPhase.get(n) ?? [],
+    capabilities: capabilities
+      .filter((c) => (capPhase.get(c.id) ?? (c.isMvp ? 1 : 3)) === n)
+      .map(
+        (c): RoleRoadmapCapability => ({
+          id: c.id,
+          name: c.name,
+          isMvp: c.isMvp,
+          businessValue: c.businessValue as RoleRoadmapCapability["businessValue"],
+          riskLevel: c.riskLevel as RoleRoadmapCapability["riskLevel"],
+          revenueImpactScore: c.revenueImpactScore,
+          estimatedCost: (pointsByCapability.get(c.id) ?? 0) * model.costPerStoryPoint,
+          dependsOnNames: c.dependsOnEdges.map((e) => e.toCapability.name),
+          inOverAllocatedSprint: [...(capSprintNumbers.get(c.id) ?? [])].some((sn) =>
+            overAllocatedSprintNumbers.has(sn),
+          ),
+        }),
+      ),
+  }));
+  const roleRoadmapView = deriveRoleRoadmapView(workingRole, {
+    phases: roleRoadmapPhases,
+    cost: {
+      estimatedInitiativeCost: model.estimatedInitiativeCost,
+      budgetVariance: model.budgetVariance,
+      costHealth: overallCost,
+    },
+    scheduleHealth: overallSchedule,
+    hasDependencyCycle: findCycle(intakeInput.capabilities).length > 0,
+    oversizedStoryCount: oversizedStories,
+    tooBroadCapabilityCount: broadCapabilityWarnings,
+    milestones: releases.map((r) => ({ name: r.name, targetDate: r.targetDate, phaseNumber: r.phaseNumber })),
+  });
 
   // ---------- sprint / release summaries ----------
   const today = new Date();
@@ -443,6 +531,7 @@ export default async function DashboardPage({
               health: overallCost,
             }}
           />
+          <RoleRoadmapPanel view={roleRoadmapView} />
           <Accordion sections={sections} defaultOpenIds={defaultOpenIds} />
         </div>
 

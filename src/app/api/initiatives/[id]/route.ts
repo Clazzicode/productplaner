@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { requireInitiativeApiAccess } from "@/lib/access/guards";
 import { jsonError, zodMessage } from "@/lib/api";
-import { getCurrentUser } from "@/lib/auth/session";
-import { db } from "@/lib/db";
+import { requireCurrentUserApi } from "@/lib/auth/session";
+import { db, establishAuthContext } from "@/lib/db";
 import { initiativePatchSchema } from "@/lib/validation/schemas";
 
 export async function GET(
@@ -10,8 +10,10 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
-  const user = await getCurrentUser();
-  const guard = await requireInitiativeApiAccess(user.id, id, "view");
+  const authGuard = await requireCurrentUserApi();
+  if (!authGuard.ok) return authGuard.response;
+  establishAuthContext(authGuard.user.authUserId);
+  const guard = await requireInitiativeApiAccess(authGuard.user, id, "view");
   if (!guard.ok) return guard.response;
 
   const initiative = await db.initiative.findUnique({
@@ -37,8 +39,10 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
-  const user = await getCurrentUser();
-  const guard = await requireInitiativeApiAccess(user.id, id, "edit");
+  const authGuard = await requireCurrentUserApi();
+  if (!authGuard.ok) return authGuard.response;
+  establishAuthContext(authGuard.user.authUserId);
+  const guard = await requireInitiativeApiAccess(authGuard.user, id, "edit");
   if (!guard.ok) return guard.response;
 
   const parsed = initiativePatchSchema.safeParse(await request.json());

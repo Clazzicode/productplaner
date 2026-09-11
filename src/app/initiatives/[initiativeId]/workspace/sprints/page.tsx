@@ -1,7 +1,8 @@
 import { format } from "date-fns";
 import { notFound } from "next/navigation";
 import SprintMoveSelect from "@/components/workspace/SprintMoveSelect";
-import { db } from "@/lib/db";
+import { requireCurrentUser } from "@/lib/auth/session";
+import { db, establishAuthContext } from "@/lib/db";
 import { profileFor } from "@/lib/generation/methodology";
 import { loadCostContext, loadWorkspace } from "@/lib/workspace";
 
@@ -13,6 +14,8 @@ export default async function SprintsPage({
   params: Promise<{ initiativeId: string }>;
 }) {
   const { initiativeId } = await params;
+  const user = await requireCurrentUser();
+  establishAuthContext(user.authUserId);
   const ws = await loadWorkspace(initiativeId);
   if (!ws) notFound();
   const cost = await loadCostContext(initiativeId, ws.prototype.id);

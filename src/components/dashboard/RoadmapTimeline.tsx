@@ -2,7 +2,8 @@ import Link from "next/link";
 import { Badge, riskBadgeVariant, valueBadgeVariant } from "@/components/ui/Badge";
 import { Card, CardTitle } from "@/components/ui/Card";
 import { VALUE_LABELS } from "@/lib/generation/constants";
-import type { BusinessValue } from "@/lib/generation/types";
+import type { BusinessValue, RiskLevel } from "@/lib/generation/types";
+import { businessValueGuidance, riskLevelGuidance } from "@/lib/questionnaire/valueRiskGuidance";
 
 export interface TimelineItem {
   name: string;
@@ -52,11 +53,19 @@ export default function RoadmapTimeline(props: { initiativeId: string; phases: T
                     )}
                   </p>
                   <p className="mt-1 flex flex-wrap items-center gap-1">
-                    <Badge variant={valueBadgeVariant(item.businessValue)}>
+                    <Badge
+                      variant={valueBadgeVariant(item.businessValue)}
+                      title={businessValueGuidance(item.businessValue as BusinessValue, false)}
+                    >
                       {VALUE_LABELS[item.businessValue as BusinessValue] ?? item.businessValue}
                     </Badge>
                     <Badge variant="neutral">{item.effortSize.toUpperCase()}</Badge>
-                    <Badge variant={riskBadgeVariant(item.riskLevel)}>risk {item.riskLevel}</Badge>
+                    <Badge
+                      variant={riskBadgeVariant(item.riskLevel)}
+                      title={riskLevelGuidance(item.riskLevel as RiskLevel, false)}
+                    >
+                      risk {item.riskLevel}
+                    </Badge>
                     <span className="text-xs text-neutral-500">{money(item.estimatedCost)}</span>
                   </p>
                   {item.dependsOnNames.length > 0 && (

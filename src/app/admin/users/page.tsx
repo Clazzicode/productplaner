@@ -2,8 +2,8 @@ import { redirect } from "next/navigation";
 import { ContainedLayout } from "@/components/layout/PageLayouts";
 import PageHeader from "@/components/ui/PageHeader";
 import UsersTable from "@/components/admin/UsersTable";
-import { getActiveProfile, getCurrentUser } from "@/lib/auth/session";
-import { db } from "@/lib/db";
+import { requireCurrentUser } from "@/lib/auth/session";
+import { db, establishAuthContext } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
@@ -14,13 +14,13 @@ export const dynamic = "force-dynamic";
  * check does and doesn't guarantee in a single-session prototype.
  */
 export default async function AdminUsersPage() {
-  const profile = await getActiveProfile();
-  if (!profile) redirect("/welcome");
-  const user = await getCurrentUser();
+  const user = await requireCurrentUser();
+  establishAuthContext(user.authUserId);
+  if (user.profiles.length === 0) redirect("/welcome");
   if (user.accessLevel !== "org_admin") redirect("/home");
 
   const users = await db.user.findMany({
-    where: { organizationId: user.organizationId },
+    where: { homeOrganizationId: user.organizationId },
     orderBy: { name: "asc" },
     include: {
       teamMemberships: { include: { team: { select: { id: true, name: true } } } },

@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { requireInitiativeApiAccess } from "@/lib/access/guards";
 import { jsonError } from "@/lib/api";
-import { getCurrentUser } from "@/lib/auth/session";
+import { requireCurrentUserApi } from "@/lib/auth/session";
+import { establishAuthContext } from "@/lib/db";
 import { analyzeIntakeDocument } from "@/lib/intakeImport/analyzeDocument";
 import {
   MAX_IMPORT_FILE_BYTES,
@@ -19,8 +20,11 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
-  const user = await getCurrentUser();
-  const guard = await requireInitiativeApiAccess(user.id, id, "edit");
+  const authGuard = await requireCurrentUserApi();
+  if (!authGuard.ok) return authGuard.response;
+  const user = authGuard.user;
+  establishAuthContext(user.authUserId);
+  const guard = await requireInitiativeApiAccess(user, id, "edit");
   if (!guard.ok) return guard.response;
 
   // Every user brings their own key (Settings → Anthropic API key) — there is
