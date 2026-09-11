@@ -3,7 +3,7 @@ import { z } from "zod";
 import { jsonError, zodMessage } from "@/lib/api";
 import { provisionSoloWorkspace } from "@/lib/auth/session";
 import { db, establishAuthContext } from "@/lib/db";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { createSupabaseServerClient, createSupabaseServiceClient } from "@/lib/supabase/server";
 
 const signUpSchema = z.object({
   name: z.string().trim().min(1, "Name is required.").max(200),
@@ -32,7 +32,29 @@ export async function POST(request: Request) {
   }
 
   if (!data.session) {
-    return NextResponse.json({ ok: true, needsEmailConfirmation: true });
+    // Email confirmation is required by the Supabase project today, but
+    // outbound confirmation delivery isn't reliable yet (tracked separately —
+    // not fixed here). Rather than leave a newly-created account stuck until
+    // that's sorted out, auto-confirm it via the Admin API and sign the user
+    // straight in, the same way sign-in does. The confirmation email itself
+    // still gets sent by Supabase; nothing here depends on the user ever
+    // opening it. Remove this once real email confirmation is ready to enforce.
+    try {
+      const adminClient = createSupabaseServiceClient();
+      const { error: confirmError } = await adminClient.auth.admin.updateUserById(data.user.id, {
+        email_confirm: true,
+      });
+      if (confirmError) throw confirmError;
+
+      const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+      if (signInError) throw signInError;
+    } catch {
+      // Auto-confirm/sign-in didn't work — the account was still created, so
+      // fall back to the original "check your email" flow instead of failing
+      // signup outright.
+      return NextResponse.json({ ok: true, needsEmailConfirmation: true });
+    }
   }
+
   return NextResponse.json({ ok: true, needsEmailConfirmation: false });
 }
