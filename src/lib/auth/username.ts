@@ -2,15 +2,15 @@ import { z } from "zod";
 
 /**
  * Temporary simplified auth: username + password only, no real email. Supabase
- * Auth's signUp()/signInWithPassword() are email-based, so a username is
- * mapped to a deterministic, non-routable placeholder address under Supabase
- * Auth itself — everything downstream (sessions, RLS via auth.uid(),
- * establishAuthContext, the Admin API auto-confirm from sign-up) keeps
- * working unchanged, and the user never sees or enters a real email.
- * ".invalid" is the IANA-reserved TLD for exactly this — guaranteed to never
- * resolve or accidentally deliver anywhere real.
+ * Auth's admin.createUser()/signInWithPassword() are email-based, so a
+ * username is mapped to a deterministic, non-routable placeholder address
+ * under Supabase Auth itself — everything downstream (sessions, RLS via
+ * auth.uid(), establishAuthContext) keeps working unchanged, and the user
+ * never sees or enters a real email. ".invalid" is the IANA-reserved TLD for
+ * exactly this — guaranteed to never resolve or accidentally deliver anywhere
+ * real.
  *
- * Revisit this (and the auto-confirm-on-sign-up logic it pairs with in
+ * Revisit this (and the Admin API account creation it pairs with in
  * src/app/api/auth/sign-up/route.ts) once real email sign-up is ready.
  */
 
