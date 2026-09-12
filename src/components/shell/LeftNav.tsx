@@ -14,7 +14,7 @@ const NOT_YET_AVAILABLE = "Not yet available.";
 
 /**
  * Persistent left navigation, grouped per docs/V2-APPLICATION-SHELL-BLUEPRINT.md §2
- * (PLAN / INTELLIGENCE / ORGANIZATION / ADMIN). Initiative-scoped links follow the
+ * (PLAN / INTELLIGENCE / ORGANIZATION). Initiative-scoped links follow the
  * initiative in the current URL, falling back to the most recent one.
  *
  * "Guided Intake" and "Epics & Stories" — present in the old flat nav — are
@@ -29,31 +29,24 @@ const NOT_YET_AVAILABLE = "Not yet available.";
  * docs/V2-SHELL-COHESION-QA.md. The initiative list moved to `/initiatives` so
  * "Initiatives" could keep its own destination.
  *
- * Implementation note (Step 8B — docs/V2-USERS-TEAMS.md): `User.accessLevel` is
- * now real and persisted, so "Users" is gated on it (real, if narrow, server-side
- * enforcement lives in the /api/admin/* routes themselves — this nav gate is
- * still just presentation, per Step 7A's "never only by hiding UI" rule). "Teams
- * & Stakeholders" is real for every viewer (admin-aware, not admin-only — see
- * docs/V2-ORG-ADMIN-IA.md §2).
+ * Guided-activation restructure (reference doc §10/§11, Block 5): two real
+ * changes from the previous flat version. First, progressive disclosure — a
+ * user with no initiative at all sees a minimal nav (Home, Initiatives,
+ * "Create Your First Plan," Organization) instead of five-sixths of the
+ * platform rendered as unexplained gray dead ends. Second, once an initiative
+ * exists, a lifecycle-locked item (Roadmap/Planning Workspace/Sprints &
+ * Releases/Capacity & Cost/Reports, before the plan is generated) carries the
+ * resolver's real unlock action instead of a bare disabled tooltip — see
+ * NavigationItem's `disabled.cta`. Genuinely unbuilt items (Risks & Blockers,
+ * Decisions, Activity) keep the plain "not yet available" treatment: no `cta`,
+ * because no unlock path exists to offer.
  *
- * Implementation note (Step 8C — docs/V2-RESOURCE-ACCESS.md): "Access" is now
- * real too, gated the same way as "Users". "Organization" and "Dashboard
- * Configuration" remain disabled placeholders — those routes don't exist yet.
- *
- * Implementation note (Step 8D — docs/V2-ORG-ADMIN-DASHBOARD.md): "Dashboard"
- * is the ADMIN group's new first item, pointing at `/admin` (the
- * organization-wide control center) — gated identically to "Users"/"Access".
- * Distinct from the Plan group's "Dashboard" above, which is the Standard
- * User's personal `/home`.
- *
- * Implementation note (Step 8E — docs/V2-DASHBOARD-CONFIGURATION.md):
- * "Dashboard Configuration" is now real too, gated the same way as
- * "Dashboard"/"Users"/"Access". "Organization" and "Settings" remain
- * disabled placeholders — those routes still don't exist.
+ * The ADMIN group that used to live here has moved to the profile/account
+ * menu (Block 6) — administrative navigation no longer occupies permanent
+ * space in the standard product sidebar (reference doc §12).
  */
-export default function LeftNav(props: { initiatives: NavInitiative[]; accessLevel: string }) {
+export default function LeftNav(props: { initiatives: NavInitiative[] }) {
   const pathname = usePathname() ?? "";
-  const isOrgAdmin = props.accessLevel === "org_admin";
 
   const urlMatch = pathname.match(/^\/initiatives\/([^/]+)/);
   const current =
@@ -66,62 +59,74 @@ export default function LeftNav(props: { initiatives: NavInitiative[]; accessLev
   const scoped = (suffix: string, label: string): NavigationItemProps =>
     current && generated
       ? { label, href: `/initiatives/${current.id}/${suffix}` }
-      : {
-          label,
-          href: null,
-          disabledReason: current
-            ? "Available once this initiative's plan is generated."
-            : "Create an initiative first.",
-        };
+      : current
+        ? {
+            label,
+            href: null,
+            disabled: {
+              reason: "Available once this initiative's plan has been generated.",
+              cta: { label: "Generate Plan", href: `/initiatives/${current.id}/intake` },
+            },
+          }
+        : {
+            label,
+            href: null,
+            disabled: {
+              reason: "Create an initiative first.",
+              cta: { label: "Create Initiative", href: "/initiatives/new" },
+            },
+          };
 
-  const groups: { title: string; items: NavigationItemProps[] }[] = [
-    {
-      title: "Plan",
-      items: [
-        { label: "Dashboard", href: "/home" },
-        { label: "Initiatives", href: "/initiatives" },
-        scoped("workspace/roadmap", "Roadmap"),
-        scoped("workspace/features", "Planning Workspace"),
-        scoped("workspace/sprints", "Sprints & Releases"),
-      ],
-    },
-    {
-      title: "Intelligence",
-      items: [
-        { label: "Risks & Blockers", href: null, disabledReason: NOT_YET_AVAILABLE },
-        { label: "Decisions", href: null, disabledReason: NOT_YET_AVAILABLE },
-        scoped("workspace/capacity", "Capacity & Cost"),
-        scoped("workspace/executive", "Reports"),
-      ],
-    },
-    {
-      title: "Organization",
-      items: [
-        { label: "Teams & Stakeholders", href: "/teams" },
-        { label: "Integrations", href: "/integrations" },
-        { label: "Activity", href: null, disabledReason: NOT_YET_AVAILABLE },
-      ],
-    },
-    {
-      title: "Admin",
-      items: [
-        isOrgAdmin
-          ? { label: "Dashboard", href: "/admin" }
-          : { label: "Dashboard", href: null, disabledReason: "Organization Admin only." },
-        isOrgAdmin
-          ? { label: "Users", href: "/admin/users" }
-          : { label: "Users", href: null, disabledReason: "Organization Admin only." },
-        isOrgAdmin
-          ? { label: "Access", href: "/admin/access" }
-          : { label: "Access", href: null, disabledReason: "Organization Admin only." },
-        isOrgAdmin
-          ? { label: "Dashboard Configuration", href: "/admin/dashboard-configuration" }
-          : { label: "Dashboard Configuration", href: null, disabledReason: "Organization Admin only." },
-        { label: "Organization", href: null, disabledReason: NOT_YET_AVAILABLE },
-        { label: "Settings", href: null, disabledReason: NOT_YET_AVAILABLE },
-      ],
-    },
-  ];
+  const groups: { title: string; items: NavigationItemProps[] }[] = current
+    ? [
+        {
+          title: "Plan",
+          items: [
+            { label: "Dashboard", href: "/home" },
+            { label: "Initiatives", href: "/initiatives" },
+            scoped("workspace/roadmap", "Roadmap"),
+            scoped("workspace/features", "Planning Workspace"),
+            scoped("workspace/sprints", "Sprints & Releases"),
+          ],
+        },
+        {
+          title: "Intelligence",
+          items: [
+            { label: "Risks & Blockers", href: null, disabled: { reason: NOT_YET_AVAILABLE } },
+            { label: "Decisions", href: null, disabled: { reason: NOT_YET_AVAILABLE } },
+            scoped("workspace/capacity", "Capacity & Cost"),
+            scoped("workspace/executive", "Reports"),
+          ],
+        },
+        {
+          title: "Organization",
+          items: [
+            { label: "Teams & Stakeholders", href: "/teams" },
+            { label: "Integrations", href: "/integrations" },
+            { label: "Activity", href: null, disabled: { reason: NOT_YET_AVAILABLE } },
+          ],
+        },
+      ]
+    : [
+        {
+          title: "Plan",
+          items: [
+            { label: "Dashboard", href: "/home" },
+            { label: "Initiatives", href: "/initiatives" },
+          ],
+        },
+        {
+          title: "Setup",
+          items: [{ label: "Create Your First Plan", href: "/initiatives/new" }],
+        },
+        {
+          title: "Organization",
+          items: [
+            { label: "Teams & Stakeholders", href: "/teams" },
+            { label: "Integrations", href: "/integrations" },
+          ],
+        },
+      ];
 
   return <Sidebar groups={groups} />;
 }

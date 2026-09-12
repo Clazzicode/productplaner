@@ -103,13 +103,12 @@ export default function AppShell(props: {
   return (
     <div className="flex min-h-screen">
       <div className="hidden lg:contents">
-        <LeftNav initiatives={props.initiatives} accessLevel={props.accessLevel} />
+        <LeftNav initiatives={props.initiatives} />
       </div>
       <MobileNavDrawer
         open={drawerOpen}
         onClose={() => setDrawerOpen(false)}
         initiatives={props.initiatives}
-        accessLevel={props.accessLevel}
         topContent={switcherAndNew}
         bottomContent={accountActions}
       />
