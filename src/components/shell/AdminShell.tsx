@@ -1,4 +1,5 @@
 import Link from "next/link";
+import AdminTopHeader from "./AdminTopHeader";
 import Sidebar from "./Sidebar";
 import type { NavigationItemProps } from "./NavigationItem";
 
@@ -33,7 +34,7 @@ const ADMIN_GROUPS: { title: string; items: NavigationItemProps[] }[] = [
  * layout's own guard just keeps the admin chrome itself from flashing for a
  * non-admin who lands here directly.
  */
-export default function AdminShell(props: { children: React.ReactNode }) {
+export default function AdminShell(props: { children: React.ReactNode; userName: string; accessLevel: string }) {
   return (
     <div className="flex min-h-screen">
       <Sidebar
@@ -49,7 +50,10 @@ export default function AdminShell(props: { children: React.ReactNode }) {
           </Link>
         }
       />
-      <main className="min-w-0 flex-1">{props.children}</main>
+      <div className="flex min-w-0 flex-1 flex-col">
+        <AdminTopHeader userName={props.userName} accessLevel={props.accessLevel} />
+        <main className="min-w-0 flex-1">{props.children}</main>
+      </div>
     </div>
   );
 }

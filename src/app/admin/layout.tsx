@@ -21,5 +21,9 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   if (user.profiles.length === 0) redirect("/welcome");
   if (user.accessLevel !== "org_admin" || user.status !== "active") redirect("/home");
 
-  return <AdminShell>{children}</AdminShell>;
+  return (
+    <AdminShell userName={user.name} accessLevel={user.accessLevel}>
+      {children}
+    </AdminShell>
+  );
 }

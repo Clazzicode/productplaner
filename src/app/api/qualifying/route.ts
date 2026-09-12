@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { jsonError, zodMessage } from "@/lib/api";
 import { requireCurrentUserApi } from "@/lib/auth/session";
 import { db, establishAuthContext } from "@/lib/db";
+import { clearOnboardingStateServer } from "@/lib/onboarding/tempStateServer";
 import { qualifyingSchema } from "@/lib/validation/schemas";
 
 export async function POST(request: Request) {
@@ -35,5 +36,12 @@ export async function POST(request: Request) {
       data: { workspaceType: "team" },
     });
   }
+  // This account's qualifying answers are now persisted — the temporary
+  // onboarding cookie has served its purpose. Clearing it here (rather than
+  // only at sign-in/sign-out boundaries) also stops a stale value from this
+  // step (e.g. workspaceType) from making a *later* re-render of an
+  // onboarding screen in this same session look like it's already been
+  // answered.
+  await clearOnboardingStateServer();
   return NextResponse.json({ profileId: profile.id });
 }

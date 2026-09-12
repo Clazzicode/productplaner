@@ -14,7 +14,7 @@ export default function Sidebar(props: {
   footer?: React.ReactNode;
 }) {
   return (
-    <nav className="no-print flex h-full w-56 shrink-0 flex-col gap-5 overflow-y-auto border-r border-border-nav bg-nav px-3 py-5">
+    <nav className="no-print sticky top-0 flex h-screen w-56 shrink-0 flex-col gap-5 overflow-y-auto border-r border-border-nav bg-nav px-3 py-5">
       <Link href={props.titleHref ?? "/home"} className="px-2">
         <span className="text-xs font-semibold uppercase tracking-widest text-text-inverse">
           {props.title ?? "Guided Planning"}

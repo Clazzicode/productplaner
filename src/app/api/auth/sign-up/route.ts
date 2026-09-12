@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { jsonError, zodMessage } from "@/lib/api";
-import { provisionSoloWorkspace } from "@/lib/auth/session";
+import { clearActiveOrganizationCookie, provisionSoloWorkspace } from "@/lib/auth/session";
 import { usernameSchema, usernameToPlaceholderEmail } from "@/lib/auth/username";
 import { db, establishAuthContext } from "@/lib/db";
+import { clearOnboardingStateServer } from "@/lib/onboarding/tempStateServer";
 import { createSupabaseServerClient, createSupabaseServiceClient } from "@/lib/supabase/server";
 
 const signUpSchema = z.object({
@@ -53,6 +54,14 @@ export async function POST(request: Request) {
   if (signInError) {
     return jsonError("Account created, but signing you in automatically failed — try signing in.", 500);
   }
+
+  // This browser may have just been used to set up a different account (e.g.
+  // creating accounts for other people back-to-back) — without this, the new
+  // account's onboarding silently inherits the previous account's leftover
+  // active organization / workspace-type / working-role answers instead of
+  // asking this account's own questions.
+  await clearActiveOrganizationCookie();
+  await clearOnboardingStateServer();
 
   return NextResponse.json({ ok: true });
 }
