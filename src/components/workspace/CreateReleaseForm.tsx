@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { apiFetch } from "@/lib/clientApi";
 import { ButtonLoader } from "@/components/ui/loading";
+import { useAsyncAction } from "@/lib/hooks/useAsyncAction";
 
 export interface AvailablePhase {
   phaseNumber: number;
@@ -21,29 +22,21 @@ export default function CreateReleaseForm(props: { initiativeId: string; availab
   const [phaseNumber, setPhaseNumber] = useState(props.availablePhases[0]?.phaseNumber ?? 1);
   const [name, setName] = useState("");
   const [targetDate, setTargetDate] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { run, loading: busy, error } = useAsyncAction((body: { phaseNumber: number; name?: string; targetDate: string }) =>
+    apiFetch(`/api/initiatives/${props.initiativeId}/releases`, { method: "POST", body }),
+  );
 
   if (props.availablePhases.length === 0) return null;
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (busy) return;
-    setBusy(true);
-    setError(null);
-    const res = await apiFetch(`/api/initiatives/${props.initiativeId}/releases`, {
-      method: "POST",
-      body: {
-        phaseNumber,
-        name: name.trim() || undefined,
-        targetDate: targetDate || new Date().toISOString(),
-      },
+    const created = await run({
+      phaseNumber,
+      name: name.trim() || undefined,
+      targetDate: targetDate || new Date().toISOString(),
     });
-    setBusy(false);
-    if (!res.ok) {
-      setError(res.error ?? "Couldn't create the release.");
-      return;
-    }
+    if (!created) return;
     setOpen(false);
     setName("");
     setTargetDate("");

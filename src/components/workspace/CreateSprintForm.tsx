@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { ButtonLoader } from "@/components/ui/loading";
 import { apiFetch } from "@/lib/clientApi";
+import { useAsyncAction } from "@/lib/hooks/useAsyncAction";
 
 export interface AvailableStory {
   id: string;
@@ -30,8 +31,10 @@ export default function CreateSprintForm(props: {
   const [endDate, setEndDate] = useState("");
   const [capacityPoints, setCapacityPoints] = useState(String(Math.round(props.defaultCapacityPoints)));
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { run, loading: busy, error } = useAsyncAction(
+    (body: { startDate: string; endDate: string; capacityPoints: number; storyIds: string[] }) =>
+      apiFetch(`/api/releases/${props.releaseId}/sprints`, { method: "POST", body }),
+  );
 
   const toggle = (id: string) =>
     setSelectedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
@@ -39,22 +42,13 @@ export default function CreateSprintForm(props: {
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (busy) return;
-    setBusy(true);
-    setError(null);
-    const res = await apiFetch(`/api/releases/${props.releaseId}/sprints`, {
-      method: "POST",
-      body: {
-        startDate: startDate || new Date().toISOString(),
-        endDate: endDate || new Date().toISOString(),
-        capacityPoints: Number(capacityPoints) || props.defaultCapacityPoints,
-        storyIds: selectedIds,
-      },
+    const created = await run({
+      startDate: startDate || new Date().toISOString(),
+      endDate: endDate || new Date().toISOString(),
+      capacityPoints: Number(capacityPoints) || props.defaultCapacityPoints,
+      storyIds: selectedIds,
     });
-    setBusy(false);
-    if (!res.ok) {
-      setError(res.error ?? "Couldn't create the sprint.");
-      return;
-    }
+    if (!created) return;
     setOpen(false);
     setSelectedIds([]);
     router.refresh();
@@ -98,7 +92,7 @@ export default function CreateSprintForm(props: {
           <input
             type="number"
             min={0.1}
-            step={0.5}
+            step="any"
             value={capacityPoints}
             onChange={(e) => setCapacityPoints(e.target.value)}
             className="mt-1 w-full rounded-lg border border-neutral-300 bg-white px-3 py-1.5 text-sm"
