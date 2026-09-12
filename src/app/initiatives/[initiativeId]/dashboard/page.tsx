@@ -18,6 +18,7 @@ import SummaryCards from "@/components/dashboard/SummaryCards";
 import UpcomingActions, { type UpcomingAction } from "@/components/dashboard/UpcomingActions";
 import { requireInitiativeView } from "@/lib/access/guards";
 import { requireCurrentUser } from "@/lib/auth/session";
+import { resolveLifecycleState } from "@/lib/lifecycle/resolveLifecycleState";
 import { db, establishAuthContext } from "@/lib/db";
 import { PHASE_NAMES } from "@/lib/generation/constants";
 import { computeCapacityForecast } from "@/lib/generation/capacityForecast";
@@ -144,6 +145,20 @@ export default async function DashboardPage({
   const lockedCount = LAYER_SEQUENCE.filter(isLocked).length;
   const activeLayer = LAYER_SEQUENCE.find((t) => !isLocked(t)) ?? null;
   const completionPercent = Math.round((lockedCount / LAYER_SEQUENCE.length) * 100);
+
+  // Guided-activation restructure (Block 8): once every waterfall layer is
+  // locked, "next" used to be a dead-end ("baseline stored") — the resolver
+  // now supplies the real next step (Create Release / Plan Sprint / fully
+  // active), reusing data already loaded above rather than a second query.
+  // Layer-by-layer guidance (the `activeLayer` branch below) is untouched —
+  // it's a different, finer-grained concern than the initiative-level
+  // lifecycle stage, and can be true independently of it.
+  const lifecycleResolution = resolveLifecycleState({
+    initiative: { id: initiative.id, status: initiative.status },
+    roadmapLocked: isLocked("roadmap"),
+    manualReleaseCount: releases.filter((r) => r.origin === "manual").length,
+    manualSprintCount: sprints.filter((s) => s.origin === "manual").length,
+  });
 
   // ---------- overall schedule / cost health ----------
   const overAllocated = forecast.filter((f) => f.status === "over-allocated");
@@ -345,6 +360,13 @@ export default async function DashboardPage({
       label: `Review & lock ${LAYER_LABELS[activeLayer]}`,
       href: activeLayer === "roadmap" ? ws("roadmap") : activeLayer === "feature_hierarchy" ? ws("features") : ws("epics"),
     });
+  } else if (lifecycleResolution.stage !== "active_execution") {
+    // Guided-activation restructure (Block 8): previously this stayed empty
+    // once every waterfall layer locked, even though Create Release/Plan
+    // Sprint was still a real pending step — surfaced the same gap the
+    // reference doc's "empty dashboard" problem statement describes, just
+    // one lifecycle stage later.
+    now.push({ label: lifecycleResolution.nextAction.label, href: lifecycleResolution.nextAction.href });
   }
   if (overAllocated.length > 0) {
     next.push({ label: `Rebalance sprint ${overAllocated[0].sprintNumber}`, href: ws("sprints") });
@@ -505,7 +527,9 @@ export default async function DashboardPage({
               activeLayer: activeLayer ? LAYER_LABELS[activeLayer] : null,
               nextAction: activeLayer
                 ? `Review & lock ${LAYER_LABELS[activeLayer]}`
-                : "All layers locked — baseline stored",
+                : lifecycleResolution.stage === "active_execution"
+                  ? "Baseline stored — fully active"
+                  : lifecycleResolution.nextAction.label,
             }}
             scope={{
               total: capabilities.length,
