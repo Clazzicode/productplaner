@@ -30,6 +30,14 @@ const PRODUCT_ROADMAP_COPY: RoleRoadmapCopy = {
 export const ROLE_ROADMAP_COPY: Record<WorkingRole, RoleRoadmapCopy> = {
   product_management: PRODUCT_ROADMAP_COPY,
   product_owner: PRODUCT_ROADMAP_COPY,
+  // Guided-activation restructure (reference doc §13): Business Analyst,
+  // Founder/Business Lead, and Other joined the Working Role list. All three
+  // map onto the Feature-oriented Product copy rather than the
+  // schedule-oriented Project copy below — closer to how each of them
+  // actually thinks about the roadmap than "Activities."
+  business_analyst: PRODUCT_ROADMAP_COPY,
+  founder_business_lead: PRODUCT_ROADMAP_COPY,
+  other: PRODUCT_ROADMAP_COPY,
   project_manager: {
     pageTitle: "Project Roadmap",
     itemNoun: "Activity",

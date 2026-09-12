@@ -1,35 +1,42 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { readOnboardingState, writeOnboardingState } from "@/lib/onboarding/tempStateClient";
+import { writeOnboardingState } from "@/lib/onboarding/tempStateClient";
+import { useOnboardingStateSnapshot } from "@/lib/onboarding/useOnboardingStateSnapshot";
 import WorkspaceTypeStep from "./WorkspaceTypeStep";
 
 const COMPANY_SIZES = ["1-10", "11-50", "51-200", "201-1000", "1000+"];
 
 export default function OrganizationSetupForm() {
   const router = useRouter();
-  const [workspaceType, setWorkspaceType] = useState<"solo" | "team" | null>(null);
-  const [name, setName] = useState("");
-  const [companySize, setCompanySize] = useState("");
-  const [industry, setIndustry] = useState("");
+  // Prefill from temporary state only (back-nav / refresh) — local state stays
+  // null/"" (untouched) until the user edits a field, falling back to the
+  // cookie snapshot for the initial render. No database read — organization
+  // name is not persisted in this phase. See docs/V2-ONBOARDING.md.
+  const snapshot = useOnboardingStateSnapshot();
+  const [workspaceTypeOverride, setWorkspaceTypeOverride] = useState<"solo" | "team" | null>(null);
+  const [nameOverride, setNameOverride] = useState<string | null>(null);
+  const [companySizeOverride, setCompanySizeOverride] = useState<string | null>(null);
+  const [industryOverride, setIndustryOverride] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // Prefill from temporary state only (back-nav / refresh). No database read —
-  // organization name is not persisted in this phase. See docs/V2-ONBOARDING.md.
-  useEffect(() => {
-    const state = readOnboardingState();
-    if (state.workspaceType) setWorkspaceType(state.workspaceType);
-    if (state.organizationName) setName(state.organizationName);
-    if (state.companySize) setCompanySize(state.companySize);
-    if (state.industry) setIndustry(state.industry);
-  }, []);
+  const workspaceType = workspaceTypeOverride ?? snapshot.workspaceType ?? null;
+  const name = nameOverride ?? snapshot.organizationName ?? "";
+  const companySize = companySizeOverride ?? snapshot.companySize ?? "";
+  const industry = industryOverride ?? snapshot.industry ?? "";
+  const setWorkspaceType = setWorkspaceTypeOverride;
+  const setName = setNameOverride;
+  const setCompanySize = setCompanySizeOverride;
+  const setIndustry = setIndustryOverride;
 
   const pickWorkspaceType = (value: "solo" | "team") => {
     writeOnboardingState({ workspaceType: value });
     if (value === "solo") {
       // A solo workspace already exists from signup — nothing else to collect.
-      router.push("/onboarding/role");
+      // Guided-activation restructure: Experience Calibration comes right
+      // after Workspace Setup now, ahead of Role (reference doc §2).
+      router.push("/welcome");
       return;
     }
     setWorkspaceType("team");
@@ -44,7 +51,7 @@ export default function OrganizationSetupForm() {
     }
     setError(null);
     writeOnboardingState({ workspaceType: "team", organizationName: trimmed, companySize, industry });
-    router.push("/onboarding/role");
+    router.push("/welcome");
   };
 
   if (workspaceType === null) {

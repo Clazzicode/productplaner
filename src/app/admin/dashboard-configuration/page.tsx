@@ -11,7 +11,18 @@ import type { WorkingRole } from "@/lib/onboarding/types";
 
 export const dynamic = "force-dynamic";
 
-const WORKING_ROLES: readonly WorkingRole[] = ["product_management", "project_manager", "product_owner"];
+// Guided-activation restructure (reference doc §13): Business Analyst,
+// Founder/Business Lead, and Other joined the Working Role list — admins can
+// configure their dashboard widget visibility here too, same as the
+// original three.
+const WORKING_ROLES: readonly WorkingRole[] = [
+  "product_management",
+  "project_manager",
+  "product_owner",
+  "business_analyst",
+  "founder_business_lead",
+  "other",
+];
 const DEFAULT_ROLE: WorkingRole = "product_management";
 
 function parseRole(value: string | undefined): WorkingRole {

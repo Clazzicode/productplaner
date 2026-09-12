@@ -2,11 +2,14 @@ import { describe, expect, it } from "vitest";
 import { MIN_OUTCOME_CHARS } from "@/lib/generation/constants";
 import {
   buildCapabilityPlan,
+  buildCapabilityPlanAllMvp,
   capabilityFieldsForBucket,
+  composeTargetCustomer,
   computeTargetLaunchDate,
   defaultTeamSize,
   deriveInitiativeName,
   deriveOutcomeStatement,
+  finalizeOutcomeStatement,
   DEFAULT_TARGET_CUSTOMER,
   parseFeatureLines,
 } from "@/lib/questionnaire/simplifiedIntakeTranslate";
@@ -94,6 +97,56 @@ describe("buildCapabilityPlan", () => {
   });
 });
 
+describe("buildCapabilityPlanAllMvp", () => {
+  // Guided-activation restructure (reference doc §5): Some Experience's
+  // shorter flow has no dedicated prioritization question — every listed
+  // item is treated as equally must-deliver.
+  it("places every parsed item in the now bucket", () => {
+    expect(buildCapabilityPlanAllMvp("Online ordering\nPayments\nLoyalty points")).toEqual([
+      { name: "Online ordering", bucket: "now" },
+      { name: "Payments", bucket: "now" },
+      { name: "Loyalty points", bucket: "now" },
+    ]);
+  });
+
+  it("returns an empty plan for blank input", () => {
+    expect(buildCapabilityPlanAllMvp("")).toEqual([]);
+  });
+});
+
+describe("composeTargetCustomer", () => {
+  it("falls back to the default when nothing was entered", () => {
+    expect(composeTargetCustomer([], "")).toBe(DEFAULT_TARGET_CUSTOMER);
+  });
+
+  it("joins chip selections", () => {
+    expect(composeTargetCustomer(["Customers", "Employees"], "")).toBe("Customers, Employees");
+  });
+
+  it("uses free-text detail alone when no chips are selected", () => {
+    expect(composeTargetCustomer([], "Freelance photographers")).toBe("Freelance photographers");
+  });
+
+  it("combines chips and free-text detail", () => {
+    expect(composeTargetCustomer(["Businesses"], "specifically small dental practices")).toBe(
+      "Businesses — specifically small dental practices",
+    );
+  });
+});
+
+describe("finalizeOutcomeStatement", () => {
+  it("returns the trimmed answer unchanged when it already clears the minimum length", () => {
+    const long = "Cut average order wait time in half and increase repeat visits.";
+    expect(finalizeOutcomeStatement(long)).toBe(long);
+  });
+
+  it("pads a too-short answer to clear the minimum length", () => {
+    const statement = finalizeOutcomeStatement("Faster.");
+    expect(statement.length).toBeGreaterThanOrEqual(MIN_OUTCOME_CHARS);
+    expect(statement).toContain("Faster.");
+  });
+});
+
 describe("capabilityFieldsForBucket", () => {
   it("marks now as MVP with high business value", () => {
     expect(capabilityFieldsForBucket("now")).toEqual({
@@ -154,10 +207,14 @@ describe("DEFAULT_TARGET_CUSTOMER", () => {
 describe("computeTargetLaunchDate", () => {
   it("adds the correct number of months for each timeline bucket", () => {
     const now = new Date("2026-01-15T00:00:00.000Z");
-    expect(computeTargetLaunchDate("3", now).getUTCMonth()).toBe(3); // Jan(0) + 3 = Apr(3)
-    expect(computeTargetLaunchDate("6", now).getUTCMonth()).toBe(6);
-    expect(computeTargetLaunchDate("9", now).getUTCMonth()).toBe(9);
-    expect(computeTargetLaunchDate("12", now).getUTCFullYear()).toBe(2027);
+    expect(computeTargetLaunchDate("3", now)?.getUTCMonth()).toBe(3); // Jan(0) + 3 = Apr(3)
+    expect(computeTargetLaunchDate("6", now)?.getUTCMonth()).toBe(6);
+    expect(computeTargetLaunchDate("9", now)?.getUTCMonth()).toBe(9);
+    expect(computeTargetLaunchDate("12", now)?.getUTCFullYear()).toBe(2027);
+  });
+
+  it("returns null for the 'none' bucket (guided-activation restructure: no date given)", () => {
+    expect(computeTargetLaunchDate("none")).toBeNull();
   });
 });
 

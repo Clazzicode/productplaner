@@ -66,6 +66,18 @@ export function buildCapabilityPlan(
   return Array.from(placed.values());
 }
 
+/**
+ * Guided-activation restructure (reference doc §5): Some Experience's
+ * shorter 4-question flow has no dedicated prioritization question ("What
+ * are the major things you already know need to be delivered?" is asked as
+ * one plain list, not split into now/next/later the way Beginner's Q3+Q4
+ * are) — every listed item is treated as equally must-deliver (the "now"/MVP
+ * bucket), since the user said they already know it's needed.
+ */
+export function buildCapabilityPlanAllMvp(featuresText: string): CapabilityPlanItem[] {
+  return parseFeatureLines(featuresText).map((name) => ({ name, bucket: "now" as const }));
+}
+
 /** Fixed, non-invented field mapping per bucket — no scoring heuristics. The 5
  * simplified-intake answers only carry signal for priority; effort and risk are
  * flat, documented assumptions (same spirit as the defaults ImportIntakePanel
@@ -100,10 +112,35 @@ export function deriveInitiativeName(productAnswer: string): string {
   return candidate.length > MAX_NAME_LENGTH ? `${candidate.slice(0, MAX_NAME_LENGTH - 1).trim()}…` : candidate;
 }
 
-/** No question in the simplified flow asks who the product is for. A fixed,
+/** Fallback when a level's flow doesn't ask who the product is for (Some
+ * Experience, per reference doc §5) or the question was left blank. A fixed,
  * honest placeholder beats guessing a persona from free text — every generated
  * user story is written from this field's point of view (ProductDirectionFields). */
 export const DEFAULT_TARGET_CUSTOMER = "The people who will use this product";
+
+/**
+ * Guided-activation restructure (reference doc §4 Q2): Beginner's "Who will
+ * use it?" chip options, plus an "Other" free-text escape hatch. Multi-select
+ * — a product can serve more than one of these at once.
+ */
+export const AUDIENCE_CHIP_OPTIONS = [
+  "Customers",
+  "Employees",
+  "A specific department",
+  "Businesses",
+  "Patients",
+  "Students",
+] as const;
+
+/** Combines chip picks + optional free-text detail into one targetCustomer
+ * string; falls back to DEFAULT_TARGET_CUSTOMER when nothing was entered. */
+export function composeTargetCustomer(chips: string[], detail: string): string {
+  const trimmedDetail = detail.trim();
+  if (chips.length === 0 && trimmedDetail.length === 0) return DEFAULT_TARGET_CUSTOMER;
+  const chipPart = chips.join(", ");
+  if (chipPart && trimmedDetail) return `${chipPart} — ${trimmedDetail}`;
+  return chipPart || trimmedDetail;
+}
 
 /** Synthesized, not asked: quotes the user's own Q3 answer back into a template
  * sentence. Deterministic string templating, not AI-generated — guaranteed to
@@ -119,18 +156,48 @@ export function deriveOutcomeStatement(priorityAnswer: string, productAnswer: st
   return statement.length >= MIN_OUTCOME_CHARS ? statement : `${statement} That's the outcome this plan is built around.`;
 }
 
-export type TimelineBucket = "3" | "6" | "9" | "12";
+/**
+ * Guided-activation restructure (reference doc §5 Q1): Some Experience asks
+ * for the intended outcome directly instead of Beginner's synthesized
+ * deriveOutcomeStatement — this only needs to guarantee the engine's minimum
+ * length, not invent content.
+ */
+export function finalizeOutcomeStatement(rawOutcomeAnswer: string): string {
+  const trimmed = rawOutcomeAnswer.trim();
+  return trimmed.length >= MIN_OUTCOME_CHARS ? trimmed : `${trimmed} That's the outcome this plan is built around.`;
+}
 
-export const TIMELINE_OPTIONS: { value: TimelineBucket; label: string }[] = [
-  { value: "3", label: "Within 3 months" },
-  { value: "6", label: "3–6 months" },
-  { value: "9", label: "6–9 months" },
-  { value: "12", label: "9–12 months" },
+// Guided-activation restructure (reference doc §4 Q5 / §5 Q4): added "1"
+// (Beginner's "Next month") and "none" (both levels' "I don't know yet"/"No
+// date yet" escape hatch) — "3"/"6"/"9"/"12" keep their original meaning and
+// computeTargetLaunchDate behavior unchanged (existing tests cover exactly
+// those four).
+export type TimelineBucket = "1" | "3" | "6" | "9" | "12" | "none";
+
+export const BEGINNER_TIMELINE_OPTIONS: { value: TimelineBucket; label: string }[] = [
+  { value: "1", label: "Next month" },
+  { value: "3", label: "This quarter" },
+  { value: "6", label: "Within 6 months" },
+  { value: "12", label: "Within a year" },
+  { value: "none", label: "I don't know yet" },
+];
+
+/** Reference doc §5 Q4 examples: "Target date / Quarter / 6–12 months / No
+ * date yet" — a full custom date picker was scoped out as a cosmetic-only
+ * refinement (targetLaunchDate is display-only, never read by generation);
+ * these bucket labels cover the same range/no-date intent. */
+export const SOME_EXPERIENCE_TIMELINE_OPTIONS: { value: TimelineBucket; label: string }[] = [
+  { value: "3", label: "This quarter" },
+  { value: "9", label: "6–12 months" },
+  { value: "12", label: "Beyond a year" },
+  { value: "none", label: "No date yet" },
 ];
 
 /** Initiative.targetLaunchDate is display-only (never read by the generation
- * engine), so this is purely cosmetic: today + {3,6,9,12} months from the Q5 pick. */
-export function computeTargetLaunchDate(bucket: TimelineBucket, now: Date = new Date()): Date {
+ * engine), so this is purely cosmetic: today + N months from the picked
+ * bucket, or null for "none" (no date given). */
+export function computeTargetLaunchDate(bucket: TimelineBucket, now: Date = new Date()): Date | null {
+  if (bucket === "none") return null;
   const months = Number(bucket);
   const result = new Date(now);
   result.setMonth(result.getMonth() + months);

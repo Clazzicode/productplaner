@@ -95,6 +95,24 @@ export const DASHBOARD_WIDGETS: DashboardWidgetDefinition[] = [
   },
 ];
 
+/** Used when no Working Role is known yet (e.g. onboarding incomplete, or an
+ * Org Admin with no personal role selected — an open question per
+ * docs/V2-ARCHITECTURE.md §4, not decided here). A neutral, PM-leaning default
+ * rather than guessing a role. Declared ahead of ROLE_WIDGET_ORDER below since
+ * that object's Business Analyst/Founder-Business-Lead/Other entries reuse it
+ * directly. */
+const DEFAULT_ORDER: DashboardWidgetId[] = [
+  "plan_health",
+  "current_sprint",
+  "roadmap_snapshot",
+  "initiative_summary",
+  "upcoming_timeline",
+  "attention",
+  "current_focus",
+  "upcoming_actions",
+  "recent_activity",
+];
+
 /**
  * Default emphasis/order per Working Role. Every role orders the same nine
  * widgets — Working Role changes emphasis, never which widgets exist or what
@@ -139,23 +157,15 @@ export const ROLE_WIDGET_ORDER: Record<WorkingRole, DashboardWidgetId[]> = {
     "upcoming_timeline",
     "initiative_summary",
   ],
+  // Guided-activation restructure (reference doc §13): Business Analyst,
+  // Founder/Business Lead, and Other were added to the Working Role list.
+  // None of the three has an established dashboard-emphasis convention yet,
+  // so they get the same neutral DEFAULT_ORDER used for "no role known" —
+  // safer than guessing an emphasis nobody asked for.
+  business_analyst: DEFAULT_ORDER,
+  founder_business_lead: DEFAULT_ORDER,
+  other: DEFAULT_ORDER,
 };
-
-/** Used when no Working Role is known yet (e.g. onboarding incomplete, or an
- * Org Admin with no personal role selected — an open question per
- * docs/V2-ARCHITECTURE.md §4, not decided here). A neutral, PM-leaning default
- * rather than guessing a role. */
-const DEFAULT_ORDER: DashboardWidgetId[] = [
-  "plan_health",
-  "current_sprint",
-  "roadmap_snapshot",
-  "initiative_summary",
-  "upcoming_timeline",
-  "attention",
-  "current_focus",
-  "upcoming_actions",
-  "recent_activity",
-];
 
 export function resolveDashboardOrder(role: WorkingRole | null | undefined): DashboardWidgetId[] {
   if (role && ROLE_WIDGET_ORDER[role]) return ROLE_WIDGET_ORDER[role];

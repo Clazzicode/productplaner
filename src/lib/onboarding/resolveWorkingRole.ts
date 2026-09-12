@@ -1,6 +1,13 @@
 import type { WorkingRole } from "./types";
 
-const VALID_ROLES: readonly WorkingRole[] = ["product_management", "project_manager", "product_owner"];
+const VALID_ROLES: readonly WorkingRole[] = [
+  "product_management",
+  "project_manager",
+  "product_owner",
+  "business_analyst",
+  "founder_business_lead",
+  "other",
+];
 
 /**
  * Step 8B transition (docs/V2-USERS-TEAMS.md "Working Role Cookie

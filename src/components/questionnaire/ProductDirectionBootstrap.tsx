@@ -16,14 +16,27 @@ import { ChoiceCard } from "./Choice";
 import ProductDirectionFields, { type ProductDirectionValues } from "./ProductDirectionFields";
 import SimplifiedIntakeWizard from "./SimplifiedIntakeWizard";
 
-const ROLE_ORDER: WorkingRole[] = ["product_owner", "product_management", "project_manager"];
+// Guided-activation restructure (reference doc §13): full 6-option Working
+// Role list, matching WorkingRoleSelector — this component's own role
+// question is now only reachable via a direct deep-link to /initiatives/new
+// before onboarding finishes (the normal path always arrives with hasProfile
+// true and a role already set from /onboarding/role), but it must still
+// offer the same real, non-rejecting choices when it is.
+const ROLE_ORDER: WorkingRole[] = [
+  "product_owner",
+  "product_management",
+  "project_manager",
+  "business_analyst",
+  "founder_business_lead",
+  "other",
+];
 
 export default function ProductDirectionBootstrap(props: { hasProfile: boolean; workingRole: WorkingRole | null }) {
   const router = useRouter();
-  const [roleAnswer, setRoleAnswer] = useState<WorkingRole | "something_else" | null>(
+  const [roleAnswer, setRoleAnswer] = useState<WorkingRole | null>(
     props.hasProfile ? (props.workingRole ?? "product_management") : props.workingRole,
   );
-  const passedRoleGate = roleAnswer !== null && roleAnswer !== "something_else";
+  const passedRoleGate = roleAnswer !== null;
   const [experienceLevel, setExperienceLevel] = useState("some_experience");
   const [values, setValues] = useState<ProductDirectionValues>({
     name: "",
@@ -101,37 +114,17 @@ export default function ProductDirectionBootstrap(props: { hasProfile: boolean; 
               This shapes how guidance is framed throughout the process — not what&apos;s asked or
               how your plan is built.
             </p>
-            {roleAnswer === "something_else" ? (
-              <div className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 p-6">
-                <h3 className="font-semibold text-amber-900">This probably isn&apos;t the right tool for that</h3>
-                <p className="mt-3 text-sm leading-relaxed text-amber-800">
-                  The Guided Product Planning Platform is built for people driving a software
-                  product roadmap — development, product management, or project management. If
-                  none of those fit, a general work-management tool will serve you better.
-                </p>
-                <Button type="button" variant="secondary" onClick={() => setRoleAnswer(null)} className="mt-4">
-                  ← Go back — one of those is closer to my role
-                </Button>
-              </div>
-            ) : (
-              <div className="mt-6 grid gap-3 sm:grid-cols-2">
-                {ROLE_ORDER.map((value) => (
-                  <ChoiceCard
-                    key={value}
-                    selected={false}
-                    onClick={() => pickRole(value)}
-                    label={WORKING_ROLE_META[value].label}
-                    hint={WORKING_ROLE_META[value].description}
-                  />
-                ))}
+            <div className="mt-6 grid gap-3 sm:grid-cols-2">
+              {ROLE_ORDER.map((value) => (
                 <ChoiceCard
+                  key={value}
                   selected={false}
-                  onClick={() => setRoleAnswer("something_else")}
-                  label="Something else"
-                  hint="This tool is built for people driving a software product roadmap."
+                  onClick={() => pickRole(value)}
+                  label={WORKING_ROLE_META[value].label}
+                  hint={WORKING_ROLE_META[value].description}
                 />
-              </div>
-            )}
+              ))}
+            </div>
           </div>
         )}
 

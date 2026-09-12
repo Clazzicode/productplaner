@@ -9,6 +9,11 @@ export const WORKING_ROLE_LABELS: Record<string, string> = {
   product_management: "Product Management",
   project_manager: "Project Manager",
   product_owner: "Product Owner",
+  // Guided-activation restructure (reference doc §13): added to the Working
+  // Role list — see src/lib/onboarding/roleOptions.ts's WORKING_ROLE_META.
+  business_analyst: "Business Analyst",
+  founder_business_lead: "Founder / Business Lead",
+  other: "Other",
 };
 
 export const MEMBER_TYPE_LABELS: Record<string, string> = {
