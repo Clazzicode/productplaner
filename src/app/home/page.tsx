@@ -10,14 +10,15 @@ import InitiativeSummaryList from "@/components/dashboard/global/InitiativeSumma
 import PlanHealthSummary from "@/components/dashboard/global/PlanHealthSummary";
 import RoadmapSnapshot from "@/components/dashboard/global/RoadmapSnapshot";
 import UpcomingTimeline from "@/components/dashboard/global/UpcomingTimeline";
-import { Card, CardTitle } from "@/components/ui/Card";
-import EmptyState from "@/components/ui/EmptyState";
+import ActivationHome from "@/components/home/ActivationHome";
+import LifecycleDashboard from "@/components/home/LifecycleDashboard";
 import { listAuthorizedInitiativeIds } from "@/lib/access/initiativeAccess";
 import { requireCurrentUser } from "@/lib/auth/session";
 import { establishAuthContext } from "@/lib/db";
 import { getEffectiveWidgetVisibility } from "@/lib/dashboard/dashboardConfiguration";
 import { resolveWidgetVisibility, filterVisible } from "@/lib/dashboard/dashboardConfigResolution";
 import { loadGlobalDashboardData } from "@/lib/dashboard/globalDashboardData";
+import { loadLifecycleDashboardData } from "@/lib/dashboard/lifecycleDashboardData";
 import { resolveDashboardOrder, resolveMainColumnOrder, type DashboardWidgetId } from "@/lib/dashboard/widgetRegistry";
 import { resolveWorkingRole } from "@/lib/onboarding/resolveWorkingRole";
 import { readOnboardingStateServer } from "@/lib/onboarding/tempStateServer";
@@ -25,40 +26,42 @@ import { readOnboardingStateServer } from "@/lib/onboarding/tempStateServer";
 export const dynamic = "force-dynamic";
 
 /**
- * Standard User Dashboard (Step 7B — docs/V2-STANDARD-DASHBOARD.md): the global
- * operational home for a normal organization member. Distinct from
- * `/initiatives/[initiativeId]/dashboard` (unchanged, untouched by this phase),
- * which stays the detailed view of one initiative.
- *
- * Authorization boundary (docs/V2-RESOURCE-ACCESS.md §16, Step 8C): the
- * dashboard now receives the canonical authorized-initiative set from
- * `listAuthorizedInitiativeIds()` — the same function every other authorized
- * list/page uses, not a re-derived filter. For the current org_admin demo
- * user this includes every initiative in the org (implicit admin access), so
- * the visible result looks the same as before Step 8C — expected, not a sign
- * the filtering is inert.
- *
- * Working Role (from the Step 4 onboarding cookie, not yet a persisted `User`
- * field) only ever changes widget ORDER via widgetRegistry.ts — it never
- * changes which data is fetched or shown.
- *
- * Dashboard Configuration (Step 8E — docs/V2-DASHBOARD-CONFIGURATION.md):
- * `getEffectiveWidgetVisibility` is the one seam this page adds — it decides
- * which of the already-authorized widgets below actually render. It has no
- * knowledge of `authorizedInitiativeIds`/`accessLevel`/`memberType` and
- * cannot grant access to anything; `loadGlobalDashboardData` is called
- * exactly as before, regardless of what's visible. No Working Role yet
- * (onboarding incomplete, or an Org Admin with none set) skips the lookup
- * entirely and uses pure registry defaults — never a guessed role.
+ * Guided-activation restructure (reference doc §7/§8, Block 4): `/home` is
+ * now a thin router on the centralized lifecycle resolver (Block 2), not a
+ * single static screen. `no_initiative` renders Activation Home instead of
+ * the operational dashboard with nothing in it; the four intermediate stages
+ * render a focused, one-primary-action LifecycleDashboard; only
+ * `active_execution` renders today's full Standard Dashboard widget body —
+ * unchanged below, still backed by loadGlobalDashboardData — which is the
+ * "mature dashboard, shown once earned" the reference doc describes.
  */
 export default async function HomePage() {
   const user = await requireCurrentUser();
   establishAuthContext(user.authUserId);
   if (user.profiles.length === 0) redirect("/welcome");
+
+  const authorizedInitiativeIds = await listAuthorizedInitiativeIds(user);
+  const lifecycle = await loadLifecycleDashboardData(user.id, authorizedInitiativeIds);
+
+  if (lifecycle.resolution.stage === "no_initiative") {
+    return <ActivationHome userName={user.name} greeting={lifecycle.greeting} />;
+  }
+  if (lifecycle.resolution.stage !== "active_execution") {
+    // initiativeSummary is always populated once an initiative exists —
+    // every non-"no_initiative"/"active_execution" stage requires one.
+    return (
+      <LifecycleDashboard
+        greeting={lifecycle.greeting}
+        userName={user.name}
+        resolution={lifecycle.resolution}
+        initiativeSummary={lifecycle.initiativeSummary!}
+      />
+    );
+  }
+
   const onboarding = await readOnboardingStateServer();
   const workingRole = resolveWorkingRole(user.workingRole, onboarding.workingRole);
 
-  const authorizedInitiativeIds = await listAuthorizedInitiativeIds(user);
   const data = await loadGlobalDashboardData(user.id, authorizedInitiativeIds);
 
   const visibility = workingRole
@@ -76,19 +79,12 @@ export default async function HomePage() {
       case "plan_health":
         return <PlanHealthSummary primary={data.primary} />;
       case "current_sprint":
-        return data.primary ? (
+        return (
           <SprintReleaseStatus
-            initiativeId={data.primary.id}
-            currentSprint={data.primary.currentSprint}
-            releases={data.primary.releases}
+            initiativeId={data.primary!.id}
+            currentSprint={data.primary!.currentSprint}
+            releases={data.primary!.releases}
           />
-        ) : (
-          <Card>
-            <CardTitle>Current Sprint</CardTitle>
-            <div className="mt-3">
-              <EmptyState title="No sprint yet" description="Sprint status appears once a plan is generated." />
-            </div>
-          </Card>
         );
       case "roadmap_snapshot":
         return <RoadmapSnapshot primary={data.primary} />;
@@ -99,16 +95,7 @@ export default async function HomePage() {
       case "attention":
         return <DecisionsRequiredPanel items={decisions} />;
       case "upcoming_actions":
-        return data.primary ? (
-          <UpcomingActions now={actions.now} next={actions.next} later={actions.later} />
-        ) : (
-          <Card>
-            <CardTitle>Upcoming Actions</CardTitle>
-            <div className="mt-3">
-              <EmptyState title="Nothing yet" description="Suggested next steps appear once a plan is generated." />
-            </div>
-          </Card>
-        );
+        return <UpcomingActions now={actions.now} next={actions.next} later={actions.later} />;
       case "recent_activity":
         return <RecentActivity items={activity} />;
       case "upcoming_timeline":

@@ -6,6 +6,26 @@ import type { OnboardingState } from "./types";
 
 const EMPTY_STATE: OnboardingState = {};
 
+// useSyncExternalStore requires getSnapshot to return a referentially stable
+// value when nothing has actually changed — readOnboardingState() itself
+// JSON.parses the cookie fresh on every call, which returns a new object
+// every time and sends React into an infinite re-render loop ("Maximum
+// update depth exceeded" — caught by browser testing, not by typecheck/lint/
+// unit tests, none of which render a real component tree). Cache the parsed
+// result, keyed on the raw cookie string, so repeated calls between actual
+// cookie writes return the same object reference.
+let cachedRawCookie: string | undefined;
+let cachedState: OnboardingState = EMPTY_STATE;
+
+function getSnapshot(): OnboardingState {
+  const raw = document.cookie;
+  if (raw !== cachedRawCookie) {
+    cachedRawCookie = raw;
+    cachedState = readOnboardingState();
+  }
+  return cachedState;
+}
+
 function subscribe(): () => void {
   // Nothing external mutates this cookie while a component reads it other
   // than this same component's own writeOnboardingState() calls, which
@@ -27,5 +47,5 @@ function getServerSnapshot(): OnboardingState {
  * subscription since nothing else mutates this cookie mid-session.
  */
 export function useOnboardingStateSnapshot(): OnboardingState {
-  return useSyncExternalStore(subscribe, readOnboardingState, getServerSnapshot);
+  return useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
 }

@@ -29,7 +29,13 @@ export default function LoginForm() {
       setError(res.error ?? (mode === "sign-up" ? "Could not create your account." : "Could not sign in."));
       return;
     }
-    router.push("/home");
+    // Guided-activation restructure: route through "/" rather than straight
+    // to "/home" — root page.tsx is what actually resumes a signed-up user at
+    // the correct onboarding step (Workspace Setup / Experience / Role /
+    // first initiative). Pushing to "/home" directly used to skip Workspace
+    // Setup entirely for a brand-new sign-up, since /home's own guard only
+    // ever checked for a QualifyingProfile, not org setup.
+    router.push("/");
     router.refresh();
   };
 

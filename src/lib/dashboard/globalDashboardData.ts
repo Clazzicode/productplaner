@@ -74,7 +74,9 @@ export interface GlobalDashboardData {
   timeline: TimelineEntry[];
 }
 
-function timeOfDayGreeting(now: Date): string {
+/** Exported for reuse by lifecycleDashboardData.ts's pre-activation stages
+ * (guided-activation restructure) — same greeting, no need for a second copy. */
+export function timeOfDayGreeting(now: Date): string {
   const hour = now.getHours();
   if (hour < 12) return "Good morning";
   if (hour < 18) return "Good afternoon";
