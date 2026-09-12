@@ -26,7 +26,10 @@ export default async function UserDetailPage({
 
   const target = await db.user.findUnique({
     where: { id: userId },
-    include: { teamMemberships: { include: { team: { select: { id: true, name: true } } } } },
+    include: {
+      teamMemberships: { include: { team: { select: { id: true, name: true } } } },
+      memberships: { where: { organizationId: actor.organizationId }, select: { role: true } },
+    },
   });
   if (!target || target.homeOrganizationId !== actor.organizationId) notFound();
 
@@ -53,6 +56,7 @@ export default async function UserDetailPage({
             name: target.name,
             email: target.email,
             accessLevel: target.accessLevel,
+            permissionRole: target.memberships[0]?.role ?? "member",
             workingRole: target.workingRole,
             memberType: target.memberType,
             status: target.status,

@@ -7,13 +7,20 @@ import Button from "@/components/ui/Button";
 import { Card, CardTitle } from "@/components/ui/Card";
 import Select from "@/components/ui/Select";
 import { apiFetch } from "@/lib/clientApi";
-import { ACCESS_LEVEL_LABELS, MEMBER_TYPE_LABELS, STATUS_LABELS, WORKING_ROLE_LABELS } from "@/lib/admin/labels";
+import {
+  ACCESS_LEVEL_LABELS,
+  MEMBER_TYPE_LABELS,
+  PERMISSION_ROLE_LABELS,
+  STATUS_LABELS,
+  WORKING_ROLE_LABELS,
+} from "@/lib/admin/labels";
 
 interface UserDetail {
   id: string;
   name: string;
   email: string;
   accessLevel: string;
+  permissionRole: string;
   workingRole: string | null;
   memberType: string;
   status: string;
@@ -56,7 +63,15 @@ export default function UserDetailForm(props: {
       setMessage({ text: result.error ?? "Something went wrong.", tone: "error" });
       return;
     }
-    setUser((prev) => ({ ...prev, ...patch }));
+    setUser((prev) => {
+      const next = { ...prev, ...patch };
+      // Mirrors PATCH /api/admin/users/[userId]'s OrganizationMember sync: an
+      // accessLevel change always writes role "admin"/"member", even for a
+      // prior Owner — the route never preserves or reassigns "owner". Kept in
+      // sync here so the badge doesn't show a stale tier until next reload.
+      if (patch.accessLevel) next.permissionRole = patch.accessLevel === "org_admin" ? "admin" : "member";
+      return next;
+    });
     setMessage({ text: "Saved.", tone: "ok" });
     router.refresh();
   }
@@ -142,16 +157,29 @@ export default function UserDetailForm(props: {
       <Card>
         <CardTitle>Organization Authority</CardTitle>
         <p className="mt-1 text-xs text-text-muted">What this account can administer — separate from Working Role.</p>
-        <Select
-          className="mt-2 max-w-xs"
-          value={user.accessLevel}
-          disabled={pending}
-          onChange={(e) => patchUser({ accessLevel: e.target.value })}
-        >
-          {Object.entries(ACCESS_LEVEL_LABELS).map(([v, l]) => (
-            <option key={v} value={v}>{l}</option>
-          ))}
-        </Select>
+        <div className="mt-2 flex items-center gap-2">
+          <Select
+            className="max-w-xs"
+            value={user.accessLevel}
+            disabled={pending}
+            onChange={(e) => patchUser({ accessLevel: e.target.value })}
+          >
+            {Object.entries(ACCESS_LEVEL_LABELS).map(([v, l]) => (
+              <option key={v} value={v}>{l}</option>
+            ))}
+          </Select>
+          {user.permissionRole === "owner" && (
+            <Badge variant="indigo" title="Created this organization — this tier can't be reassigned here.">
+              {PERMISSION_ROLE_LABELS.owner}
+            </Badge>
+          )}
+        </div>
+        {user.permissionRole === "admin" && (
+          <p className="mt-1.5 text-[11px] text-text-muted">
+            {PERMISSION_ROLE_LABELS.admin} — promoted by the Organization Owner, distinct from the Owner
+            themselves.
+          </p>
+        )}
       </Card>
 
       <Card>

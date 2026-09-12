@@ -7,13 +7,14 @@ import FilterBar from "@/components/ui/FilterBar";
 import SearchInput from "@/components/ui/SearchInput";
 import Select from "@/components/ui/Select";
 import { Table, TableBody, TableCell, TableHead, TableHeaderCell, TableRow } from "@/components/ui/Table";
-import { ACCESS_LEVEL_LABELS, MEMBER_TYPE_LABELS, STATUS_LABELS, WORKING_ROLE_LABELS } from "@/lib/admin/labels";
+import { MEMBER_TYPE_LABELS, PERMISSION_ROLE_LABELS, STATUS_LABELS, WORKING_ROLE_LABELS } from "@/lib/admin/labels";
 
 export interface UserRow {
   id: string;
   name: string;
   email: string;
   accessLevel: string;
+  permissionRole: string;
   workingRole: string | null;
   memberType: string;
   status: string;
@@ -26,6 +27,12 @@ const STATUS_VARIANT: Record<string, BadgeVariant> = {
   archived: "neutral",
 };
 
+const PERMISSION_ROLE_VARIANT: Record<string, BadgeVariant> = {
+  member: "neutral",
+  admin: "emerald",
+  owner: "indigo",
+};
+
 const ALL = "__all__";
 
 export default function UsersTable(props: { users: UserRow[] }) {
@@ -33,7 +40,7 @@ export default function UsersTable(props: { users: UserRow[] }) {
   const [status, setStatus] = useState(ALL);
   const [workingRole, setWorkingRole] = useState(ALL);
   const [memberType, setMemberType] = useState(ALL);
-  const [accessLevel, setAccessLevel] = useState(ALL);
+  const [permissionRole, setPermissionRole] = useState(ALL);
   const [team, setTeam] = useState(ALL);
 
   const allTeams = useMemo(
@@ -47,7 +54,7 @@ export default function UsersTable(props: { users: UserRow[] }) {
     if (status !== ALL && u.status !== status) return false;
     if (workingRole !== ALL && u.workingRole !== workingRole) return false;
     if (memberType !== ALL && u.memberType !== memberType) return false;
-    if (accessLevel !== ALL && u.accessLevel !== accessLevel) return false;
+    if (permissionRole !== ALL && u.permissionRole !== permissionRole) return false;
     if (team !== ALL && !u.teams.includes(team)) return false;
     return true;
   });
@@ -85,9 +92,9 @@ export default function UsersTable(props: { users: UserRow[] }) {
             <option key={v} value={v}>{l}</option>
           ))}
         </Select>
-        <Select value={accessLevel} onChange={(e) => setAccessLevel(e.target.value)} className="w-auto">
-          <option value={ALL}>All access levels</option>
-          {Object.entries(ACCESS_LEVEL_LABELS).map(([v, l]) => (
+        <Select value={permissionRole} onChange={(e) => setPermissionRole(e.target.value)} className="w-auto">
+          <option value={ALL}>All permission roles</option>
+          {Object.entries(PERMISSION_ROLE_LABELS).map(([v, l]) => (
             <option key={v} value={v}>{l}</option>
           ))}
         </Select>
@@ -107,7 +114,7 @@ export default function UsersTable(props: { users: UserRow[] }) {
             <TableHeaderCell>User</TableHeaderCell>
             <TableHeaderCell>Email</TableHeaderCell>
             <TableHeaderCell>Working Role</TableHeaderCell>
-            <TableHeaderCell>Access Level</TableHeaderCell>
+            <TableHeaderCell>Permission Role</TableHeaderCell>
             <TableHeaderCell>Member Type</TableHeaderCell>
             <TableHeaderCell>Teams</TableHeaderCell>
             <TableHeaderCell>Status</TableHeaderCell>
@@ -121,7 +128,11 @@ export default function UsersTable(props: { users: UserRow[] }) {
                 <TableCell className="text-text-muted">
                   {u.workingRole ? WORKING_ROLE_LABELS[u.workingRole] : <span className="italic">Not set</span>}
                 </TableCell>
-                <TableCell>{ACCESS_LEVEL_LABELS[u.accessLevel]}</TableCell>
+                <TableCell>
+                  <Badge variant={PERMISSION_ROLE_VARIANT[u.permissionRole]}>
+                    {PERMISSION_ROLE_LABELS[u.permissionRole]}
+                  </Badge>
+                </TableCell>
                 <TableCell>
                   <Badge variant={u.memberType === "external" ? "amber" : "neutral"}>
                     {MEMBER_TYPE_LABELS[u.memberType]}

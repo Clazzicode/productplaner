@@ -2,18 +2,25 @@
 
 // Guided-activation restructure (reference doc §13): relabeled to the
 // reference doc's permission-tier language (Member / Organization Admin).
-// This is the only permission tier surfaced in the UI today — the finer
-// Workspace-Admin-vs-Organization-Admin split the doc also lists exists
-// server-side (OrganizationMember.role: member|admin|owner, resolved fresh
-// per request as getCurrentUser().permissionRole) but isn't displayed
-// anywhere yet; every current display (this file's consumers) reads
-// User.accessLevel, documented as a fallback/seed value, not the
-// authoritative per-org role. Surfacing the real 3-tier split would mean
-// reworking admin/users' data source from User.accessLevel to a per-org
-// OrganizationMember.role join — a real, separate change, not done here.
+// Kept for the mutation path — PATCH /api/admin/users/[userId] only ever
+// toggles User.accessLevel between these two values (see that route's own
+// comment for why it never assigns "owner").
 export const ACCESS_LEVEL_LABELS: Record<string, string> = {
   standard_user: "Member",
   org_admin: "Organization Admin",
+};
+
+// The real, per-organization 3-tier role (OrganizationMember.role:
+// member|admin|owner — see getCurrentUser().permissionRole in
+// src/lib/auth/session.ts). Surfaced read-only in the Users list and User
+// Detail page so an Organization Admin can tell the actual org Owner apart
+// from other admins they've promoted — both collapse to the same
+// ACCESS_LEVEL_LABELS entry ("Organization Admin") since the mutation route
+// can't distinguish or reassign ownership.
+export const PERMISSION_ROLE_LABELS: Record<string, string> = {
+  member: "Member",
+  admin: "Workspace Admin",
+  owner: "Organization Admin",
 };
 
 export const WORKING_ROLE_LABELS: Record<string, string> = {

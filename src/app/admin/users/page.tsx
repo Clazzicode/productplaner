@@ -24,6 +24,7 @@ export default async function AdminUsersPage() {
     orderBy: { name: "asc" },
     include: {
       teamMemberships: { include: { team: { select: { id: true, name: true } } } },
+      memberships: { where: { organizationId: user.organizationId }, select: { role: true } },
     },
   });
 
@@ -41,6 +42,7 @@ export default async function AdminUsersPage() {
             name: u.name,
             email: u.email,
             accessLevel: u.accessLevel,
+            permissionRole: u.memberships[0]?.role ?? "member",
             workingRole: u.workingRole,
             memberType: u.memberType,
             status: u.status,
