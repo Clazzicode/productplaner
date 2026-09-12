@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { isAuthRetryableFetchError } from "@supabase/supabase-js";
 import { z } from "zod";
 import { jsonError, zodMessage } from "@/lib/api";
 import { usernameSchema, usernameToPlaceholderEmail } from "@/lib/auth/username";
@@ -18,7 +19,19 @@ export async function POST(request: Request) {
     email: usernameToPlaceholderEmail(parsed.data.username),
     password: parsed.data.password,
   });
-  if (error) return jsonError("Incorrect username or password.", 401);
+  if (error) {
+    // Supabase's own auth-js docs this error class for exactly this: a 500-504
+    // gateway/infra hiccup, not a real rejection — "should not cause session
+    // invalidation." Reported the same as bad credentials, a transient blip on
+    // Supabase's end looks identical to a wrong password and sends users
+    // chasing a typo that was never there. Reproduced directly against this
+    // project's Supabase instance: a fresh, correct sign-in occasionally comes
+    // back as this error class rather than succeeding.
+    if (isAuthRetryableFetchError(error)) {
+      return jsonError("Sign-in service is temporarily unavailable. Please try again in a moment.", 503);
+    }
+    return jsonError("Incorrect username or password.", 401);
+  }
 
   return NextResponse.json({ ok: true });
 }

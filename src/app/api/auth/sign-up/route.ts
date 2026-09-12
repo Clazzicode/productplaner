@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { isAuthRetryableFetchError } from "@supabase/supabase-js";
 import { z } from "zod";
 import { jsonError, zodMessage } from "@/lib/api";
 import { clearActiveOrganizationCookie, provisionSoloWorkspace } from "@/lib/auth/session";
@@ -32,12 +33,21 @@ export async function POST(request: Request) {
     email_confirm: true,
   });
   if (error) {
+    // Supabase's auth-js docs this error class for exactly this: a 500-504
+    // gateway/infra hiccup, not a real rejection — reproduced directly
+    // against this project's Supabase instance, where admin.createUser()
+    // occasionally comes back this way on an otherwise-fine request. Left
+    // unchecked, the raw infra message (e.g. "Gateway Timeout") leaked
+    // straight to the user as if it were a real validation failure.
+    if (isAuthRetryableFetchError(error)) {
+      return jsonError("Sign-up service is temporarily unavailable. Please try again in a moment.", 503);
+    }
     // Supabase reports a taken placeholder address the same way it would a
     // real duplicate email (admin.createUser()'s wording is "has already
     // been registered", not signUp()'s "already registered" — match both)
     // — translate that back into username terms.
     const message = /already.*registered|already exists/i.test(error.message)
-      ? "That username is already taken."
+      ? "That username is already taken. If this is your account, try signing in instead."
       : error.message;
     return jsonError(message, 400);
   }
