@@ -9,7 +9,7 @@ import { readOnboardingState, writeOnboardingState } from "@/lib/onboarding/temp
 import { WORKING_ROLE_META } from "@/lib/onboarding/roleOptions";
 import { EXPERIENCE_LEVEL_OPTIONS, type SimplifiedExperienceLevel } from "@/lib/onboarding/experienceOptions";
 import type { WorkingRole } from "@/lib/onboarding/types";
-import Button from "@/components/ui/Button";
+import { ButtonLoader } from "@/components/ui/loading";
 import SectionProgress from "./SectionProgress";
 import GuidanceBanner from "./GuidanceBanner";
 import { ChoiceCard } from "./Choice";
@@ -173,9 +173,15 @@ export default function ProductDirectionBootstrap(props: { hasProfile: boolean; 
                 {error && <p className="mt-4 text-sm text-red-600">{error}</p>}
 
                 <div className="mt-8 flex justify-end">
-                  <Button type="submit" disabled={submitting || values.name.trim().length < 3} className="px-6 py-3">
-                    {submitting ? "Creating…" : "Continue →"}
-                  </Button>
+                  <ButtonLoader
+                    type="submit"
+                    loading={submitting}
+                    loadingLabel="Creating"
+                    disabled={values.name.trim().length < 3}
+                    className="px-6 py-3"
+                  >
+                    Continue →
+                  </ButtonLoader>
                 </div>
               </>
             )}

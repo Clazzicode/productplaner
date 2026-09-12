@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { apiFetch } from "@/lib/clientApi";
+import { ButtonLoader } from "@/components/ui/loading";
 
 /** Inline title/body(/points) editor, gated by the layer's lock state (FR-11). */
 export default function EditableArtifact(props: {
@@ -79,13 +80,9 @@ export default function EditableArtifact(props: {
           >
             Cancel
           </button>
-          <button
-            onClick={save}
-            disabled={busy || title.trim().length < 3}
-            className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-700 disabled:opacity-50"
-          >
-            {busy ? "Saving…" : "Save"}
-          </button>
+          <ButtonLoader onClick={save} loading={busy} loadingLabel="Saving" disabled={title.trim().length < 3}>
+            Save
+          </ButtonLoader>
         </div>
       </div>
     );

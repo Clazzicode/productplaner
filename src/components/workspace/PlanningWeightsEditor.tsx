@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Button from "@/components/ui/Button";
 import { apiFetch } from "@/lib/clientApi";
+import { ButtonLoader } from "@/components/ui/loading";
 import type { WeightSetConfigView } from "@/lib/planningWeights/planningWeights";
 
 const SUM_TOLERANCE = 0.001;
@@ -128,9 +129,9 @@ export default function PlanningWeightsEditor(props: { initiativeId: string; set
               <Button variant="secondary" onClick={() => reset(set.id)} disabled={busy || !set.isOverridden}>
                 Reset to default
               </Button>
-              <Button onClick={() => save(set.id)} disabled={busy || !dirty || !validSum}>
-                {busy ? "Saving…" : "Save"}
-              </Button>
+              <ButtonLoader onClick={() => save(set.id)} loading={busy} loadingLabel="Saving" disabled={!dirty || !validSum}>
+                Save
+              </ButtonLoader>
             </div>
           </div>
         );

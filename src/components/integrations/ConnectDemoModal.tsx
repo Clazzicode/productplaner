@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Modal from "@/components/ui/Modal";
 import { apiFetch } from "@/lib/clientApi";
+import { ButtonLoader } from "@/components/ui/loading";
 import type { HubInitiative, HubProvider } from "./IntegrationsHub";
 
 /**
@@ -156,13 +157,14 @@ export default function ConnectDemoModal(props: {
         <button onClick={props.onClose} className="text-sm text-neutral-500 hover:text-neutral-800">
           Cancel
         </button>
-        <button
+        <ButtonLoader
           onClick={save}
-          disabled={busy || (isExecution && form.projectKey.trim().length === 0)}
-          className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50"
+          loading={busy}
+          loadingLabel="Saving"
+          disabled={isExecution && form.projectKey.trim().length === 0}
         >
-          {busy ? "Saving…" : "Save connection"}
-        </button>
+          Save connection
+        </ButtonLoader>
       </div>
     </Modal>
   );

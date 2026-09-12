@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { apiFetch } from "@/lib/clientApi";
+import { ButtonLoader } from "@/components/ui/loading";
 
 /** FR-14 stub: demo-mode sync — writes fake DEMO-n keys locally, no HTTP
  * leaves the machine. It is a sync, not a handoff: the prototype stays here. */
@@ -46,21 +47,24 @@ export default function JiraSyncPanel(props: {
         Jira: {props.status === "connected" ? "connected" : "not connected"}
       </span>
       {props.status !== "connected" ? (
-        <button
+        <ButtonLoader
+          variant="secondary"
           onClick={() => run("connect")}
           disabled={busy !== null}
-          className="rounded-lg border border-indigo-300 px-3 py-1 font-medium text-indigo-700 hover:bg-indigo-50 disabled:opacity-50"
+          loading={busy === "connect"}
+          loadingLabel="Connecting"
         >
-          {busy === "connect" ? "Connecting…" : "Connect"}
-        </button>
+          Connect
+        </ButtonLoader>
       ) : (
-        <button
+        <ButtonLoader
           onClick={() => run("sync")}
           disabled={busy !== null}
-          className="rounded-lg bg-indigo-600 px-3 py-1 font-semibold text-white hover:bg-indigo-700 disabled:opacity-50"
+          loading={busy === "sync"}
+          loadingLabel="Syncing"
         >
-          {busy === "sync" ? "Syncing…" : "Sync now"}
-        </button>
+          Sync now
+        </ButtonLoader>
       )}
       {props.lastSyncedAt && (
         <span className="text-neutral-400">

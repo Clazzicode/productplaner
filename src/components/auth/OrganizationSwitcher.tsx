@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import Button from "@/components/ui/Button";
 import { apiFetch } from "@/lib/clientApi";
+import { ButtonLoader } from "@/components/ui/loading";
 
 interface OrgOption {
   id: string;
@@ -48,13 +48,15 @@ export default function OrganizationSwitcher(props: { activeOrganizationId: stri
             {isActive ? (
               <span className="rounded-full bg-accent/10 px-3 py-1 text-xs font-semibold text-accent">Active</span>
             ) : (
-              <Button
-                variant="ghost"
+              <ButtonLoader
+                variant="secondary"
                 onClick={() => void switchTo(org.id)}
                 disabled={busyId !== null}
+                loading={busyId === org.id}
+                loadingLabel="Switching"
               >
-                {busyId === org.id ? "Switching…" : "Switch"}
-              </Button>
+                Switch
+              </ButtonLoader>
             )}
           </div>
         );

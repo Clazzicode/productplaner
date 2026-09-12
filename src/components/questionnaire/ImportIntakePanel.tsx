@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import { apiFetch } from "@/lib/clientApi";
 import Button from "@/components/ui/Button";
+import { ButtonLoader } from "@/components/ui/loading";
 import type { CapabilityView, SuccessValues } from "./PlanningQuestionnaire";
 import type { ProductDirectionValues } from "./ProductDirectionFields";
 
@@ -345,9 +346,9 @@ export default function ImportIntakePanel(props: {
                 <Button variant="ghost" onClick={dismiss}>
                   Discard
                 </Button>
-                <Button onClick={() => void apply()} disabled={busy}>
-                  {busy ? "Applying…" : "Apply selected"}
-                </Button>
+                <ButtonLoader onClick={() => void apply()} loading={busy} loadingLabel="Applying">
+                  Apply selected
+                </ButtonLoader>
               </div>
             </div>
           )}

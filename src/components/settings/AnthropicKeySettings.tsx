@@ -4,6 +4,7 @@ import { useState } from "react";
 import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
 import { apiFetch } from "@/lib/clientApi";
+import { ButtonLoader } from "@/components/ui/loading";
 
 export default function AnthropicKeySettings(props: { hasKey: boolean; last4: string | null }) {
   const [hasKey, setHasKey] = useState(props.hasKey);
@@ -90,9 +91,9 @@ export default function AnthropicKeySettings(props: { hasKey: boolean; last4: st
                 Cancel
               </Button>
             )}
-            <Button onClick={() => void save()} disabled={busy || apiKey.trim().length < 10}>
-              {busy ? "Saving…" : "Save"}
-            </Button>
+            <ButtonLoader onClick={() => void save()} loading={busy} loadingLabel="Saving" disabled={apiKey.trim().length < 10}>
+              Save
+            </ButtonLoader>
           </div>
         </div>
       )}

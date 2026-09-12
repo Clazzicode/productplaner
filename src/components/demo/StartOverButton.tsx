@@ -5,6 +5,7 @@ import { useState } from "react";
 import Button from "@/components/ui/Button";
 import Modal from "@/components/ui/Modal";
 import { apiFetch } from "@/lib/clientApi";
+import { ButtonLoader } from "@/components/ui/loading";
 
 // Migrated to the shared Modal primitive (docs/V2-DESIGN-SYSTEM.md). Accepted,
 // intentional deltas from the previous hand-rolled dialog: Modal adds an
@@ -53,9 +54,14 @@ export default function StartOverButton() {
           <Button variant="secondary" onClick={() => setConfirming(false)}>
             Cancel
           </Button>
-          <Button variant="destructive" onClick={run} disabled={busy}>
-            {busy ? "Deleting everything…" : "Delete everything & start over"}
-          </Button>
+          <ButtonLoader
+            loading={busy}
+            loadingLabel="Deleting everything"
+            onClick={run}
+            className="!bg-red-600 hover:!bg-red-700 disabled:hover:!bg-red-600"
+          >
+            Delete everything & start over
+          </ButtonLoader>
         </div>
       </Modal>
     </>

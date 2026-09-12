@@ -14,6 +14,7 @@ import {
 } from "@/lib/questionnaire/valueRiskGuidance";
 import type { BusinessValue, RiskLevel } from "@/lib/generation/types";
 import Button from "@/components/ui/Button";
+import { ButtonLoader } from "@/components/ui/loading";
 import SectionProgress from "./SectionProgress";
 import GuidanceBanner from "./GuidanceBanner";
 import { ChoiceCard, ChoicePill } from "./Choice";
@@ -752,9 +753,14 @@ function CapabilityForm(props: {
 
       <div className="mt-5 flex justify-end gap-3">
         <Button variant="ghost" onClick={onCancel}>Cancel</Button>
-        <Button onClick={save} disabled={busy || form.name.trim().length < 3 || (advancedValue && !scoringComplete)}>
-          {busy ? "Saving…" : existing ? "Save changes" : "Add feature"}
-        </Button>
+        <ButtonLoader
+          onClick={save}
+          loading={busy}
+          loadingLabel="Saving"
+          disabled={form.name.trim().length < 3 || (advancedValue && !scoringComplete)}
+        >
+          {existing ? "Save changes" : "Add feature"}
+        </ButtonLoader>
       </div>
     </div>
   );
@@ -858,13 +864,15 @@ function ReviewSection(props: {
 
       <div className="mt-7 flex items-center justify-between">
         <Button variant="ghost" onClick={onBack}>← Back</Button>
-        <Button
+        <ButtonLoader
           onClick={onGenerate}
-          disabled={busy || (!alreadyGenerated && (!validation || validation.errors.length > 0))}
+          loading={busy}
+          loadingLabel="Generating your prototype"
+          disabled={!alreadyGenerated && (!validation || validation.errors.length > 0)}
           className="px-6 py-3"
         >
-          {busy ? "Generating your prototype…" : alreadyGenerated ? "Save & view plan →" : "Generate working prototype"}
-        </Button>
+          {alreadyGenerated ? "Save & view plan →" : "Generate working prototype"}
+        </ButtonLoader>
       </div>
     </div>
   );
@@ -903,9 +911,9 @@ function Nav(props: { busy: boolean; onBack?: () => void; onNext: () => void; ne
       {props.onBack ? (
         <Button variant="ghost" onClick={props.onBack}>← Back</Button>
       ) : <span />}
-      <Button onClick={props.onNext} disabled={props.busy || props.nextDisabled} className="px-6 py-3">
-        {props.busy ? "Saving…" : "Continue →"}
-      </Button>
+      <ButtonLoader onClick={props.onNext} loading={props.busy} loadingLabel="Saving" disabled={props.nextDisabled} className="px-6 py-3">
+        Continue →
+      </ButtonLoader>
     </div>
   );
 }

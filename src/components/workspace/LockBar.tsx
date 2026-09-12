@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { apiFetch } from "@/lib/clientApi";
+import { ButtonLoader } from "@/components/ui/loading";
 
 const SEQUENCE = [
   "roadmap",
@@ -173,23 +174,18 @@ export default function LockBar(props: {
               >
                 Cancel
               </button>
-              <button
+              <ButtonLoader
                 onClick={() => act(confirm.layerType, confirm.mode)}
-                disabled={busy}
-                className={`rounded-lg px-4 py-2 text-sm font-semibold text-white disabled:opacity-50 ${
+                loading={busy}
+                loadingLabel="Working"
+                className={
                   confirm.mode === "lock" && regenWarning
-                    ? "bg-amber-600 hover:bg-amber-700"
-                    : "bg-indigo-600 hover:bg-indigo-700"
-                }`}
+                    ? "!bg-amber-600 hover:!bg-amber-700 disabled:hover:!bg-amber-600"
+                    : ""
+                }
               >
-                {busy
-                  ? "Working…"
-                  : confirm.mode === "lock"
-                    ? regenWarning
-                      ? "Lock & re-propagate"
-                      : "Lock layer"
-                    : "Unlock"}
-              </button>
+                {confirm.mode === "lock" ? (regenWarning ? "Lock & re-propagate" : "Lock layer") : "Unlock"}
+              </ButtonLoader>
             </div>
           </div>
         </div>

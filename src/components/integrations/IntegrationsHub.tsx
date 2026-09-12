@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Badge, type BadgeVariant } from "@/components/ui/Badge";
 import { apiFetch } from "@/lib/clientApi";
+import { ButtonLoader } from "@/components/ui/loading";
 import ConnectDemoModal from "./ConnectDemoModal";
 import SyncLogPanel, { type SyncLogView } from "./SyncLogPanel";
 
@@ -223,6 +224,7 @@ export default function IntegrationsHub(props: {
                             : setModalProvider(provider)
                         }
                         busy={busy("reconnect")}
+                        loadingLabel={conn && !conn.isEnabled ? "Reconnecting" : "Connecting"}
                       >
                         {conn && !conn.isEnabled ? "Reconnect" : "Connect"}
                       </ActionButton>
@@ -237,6 +239,7 @@ export default function IntegrationsHub(props: {
                             primary
                             onClick={() => act(provider, { action: "sync", connectionId: conn!.id }, "sync")}
                             busy={busy("sync")}
+                            loadingLabel="Syncing"
                           >
                             Sync now
                           </ActionButton>
@@ -244,6 +247,7 @@ export default function IntegrationsHub(props: {
                         <ActionButton
                           onClick={() => act(provider, { action: "disconnect", connectionId: conn!.id }, "disconnect")}
                           busy={busy("disconnect")}
+                          loadingLabel="Disconnecting"
                         >
                           Disconnect
                         </ActionButton>
@@ -303,18 +307,16 @@ function ActionButton(props: {
   onClick: () => void;
   primary?: boolean;
   busy?: boolean;
+  loadingLabel?: string;
 }) {
   return (
-    <button
+    <ButtonLoader
       onClick={props.onClick}
-      disabled={props.busy}
-      className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition disabled:opacity-50 ${
-        props.primary
-          ? "bg-indigo-600 text-white hover:bg-indigo-700"
-          : "border border-neutral-300 text-neutral-600 hover:bg-neutral-50"
-      }`}
+      loading={!!props.busy}
+      loadingLabel={props.loadingLabel}
+      variant={props.primary ? "primary" : "secondary"}
     >
-      {props.busy ? "Working…" : props.children}
-    </button>
+      {props.children}
+    </ButtonLoader>
   );
 }

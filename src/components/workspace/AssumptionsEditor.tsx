@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { apiFetch } from "@/lib/clientApi";
+import { ButtonLoader } from "@/components/ui/loading";
 
 export interface AssumptionValues {
   averageHourlyRate: number;
@@ -99,13 +100,9 @@ export default function AssumptionsEditor(props: {
         </p>
       )}
       <div className="mt-4 flex justify-end">
-        <button
-          onClick={save}
-          disabled={busy}
-          className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50"
-        >
-          {busy ? "Recalculating…" : "Save & recalculate"}
-        </button>
+        <ButtonLoader onClick={save} loading={busy} loadingLabel="Recalculating">
+          Save & recalculate
+        </ButtonLoader>
       </div>
     </div>
   );
