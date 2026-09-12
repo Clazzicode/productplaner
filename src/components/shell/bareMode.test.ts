@@ -18,6 +18,12 @@ describe("isBareRoute", () => {
     expect(isBareRoute("/initiatives/abc/workspace/executive/print", true, undefined)).toBe(true);
   });
 
+  it("is bare on admin routes — they render their own separate AdminShell", () => {
+    expect(isBareRoute("/admin", true, undefined)).toBe(true);
+    expect(isBareRoute("/admin/users", true, undefined)).toBe(true);
+    expect(isBareRoute("/admin/dashboard-configuration", true, undefined)).toBe(true);
+  });
+
   it("is shelled for ordinary operational routes", () => {
     expect(isBareRoute("/home", true, undefined)).toBe(false);
     expect(isBareRoute("/integrations", true, undefined)).toBe(false);

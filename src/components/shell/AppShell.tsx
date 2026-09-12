@@ -4,7 +4,6 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
 import AccountMenu from "@/components/auth/AccountMenu";
-import Avatar from "@/components/ui/Avatar";
 import { isBareRoute } from "./bareMode";
 import LeftNav, { type NavInitiative } from "./LeftNav";
 import MobileNavDrawer from "./MobileNavDrawer";
@@ -87,18 +86,7 @@ export default function AppShell(props: {
     </div>
   );
 
-  const accountActions = (
-    <div className="flex items-center gap-3">
-      <Link
-        href="/account/settings"
-        className="hidden items-center gap-2 text-sm text-neutral-500 hover:text-neutral-700 sm:flex"
-      >
-        <Avatar name={props.userName} />
-        {props.userName}
-      </Link>
-      <AccountMenu />
-    </div>
-  );
+  const accountActions = <AccountMenu userName={props.userName} accessLevel={props.accessLevel} />;
 
   return (
     <div className="flex min-h-screen">
