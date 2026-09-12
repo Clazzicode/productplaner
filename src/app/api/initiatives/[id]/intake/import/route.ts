@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireInitiativeApiAccess } from "@/lib/access/guards";
-import { jsonError } from "@/lib/api";
+import { jsonError, zodMessage } from "@/lib/api";
 import { requireCurrentUserApi } from "@/lib/auth/session";
 import { establishAuthContext } from "@/lib/db";
 import { runDocumentUnderstanding } from "@/lib/ai/actions/documentUnderstanding";
@@ -10,16 +10,13 @@ import {
   AiRequestInProgressError,
   AiUsageLimitExceededError,
 } from "@/lib/ai/errors";
-import {
-  MAX_IMPORT_FILE_BYTES,
-  SUPPORTED_IMPORT_EXTENSIONS,
-  extractDocumentText,
-  isSupportedImportExtension,
-} from "@/lib/intakeImport/extractText";
+import { documentUnderstandingRequestSchema } from "@/lib/validation/schemas";
 
-// Analysis only — this route never writes to the database. The extracted draft
-// goes back to the client for review; accepted fields are saved through the
-// same PATCH /intake and POST /capabilities endpoints manual entry already uses.
+// Step 2 of 2 for document import (see ./extract/route.ts for step 1, which
+// reads the file and returns its text). This route never writes to the
+// database — the extracted draft goes back to the client for review; accepted
+// fields are saved through the same PATCH /intake and POST /capabilities
+// endpoints manual entry already uses.
 //
 // Routes through the shared platform AI gateway (DOCUMENT_UNDERSTANDING) —
 // no per-user API key anymore (directive §30/§37: bring-your-own-key removed).
@@ -35,29 +32,9 @@ export async function POST(
   const guard = await requireInitiativeApiAccess(user, id, "edit");
   if (!guard.ok) return guard.response;
 
-  const form = await request.formData().catch(() => null);
-  const file = form?.get("file");
-  if (!file || !(file instanceof File)) return jsonError("No file provided.", 422);
-
-  if (file.size > MAX_IMPORT_FILE_BYTES) {
-    return jsonError(`That file is too large — please keep it under ${MAX_IMPORT_FILE_BYTES / (1024 * 1024)}MB.`, 422);
-  }
-  const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
-  if (!isSupportedImportExtension(ext)) {
-    return jsonError(`Unsupported file type — upload a ${SUPPORTED_IMPORT_EXTENSIONS.map((e) => `.${e}`).join(", ")} file.`, 422);
-  }
-
-  const buffer = Buffer.from(await file.arrayBuffer());
-
-  let text: string;
-  try {
-    text = await extractDocumentText(buffer);
-  } catch {
-    return jsonError("Could not read that file — it may be corrupted or password-protected.", 422);
-  }
-  if (!text.trim()) {
-    return jsonError("No readable text was found in that document.", 422);
-  }
+  const parsed = documentUnderstandingRequestSchema.safeParse(await request.json().catch(() => null));
+  if (!parsed.success) return jsonError(zodMessage(parsed.error), 422);
+  const { text, sourceFileName } = parsed.data;
 
   try {
     const draft = await runDocumentUnderstanding({
@@ -66,7 +43,7 @@ export async function POST(
       userId: user.id,
       organizationId: user.organizationId,
     });
-    return NextResponse.json({ draft, sourceFileName: file.name });
+    return NextResponse.json({ draft, sourceFileName });
   } catch (err) {
     if (err instanceof AiDisabledError) return jsonError("AI features are currently disabled.", 503);
     if (err instanceof AiCapabilityDisabledError) return jsonError(err.message, 403);

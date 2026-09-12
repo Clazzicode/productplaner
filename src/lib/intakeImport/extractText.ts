@@ -8,8 +8,9 @@ export type SupportedImportExtension = (typeof SUPPORTED_IMPORT_EXTENSIONS)[numb
 export const MAX_IMPORT_FILE_BYTES = 8 * 1024 * 1024;
 
 // Bounds LLM cost/latency for outlier documents — planning decks/briefs comfortably
-// fit well under this; anything larger is truncated rather than rejected.
-const MAX_EXTRACTED_CHARS = 40_000;
+// fit well under this; anything larger is truncated rather than rejected. Exported
+// so the /intake/import route can cap the re-submitted text at the same limit.
+export const MAX_EXTRACTED_CHARS = 40_000;
 
 export function isSupportedImportExtension(ext: string): ext is SupportedImportExtension {
   return (SUPPORTED_IMPORT_EXTENSIONS as readonly string[]).includes(ext);

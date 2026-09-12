@@ -47,6 +47,7 @@ model Organization {
   dashboardConfigurations DashboardConfiguration[]
   aiUsageEvents           AiUsageEvent[]
   aiRequestLocks          AiRequestLock[]
+  aiJobs                  AiJob[]
   createdAt               DateTime                 @default(now())
 }
 
@@ -105,6 +106,7 @@ model User {
   initiativeAccess       InitiativeAccess[]
   aiUsageEvents          AiUsageEvent[]
   aiRequestLocks         AiRequestLock[]
+  aiJobs                 AiJob[]
   intakeAiAnalyses       IntakeAiAnalysis[]
   createdAt              DateTime             @default(now())
 }
@@ -227,6 +229,7 @@ model Project {
   initiatives          Initiative[]
   decisions            Decision[]
   risks                Risk[]
+  aiJobs               AiJob[]
   createdAt            DateTime     @default(now())
   updatedAt            DateTime     @updatedAt
 }
@@ -369,6 +372,7 @@ model Initiative {
   initiativeAccess          InitiativeAccess[]
   aiUsageEvents             AiUsageEvent[]
   aiRequestLocks            AiRequestLock[]
+  aiJobs                    AiJob[]
   intakeAiAnalyses          IntakeAiAnalysis[]
   planningWeightOverrides   PlanningWeightOverride[]
   decisions                 Decision[]
@@ -710,6 +714,8 @@ model AiUsageEvent {
   organization     Organization @relation(fields: [organizationId], references: [id])
   initiativeId     String?
   initiative       Initiative?  @relation(fields: [initiativeId], references: [id], onDelete: Cascade)
+  aiJobId          String?
+  aiJob            AiJob?       @relation(fields: [aiJobId], references: [id], onDelete: SetNull)
   action           String // AiActionKey
   success          Boolean
   inputTokens      Int          @default(0)
@@ -746,6 +752,38 @@ model AiRequestLock {
   initiative     Initiative?  @relation(fields: [initiativeId], references: [id])
 
   @@unique([scopeKey, action])
+}
+
+// AI job record (directive §18-21 foundation): one row per AI action
+// invocation, so a completed/failed job can be inspected later even
+// without a client watching live (e.g. a future job-history view).
+// `status` is the directive's internal-stage vocabulary — never surfaced
+// to the user directly; src/lib/ai/activityCopy.ts maps each value to
+// plain-language copy shown in the UI. Today's actions are single
+// synchronous Anthropic calls, so only a handful of these values are ever
+// real in practice; the fuller set (checking_gaps/waiting_for_user/
+// building_recommendation/saving_artifact) is reserved for the richer
+// multi-stage pipelines Phase 4/5 add later — foundation-scoped, not
+// fully wired yet.
+model AiJob {
+  id                String         @id @default(cuid())
+  organizationId    String
+  organization      Organization   @relation(fields: [organizationId], references: [id])
+  projectId         String?
+  project           Project?       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  initiativeId      String?
+  initiative        Initiative?    @relation(fields: [initiativeId], references: [id], onDelete: Cascade)
+  actionKey         String // AiActionKey
+  status            String         @default("queued")
+  createdByUserId   String
+  createdByUser     User           @relation(fields: [createdByUserId], references: [id])
+  startedAt         DateTime       @default(now())
+  completedAt       DateTime?
+  errorMessage      String?
+  resultSummaryJson String? // serialized JSON — foundation-level completion synopsis data
+  usageEvents       AiUsageEvent[]
+
+  @@index([organizationId, actionKey, startedAt])
 }
 
 // Validated ANALYZE_INTAKE output. Additive-only alongside IntakeAnswerSet/

@@ -14,3 +14,24 @@ export interface AiCapabilityConfig {
   organizationMonthlyLimit: number;
   description: string;
 }
+
+/** AiJob.status vocabulary (directive §18-21's internal-stage table). Never
+ * shown to the user directly — src/lib/ai/activityCopy.ts maps each value to
+ * plain-language copy. Today's actions (single synchronous Anthropic calls)
+ * only ever pass through queued -> extracting_information -> completed/failed
+ * for real; the richer stages below are reserved for the multi-stage
+ * pipelines Phase 4/5 add later. */
+export type AiJobStatus =
+  | "queued"
+  | "validating_access"
+  | "loading_context"
+  | "processing_sources"
+  | "extracting_information"
+  | "checking_gaps"
+  | "waiting_for_user"
+  | "building_recommendation"
+  | "validating_output"
+  | "saving_artifact"
+  | "completed"
+  | "failed"
+  | "cancelled";

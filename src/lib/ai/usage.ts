@@ -3,6 +3,7 @@ import { getAiCapabilityConfig } from "./registry";
 import { isAiEnabled } from "./client";
 import { getOrganizationAiSpendThisMonthUsd, resolveOrganizationAiBudgetUsd } from "./budget";
 import { estimateCostUsd } from "./pricing";
+import { completeAiJob, createAiJob, failAiJob } from "./job";
 import type { AiActionKey, AiCapabilityConfig } from "./types";
 import {
   AiCapabilityDisabledError,
@@ -42,6 +43,7 @@ export function deriveScopeKey(params: { userId: string; initiativeId?: string |
 interface AllowedContext {
   capability: AiCapabilityConfig;
   release: () => Promise<void>;
+  jobId: string;
 }
 
 export async function assertAiActionAllowed(params: {
@@ -49,6 +51,7 @@ export async function assertAiActionAllowed(params: {
   userId: string;
   organizationId: string;
   initiativeId?: string | null;
+  projectId?: string | null;
 }): Promise<AllowedContext> {
   if (!isAiEnabled()) throw new AiDisabledError("AI features are currently disabled.");
 
@@ -99,7 +102,15 @@ export async function assertAiActionAllowed(params: {
     initiativeId: params.initiativeId ?? null,
   });
 
-  return { capability, release };
+  const jobId = await createAiJob({
+    organizationId: params.organizationId,
+    createdByUserId: params.userId,
+    actionKey: params.action,
+    projectId: params.projectId ?? null,
+    initiativeId: params.initiativeId ?? null,
+  });
+
+  return { capability, release, jobId };
 }
 
 async function acquireLock(data: {
@@ -142,14 +153,17 @@ export async function recordAiUsage(data: {
   inputTokens?: number;
   outputTokens?: number;
   errorMessage?: string;
+  aiJobId?: string | null;
+  resultSummary?: Record<string, unknown>;
 }): Promise<{ id: string }> {
   const inputTokens = data.inputTokens ?? 0;
   const outputTokens = data.outputTokens ?? 0;
-  return db.aiUsageEvent.create({
+  const event = await db.aiUsageEvent.create({
     data: {
       userId: data.userId,
       organizationId: data.organizationId,
       initiativeId: data.initiativeId ?? null,
+      aiJobId: data.aiJobId ?? null,
       action: data.action,
       success: data.success,
       inputTokens,
@@ -159,4 +173,19 @@ export async function recordAiUsage(data: {
     },
     select: { id: true },
   });
+
+  // Retries (e.g. analyzeIntake.ts's malformed-response retry loop) call this
+  // more than once per job — a later success overwrites an earlier attempt's
+  // "failed" mark, which is the outcome that actually matters. Awaited (not
+  // fire-and-forget) since this runs in short-lived serverless functions that
+  // can be frozen right after returning a response.
+  if (data.aiJobId) {
+    if (data.success) {
+      await completeAiJob(data.aiJobId, data.resultSummary ?? {});
+    } else {
+      await failAiJob(data.aiJobId, data.errorMessage ?? "AI request failed.");
+    }
+  }
+
+  return event;
 }

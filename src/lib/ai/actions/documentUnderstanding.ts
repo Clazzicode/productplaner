@@ -1,6 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { AI_MODEL, getAnthropicClient } from "@/lib/ai/client";
 import { assertAiActionAllowed, recordAiUsage } from "@/lib/ai/usage";
+import { setAiJobStatus } from "@/lib/ai/job";
 import { intakeImportDraftSchema, type IntakeImportDraft } from "@/lib/validation/schemas";
 
 // DOCUMENT_UNDERSTANDING (directive §14A) — reads a supplied document and
@@ -85,7 +86,7 @@ export interface RunDocumentUnderstandingParams {
 export async function runDocumentUnderstanding(params: RunDocumentUnderstandingParams): Promise<IntakeImportDraft> {
   const { documentText, initiativeId, userId, organizationId } = params;
 
-  const { capability, release } = await assertAiActionAllowed({
+  const { capability, release, jobId } = await assertAiActionAllowed({
     action: "DOCUMENT_UNDERSTANDING",
     userId,
     organizationId,
@@ -93,6 +94,8 @@ export async function runDocumentUnderstanding(params: RunDocumentUnderstandingP
   });
 
   try {
+    await setAiJobStatus(jobId, "extracting_information");
+
     let response: Anthropic.Message;
     try {
       response = await getAnthropicClient().messages.create({
@@ -108,6 +111,7 @@ export async function runDocumentUnderstanding(params: RunDocumentUnderstandingP
         userId,
         organizationId,
         initiativeId,
+        aiJobId: jobId,
         action: "DOCUMENT_UNDERSTANDING",
         success: false,
         errorMessage: err instanceof Error ? err.message : "Anthropic API request failed.",
@@ -121,6 +125,7 @@ export async function runDocumentUnderstanding(params: RunDocumentUnderstandingP
         userId,
         organizationId,
         initiativeId,
+        aiJobId: jobId,
         action: "DOCUMENT_UNDERSTANDING",
         success: false,
         inputTokens: response.usage.input_tokens,
@@ -130,6 +135,7 @@ export async function runDocumentUnderstanding(params: RunDocumentUnderstandingP
       throw new Error("Model did not return structured output.");
     }
 
+    await setAiJobStatus(jobId, "validating_output");
     const parsed = intakeImportDraftSchema.parse(toolUse.input);
     const draft: IntakeImportDraft = {
       ...parsed,
@@ -143,10 +149,16 @@ export async function runDocumentUnderstanding(params: RunDocumentUnderstandingP
       userId,
       organizationId,
       initiativeId,
+      aiJobId: jobId,
       action: "DOCUMENT_UNDERSTANDING",
       success: true,
       inputTokens: response.usage.input_tokens,
       outputTokens: response.usage.output_tokens,
+      resultSummary: {
+        fieldsExtracted: Object.keys({ ...draft.productDirection, ...draft.success }).length,
+        capabilitiesExtracted: draft.capabilities?.length ?? 0,
+        warnings: draft.warnings ?? [],
+      },
     });
 
     return draft;

@@ -8,6 +8,7 @@ import { AI_MODEL, getAnthropicClient } from "@/lib/ai/client";
 import { GLOBAL_PRODUCT_PLANNING_RULES, METHODOLOGY_AI_GUIDANCE } from "@/lib/ai/methodologyRules";
 import { PLATFORM_SYSTEM_PROMPT } from "@/lib/ai/systemPrompt";
 import { assertAiActionAllowed, recordAiUsage } from "@/lib/ai/usage";
+import { completeAiJob, setAiJobStatus } from "@/lib/ai/job";
 import { AiResponseValidationError } from "@/lib/ai/errors";
 
 // ANALYZE_INTAKE (req #9-#13, docs/V2-AI-FOUNDATION.md). Reads intake data
@@ -122,7 +123,7 @@ export interface RunAnalyzeIntakeResult {
 export async function runAnalyzeIntake(params: RunAnalyzeIntakeParams): Promise<RunAnalyzeIntakeResult> {
   const { initiativeId, userId, organizationId } = params;
 
-  const { capability, release } = await assertAiActionAllowed({
+  const { capability, release, jobId } = await assertAiActionAllowed({
     action: "ANALYZE_INTAKE",
     userId,
     organizationId,
@@ -130,6 +131,7 @@ export async function runAnalyzeIntake(params: RunAnalyzeIntakeParams): Promise<
   });
 
   try {
+    await setAiJobStatus(jobId, "loading_context");
     const [intake, initiative] = await Promise.all([
       loadIntakeInput(initiativeId),
       db.initiative.findUniqueOrThrow({ where: { id: initiativeId }, select: { methodology: true } }),
@@ -151,6 +153,7 @@ export async function runAnalyzeIntake(params: RunAnalyzeIntakeParams): Promise<
     let response: Anthropic.Message | undefined;
     let lastError: unknown;
 
+    await setAiJobStatus(jobId, "extracting_information");
     for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
       try {
         response = await getAnthropicClient().messages.create({
@@ -166,6 +169,7 @@ export async function runAnalyzeIntake(params: RunAnalyzeIntakeParams): Promise<
           userId,
           organizationId,
           initiativeId,
+          aiJobId: jobId,
           action: "ANALYZE_INTAKE",
           success: false,
           errorMessage: err instanceof Error ? err.message : "Anthropic API request failed.",
@@ -184,6 +188,7 @@ export async function runAnalyzeIntake(params: RunAnalyzeIntakeParams): Promise<
           userId,
           organizationId,
           initiativeId,
+          aiJobId: jobId,
           action: "ANALYZE_INTAKE",
           success: false,
           inputTokens: response.usage.input_tokens,
@@ -199,6 +204,7 @@ export async function runAnalyzeIntake(params: RunAnalyzeIntakeParams): Promise<
       );
     }
 
+    await setAiJobStatus(jobId, "validating_output");
     const [analysisRow, usageEvent] = await withTransaction((tx) =>
       Promise.all([
         tx.intakeAiAnalysis.create({
@@ -220,6 +226,7 @@ export async function runAnalyzeIntake(params: RunAnalyzeIntakeParams): Promise<
             userId,
             organizationId,
             initiativeId,
+            aiJobId: jobId,
             action: "ANALYZE_INTAKE",
             success: true,
             inputTokens: response.usage.input_tokens,
@@ -229,6 +236,12 @@ export async function runAnalyzeIntake(params: RunAnalyzeIntakeParams): Promise<
         }),
       ]),
     );
+
+    await completeAiJob(jobId, {
+      summary: analysis.summary,
+      risksIdentified: analysis.risks.length,
+      recommendedPhases: analysis.recommendedRoadmapPhases.length,
+    });
 
     return { analysis, analysisId: analysisRow.id, usageEventId: usageEvent.id };
   } finally {

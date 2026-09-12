@@ -4,8 +4,13 @@ import { useRef, useState } from "react";
 import { apiFetch } from "@/lib/clientApi";
 import Button from "@/components/ui/Button";
 import { ButtonLoader } from "@/components/ui/loading";
+import AiActivityPanel from "@/components/ai/AiActivityPanel";
+import AiCompletionSynopsis from "@/components/ai/AiCompletionSynopsis";
+import AiExplainBadge from "@/components/ai/AiExplainBadge";
 import type { CapabilityView, SuccessValues } from "./PlanningQuestionnaire";
 import type { ProductDirectionValues } from "./ProductDirectionFields";
+
+const IMPORT_STEPS = ["Reading your document", "Extracting planning details"];
 
 interface CapabilityDraft {
   name: string;
@@ -98,6 +103,7 @@ export default function ImportIntakePanel(props: {
 
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [step, setImportStep] = useState(0); // 0 = reading, 1 = extracting — real network stages, see IMPORT_STEPS
   const [error, setError] = useState<string | null>(null);
   const [draft, setDraft] = useState<IntakeImportDraft | null>(null);
   const [sourceFileName, setSourceFileName] = useState("");
@@ -106,6 +112,11 @@ export default function ImportIntakePanel(props: {
 
   const fieldRows = draft ? buildFieldRows(draft, productDirection, success) : [];
   const capabilityDrafts = draft?.capabilities ?? [];
+  const assumptionNotes = capabilityDrafts.some(
+    (c) => c.effortSize == null || c.businessValue == null || c.riskLevel == null,
+  )
+    ? ["Effort, value, or risk were defaulted for features not explicitly scored in the document."]
+    : [];
 
   const openFilePicker = () => {
     setError(null);
@@ -119,14 +130,30 @@ export default function ImportIntakePanel(props: {
 
     setOpen(true);
     setBusy(true);
+    setImportStep(0);
     setError(null);
     setDraft(null);
     setApplied(null);
 
     try {
-      const form = new FormData();
-      form.append("file", file);
-      const res = await fetch(`/api/initiatives/${initiativeId}/intake/import`, { method: "POST", body: form });
+      const extractForm = new FormData();
+      extractForm.append("file", file);
+      const extractRes = await fetch(`/api/initiatives/${initiativeId}/intake/import/extract`, {
+        method: "POST",
+        body: extractForm,
+      });
+      const extractBody = (await extractRes.json().catch(() => ({}))) as { text?: string; error?: string };
+      if (!extractRes.ok || !extractBody.text) {
+        setError(extractBody.error ?? `Could not read that file (${extractRes.status}).`);
+        return;
+      }
+
+      setImportStep(1);
+      const res = await fetch(`/api/initiatives/${initiativeId}/intake/import`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: extractBody.text, sourceFileName: file.name }),
+      });
       const body = (await res.json().catch(() => ({}))) as {
         draft?: IntakeImportDraft;
         sourceFileName?: string;
@@ -251,18 +278,51 @@ export default function ImportIntakePanel(props: {
             </button>
           </div>
 
-          {busy && !draft && <p className="mt-3 text-sm text-text-secondary">Analyzing your document…</p>}
+          {busy && !draft && (
+            <div className="mt-3">
+              <AiActivityPanel
+                explanation="The Planning Assistant will read your document and extract planning details it finds — problem statement, target customer, goals, and features. Nothing is saved until you review and approve it below."
+                steps={IMPORT_STEPS}
+                currentStep={step}
+              />
+            </div>
+          )}
 
           {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
 
           {applied && <p className="mt-3 text-sm text-emerald-700">{applied}</p>}
 
           {draft && (
-            <div className="mt-3">
-              <p className="text-sm text-text-secondary">
-                Extracted from <span className="font-medium">{sourceFileName}</span> — review and pick what to keep.
-                Nothing is saved until you click Apply.
-              </p>
+            <div className="mt-3 space-y-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="text-sm text-text-secondary">
+                  Extracted from <span className="font-medium">{sourceFileName}</span> — review and pick what to
+                  keep. Nothing is saved until you click Apply.
+                </p>
+                <AiExplainBadge
+                  informationUsed={`Text extracted from ${sourceFileName}.`}
+                  why="To pre-fill this initiative's intake form so you don't have to retype information already in the document."
+                  assumptions={assumptionNotes}
+                  sources={[sourceFileName]}
+                  rulesApplied={[
+                    "Only fields with clear, specific evidence in the document were included — anything uncertain was left for you to fill in manually.",
+                  ]}
+                />
+              </div>
+
+              {(fieldRows.length > 0 || capabilityDrafts.length > 0) && (
+                <AiCompletionSynopsis
+                  sourceLabel={sourceFileName}
+                  created={[
+                    ...(fieldRows.length > 0 ? [`${fieldRows.length} field${fieldRows.length === 1 ? "" : "s"} suggested`] : []),
+                    ...(capabilityDrafts.length > 0
+                      ? [`${capabilityDrafts.length} feature${capabilityDrafts.length === 1 ? "" : "s"} found`]
+                      : []),
+                  ]}
+                  assumptions={assumptionNotes}
+                  unresolved={draft.warnings ?? []}
+                />
+              )}
 
               {fieldRows.length === 0 && capabilityDrafts.length === 0 && (
                 <p className="mt-3 text-sm text-amber-700">Nothing usable was found in that document.</p>
@@ -331,14 +391,6 @@ export default function ImportIntakePanel(props: {
                       </li>
                     ))}
                   </ul>
-                </div>
-              )}
-
-              {draft.warnings && draft.warnings.length > 0 && (
-                <div className="mt-4 rounded-xl bg-amber-50 px-4 py-3 text-xs text-amber-800">
-                  {draft.warnings.map((w, i) => (
-                    <p key={i}>{w}</p>
-                  ))}
                 </div>
               )}
 

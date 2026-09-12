@@ -211,6 +211,17 @@ export const intakeImportDraftSchema = z.object({
 
 export type IntakeImportDraft = z.infer<typeof intakeImportDraftSchema>;
 
+// Document import is now two real round trips (extract, then analyze) so the
+// client can show genuine staged progress instead of one opaque "working"
+// state — see src/components/questionnaire/ImportIntakePanel.tsx and
+// src/app/api/initiatives/[id]/intake/import/{extract,}/route.ts. Capped at
+// the same MAX_EXTRACTED_CHARS the extract step already enforces server-side;
+// this is defense-in-depth against a tampered request, not a new limit.
+export const documentUnderstandingRequestSchema = z.object({
+  text: z.string().trim().min(1).max(40_000),
+  sourceFileName: z.string().trim().min(1).max(255),
+});
+
 export const artifactPatchSchema = z
   .object({
     title: z.string().trim().min(3).optional(),
