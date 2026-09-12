@@ -3,7 +3,7 @@ import { requireCurrentUser } from "@/lib/auth/session";
 import { db, establishAuthContext } from "@/lib/db";
 import { DEFAULT_ASSUMPTIONS, PROTOTYPE_DISCLAIMER } from "@/lib/generation/constants";
 import { costHealth, HEALTH_LABELS } from "@/lib/generation/health";
-import { LAYER_LABELS, LAYER_SEQUENCE } from "@/lib/generation/types";
+import { resolveLifecycleState, STAGE_LABEL } from "@/lib/lifecycle/resolveLifecycleState";
 import { loadCostContext } from "@/lib/workspace";
 
 // FR-19: assembled from live data on every render — no snapshot, no manual
@@ -28,7 +28,7 @@ export default async function ExecutiveReport({ initiativeId }: { initiativeId: 
           },
         },
       },
-      prototype: { include: { layerLocks: true } },
+      prototype: { select: { id: true, approvedAt: true } },
       syncConnections: true,
     },
   });
@@ -55,7 +55,11 @@ export default async function ExecutiveReport({ initiativeId }: { initiativeId: 
     0,
   );
   const totalCapacity = sprints.reduce((n, s) => n + s.capacityPoints, 0);
-  const lockedCount = prototype.layerLocks.filter((l) => l.state === "locked").length;
+  const planStage = resolveLifecycleState({
+    initiative: { id: initiative.id, status: initiative.status },
+    manualReleaseCount: releases.filter((r) => r.origin === "manual").length,
+    manualSprintCount: sprints.filter((s) => s.origin === "manual").length,
+  }).stage;
   const jira = initiative.syncConnections.find((c) => c.tool === "jira");
   const { model } = await loadCostContext(initiativeId, prototype.id);
   const money = (n: number) => `$${Math.round(n).toLocaleString()}`;
@@ -206,21 +210,13 @@ export default async function ExecutiveReport({ initiativeId }: { initiativeId: 
       <Section title="Plan status">
         <ul className="space-y-1 text-sm text-neutral-600">
           <li>
-            Waterfall layers locked: <strong>{lockedCount} of {LAYER_SEQUENCE.length}</strong>{" "}
-            ({LAYER_SEQUENCE.filter(
-              (t) => prototype.layerLocks.find((l) => l.layerType === t)?.state === "locked",
-            )
-              .map((t) => LAYER_LABELS[t])
-              .join(", ") || "none yet"})
+            Progress: <strong>{STAGE_LABEL[planStage]}</strong>
           </li>
-          <li>
-            Approved baseline:{" "}
-            <strong>
-              {prototype.approvedAt
-                ? `stored ${format(prototype.approvedAt, "MMM d, yyyy")}`
-                : "not yet approved"}
-            </strong>
-          </li>
+          {prototype.approvedAt && (
+            <li>
+              Approved baseline: <strong>stored {format(prototype.approvedAt, "MMM d, yyyy")}</strong>
+            </li>
+          )}
           <li>
             Execution tool:{" "}
             <strong>

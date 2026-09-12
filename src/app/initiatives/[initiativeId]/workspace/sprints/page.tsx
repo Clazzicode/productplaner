@@ -196,7 +196,7 @@ export default async function SprintsPage({
           ? "Kanban continuous flow — no fixed sprints. Stories are worked in priority order; release dates are forecasted from cumulative throughput."
           : agileFrozen
             ? "Waterfall: the sprint and release plan became a fixed schedule once the baseline was approved — it can no longer be rebalanced."
-            : "Agile execution layers — flexible beneath the locked waterfall structure. Moving stories here never restructures locked layers above. Re-locking an upper layer recomputes this plan."}
+            : "Create releases and plan sprints directly here — nothing is auto-assigned. Regenerating the plan from Living Plan rebuilds everything, including releases and sprints you've created."}
       </p>
       {/* Releases strip */}
       <div className="mt-5 flex flex-wrap items-start gap-3">
@@ -234,17 +234,13 @@ export default async function SprintsPage({
       </div>
 
       {/* Guided-activation restructure: the explicit Create Release step
-          (reference doc §8 STATE 4) — only offered once the roadmap has been
-          reviewed and locked, and only for phases without one yet. */}
+          (reference doc §8 STATE 4) — available as soon as a plan exists
+          (this page never renders without one), for any phase without a
+          release yet. The waterfall roadmap-lock ceremony this used to
+          require has been removed platform-wide. */}
       {!isKanban && !agileFrozen && (
         <div className="mt-4">
-          {ws.isLocked("roadmap") ? (
-            <CreateReleaseForm initiativeId={initiativeId} availablePhases={availablePhases} />
-          ) : (
-            <p className="text-sm text-neutral-500">
-              Review and lock the roadmap to create your first release.
-            </p>
-          )}
+          <CreateReleaseForm initiativeId={initiativeId} availablePhases={availablePhases} />
         </div>
       )}
 

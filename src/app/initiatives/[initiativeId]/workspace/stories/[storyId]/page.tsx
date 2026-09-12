@@ -30,8 +30,6 @@ export default async function StoryPage({
   });
   if (!story || story.type !== "story" || story.prototypeId !== ws.prototype.id) notFound();
 
-  const storiesLocked = ws.isLocked("stories");
-  const acLocked = ws.isLocked("acceptance_criteria");
   const cap = story.sourceCapabilityId ? ws.capViewById.get(story.sourceCapabilityId) : null;
   const cost = await loadCostContext(initiativeId, ws.prototype.id);
   const storyCost = (story.points ?? 1) * cost.model.costPerStoryPoint;
@@ -55,7 +53,6 @@ export default async function StoryPage({
             title={story.title}
             body={story.body}
             points={story.points}
-            locked={storiesLocked}
             titleClassName="text-lg font-bold"
           />
         </div>
@@ -105,7 +102,7 @@ export default async function StoryPage({
       </div>
 
       <h3 className="mt-8 text-sm font-semibold uppercase tracking-wide text-indigo-600">
-        Acceptance criteria — waterfall layer 5
+        Acceptance criteria
       </h3>
       <div className="mt-3 space-y-3">
         {story.children.map((ac) => (
@@ -116,7 +113,6 @@ export default async function StoryPage({
                   artifactId={ac.id}
                   title={ac.title}
                   body={ac.body}
-                  locked={acLocked}
                   titleClassName="text-sm font-semibold"
                 />
               </div>

@@ -8,9 +8,7 @@ const money = (n: number) => `$${Math.round(n).toLocaleString()}`;
 export default function SummaryCards(props: {
   completion: {
     percent: number;
-    lockedCount: number;
-    totalLayers: number;
-    activeLayer: string | null;
+    stageLabel: string;
     nextAction: string;
   };
   scope: {
@@ -40,18 +38,12 @@ export default function SummaryCards(props: {
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <Card>
           <p className="text-xs font-semibold uppercase tracking-wide text-neutral-400">
-            Plan completion
+            Plan progress
           </p>
           <p className="mt-1 text-2xl font-bold">{completion.percent}%</p>
           <ProgressBar percent={completion.percent} className="mt-2" />
           <p className="mt-2 text-xs text-neutral-500">
-            {completion.lockedCount} of {completion.totalLayers} planning layers locked
-            {completion.activeLayer && (
-              <>
-                <br />
-                Current: <span className="font-medium text-neutral-700">{completion.activeLayer}</span>
-              </>
-            )}
+            Now: <span className="font-medium text-neutral-700">{completion.stageLabel}</span>
             <br />
             Next: {completion.nextAction}
           </p>
@@ -65,10 +57,12 @@ export default function SummaryCards(props: {
           <p className="mt-2 text-xs text-neutral-500">
             <span className="font-medium text-indigo-700">{scope.mvp} MVP</span> ·{" "}
             {scope.deferred} future release
-            <br />
-            {scope.baselineApprovedAt
-              ? `Baseline approved ${scope.baselineApprovedAt.toLocaleDateString()}`
-              : "Baseline not approved yet — lock all five layers"}
+            {scope.baselineApprovedAt && (
+              <>
+                <br />
+                Baseline approved {scope.baselineApprovedAt.toLocaleDateString()}
+              </>
+            )}
           </p>
         </Card>
 

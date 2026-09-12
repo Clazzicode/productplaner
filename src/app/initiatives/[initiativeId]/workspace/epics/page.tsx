@@ -19,7 +19,6 @@ export default async function EpicsPage({
   establishAuthContext(user.authUserId);
   const ws = await loadWorkspace(initiativeId);
   if (!ws) notFound();
-  const epicsLocked = ws.isLocked("epics");
   const cost = await loadCostContext(initiativeId, ws.prototype.id);
 
   const features = await db.artifactLayer.findMany({
@@ -48,8 +47,7 @@ export default async function EpicsPage({
     <div>
       <h2 className="text-xl font-bold">Epics &amp; user stories</h2>
       <p className="mt-1 text-sm text-neutral-500">
-        Waterfall layers 3 and 4. Epic edits propagate into regenerated stories on re-lock;
-        open a story for its acceptance criteria.
+        Edit an epic's title or description directly — open a story for its acceptance criteria.
       </p>
 
       <div className="mt-6 space-y-8">
@@ -71,7 +69,6 @@ export default async function EpicsPage({
                           artifactId={epic.id}
                           title={epic.title}
                           body={epic.body}
-                          locked={epicsLocked}
                         />
                       </div>
                       <div className="flex flex-wrap shrink-0 items-center gap-2">

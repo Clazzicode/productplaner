@@ -23,13 +23,10 @@ export default function PlanHealthSummary(props: { primary: PrimaryInitiativeDet
         <div className="mt-3">
           <div className="flex items-center justify-between">
             <Badge variant={healthTokenVariant(p.scheduleHealth)}>{HEALTH_LABELS[p.scheduleHealth]}</Badge>
-            <span className="text-xs text-neutral-500">{p.completionPercent}% locked</span>
+            <span className="text-xs text-neutral-500">{p.completionPercent}% complete</span>
           </div>
           <ProgressBar percent={p.completionPercent} className="mt-2" />
-          <p className="mt-2 text-xs text-neutral-500">
-            {p.lockedCount}/{p.totalLayers} layers locked
-            {p.activeLayerLabel && <> · next up: {p.activeLayerLabel}</>}
-          </p>
+          <p className="mt-2 text-xs text-neutral-500">{p.stageLabel}</p>
           <Link
             href={`/initiatives/${p.id}/dashboard`}
             className="mt-3 inline-block text-xs font-medium text-indigo-600 hover:underline"

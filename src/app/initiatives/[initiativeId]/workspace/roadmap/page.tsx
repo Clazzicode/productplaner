@@ -37,7 +37,6 @@ export default async function RoadmapPage({
   establishAuthContext(user.authUserId);
   const ws = await loadWorkspace(initiativeId);
   if (!ws) notFound();
-  const locked = ws.isLocked("roadmap");
   const cost = await loadCostContext(initiativeId, ws.prototype.id);
 
   const root = await db.artifactLayer.findFirst({
@@ -99,7 +98,6 @@ export default async function RoadmapPage({
             artifactId={root.id}
             title={root.title}
             body={root.body}
-            locked={locked}
             titleClassName="text-xl font-bold"
           />
         </div>
@@ -130,7 +128,6 @@ export default async function RoadmapPage({
                     artifactId={phase.id}
                     title={phase.title}
                     body={phase.body}
-                    locked={locked}
                     titleClassName="text-lg font-semibold text-indigo-900"
                   />
                 </div>
@@ -172,7 +169,6 @@ export default async function RoadmapPage({
       </div>
 
       <p className="mt-6 text-xs text-neutral-400">
-        Roadmap is waterfall layer 1 of 5 — it must lock before the Feature Hierarchy can.
         Phase date ranges are computed from the sprint plan (the FR-07 dual capacity mapping).
       </p>
     </div>
@@ -187,7 +183,7 @@ export default async function RoadmapPage({
           Hybrid, Waterfall, or Kanban to use it.
         </p>
       ) : (
-        <RoadmapBoard initiativeId={initiativeId} phases={boardPhases} locked={locked} />
+        <RoadmapBoard initiativeId={initiativeId} phases={boardPhases} />
       )}
     </div>
   );

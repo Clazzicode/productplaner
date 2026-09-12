@@ -6,7 +6,7 @@ import PageHeader from "@/components/ui/PageHeader";
 import { listAuthorizedInitiativeIds } from "@/lib/access/initiativeAccess";
 import { requireCurrentUser } from "@/lib/auth/session";
 import { db, establishAuthContext } from "@/lib/db";
-import { LAYER_SEQUENCE } from "@/lib/generation/types";
+import { resolveLifecycleState, STAGE_LABEL } from "@/lib/lifecycle/resolveLifecycleState";
 
 export const dynamic = "force-dynamic";
 
@@ -36,7 +36,12 @@ export default async function InitiativesPage() {
     where: { id: { in: authorizedInitiativeIds ?? [] } },
     orderBy: { updatedAt: "desc" },
     include: {
-      prototype: { include: { layerLocks: true } },
+      prototype: {
+        include: {
+          releases: { where: { origin: "manual" }, select: { id: true } },
+          sprints: { where: { origin: "manual" }, select: { id: true } },
+        },
+      },
       syncConnections: true,
     },
   });
@@ -74,8 +79,13 @@ export default async function InitiativesPage() {
       ) : (
         <ul className="mt-8 space-y-3">
           {initiatives.map((initiative) => {
-            const locks = initiative.prototype?.layerLocks ?? [];
-            const lockedCount = locks.filter((l) => l.state === "locked").length;
+            const stageLabel = STAGE_LABEL[
+              resolveLifecycleState({
+                initiative: { id: initiative.id, status: initiative.status },
+                manualReleaseCount: initiative.prototype?.releases.length ?? 0,
+                manualSprintCount: initiative.prototype?.sprints.length ?? 0,
+              }).stage
+            ];
             const status = STATUS_META[initiative.status] ?? STATUS_META.draft;
             const jira = initiative.syncConnections.find((c) => c.tool === "jira");
             const href =
@@ -99,12 +109,7 @@ export default async function InitiativesPage() {
                   )}
                   <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-neutral-500">
                     {initiative.prototype && (
-                      <span>
-                        <span className="font-medium text-neutral-700">
-                          {lockedCount}/{LAYER_SEQUENCE.length}
-                        </span>{" "}
-                        waterfall layers locked
-                      </span>
+                      <span className="font-medium text-neutral-700">{stageLabel}</span>
                     )}
                     {initiative.prototype?.approvedAt && (
                       <span className="text-emerald-700">Baseline approved</span>

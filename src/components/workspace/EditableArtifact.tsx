@@ -5,13 +5,12 @@ import { useState } from "react";
 import { apiFetch } from "@/lib/clientApi";
 import { ButtonLoader } from "@/components/ui/loading";
 
-/** Inline title/body(/points) editor, gated by the layer's lock state (FR-11). */
+/** Inline title/body(/points) editor. */
 export default function EditableArtifact(props: {
   artifactId: string;
   title: string;
   body: string;
   points?: number | null;
-  locked: boolean;
   titleClassName?: string;
 }) {
   const router = useRouter();
@@ -92,21 +91,12 @@ export default function EditableArtifact(props: {
     <div className="group">
       <div className="flex items-start justify-between gap-2">
         <h3 className={props.titleClassName ?? "font-semibold"}>{props.title}</h3>
-        {props.locked ? (
-          <span
-            className="no-print shrink-0 text-xs text-neutral-400"
-            title="This layer is locked — unlock it in the lock bar to edit."
-          >
-            🔒
-          </span>
-        ) : (
-          <button
-            onClick={() => setEditing(true)}
-            className="no-print shrink-0 text-xs font-medium text-indigo-600 opacity-0 transition group-hover:opacity-100 hover:underline"
-          >
-            Edit
-          </button>
-        )}
+        <button
+          onClick={() => setEditing(true)}
+          className="no-print shrink-0 text-xs font-medium text-indigo-600 opacity-0 transition group-hover:opacity-100 hover:underline"
+        >
+          Edit
+        </button>
       </div>
       {props.body && <p className="mt-1 text-sm text-neutral-600">{props.body}</p>}
       {error && <p className="mt-1 text-xs text-red-600">{error}</p>}

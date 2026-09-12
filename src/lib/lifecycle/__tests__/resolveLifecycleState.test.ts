@@ -3,7 +3,6 @@ import { resolveLifecycleState, type LifecycleInput } from "../resolveLifecycleS
 
 const base: LifecycleInput = {
   initiative: null,
-  roadmapLocked: false,
   manualReleaseCount: 0,
   manualSprintCount: 0,
 };
@@ -28,24 +27,13 @@ describe("resolveLifecycleState", () => {
     });
   });
 
-  it("plan_not_reviewed when generated but the roadmap isn't locked", () => {
+  it("plan_generated_no_release once generated but no manual release exists", () => {
     const result = resolveLifecycleState({
       ...base,
       initiative: { id: "init-1", status: "generated" },
-      roadmapLocked: false,
-    });
-    expect(result.stage).toBe("plan_not_reviewed");
-    expect(result.nextAction.key).toBe("REVIEW_ROADMAP");
-  });
-
-  it("roadmap_reviewed_no_release once locked but no manual release exists", () => {
-    const result = resolveLifecycleState({
-      ...base,
-      initiative: { id: "init-1", status: "generated" },
-      roadmapLocked: true,
       manualReleaseCount: 0,
     });
-    expect(result.stage).toBe("roadmap_reviewed_no_release");
+    expect(result.stage).toBe("plan_generated_no_release");
     expect(result.nextAction.key).toBe("CREATE_RELEASE");
   });
 
@@ -53,7 +41,6 @@ describe("resolveLifecycleState", () => {
     const result = resolveLifecycleState({
       ...base,
       initiative: { id: "init-1", status: "generated" },
-      roadmapLocked: true,
       manualReleaseCount: 1,
       manualSprintCount: 0,
     });
@@ -65,7 +52,6 @@ describe("resolveLifecycleState", () => {
     const result = resolveLifecycleState({
       ...base,
       initiative: { id: "init-1", status: "generated" },
-      roadmapLocked: true,
       manualReleaseCount: 1,
       manualSprintCount: 1,
     });
@@ -82,10 +68,9 @@ describe("resolveLifecycleState", () => {
     const result = resolveLifecycleState({
       ...base,
       initiative: { id: "init-1", status: "generated" },
-      roadmapLocked: true,
       manualReleaseCount: 0,
       manualSprintCount: 0,
     });
-    expect(result.stage).toBe("roadmap_reviewed_no_release");
+    expect(result.stage).toBe("plan_generated_no_release");
   });
 });

@@ -11,15 +11,10 @@ const STAGE_COPY: Record<
     heading: "Generate your initial plan",
     description: "Turn your answers into a working roadmap, features, and a delivery estimate.",
   },
-  plan_not_reviewed: {
+  plan_generated_no_release: {
     eyebrow: "Plan generated",
-    heading: "Review your roadmap",
-    description: "Check the phases and features the plan produced, then lock the roadmap to move forward.",
-  },
-  roadmap_reviewed_no_release: {
-    eyebrow: "Roadmap reviewed",
     heading: "Create your first release",
-    description: "Turn a reviewed roadmap phase into a real release you can plan sprints under.",
+    description: "Turn a roadmap phase into a real release you can plan sprints under.",
   },
   release_no_sprint: {
     eyebrow: "Release created",

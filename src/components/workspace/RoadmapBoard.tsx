@@ -49,7 +49,6 @@ const money = (n: number) => `~$${Math.round(n).toLocaleString()}`;
 export default function RoadmapBoard(props: {
   initiativeId: string;
   phases: BoardPhase[];
-  locked: boolean;
 }) {
   const router = useRouter();
   const [draggingId, setDraggingId] = useState<string | null>(null);
@@ -79,11 +78,6 @@ export default function RoadmapBoard(props: {
 
   return (
     <div>
-      {props.locked && (
-        <p className="mb-3 rounded-lg bg-neutral-50 px-3 py-2 text-xs text-neutral-500">
-          🔒 Roadmap is locked — unlock it to drag features between phases.
-        </p>
-      )}
       {message && (
         <p
           className={`mb-3 rounded-lg px-3 py-2 text-xs ${
@@ -100,13 +94,11 @@ export default function RoadmapBoard(props: {
             <div
               key={phase.phaseNumber}
               onDragOver={(e) => {
-                if (props.locked) return;
                 e.preventDefault();
                 setDragOverPhase(phase.phaseNumber);
               }}
               onDragLeave={() => setDragOverPhase((p) => (p === phase.phaseNumber ? null : p))}
               onDrop={(e) => {
-                if (props.locked) return;
                 e.preventDefault();
                 setDragOverPhase(null);
                 const capabilityId = e.dataTransfer.getData("text/plain");
@@ -127,7 +119,7 @@ export default function RoadmapBoard(props: {
               </div>
               <div className="mt-2 space-y-3">
                 {phase.features.map((feature) => {
-                  const draggable = !props.locked && feature.capabilityId != null && !busy;
+                  const draggable = feature.capabilityId != null && !busy;
                   return (
                     <div
                       key={feature.id}
@@ -192,7 +184,7 @@ export default function RoadmapBoard(props: {
                 })}
                 {phase.features.length === 0 && (
                   <p className="rounded-lg border border-dashed border-neutral-300 px-3 py-4 text-center text-xs text-neutral-400">
-                    {props.locked ? "Nothing in this phase." : "Drop a feature here."}
+                    Drop a feature here.
                   </p>
                 )}
               </div>

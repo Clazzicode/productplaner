@@ -10,9 +10,9 @@ import { createReleaseSchema } from "@/lib/validation/schemas";
  * Guided-activation restructure (reference doc §8/§9): the explicit,
  * user-confirmed "Create Release" step — distinct from and no longer a
  * byproduct of plan generation (see engine.ts's generatePrototype/
- * repackSprints). Gated on the roadmap layer's first lock, which is a real,
- * already-existing user action (src/lib/generation/locking.ts) and never
- * triggers regeneration on its own — see resolveLifecycleState.ts.
+ * repackSprints). Gated only on a plan existing — the waterfall roadmap-lock
+ * ceremony this used to also require has been removed platform-wide. See
+ * resolveLifecycleState.ts.
  */
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -31,7 +31,6 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     include: {
       prototype: {
         include: {
-          layerLocks: { where: { layerType: "roadmap" }, select: { state: true } },
           releases: { select: { phaseNumber: true, origin: true } },
         },
       },
@@ -39,11 +38,6 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   });
   if (!initiative?.prototype) {
     return jsonError("Generate a plan before creating a release.", 409);
-  }
-
-  const roadmapLocked = initiative.prototype.layerLocks[0]?.state === "locked";
-  if (!roadmapLocked) {
-    return jsonError("Review and lock the roadmap before creating a release.", 409);
   }
 
   const manualReleases = initiative.prototype.releases.filter((r) => r.origin === "manual");

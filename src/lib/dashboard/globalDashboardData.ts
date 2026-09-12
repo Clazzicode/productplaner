@@ -24,7 +24,8 @@ import { computeCapacityForecast } from "@/lib/generation/capacityForecast";
 import { PHASE_NAMES } from "@/lib/generation/constants";
 import { loadIntakeInput } from "@/lib/generation/engine";
 import { scheduleHealth, type HealthStatus } from "@/lib/generation/health";
-import { LAYER_LABELS, LAYER_SEQUENCE, type LayerType } from "@/lib/generation/types";
+import { LAYER_LABELS, type LayerType } from "@/lib/generation/types";
+import { resolveLifecycleState, STAGE_LABEL, STAGE_PROGRESS_PERCENT } from "@/lib/lifecycle/resolveLifecycleState";
 import { validateIntake } from "@/lib/generation/validateIntake";
 
 export interface InitiativeOverview {
@@ -32,8 +33,8 @@ export interface InitiativeOverview {
   name: string;
   status: string;
   updatedAt: Date;
-  lockedCount: number;
-  totalLayers: number;
+  progressPercent: number;
+  stageLabel: string;
   isPrimary: boolean;
 }
 
@@ -51,9 +52,7 @@ export interface PrimaryInitiativeDetail {
   id: string;
   name: string;
   completionPercent: number;
-  lockedCount: number;
-  totalLayers: number;
-  activeLayerLabel: string | null;
+  stageLabel: string;
   scheduleHealth: HealthStatus;
   currentPhaseName: string;
   nextMilestone: { label: string; date: Date } | null;
@@ -122,7 +121,13 @@ export async function loadGlobalDashboardData(
     where: authorizedInitiativeIds ? { id: { in: authorizedInitiativeIds } } : { userId },
     orderBy: { updatedAt: "desc" },
     include: {
-      prototype: { include: { layerLocks: true } },
+      prototype: {
+        include: {
+          layerLocks: true,
+          releases: { where: { origin: "manual" }, select: { id: true } },
+          sprints: { where: { origin: "manual" }, select: { id: true } },
+        },
+      },
       syncConnections: true,
       integrationConnections: { select: { lastSyncAt: true, provider: { select: { name: true } } } },
       intakeAnswerSet: { select: { updatedAt: true } },
@@ -131,15 +136,22 @@ export async function loadGlobalDashboardData(
 
   const primaryInitiative = initiatives.find((i) => i.status === "generated") ?? initiatives[0] ?? null;
 
-  const initiativeOverviews: InitiativeOverview[] = initiatives.map((i) => ({
-    id: i.id,
-    name: i.name,
-    status: i.status,
-    updatedAt: i.updatedAt,
-    lockedCount: (i.prototype?.layerLocks ?? []).filter((l) => l.state === "locked").length,
-    totalLayers: LAYER_SEQUENCE.length,
-    isPrimary: primaryInitiative?.id === i.id,
-  }));
+  const initiativeOverviews: InitiativeOverview[] = initiatives.map((i) => {
+    const resolution = resolveLifecycleState({
+      initiative: { id: i.id, status: i.status },
+      manualReleaseCount: i.prototype?.releases.length ?? 0,
+      manualSprintCount: i.prototype?.sprints.length ?? 0,
+    });
+    return {
+      id: i.id,
+      name: i.name,
+      status: i.status,
+      updatedAt: i.updatedAt,
+      progressPercent: STAGE_PROGRESS_PERCENT[resolution.stage],
+      stageLabel: STAGE_LABEL[resolution.stage],
+      isPrimary: primaryInitiative?.id === i.id,
+    };
+  });
 
   // ---------- primary initiative detail ----------
   let primary: PrimaryInitiativeDetail | null = null;
@@ -163,11 +175,18 @@ export async function loadGlobalDashboardData(
       }),
     ]);
 
+    // `locks` stays only for the Recent Activity feed below, which shows any
+    // pre-existing "X locked" history truthfully rather than erasing it —
+    // the waterfall lock ceremony itself has been removed platform-wide, so
+    // nothing can ever add to that history again. Progress now comes from
+    // the same lifecycle resolver every other screen uses.
     const locks = prototype.layerLocks;
-    const isLocked = (t: LayerType) => locks.find((l) => l.layerType === t)?.state === "locked";
-    const lockedCount = LAYER_SEQUENCE.filter(isLocked).length;
-    const activeLayer = LAYER_SEQUENCE.find((t) => !isLocked(t)) ?? null;
-    const completionPercent = Math.round((lockedCount / LAYER_SEQUENCE.length) * 100);
+    const primaryResolution = resolveLifecycleState({
+      initiative: { id: primaryInitiative.id, status: primaryInitiative.status },
+      manualReleaseCount: releases.filter((r) => r.origin === "manual").length,
+      manualSprintCount: sprints.filter((s) => s.origin === "manual").length,
+    });
+    const completionPercent = STAGE_PROGRESS_PERCENT[primaryResolution.stage];
 
     const forecast = computeCapacityForecast(sprints);
     const overAllocated = forecast.filter((f) => f.status === "over-allocated");
@@ -225,21 +244,11 @@ export async function loadGlobalDashboardData(
     }
 
     const ws = (slug: string) => `/initiatives/${primaryInitiative.id}/workspace/${slug}`;
-    const layerHref = (t: LayerType) => (t === "roadmap" ? ws("roadmap") : t === "feature_hierarchy" ? ws("features") : ws("epics"));
 
     // Deliberately no cost/budget decision item here (unlike the initiative
     // dashboard) — the global Standard Dashboard doesn't surface financial
     // figures for any user yet. See docs/V2-STANDARD-DASHBOARD.md §8.
     const decisions: DecisionItem[] = [];
-    if (activeLayer) {
-      decisions.push({
-        title: `${LAYER_LABELS[activeLayer]} is ready to review and lock`,
-        impact: "Downstream layers can't lock until this one does (strict waterfall sequence).",
-        action: `Review the generated ${LAYER_LABELS[activeLayer].toLowerCase()} and lock the layer.`,
-        href: layerHref(activeLayer),
-        severity: "info",
-      });
-    }
     for (const f of overAllocated) {
       decisions.push({
         title: `Sprint ${f.sprintNumber} exceeds capacity by ${Math.round(f.plannedPoints - f.capacityPoints)} points`,
@@ -290,7 +299,9 @@ export async function loadGlobalDashboardData(
     const now: UpcomingAction[] = [];
     const next: UpcomingAction[] = [];
     const later: UpcomingAction[] = [];
-    if (activeLayer) now.push({ label: `Review & lock ${LAYER_LABELS[activeLayer]}`, href: layerHref(activeLayer) });
+    if (primaryResolution.stage !== "active_execution") {
+      now.push({ label: primaryResolution.nextAction.label, href: primaryResolution.nextAction.href });
+    }
     if (overAllocated.length > 0) next.push({ label: `Rebalance sprint ${overAllocated[0].sprintNumber}`, href: ws("sprints") });
     next.push({ label: "Review capacity assumptions", href: ws("capacity") });
     later.push({ label: "Generate executive presentation", href: ws("executive") });
@@ -300,9 +311,7 @@ export async function loadGlobalDashboardData(
       id: primaryInitiative.id,
       name: primaryInitiative.name,
       completionPercent,
-      lockedCount,
-      totalLayers: LAYER_SEQUENCE.length,
-      activeLayerLabel: activeLayer ? LAYER_LABELS[activeLayer] : null,
+      stageLabel: STAGE_LABEL[primaryResolution.stage],
       scheduleHealth: overallSchedule,
       currentPhaseName,
       nextMilestone,

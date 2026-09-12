@@ -4,7 +4,6 @@ import { ContainedLayout } from "@/components/layout/PageLayouts";
 import { Badge } from "@/components/ui/Badge";
 import PageHeader from "@/components/ui/PageHeader";
 import JiraSyncPanel from "@/components/workspace/JiraSyncPanel";
-import LockBar from "@/components/workspace/LockBar";
 import NavTabs from "@/components/workspace/NavTabs";
 import RefreshBar from "@/components/workspace/RefreshBar";
 import WorkspaceBreadcrumb from "@/components/workspace/WorkspaceBreadcrumb";
@@ -12,7 +11,7 @@ import { requireCurrentUser } from "@/lib/auth/session";
 import { requireInitiativeView } from "@/lib/access/guards";
 import { db, establishAuthContext } from "@/lib/db";
 import { profileFor, resolveMethodology } from "@/lib/generation/methodology";
-import { artifactCounts, loadWorkspace } from "@/lib/workspace";
+import { loadWorkspace } from "@/lib/workspace";
 
 export const dynamic = "force-dynamic";
 
@@ -39,7 +38,6 @@ export default async function WorkspaceLayout({
     if (!initiative) notFound();
     redirect(`/initiatives/${initiativeId}/intake`);
   }
-  const counts = await artifactCounts(ws.prototype.id);
   const methodology = resolveMethodology(ws.initiative.methodology);
   const profile = profileFor(ws.initiative.methodology);
   const [manualReleaseCount, manualSprintCount] = await Promise.all([
@@ -84,19 +82,8 @@ export default async function WorkspaceLayout({
           />
         </div>
         <div className="mt-5">
-          <LockBar
-            initiativeId={initiativeId}
-            locks={ws.locks.map((l) => ({
-              layerType: l.layerType,
-              state: l.state,
-              everLocked: l.everLocked,
-            }))}
-            counts={counts}
-            methodology={methodology}
-          />
           <RefreshBar
             initiativeId={initiativeId}
-            locks={ws.locks.map((l) => ({ layerType: l.layerType, state: l.state }))}
             manualReleaseCount={manualReleaseCount}
             manualSprintCount={manualSprintCount}
           />

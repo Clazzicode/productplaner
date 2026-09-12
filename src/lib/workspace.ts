@@ -7,7 +7,6 @@ import { loadIntakeInput } from "@/lib/generation/engine";
 import { computePriorityScore } from "@/lib/generation/scoring";
 import { getEffectiveWeights } from "@/lib/planningWeights/planningWeights";
 import type { TraceCapabilityView, TraceIntakeView } from "@/lib/trace";
-import type { LayerType } from "@/lib/generation/types";
 
 /** Shared workspace loader: initiative, prototype, locks, and the intake
  * views the trace drawer needs. Pages layer their own artifact queries on top. */
@@ -58,8 +57,12 @@ export async function loadWorkspace(initiativeId: string) {
   );
 
   const locks = initiative.prototype.layerLocks;
-  const isLocked = (layerType: LayerType) =>
-    locks.find((l) => l.layerType === layerType)?.state === "locked";
+  // The waterfall layer-lock ceremony has been removed platform-wide —
+  // always unlocked/editable, including for initiatives that had a layer
+  // locked before this change (there's no unlock UI/route left to reach
+  // those otherwise). `locks` itself stays available for the Recent
+  // Activity feed's historical "X locked" entries.
+  const isLocked = (): boolean => false;
 
   return {
     initiative,
@@ -145,17 +148,3 @@ export async function loadCostContext(
   return { model, pointsByCapability, costByCapability, priorityByCapability, priorityExplanationByCapability };
 }
 
-export async function artifactCounts(prototypeId: string) {
-  const grouped = await db.artifactLayer.groupBy({
-    by: ["type"],
-    where: { prototypeId },
-    _count: { _all: true },
-  });
-  const count = (t: string) => grouped.find((g) => g.type === t)?._count._all ?? 0;
-  return {
-    features: count("feature"),
-    epics: count("epic"),
-    stories: count("story"),
-    acs: count("acceptance_criterion"),
-  };
-}

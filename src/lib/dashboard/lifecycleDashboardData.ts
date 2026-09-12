@@ -48,7 +48,6 @@ export async function loadLifecycleDashboardData(
       prototype: {
         select: {
           id: true,
-          layerLocks: { where: { layerType: "roadmap" }, select: { state: true } },
           releases: { where: { origin: "manual" }, select: { id: true } },
           sprints: { where: { origin: "manual" }, select: { id: true } },
         },
@@ -60,7 +59,6 @@ export async function loadLifecycleDashboardData(
 
   const resolution = resolveLifecycleState({
     initiative: current ? { id: current.id, status: current.status } : null,
-    roadmapLocked: current?.prototype?.layerLocks.some((l) => l.state === "locked") ?? false,
     manualReleaseCount: current?.prototype?.releases.length ?? 0,
     manualSprintCount: current?.prototype?.sprints.length ?? 0,
   });

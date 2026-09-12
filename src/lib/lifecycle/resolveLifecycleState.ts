@@ -16,19 +16,26 @@ import { db } from "@/lib/db";
 // generated long ago — the new Create Release / Plan Sprint steps apply
 // retroactively. See engine.ts's repackSprints/legacy-cleanup comments for
 // what happens to those old auto rows once a prototype "graduates" to manual.
+//
+// The waterfall layer-lock ceremony (Roadmap/Features/Epics/Stories/
+// Acceptance Criteria) that used to gate the step between "plan generated"
+// and "release created" has been removed platform-wide (locking never made
+// sense as a user-facing concept here) — a generated plan is immediately
+// eligible for its first Release, no separate "review and lock the roadmap"
+// stage in between. `src/lib/generation/locking.ts`'s lock/unlock machinery
+// still exists but nothing calls it anymore; `LayerLock` rows just stay
+// permanently unlocked.
 
 export type LifecycleStage =
   | "no_initiative"
   | "initiative_no_plan"
-  | "plan_not_reviewed"
-  | "roadmap_reviewed_no_release"
+  | "plan_generated_no_release"
   | "release_no_sprint"
   | "active_execution";
 
 export type NextActionKey =
   | "CREATE_INITIATIVE"
   | "GENERATE_PLAN"
-  | "REVIEW_ROADMAP"
   | "CREATE_RELEASE"
   | "CREATE_SPRINT"
   | "OPERATIONAL_DASHBOARD";
@@ -40,8 +47,6 @@ export interface LifecycleInitiativeInput {
 
 export interface LifecycleInput {
   initiative: LifecycleInitiativeInput | null;
-  /** LayerLock(layerType:'roadmap').state === 'locked' for this initiative's prototype. */
-  roadmapLocked: boolean;
   /** Release rows with origin:'manual' for this initiative's prototype. */
   manualReleaseCount: number;
   /** Sprint rows with origin:'manual' for this initiative's prototype. */
@@ -59,14 +64,35 @@ export interface LifecycleResolution {
   nextAction: NextAction;
 }
 
+/** A 0-100 progress figure for the "plan completion" style widgets across the
+ * per-initiative dashboard, global dashboard, admin dashboard, and Executive
+ * Report — replaces the old locked-layer-count math (there are no more
+ * layers to lock). Keyed on the same stage the resolver already computes, so
+ * every one of those screens shows a consistent number. */
+export const STAGE_PROGRESS_PERCENT: Record<LifecycleStage, number> = {
+  no_initiative: 0,
+  initiative_no_plan: 0,
+  plan_generated_no_release: 33,
+  release_no_sprint: 66,
+  active_execution: 100,
+};
+
+/** Short, human label for the current stage — the "where things stand today"
+ * half of a progress widget, paired with `nextAction.label` for "what's next". */
+export const STAGE_LABEL: Record<LifecycleStage, string> = {
+  no_initiative: "No initiative yet",
+  initiative_no_plan: "Plan not generated",
+  plan_generated_no_release: "Plan generated",
+  release_no_sprint: "Release created",
+  active_execution: "Fully active",
+};
+
 function actionFor(key: NextActionKey, initiativeId: string | null): NextAction {
   switch (key) {
     case "CREATE_INITIATIVE":
       return { key, label: "Create Initiative", href: "/initiatives/new" };
     case "GENERATE_PLAN":
       return { key, label: "Generate Plan", href: `/initiatives/${initiativeId}/intake` };
-    case "REVIEW_ROADMAP":
-      return { key, label: "Review Roadmap", href: `/initiatives/${initiativeId}/workspace/roadmap` };
     case "CREATE_RELEASE":
       return { key, label: "Create First Release", href: `/initiatives/${initiativeId}/workspace/sprints` };
     case "CREATE_SPRINT":
@@ -78,8 +104,8 @@ function actionFor(key: NextActionKey, initiativeId: string | null): NextAction 
 
 /**
  * The reference doc's next-best-action ladder, applied literally:
- *   no initiative -> generate plan -> review roadmap -> create release ->
- *   create sprint -> operational dashboard.
+ *   no initiative -> generate plan -> create release -> create sprint ->
+ *   operational dashboard.
  */
 export function resolveLifecycleState(input: LifecycleInput): LifecycleResolution {
   const { initiative } = input;
@@ -93,15 +119,9 @@ export function resolveLifecycleState(input: LifecycleInput): LifecycleResolutio
       nextAction: actionFor("GENERATE_PLAN", initiative.id),
     };
   }
-  if (!input.roadmapLocked) {
-    return {
-      stage: "plan_not_reviewed",
-      nextAction: actionFor("REVIEW_ROADMAP", initiative.id),
-    };
-  }
   if (input.manualReleaseCount === 0) {
     return {
-      stage: "roadmap_reviewed_no_release",
+      stage: "plan_generated_no_release",
       nextAction: actionFor("CREATE_RELEASE", initiative.id),
     };
   }
@@ -119,7 +139,6 @@ export function resolveLifecycleState(input: LifecycleInput): LifecycleResolutio
 
 const EMPTY_INPUT: LifecycleInput = {
   initiative: null,
-  roadmapLocked: false,
   manualReleaseCount: 0,
   manualSprintCount: 0,
 };
@@ -133,7 +152,6 @@ export async function loadLifecycleInput(initiativeId: string): Promise<Lifecycl
       status: true,
       prototype: {
         select: {
-          layerLocks: { where: { layerType: "roadmap" }, select: { state: true } },
           releases: { where: { origin: "manual" }, select: { id: true } },
           sprints: { where: { origin: "manual" }, select: { id: true } },
         },
@@ -145,7 +163,6 @@ export async function loadLifecycleInput(initiativeId: string): Promise<Lifecycl
 
   return {
     initiative: { id: row.id, status: row.status },
-    roadmapLocked: row.prototype?.layerLocks.some((l) => l.state === "locked") ?? false,
     manualReleaseCount: row.prototype?.releases.length ?? 0,
     manualSprintCount: row.prototype?.sprints.length ?? 0,
   };

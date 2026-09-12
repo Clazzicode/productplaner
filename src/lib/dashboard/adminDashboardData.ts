@@ -11,7 +11,7 @@
 import { db } from "@/lib/db";
 import { computeCapacityForecast } from "@/lib/generation/capacityForecast";
 import { scheduleHealth, type HealthStatus } from "@/lib/generation/health";
-import { LAYER_SEQUENCE, type LayerType } from "@/lib/generation/types";
+import { resolveLifecycleState, STAGE_PROGRESS_PERCENT } from "@/lib/lifecycle/resolveLifecycleState";
 
 export interface AdminOrgSummary {
   activeUsers: number;
@@ -173,7 +173,7 @@ export async function loadAdminDashboardData(organizationId: string): Promise<Ad
         orderBy: { name: "asc" },
         include: {
           user: { select: { id: true, name: true } },
-          prototype: { include: { layerLocks: true } },
+          prototype: { select: { id: true } },
         },
       }),
       db.initiativeAccess.findMany({
@@ -264,10 +264,15 @@ export async function loadAdminDashboardData(organizationId: string): Promise<Ad
     if (init.status === "generated" && init.prototype) {
       const protoSprints = sprintsByPrototype.get(init.prototype.id) ?? [];
       const protoReleases = releasesByPrototype.get(init.prototype.id) ?? [];
-      const locks = init.prototype.layerLocks;
-      const isLocked = (t: LayerType) => locks.find((l) => l.layerType === t)?.state === "locked";
-      const lockedCount = LAYER_SEQUENCE.filter(isLocked).length;
-      deliveryPercent = Math.round((lockedCount / LAYER_SEQUENCE.length) * 100);
+      // Delivery progress used to be "X of 5 waterfall layers locked" — that
+      // ceremony has been removed platform-wide, so this now reads the same
+      // activation-stage progress every other dashboard shows.
+      const initResolution = resolveLifecycleState({
+        initiative: { id: init.id, status: init.status },
+        manualReleaseCount: protoReleases.filter((r) => r.origin === "manual").length,
+        manualSprintCount: protoSprints.filter((s) => s.origin === "manual").length,
+      });
+      deliveryPercent = STAGE_PROGRESS_PERCENT[initResolution.stage];
 
       const forecast = computeCapacityForecast(protoSprints);
       const overAllocated = forecast.filter((f) => f.status === "over-allocated");

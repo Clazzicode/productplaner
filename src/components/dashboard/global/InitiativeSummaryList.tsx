@@ -58,9 +58,7 @@ export default function InitiativeSummaryList(props: { initiatives: InitiativeOv
                   </span>
                   <span className="flex shrink-0 items-center gap-2">
                     {i.status === "generated" && (
-                      <span className="text-xs text-neutral-400">
-                        {i.lockedCount}/{i.totalLayers} locked
-                      </span>
+                      <span className="text-xs text-neutral-400">{i.stageLabel}</span>
                     )}
                     <Badge variant={status.variant}>{status.label}</Badge>
                   </span>

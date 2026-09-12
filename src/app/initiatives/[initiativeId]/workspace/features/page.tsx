@@ -23,7 +23,6 @@ export default async function FeaturesPage({
   establishAuthContext(user.authUserId);
   const ws = await loadWorkspace(initiativeId);
   if (!ws) notFound();
-  const locked = ws.isLocked("feature_hierarchy");
   const cost = await loadCostContext(initiativeId, ws.prototype.id);
 
   const phases = await db.artifactLayer.findMany({
@@ -42,7 +41,7 @@ export default async function FeaturesPage({
     <div>
       <h2 className="text-xl font-bold">Feature hierarchy</h2>
       <p className="mt-1 text-sm text-neutral-500">
-        Each feature from intake appears once here, grouped by roadmap phase. Waterfall layer 2 of 5.
+        Each feature from intake appears once here, grouped by roadmap phase.
       </p>
 
       <div className="mt-6 space-y-6">
@@ -64,7 +63,6 @@ export default async function FeaturesPage({
                           artifactId={feature.id}
                           title={feature.title}
                           body={feature.body}
-                          locked={locked}
                         />
                       </div>
                       <TraceBadge

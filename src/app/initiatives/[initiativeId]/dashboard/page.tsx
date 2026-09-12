@@ -18,7 +18,7 @@ import SummaryCards from "@/components/dashboard/SummaryCards";
 import UpcomingActions, { type UpcomingAction } from "@/components/dashboard/UpcomingActions";
 import { requireInitiativeView } from "@/lib/access/guards";
 import { requireCurrentUser } from "@/lib/auth/session";
-import { resolveLifecycleState } from "@/lib/lifecycle/resolveLifecycleState";
+import { resolveLifecycleState, STAGE_LABEL, STAGE_PROGRESS_PERCENT } from "@/lib/lifecycle/resolveLifecycleState";
 import { db, establishAuthContext } from "@/lib/db";
 import { PHASE_NAMES } from "@/lib/generation/constants";
 import { computeCapacityForecast } from "@/lib/generation/capacityForecast";
@@ -27,7 +27,7 @@ import { findCycle } from "@/lib/generation/dependencyGraph";
 import { loadIntakeInput } from "@/lib/generation/engine";
 import { costHealth, HEALTH_LABELS, scheduleHealth, type HealthStatus } from "@/lib/generation/health";
 import { profileFor } from "@/lib/generation/methodology";
-import { LAYER_LABELS, LAYER_SEQUENCE, type LayerType } from "@/lib/generation/types";
+import { LAYER_LABELS, type LayerType } from "@/lib/generation/types";
 import { validateIntake } from "@/lib/generation/validateIntake";
 import { resolveWorkingRole } from "@/lib/onboarding/resolveWorkingRole";
 import { readOnboardingStateServer } from "@/lib/onboarding/tempStateServer";
@@ -40,14 +40,6 @@ const parseContentJson = (raw: string): Record<string, unknown> => {
     return {};
   }
 };
-
-function LockChip(props: { label: string; locked: boolean | null }) {
-  return (
-    <Badge variant={props.locked === null ? "neutral" : props.locked ? "emerald" : "neutral"}>
-      {props.label} · {props.locked === null ? "flexible" : props.locked ? "locked" : "unlocked"}
-    </Badge>
-  );
-}
 
 export const dynamic = "force-dynamic";
 
@@ -139,26 +131,20 @@ export default async function DashboardPage({
     totalPlannedPoints,
   });
 
-  // ---------- plan completion ----------
+  // ---------- plan progress ----------
+  // The waterfall layer-lock ceremony (Roadmap/Features/Epics/Stories/
+  // Acceptance Criteria) that used to drive "plan completion" here has been
+  // removed platform-wide — `locks` stays only for the Recent Activity feed
+  // below, which shows any pre-existing "X locked" history truthfully rather
+  // than erasing it, but nothing can ever add to it again. Progress is now
+  // read from the same lifecycle resolver every other screen uses.
   const locks = prototype.layerLocks;
-  const isLocked = (t: LayerType) => locks.find((l) => l.layerType === t)?.state === "locked";
-  const lockedCount = LAYER_SEQUENCE.filter(isLocked).length;
-  const activeLayer = LAYER_SEQUENCE.find((t) => !isLocked(t)) ?? null;
-  const completionPercent = Math.round((lockedCount / LAYER_SEQUENCE.length) * 100);
-
-  // Guided-activation restructure (Block 8): once every waterfall layer is
-  // locked, "next" used to be a dead-end ("baseline stored") — the resolver
-  // now supplies the real next step (Create Release / Plan Sprint / fully
-  // active), reusing data already loaded above rather than a second query.
-  // Layer-by-layer guidance (the `activeLayer` branch below) is untouched —
-  // it's a different, finer-grained concern than the initiative-level
-  // lifecycle stage, and can be true independently of it.
   const lifecycleResolution = resolveLifecycleState({
     initiative: { id: initiative.id, status: initiative.status },
-    roadmapLocked: isLocked("roadmap"),
     manualReleaseCount: releases.filter((r) => r.origin === "manual").length,
     manualSprintCount: sprints.filter((s) => s.origin === "manual").length,
   });
+  const completionPercent = STAGE_PROGRESS_PERCENT[lifecycleResolution.stage];
 
   // ---------- overall schedule / cost health ----------
   const overAllocated = forecast.filter((f) => f.status === "over-allocated");
@@ -288,15 +274,6 @@ export default async function DashboardPage({
 
   // ---------- decisions required ----------
   const decisions: DecisionItem[] = [];
-  if (activeLayer) {
-    decisions.push({
-      title: `${LAYER_LABELS[activeLayer]} is ready to review and lock`,
-      impact: "Downstream layers can't lock until this one does (strict waterfall sequence).",
-      action: `Review the generated ${LAYER_LABELS[activeLayer].toLowerCase()} and lock the layer.`,
-      href: activeLayer === "roadmap" ? ws("roadmap") : activeLayer === "feature_hierarchy" ? ws("features") : ws("epics"),
-      severity: "info",
-    });
-  }
   for (const f of overAllocated) {
     decisions.push({
       title: `Sprint ${f.sprintNumber} exceeds capacity by ${Math.round(f.plannedPoints - f.capacityPoints)} points`,
@@ -355,17 +332,7 @@ export default async function DashboardPage({
   const now: UpcomingAction[] = [];
   const next: UpcomingAction[] = [];
   const later: UpcomingAction[] = [];
-  if (activeLayer) {
-    now.push({
-      label: `Review & lock ${LAYER_LABELS[activeLayer]}`,
-      href: activeLayer === "roadmap" ? ws("roadmap") : activeLayer === "feature_hierarchy" ? ws("features") : ws("epics"),
-    });
-  } else if (lifecycleResolution.stage !== "active_execution") {
-    // Guided-activation restructure (Block 8): previously this stayed empty
-    // once every waterfall layer locked, even though Create Release/Plan
-    // Sprint was still a real pending step — surfaced the same gap the
-    // reference doc's "empty dashboard" problem statement describes, just
-    // one lifecycle stage later.
+  if (lifecycleResolution.stage !== "active_execution") {
     now.push({ label: lifecycleResolution.nextAction.label, href: lifecycleResolution.nextAction.href });
   }
   if (overAllocated.length > 0) {
@@ -386,16 +353,12 @@ export default async function DashboardPage({
   }
 
   // ---------- dashboard accordion: everything past the top summary lives here,
-  // collapsed by default except the stage that actually needs attention ----------
+  // collapsed by default except "delivery" — used to instead default to
+  // whichever waterfall layer was next in line to lock, but there's no more
+  // layer-by-layer review step to point at (the removed lock ceremony), so
+  // this just opens the section most likely to need attention day to day. ----------
   const isContinuousFlow = profile.sprintMode === "continuous_flow";
-  const stageToSectionId: Record<LayerType, string> = {
-    roadmap: "roadmap",
-    feature_hierarchy: "roadmap",
-    epics: "backlog",
-    stories: "backlog",
-    acceptance_criteria: "backlog",
-  };
-  const defaultOpenIds = [activeLayer ? stageToSectionId[activeLayer] : "delivery"];
+  const defaultOpenIds = ["delivery"];
 
   const sections: AccordionSection[] = [
     {
@@ -408,8 +371,6 @@ export default async function DashboardPage({
               {broadCapabilityWarnings} warning{broadCapabilityWarnings > 1 ? "s" : ""}
             </Badge>
           )}
-          <LockChip label="Roadmap" locked={isLocked("roadmap")} />
-          <LockChip label="Features" locked={isLocked("feature_hierarchy")} />
         </>
       ),
       content: <RoadmapTimeline initiativeId={initiativeId} phases={phases} />,
@@ -424,9 +385,6 @@ export default async function DashboardPage({
               {oversizedStories} warning{oversizedStories > 1 ? "s" : ""}
             </Badge>
           )}
-          <LockChip label="Epics" locked={isLocked("epics")} />
-          <LockChip label="Stories" locked={isLocked("stories")} />
-          <LockChip label="AC" locked={isLocked("acceptance_criteria")} />
         </>
       ),
       content: (
@@ -522,13 +480,10 @@ export default async function DashboardPage({
           <SummaryCards
             completion={{
               percent: completionPercent,
-              lockedCount,
-              totalLayers: LAYER_SEQUENCE.length,
-              activeLayer: activeLayer ? LAYER_LABELS[activeLayer] : null,
-              nextAction: activeLayer
-                ? `Review & lock ${LAYER_LABELS[activeLayer]}`
-                : lifecycleResolution.stage === "active_execution"
-                  ? "Baseline stored — fully active"
+              stageLabel: STAGE_LABEL[lifecycleResolution.stage],
+              nextAction:
+                lifecycleResolution.stage === "active_execution"
+                  ? "Fully active"
                   : lifecycleResolution.nextAction.label,
             }}
             scope={{
