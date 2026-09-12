@@ -11,7 +11,7 @@ import type { SimplifiedExperienceLevel } from "@/lib/onboarding/experienceOptio
 import { BEGINNER_INTAKE_COPY, SOME_EXPERIENCE_INTAKE_COPY } from "./simplifiedIntakeCopy";
 import { ChoiceCard, ChoicePill } from "./Choice";
 import { FIELD_CLASS } from "./fieldStyles";
-import { ButtonLoader } from "@/components/ui/loading";
+import { ButtonLoader, GenerationProgress } from "@/components/ui/loading";
 import Button from "@/components/ui/Button";
 import {
   AUDIENCE_CHIP_OPTIONS,
@@ -33,6 +33,16 @@ import {
 } from "@/lib/questionnaire/simplifiedIntakeTranslate";
 
 type MethodologyChoice = "agile_scrum" | "waterfall" | "hybrid" | "recommend";
+
+// Guided-activation restructure (reference doc §16): matches genStep, which
+// the real submit() sequence advances as each actual API call starts — not
+// a timer, so a step only ever shows "in progress" while genuinely in flight.
+const GENERATION_STEPS = [
+  "Analyzing your answers",
+  "Organizing features",
+  "Creating roadmap structure",
+  "Preparing delivery plan",
+];
 
 const METHODOLOGY_OPTIONS: { value: MethodologyChoice; label: string; hint: string }[] = [
   { value: "agile_scrum", label: "Agile", hint: "Fixed-length sprints, a prioritized backlog." },
@@ -124,6 +134,7 @@ export default function SimplifiedIntakeWizard(props: {
   const [timeline, setTimeline] = useState<TimelineBucket | null>(null);
   const [nameOverride, setNameOverride] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [genStep, setGenStep] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
   const derivedName = useMemo(() => deriveInitiativeName(productAnswer), [productAnswer]);
@@ -171,6 +182,7 @@ export default function SimplifiedIntakeWizard(props: {
   const submit = async () => {
     if (timeline == null) return;
     setSubmitting(true);
+    setGenStep(0); // "Analyzing your answers"
     setError(null);
 
     const onboardingWorkspaceType = readOnboardingState().workspaceType;
@@ -235,6 +247,7 @@ export default function SimplifiedIntakeWizard(props: {
       return;
     }
 
+    setGenStep(1); // "Organizing features"
     for (const item of capabilityPlan) {
       const capRes = await apiFetch(`/api/initiatives/${initiativeId}/capabilities`, {
         method: "POST",
@@ -257,12 +270,14 @@ export default function SimplifiedIntakeWizard(props: {
       }
     }
 
+    setGenStep(2); // "Creating roadmap structure" — the long-running step
     const genRes = await apiFetch(`/api/initiatives/${initiativeId}/generate`, { method: "POST", body: {} });
     if (!genRes.ok) {
       setSubmitting(false);
-      setError(genRes.error ?? "Could not build your plan. You can try again from the initiative page.");
+      setError(genRes.error ?? "Could not build your plan. Your answers are saved — you can try again from the initiative page.");
       return;
     }
+    setGenStep(3); // "Preparing delivery plan"
 
     router.push(`/initiatives/${initiativeId}/review`);
     router.refresh();
@@ -405,37 +420,43 @@ export default function SimplifiedIntakeWizard(props: {
 
             {step === reviewStep && (
               <div>
-                <h2 className="text-2xl font-semibold tracking-tight text-text-primary">{reviewCopy.title}</h2>
-                <div className="mt-6 space-y-5">
-                  <label className="block">
-                    <span className="text-sm font-medium text-text-primary">Product name</span>
-                    <input
-                      value={initiativeName}
-                      onChange={(e) => setNameOverride(e.target.value)}
-                      className={`mt-1.5 w-full ${FIELD_CLASS}`}
-                    />
-                  </label>
-                  <ReviewBlock
-                    label="What ships first"
-                    items={nowItems}
-                    onEdit={() => setStep(3)}
-                    empty="Nothing yet — go back and tell us what's most important."
-                  />
-                  <ReviewBlock
-                    label="What's next"
-                    items={nextItems}
-                    onEdit={() => setStep(4)}
-                    empty="Nothing yet — that's okay, you can add this later."
-                  />
-                  <ReviewBlock label="Later" items={laterItems} onEdit={() => setStep(2)} empty="Nothing yet." />
-                  <div>
-                    <span className="text-sm font-medium text-text-primary">Target timing</span>
-                    <p className="mt-1 text-sm text-text-secondary">
-                      Aiming for the first part to be ready{" "}
-                      {timelineOptions.find((o) => o.value === timeline)?.label.toLowerCase()}.
-                    </p>
-                  </div>
-                </div>
+                {submitting ? (
+                  <GenerationProgress title="Building your plan" steps={GENERATION_STEPS} currentStep={genStep} />
+                ) : (
+                  <>
+                    <h2 className="text-2xl font-semibold tracking-tight text-text-primary">{reviewCopy.title}</h2>
+                    <div className="mt-6 space-y-5">
+                      <label className="block">
+                        <span className="text-sm font-medium text-text-primary">Product name</span>
+                        <input
+                          value={initiativeName}
+                          onChange={(e) => setNameOverride(e.target.value)}
+                          className={`mt-1.5 w-full ${FIELD_CLASS}`}
+                        />
+                      </label>
+                      <ReviewBlock
+                        label="What ships first"
+                        items={nowItems}
+                        onEdit={() => setStep(3)}
+                        empty="Nothing yet — go back and tell us what's most important."
+                      />
+                      <ReviewBlock
+                        label="What's next"
+                        items={nextItems}
+                        onEdit={() => setStep(4)}
+                        empty="Nothing yet — that's okay, you can add this later."
+                      />
+                      <ReviewBlock label="Later" items={laterItems} onEdit={() => setStep(2)} empty="Nothing yet." />
+                      <div>
+                        <span className="text-sm font-medium text-text-primary">Target timing</span>
+                        <p className="mt-1 text-sm text-text-secondary">
+                          Aiming for the first part to be ready{" "}
+                          {timelineOptions.find((o) => o.value === timeline)?.label.toLowerCase()}.
+                        </p>
+                      </div>
+                    </div>
+                  </>
+                )}
               </div>
             )}
           </>
@@ -543,72 +564,87 @@ export default function SimplifiedIntakeWizard(props: {
 
             {step === reviewStep && (
               <div>
-                <h2 className="text-2xl font-semibold tracking-tight text-text-primary">{reviewCopy.title}</h2>
-                <div className="mt-6 space-y-5">
-                  <label className="block">
-                    <span className="text-sm font-medium text-text-primary">Product name</span>
-                    <input
-                      value={initiativeName}
-                      onChange={(e) => setNameOverride(e.target.value)}
-                      className={`mt-1.5 w-full ${FIELD_CLASS}`}
-                    />
-                  </label>
-                  <ReviewBlock
-                    label="What you're delivering"
-                    items={nowItems}
-                    onEdit={() => setStep(2)}
-                    empty="Nothing yet — go back and list what needs to be delivered."
-                  />
-                  <div>
-                    <span className="text-sm font-medium text-text-primary">Planning approach</span>
-                    <p className="mt-1 text-sm text-text-secondary">
-                      {METHODOLOGY_OPTIONS.find((o) => o.value === methodology)?.label}
-                    </p>
-                  </div>
-                  <div>
-                    <span className="text-sm font-medium text-text-primary">Target timing</span>
-                    <p className="mt-1 text-sm text-text-secondary">
-                      Aiming for the first part to be ready{" "}
-                      {timelineOptions.find((o) => o.value === timeline)?.label.toLowerCase()}.
-                    </p>
-                  </div>
-                </div>
+                {submitting ? (
+                  <GenerationProgress title="Building your plan" steps={GENERATION_STEPS} currentStep={genStep} />
+                ) : (
+                  <>
+                    <h2 className="text-2xl font-semibold tracking-tight text-text-primary">{reviewCopy.title}</h2>
+                    <div className="mt-6 space-y-5">
+                      <label className="block">
+                        <span className="text-sm font-medium text-text-primary">Product name</span>
+                        <input
+                          value={initiativeName}
+                          onChange={(e) => setNameOverride(e.target.value)}
+                          className={`mt-1.5 w-full ${FIELD_CLASS}`}
+                        />
+                      </label>
+                      <ReviewBlock
+                        label="What you're delivering"
+                        items={nowItems}
+                        onEdit={() => setStep(2)}
+                        empty="Nothing yet — go back and list what needs to be delivered."
+                      />
+                      <div>
+                        <span className="text-sm font-medium text-text-primary">Planning approach</span>
+                        <p className="mt-1 text-sm text-text-secondary">
+                          {METHODOLOGY_OPTIONS.find((o) => o.value === methodology)?.label}
+                        </p>
+                      </div>
+                      <div>
+                        <span className="text-sm font-medium text-text-primary">Target timing</span>
+                        <p className="mt-1 text-sm text-text-secondary">
+                          Aiming for the first part to be ready{" "}
+                          {timelineOptions.find((o) => o.value === timeline)?.label.toLowerCase()}.
+                        </p>
+                      </div>
+                    </div>
+                  </>
+                )}
               </div>
             )}
           </>
         )}
 
-        {error && <p className="mt-4 text-sm text-red-600">{error}</p>}
+        {error && (
+          <div className="mt-4">
+            <p className="text-sm text-red-600">{error}</p>
+            <p className="mt-1 text-xs text-text-muted">Your answers are saved — nothing is lost.</p>
+          </div>
+        )}
 
-        <div className="mt-8 flex items-center justify-between">
-          {step > 0 ? (
-            <Button type="button" variant="ghost" onClick={() => setStep((s) => s - 1)}>
-              ← Back
-            </Button>
-          ) : (
-            <div />
-          )}
-          {step < reviewStep ? (
-            <Button
-              type="button"
-              onClick={() => setStep((s) => s + 1)}
-              disabled={!canContinue}
-              className="px-6 py-3"
-            >
-              Continue →
-            </Button>
-          ) : (
-            <ButtonLoader
-              type="button"
-              onClick={() => void submit()}
-              loading={submitting}
-              loadingLabel={reviewCopy.busy.replace(/…$/, "")}
-              className="px-6 py-3"
-            >
-              {reviewCopy.cta}
-            </ButtonLoader>
-          )}
-        </div>
+        {/* Hidden while submitting — GenerationProgress above is the only
+            feedback needed, and there's nothing useful to click mid-generation. */}
+        {!submitting && (
+          <div className="mt-8 flex items-center justify-between">
+            {step > 0 ? (
+              <Button type="button" variant="ghost" onClick={() => setStep((s) => s - 1)}>
+                ← Back
+              </Button>
+            ) : (
+              <div />
+            )}
+            {step < reviewStep ? (
+              <Button
+                type="button"
+                onClick={() => setStep((s) => s + 1)}
+                disabled={!canContinue}
+                className="px-6 py-3"
+              >
+                Continue →
+              </Button>
+            ) : (
+              <ButtonLoader
+                type="button"
+                onClick={() => void submit()}
+                loading={submitting}
+                loadingLabel={reviewCopy.busy.replace(/…$/, "")}
+                className="px-6 py-3"
+              >
+                {reviewCopy.cta}
+              </ButtonLoader>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

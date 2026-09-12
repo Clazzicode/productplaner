@@ -2,9 +2,9 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
 import { apiFetch } from "@/lib/clientApi";
+import { AuthenticationLoader, ButtonLoader } from "@/components/ui/loading";
 
 // Temporary simplified auth (src/lib/auth/username.ts): username + password
 // only, no email collected or shown anywhere in this form.
@@ -24,8 +24,8 @@ export default function LoginForm() {
       method: "POST",
       body: { username, password },
     });
-    setBusy(false);
     if (!res.ok) {
+      setBusy(false);
       setError(res.error ?? (mode === "sign-up" ? "Could not create your account." : "Could not sign in."));
       return;
     }
@@ -35,6 +35,10 @@ export default function LoginForm() {
     // first initiative). Pushing to "/home" directly used to skip Workspace
     // Setup entirely for a brand-new sign-up, since /home's own guard only
     // ever checked for a QualifyingProfile, not org setup.
+    // `busy` deliberately stays true through the redirect — the
+    // AuthenticationLoader below disappears the instant this component
+    // unmounts, per reference doc §17 ("disappear immediately when
+    // authentication completes"), not a moment before.
     router.push("/");
     router.refresh();
   };
@@ -53,6 +57,7 @@ export default function LoginForm() {
             placeholder="e.g. jsmith"
             autoComplete="username"
             autoFocus
+            disabled={busy}
           />
         </label>
         <label className="mt-3 block text-sm font-medium text-text-primary">
@@ -63,12 +68,21 @@ export default function LoginForm() {
             onChange={(e) => setPassword(e.target.value)}
             className="mt-1.5"
             autoComplete={mode === "sign-in" ? "current-password" : "new-password"}
+            disabled={busy}
           />
         </label>
 
-        <Button className="mt-5 w-full" onClick={() => void submit()} disabled={busy || !canSubmit}>
-          {busy ? "Please wait…" : mode === "sign-in" ? "Sign in" : "Create account"}
-        </Button>
+        <ButtonLoader
+          className="mt-5 w-full justify-center"
+          onClick={() => void submit()}
+          disabled={!canSubmit}
+          loading={busy}
+          loadingLabel={mode === "sign-in" ? "Signing in" : "Creating account"}
+        >
+          {mode === "sign-in" ? "Sign in" : "Create account"}
+        </ButtonLoader>
+
+        {busy && <AuthenticationLoader label={mode === "sign-in" ? "Signing you in" : "Setting up your workspace"} />}
 
         <button
           type="button"
@@ -76,7 +90,8 @@ export default function LoginForm() {
             setMode(mode === "sign-in" ? "sign-up" : "sign-in");
             setError(null);
           }}
-          className="mt-4 w-full text-center text-sm font-medium text-accent hover:underline"
+          disabled={busy}
+          className="mt-4 w-full text-center text-sm font-medium text-accent hover:underline disabled:opacity-50"
         >
           {mode === "sign-in" ? "Need an account? Create one" : "Already have an account? Sign in"}
         </button>
