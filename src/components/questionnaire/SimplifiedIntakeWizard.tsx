@@ -132,6 +132,8 @@ export default function SimplifiedIntakeWizard(props: {
   const [nextAnswer, setNextAnswer] = useState("");
   const [methodology, setMethodology] = useState<MethodologyChoice | null>(null);
   const [timeline, setTimeline] = useState<TimelineBucket | null>(null);
+  const [teamSizeAnswer, setTeamSizeAnswer] = useState("");
+  const [budgetAnswer, setBudgetAnswer] = useState("");
   const [nameOverride, setNameOverride] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [genStep, setGenStep] = useState(0);
@@ -151,9 +153,14 @@ export default function SimplifiedIntakeWizard(props: {
   const nextItems = capabilityPlan.filter((i) => i.bucket === "next");
   const laterItems = capabilityPlan.filter((i) => i.bucket === "later");
 
-  // Beginner: product, audience, features, priority, next, timeline, review (7).
-  // Some Experience: product, outcome, features, methodology, timeline, review (6).
-  const TOTAL_STEPS = isBeginner ? 7 : 6;
+  // Beginner: product, audience, features, priority, next, timeline, resources, review (8).
+  // Some Experience: product, outcome, features, methodology, timeline, resources, review (7).
+  // "Resources" (team size + budget, both optional) is asked on every path,
+  // regardless of experience level — previously only the advanced
+  // PlanningQuestionnaire asked about budget at all, so a Beginner/Some
+  // Experience initiative always generated its roadmap and sprints without
+  // it (or any team-size input) even being requested.
+  const TOTAL_STEPS = isBeginner ? 8 : 7;
   const reviewStep = TOTAL_STEPS - 1;
 
   const canContinue = isBeginner
@@ -187,6 +194,12 @@ export default function SimplifiedIntakeWizard(props: {
 
     const onboardingWorkspaceType = readOnboardingState().workspaceType;
     const resolvedTeamComposition = props.teamComposition ?? (onboardingWorkspaceType === "solo" ? "solo" : "small_team");
+    const trimmedTeamSize = teamSizeAnswer.trim();
+    const parsedTeamSize = trimmedTeamSize === "" ? null : Number(trimmedTeamSize);
+    const resolvedTeamSize =
+      parsedTeamSize != null && parsedTeamSize > 0 ? parsedTeamSize : defaultTeamSize(resolvedTeamComposition);
+    const trimmedBudget = budgetAnswer.trim();
+    const parsedBudget = trimmedBudget === "" ? null : Number(trimmedBudget);
 
     if (!props.hasProfile) {
       const profileRes = await apiFetch("/api/qualifying", {
@@ -212,6 +225,7 @@ export default function SimplifiedIntakeWizard(props: {
         name: initiativeName,
         description: productAnswer.trim(),
         ...(targetLaunchDate ? { targetLaunchDate: targetLaunchDate.toISOString() } : {}),
+        ...(parsedBudget != null ? { budget: parsedBudget } : {}),
       },
     });
     if (!initRes.ok || !initRes.data) {
@@ -238,7 +252,7 @@ export default function SimplifiedIntakeWizard(props: {
         outcomeStatement: isBeginner
           ? deriveOutcomeStatement(priorityAnswer, productAnswer)
           : finalizeOutcomeStatement(outcomeAnswer),
-        teamSize: defaultTeamSize(resolvedTeamComposition),
+        teamSize: resolvedTeamSize,
       },
     });
     if (!intakeRes.ok) {
@@ -418,6 +432,45 @@ export default function SimplifiedIntakeWizard(props: {
               </div>
             )}
 
+            {step === reviewStep - 1 && (
+              <div>
+                <span className="block text-2xl font-semibold tracking-tight text-text-primary">
+                  {BEGINNER_INTAKE_COPY.resources.title}
+                </span>
+                <p className="mt-2 mb-5 text-sm leading-relaxed text-text-secondary">
+                  {BEGINNER_INTAKE_COPY.resources.hint}
+                </p>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <label className="block">
+                    <span className="text-sm font-medium text-text-primary">
+                      People working on this <span className="font-normal text-text-muted">(optional)</span>
+                    </span>
+                    <input
+                      type="number"
+                      min={1}
+                      value={teamSizeAnswer}
+                      onChange={(e) => setTeamSizeAnswer(e.target.value)}
+                      placeholder="e.g. 2"
+                      className={`mt-1.5 w-full ${FIELD_CLASS}`}
+                    />
+                  </label>
+                  <label className="block">
+                    <span className="text-sm font-medium text-text-primary">
+                      Budget ($) <span className="font-normal text-text-muted">(optional)</span>
+                    </span>
+                    <input
+                      type="number"
+                      min={0}
+                      value={budgetAnswer}
+                      onChange={(e) => setBudgetAnswer(e.target.value)}
+                      placeholder="e.g. 25000"
+                      className={`mt-1.5 w-full ${FIELD_CLASS}`}
+                    />
+                  </label>
+                </div>
+              </div>
+            )}
+
             {step === reviewStep && (
               <div>
                 {submitting ? (
@@ -452,6 +505,14 @@ export default function SimplifiedIntakeWizard(props: {
                         <p className="mt-1 text-sm text-text-secondary">
                           Aiming for the first part to be ready{" "}
                           {timelineOptions.find((o) => o.value === timeline)?.label.toLowerCase()}.
+                        </p>
+                      </div>
+                      <div>
+                        <span className="text-sm font-medium text-text-primary">Team & budget</span>
+                        <p className="mt-1 text-sm text-text-secondary">
+                          {teamSizeAnswer.trim() ? `${teamSizeAnswer.trim()} people` : "Team size not set"}
+                          {" · "}
+                          {budgetAnswer.trim() ? `$${budgetAnswer.trim()} budget` : "No budget set"}
                         </p>
                       </div>
                     </div>
@@ -562,6 +623,45 @@ export default function SimplifiedIntakeWizard(props: {
               </div>
             )}
 
+            {step === reviewStep - 1 && (
+              <div>
+                <span className="block text-2xl font-semibold tracking-tight text-text-primary">
+                  {SOME_EXPERIENCE_INTAKE_COPY.resources.title}
+                </span>
+                <p className="mt-2 mb-5 text-sm leading-relaxed text-text-secondary">
+                  {SOME_EXPERIENCE_INTAKE_COPY.resources.hint}
+                </p>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <label className="block">
+                    <span className="text-sm font-medium text-text-primary">
+                      Team size <span className="font-normal text-text-muted">(optional)</span>
+                    </span>
+                    <input
+                      type="number"
+                      min={1}
+                      value={teamSizeAnswer}
+                      onChange={(e) => setTeamSizeAnswer(e.target.value)}
+                      placeholder="e.g. 4"
+                      className={`mt-1.5 w-full ${FIELD_CLASS}`}
+                    />
+                  </label>
+                  <label className="block">
+                    <span className="text-sm font-medium text-text-primary">
+                      Budget ($) <span className="font-normal text-text-muted">(optional)</span>
+                    </span>
+                    <input
+                      type="number"
+                      min={0}
+                      value={budgetAnswer}
+                      onChange={(e) => setBudgetAnswer(e.target.value)}
+                      placeholder="e.g. 175000"
+                      className={`mt-1.5 w-full ${FIELD_CLASS}`}
+                    />
+                  </label>
+                </div>
+              </div>
+            )}
+
             {step === reviewStep && (
               <div>
                 {submitting ? (
@@ -595,6 +695,14 @@ export default function SimplifiedIntakeWizard(props: {
                         <p className="mt-1 text-sm text-text-secondary">
                           Aiming for the first part to be ready{" "}
                           {timelineOptions.find((o) => o.value === timeline)?.label.toLowerCase()}.
+                        </p>
+                      </div>
+                      <div>
+                        <span className="text-sm font-medium text-text-primary">Team & budget</span>
+                        <p className="mt-1 text-sm text-text-secondary">
+                          {teamSizeAnswer.trim() ? `${teamSizeAnswer.trim()} people` : "Team size not set"}
+                          {" · "}
+                          {budgetAnswer.trim() ? `$${budgetAnswer.trim()} budget` : "No budget set"}
                         </p>
                       </div>
                     </div>

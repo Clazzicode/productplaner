@@ -26,6 +26,7 @@ export interface BeginnerIntakeCopy {
   priority: QuestionCopy;
   next: QuestionCopy;
   timeline: { title: string; hint: string };
+  resources: { title: string; hint: string };
   review: { title: string; cta: string; busy: string };
 }
 
@@ -58,6 +59,10 @@ export const BEGINNER_INTAKE_COPY: BeginnerIntakeCopy = {
     title: "When would you like the different parts of this work completed?",
     hint: "Pick the range that's closest to what you have in mind — it's fine to not know yet.",
   },
+  resources: {
+    title: "Who's working on this, and what can you spend?",
+    hint: "Both optional — but if you know roughly how many people will work on it and what you can spend, sharing it now makes the plan and its timing more realistic. Leave either blank if you're not sure yet.",
+  },
   review: {
     title: "Here's your plan",
     cta: "Build my plan",
@@ -71,6 +76,7 @@ export interface SomeExperienceIntakeCopy {
   features: QuestionCopy;
   methodology: { title: string; hint: string };
   timeline: { title: string; hint: string };
+  resources: { title: string; hint: string };
   review: { title: string; cta: string; busy: string };
 }
 
@@ -97,6 +103,10 @@ export const SOME_EXPERIENCE_INTAKE_COPY: SomeExperienceIntakeCopy = {
   timeline: {
     title: "What is your expected timeline?",
     hint: "Pick the closest range, or tell us you're not sure yet.",
+  },
+  resources: {
+    title: "Team size and budget",
+    hint: "Optional, but sharpens the capacity and cost estimates in your plan — leave either blank if you don't know yet.",
   },
   review: {
     title: "Here's your plan",
