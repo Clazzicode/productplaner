@@ -11,7 +11,21 @@ import {
 import { DASHBOARD_WIDGETS } from "@/lib/dashboard/widgetRegistry";
 import type { WorkingRole } from "@/lib/onboarding/types";
 
-const WORKING_ROLES: readonly WorkingRole[] = ["product_management", "project_manager", "product_owner"];
+// Guided-activation restructure (reference doc §13): kept in sync with
+// WorkingRole (src/lib/onboarding/types.ts) by hand — confirmed drifted
+// (still only 3 of 6 values) via the same audit that caught
+// /api/account/working-role's identical drift; without this fix, saving
+// Dashboard Configuration for Business Analyst/Founder-Business-Lead/Other
+// would 400 "Unknown Working Role" even though admin/dashboard-configuration
+// page.tsx already offers all six as tabs.
+const WORKING_ROLES: readonly WorkingRole[] = [
+  "product_management",
+  "project_manager",
+  "product_owner",
+  "business_analyst",
+  "founder_business_lead",
+  "other",
+];
 const WIDGET_IDS = DASHBOARD_WIDGETS.map((w) => w.id) as [string, ...string[]];
 
 const saveSchema = z.object({

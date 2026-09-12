@@ -8,7 +8,21 @@ import { isLastActiveOrgAdmin } from "@/lib/admin/safeguards";
 const userPatchSchema = z
   .object({
     accessLevel: z.enum(["standard_user", "org_admin"]).optional(),
-    workingRole: z.enum(["product_management", "project_manager", "product_owner"]).nullable().optional(),
+    // Guided-activation restructure (reference doc §13): kept in sync with
+    // WorkingRole (src/lib/onboarding/types.ts) by hand — same drift
+    // confirmed and fixed at /api/account/working-role and
+    // /api/admin/dashboard-config/[workingRole].
+    workingRole: z
+      .enum([
+        "product_management",
+        "project_manager",
+        "product_owner",
+        "business_analyst",
+        "founder_business_lead",
+        "other",
+      ])
+      .nullable()
+      .optional(),
     memberType: z.enum(["internal", "external"]).optional(),
     status: z.enum(["active", "disabled", "archived"]).optional(),
   })

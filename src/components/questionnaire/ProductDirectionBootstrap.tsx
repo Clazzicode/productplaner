@@ -31,6 +31,8 @@ const ROLE_ORDER: WorkingRole[] = [
   "other",
 ];
 
+type StartingPoint = "fresh" | "import";
+
 export default function ProductDirectionBootstrap(props: { hasProfile: boolean; workingRole: WorkingRole | null }) {
   const router = useRouter();
   const [roleAnswer, setRoleAnswer] = useState<WorkingRole | null>(
@@ -43,6 +45,16 @@ export default function ProductDirectionBootstrap(props: { hasProfile: boolean; 
     problemStatement: "",
     targetCustomer: "",
   });
+  // Guided-activation restructure (reference doc §6 "Starting point"):
+  // "Start fresh" is today's existing behavior unchanged. "Import existing
+  // work" skips the core-idea fields (an imported document fills them) and
+  // drops straight into /intake, where ImportIntakePanel already lives
+  // inside the full PlanningQuestionnaire — no new import surface needed,
+  // just skipping fields that would otherwise be asked and thrown away.
+  // "Connect existing work" has no real integration-import path yet
+  // (Integrations Hub is demo-only), so it's honestly marked unavailable
+  // rather than pretending to do something — reference doc §11.
+  const [startingPoint, setStartingPoint] = useState<StartingPoint>("fresh");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -157,12 +169,45 @@ export default function ProductDirectionBootstrap(props: { hasProfile: boolean; 
               <>
                 <div className="border-t border-neutral-100 pt-7 first:border-0 first:pt-0">
                   <p className="text-xs font-semibold uppercase tracking-wide text-accent">
+                    Starting point
+                  </p>
+                  <div className="mt-3 grid gap-3 sm:grid-cols-3">
+                    <ChoiceCard
+                      selected={startingPoint === "fresh"}
+                      onClick={() => setStartingPoint("fresh")}
+                      label="Start fresh"
+                      hint="Answer a few questions to build the plan from scratch."
+                    />
+                    <ChoiceCard
+                      selected={startingPoint === "import"}
+                      onClick={() => setStartingPoint("import")}
+                      label="Import existing work"
+                      hint="Pull details from a document instead of typing them here."
+                    />
+                    <ChoiceCard
+                      selected={false}
+                      onClick={() => {}}
+                      className="cursor-not-allowed opacity-50"
+                      label="Connect existing work"
+                      hint="Not yet available — no live integration import exists yet."
+                    />
+                  </div>
+                </div>
+
+                <div className="mt-7 border-t border-neutral-100 pt-7">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-accent">
                     {props.hasProfile ? "New initiative" : "Question 3"}
                   </p>
                   <h2 className="mt-1.5 text-2xl font-semibold tracking-tight text-text-primary">
                     What&apos;s the core idea?
                   </h2>
                   <GuidanceBanner section="productDirection" workingRole={props.workingRole} />
+                  {startingPoint === "import" && (
+                    <p className="mt-2 rounded-lg bg-accent/[0.06] px-3 py-2 text-xs text-text-secondary">
+                      You can leave the problem and customer fields blank — you&apos;ll pull those
+                      details from your imported document on the next step instead.
+                    </p>
+                  )}
                   <ProductDirectionFields
                     values={values}
                     onChange={(patch) => setValues((v) => ({ ...v, ...patch }))}
@@ -180,7 +225,7 @@ export default function ProductDirectionBootstrap(props: { hasProfile: boolean; 
                     disabled={values.name.trim().length < 3}
                     className="px-6 py-3"
                   >
-                    Continue →
+                    Create Initiative
                   </ButtonLoader>
                 </div>
               </>
