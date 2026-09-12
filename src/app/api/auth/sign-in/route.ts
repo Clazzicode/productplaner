@@ -2,7 +2,9 @@ import { NextResponse } from "next/server";
 import { isAuthRetryableFetchError } from "@supabase/supabase-js";
 import { z } from "zod";
 import { jsonError, zodMessage } from "@/lib/api";
+import { provisionSoloWorkspace } from "@/lib/auth/session";
 import { usernameSchema, usernameToPlaceholderEmail } from "@/lib/auth/username";
+import { db, establishAuthContext } from "@/lib/db";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 const signInSchema = z.object({
@@ -15,7 +17,7 @@ export async function POST(request: Request) {
   if (!parsed.success) return jsonError(zodMessage(parsed.error), 422);
 
   const supabase = await createSupabaseServerClient();
-  const { error } = await supabase.auth.signInWithPassword({
+  const { data, error } = await supabase.auth.signInWithPassword({
     email: usernameToPlaceholderEmail(parsed.data.username),
     password: parsed.data.password,
   });
@@ -31,6 +33,24 @@ export async function POST(request: Request) {
       return jsonError("Sign-in service is temporarily unavailable. Please try again in a moment.", 503);
     }
     return jsonError("Incorrect username or password.", 401);
+  }
+
+  // Sign-up creates the Supabase Auth account and this app's own User row as
+  // two separate steps (sign-up route), with no rollback between them. If the
+  // User-row step ever fails partway (a transient DB/pooler error), the auth
+  // account is left with no matching User row: Supabase happily signs it in,
+  // but the rest of the app has nothing to resolve it to and treats the
+  // request as signed out. Self-heal that here with the same idempotent-safe
+  // provisioning sign-up itself uses, so a stuck account recovers on its next
+  // sign-in instead of looping back to /login forever.
+  establishAuthContext(data.user.id);
+  const existing = await db.user.findUnique({ where: { authUserId: data.user.id } });
+  if (!existing) {
+    await provisionSoloWorkspace({
+      authUserId: data.user.id,
+      name: parsed.data.username,
+      email: usernameToPlaceholderEmail(parsed.data.username),
+    });
   }
 
   return NextResponse.json({ ok: true });
