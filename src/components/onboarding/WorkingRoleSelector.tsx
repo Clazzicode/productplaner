@@ -9,14 +9,7 @@ import { WORKING_ROLE_META } from "@/lib/onboarding/roleOptions";
 import type { WorkingRole } from "@/lib/onboarding/types";
 import { ButtonLoader } from "@/components/ui/loading";
 
-const ROLE_ORDER: WorkingRole[] = [
-  "product_management",
-  "product_owner",
-  "project_manager",
-  "business_analyst",
-  "founder_business_lead",
-  "other",
-];
+const ROLE_ORDER: WorkingRole[] = ["product_management", "product_owner", "project_manager"];
 
 /**
  * Guided-activation restructure (reference doc §2/§13): Role/Working Context

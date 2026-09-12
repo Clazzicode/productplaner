@@ -22,14 +22,7 @@ import SimplifiedIntakeWizard from "./SimplifiedIntakeWizard";
 // before onboarding finishes (the normal path always arrives with hasProfile
 // true and a role already set from /onboarding/role), but it must still
 // offer the same real, non-rejecting choices when it is.
-const ROLE_ORDER: WorkingRole[] = [
-  "product_owner",
-  "product_management",
-  "project_manager",
-  "business_analyst",
-  "founder_business_lead",
-  "other",
-];
+const ROLE_ORDER: WorkingRole[] = ["product_owner", "product_management", "project_manager"];
 
 type StartingPoint = "fresh" | "import" | "use_project_context";
 
