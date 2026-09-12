@@ -31,12 +31,30 @@ type Action = "full" | "respect_locks";
  * The "living plan" recalculate action: two separate, mutually exclusive
  * buttons (never a single ambiguous "Recalculate") — reuses LockBar's
  * confirm-modal idiom.
+ *
+ * Guided-activation restructure: `manualReleaseCount`/`manualSprintCount` —
+ * when non-zero, the confirm copy discloses the impact on the user's
+ * manually-confirmed releases/sprints, not just the engine's auto-packed
+ * ones. "Full regenerate" (and respect-locks' `full_fallback_no_locks`
+ * branch) delete the whole Prototype, manual rows included — that's already
+ * disclosed generically below ("You will lose... everything"). The
+ * respect-locks disclosure below is specific: `repack_only` never touches
+ * manual rows (repackSprints is origin-aware), so nothing needs saying there;
+ * `regen_below` can invalidate a manual Sprint's story links, which the app
+ * flags afterward as `needs_reconciliation` rather than silently losing them.
  */
-export default function RefreshBar(props: { initiativeId: string; locks: RefreshLockView[] }) {
+export default function RefreshBar(props: {
+  initiativeId: string;
+  locks: RefreshLockView[];
+  manualReleaseCount?: number;
+  manualSprintCount?: number;
+}) {
   const router = useRouter();
   const [confirm, setConfirm] = useState<Action | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const hasManualData = (props.manualReleaseCount ?? 0) > 0 || (props.manualSprintCount ?? 0) > 0;
 
   const lockedTypes = SEQUENCE.filter(
     (t) => props.locks.find((l) => l.layerType === t)?.state === "locked",
@@ -46,10 +64,14 @@ export default function RefreshBar(props: { initiativeId: string; locks: Refresh
   const lastLockedLabel = !noneLocked ? LABELS[lockedTypes[lockedTypes.length - 1]] : null;
 
   const respectLocksCopy = noneLocked
-    ? "Nothing is locked yet, so this has the same effect as Full regenerate — it rebuilds the whole plan from your current intake answers."
+    ? `Nothing is locked yet, so this has the same effect as Full regenerate — it rebuilds the whole plan from your current intake answers${hasManualData ? ", including your manually created releases and sprints" : ""}.`
     : allLocked
-      ? "All waterfall layers are locked, so only the sprint & release plan recomputes from your current capacity, budget, and rate — nothing above changes."
-      : `${lastLockedLabel} and everything above stay exactly as-is. Everything below regenerates from your current intake data, including sprints and releases. Note: adding, removing, or reclassifying features since your last generation won't be reflected here — use Full regenerate for that.`;
+      ? "All waterfall layers are locked, so only the auto-packed sprint & release suggestions recompute from your current capacity, budget, and rate — your manually created releases and sprints are never touched."
+      : `${lastLockedLabel} and everything above stay exactly as-is. Everything below regenerates from your current intake data.${
+          hasManualData
+            ? " Your manually created releases stay in place, but a manual sprint whose stories were affected gets flagged for review afterward — nothing is silently dropped."
+            : " Sprints and releases are recomputed too."
+        } Note: adding, removing, or reclassifying features since your last generation won't be reflected here — use Full regenerate for that.`;
 
   const run = async (action: Action) => {
     setBusy(true);
@@ -99,10 +121,20 @@ export default function RefreshBar(props: { initiativeId: string; locks: Refresh
                   <strong>every lock state</strong> (everything unlocks), the{" "}
                   <strong>approved baseline</strong> snapshot, any{" "}
                   <strong>inline edits</strong> you&apos;ve made directly to roadmap/feature/epic/
-                  story/acceptance-criteria text, and any{" "}
-                  <strong>Jira/Integration sync stamps</strong> on individual items, and any{" "}
-                  <strong>manual phase drags</strong> made on the Timeline view. This cannot be
-                  undone.
+                  story/acceptance-criteria text, any{" "}
+                  <strong>Jira/Integration sync stamps</strong> on individual items, any{" "}
+                  <strong>manual phase drags</strong> made on the Timeline view
+                  {hasManualData && (
+                    <>
+                      , and{" "}
+                      <strong>
+                        {props.manualReleaseCount ?? 0} manually created release
+                        {(props.manualReleaseCount ?? 0) === 1 ? "" : "s"} and{" "}
+                        {props.manualSprintCount ?? 0} sprint{(props.manualSprintCount ?? 0) === 1 ? "" : "s"}
+                      </strong>
+                    </>
+                  )}
+                  . This cannot be undone.
                 </p>
               </>
             ) : (

@@ -180,6 +180,21 @@ export const movePhaseSchema = z.object({
   targetPhase: z.number().int().min(1).max(3),
 });
 
+// Guided-activation restructure: manual Create Release / Plan Sprint flows
+// (src/app/api/initiatives/[id]/releases, src/app/api/releases/[releaseId]/sprints).
+export const createReleaseSchema = z.object({
+  phaseNumber: z.number().int().min(1),
+  name: z.string().trim().min(1).max(120).optional(),
+  targetDate: z.coerce.date(),
+});
+
+export const createSprintSchema = z.object({
+  startDate: z.coerce.date(),
+  endDate: z.coerce.date(),
+  capacityPoints: z.number().min(0.1).max(10_000),
+  storyIds: z.array(z.string()).default([]),
+});
+
 export const integrationActionSchema = z.object({
   action: z.enum(["connect", "configure", "sync", "disconnect", "reconnect"]),
   connectionId: z.string().optional(),

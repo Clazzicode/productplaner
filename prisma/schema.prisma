@@ -339,6 +339,16 @@ model ArtifactLayer {
   @@index([parentId])
 }
 
+// Guided-activation restructure (docs/V2-... lifecycle work): `origin`
+// distinguishes rows the engine auto-packs (`repackSprints`) from rows a user
+// explicitly confirmed through the manual Create Release / Plan Sprint flow.
+// The lifecycle resolver (src/lib/lifecycle/resolveLifecycleState.ts) counts
+// only `origin:"manual"` rows toward its release/sprint gates — this applies
+// retroactively, so every pre-existing row (defaulted to "auto" by this
+// migration) must be re-confirmed manually before an initiative reaches the
+// operational dashboard. `status` flags a manual Sprint whose story
+// assignments were invalidated by a later roadmap regeneration, instead of
+// silently dropping/renaming them (see `regenerateBelow` in engine.ts).
 model Sprint {
   id             String          @id @default(cuid())
   prototypeId    String
@@ -348,6 +358,8 @@ model Sprint {
   startDate      DateTime
   endDate        DateTime
   capacityPoints Float
+  origin         String          @default("auto") // auto | manual
+  status         String          @default("planned") // planned | needs_reconciliation
   releaseId      String?
   release        Release?        @relation(fields: [releaseId], references: [id], onDelete: SetNull)
   stories        ArtifactLayer[]
@@ -364,6 +376,7 @@ model Release {
   phaseNumber Int
   targetDate  DateTime
   order       Int
+  origin      String    @default("auto") // auto | manual — see Sprint.origin comment above
   sprints     Sprint[]
   createdAt   DateTime  @default(now())
 

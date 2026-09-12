@@ -94,3 +94,32 @@ body {
     display: none;
   }
 }
+
+/* Loading system (guided-activation restructure — reference doc §14-19).
+   Three-dot "working" indicator shared by InlineLoader/ButtonLoader/
+   AuthenticationLoader. JS only adds this class when
+   `useReducedMotion()` reports motion is allowed — see
+   src/lib/hooks/useReducedMotion.ts — so a reduced-motion viewer never
+   receives the animation in the first place, but the media query below is
+   kept too as a defense-in-depth static fallback. */
+@keyframes loading-dot-pulse {
+  0%,
+  80%,
+  100% {
+    opacity: 0.2;
+  }
+  40% {
+    opacity: 1;
+  }
+}
+
+@utility animate-loading-dot {
+  animation: loading-dot-pulse 1.2s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-loading-dot {
+    animation: none;
+    opacity: 1;
+  }
+}

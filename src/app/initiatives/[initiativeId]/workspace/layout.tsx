@@ -42,6 +42,10 @@ export default async function WorkspaceLayout({
   const counts = await artifactCounts(ws.prototype.id);
   const methodology = resolveMethodology(ws.initiative.methodology);
   const profile = profileFor(ws.initiative.methodology);
+  const [manualReleaseCount, manualSprintCount] = await Promise.all([
+    db.release.count({ where: { prototypeId: ws.prototype.id, origin: "manual" } }),
+    db.sprint.count({ where: { prototypeId: ws.prototype.id, origin: "manual" } }),
+  ]);
 
   return (
     <ContainedLayout>
@@ -93,6 +97,8 @@ export default async function WorkspaceLayout({
           <RefreshBar
             initiativeId={initiativeId}
             locks={ws.locks.map((l) => ({ layerType: l.layerType, state: l.state }))}
+            manualReleaseCount={manualReleaseCount}
+            manualSprintCount={manualSprintCount}
           />
         </div>
         <div className="mt-5">

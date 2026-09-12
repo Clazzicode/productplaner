@@ -331,29 +331,14 @@ export async function generatePrototype(initiativeId: string): Promise<{ prototy
         })),
       });
 
-      const releaseRows = plan.releases.map((rel) => ({
-        id: randomUUID(),
-        prototypeId: proto.id,
-        name: rel.name,
-        phaseNumber: rel.phaseNumber,
-        targetDate: rel.targetDate,
-        order: rel.order,
-      }));
-      if (releaseRows.length > 0) await tx.release.createMany({ data: releaseRows });
-      const releaseIdByPhase = new Map(releaseRows.map((r) => [r.phaseNumber, r.id]));
-
-      const sprintRows = plan.sprints.map((sprint) => ({
-        id: randomUUID(),
-        prototypeId: proto.id,
-        sprintNumber: sprint.sprintNumber,
-        phaseNumber: sprint.phaseNumber,
-        startDate: sprint.startDate,
-        endDate: sprint.endDate,
-        capacityPoints: sprint.capacityPoints,
-        releaseId: releaseIdByPhase.get(sprint.phaseNumber) ?? null,
-      }));
-      if (sprintRows.length > 0) await tx.sprint.createMany({ data: sprintRows });
-      const sprintIdByNumber = new Map(sprintRows.map((r) => [r.sprintNumber, r.id]));
+      // Guided-activation restructure: generation no longer auto-creates
+      // Release/Sprint rows (plan.releases/plan.sprints go unused here) —
+      // those are now a separate, explicit, user-confirmed step (see the
+      // manual creation routes and resolveLifecycleState.ts). `buildPlan()`
+      // still computes them internally purely to derive realistic phase
+      // start/end dates (phase.startDate/endDate above), which stay useful
+      // even before any release/sprint is manually created.
+      const sprintIdByNumber = new Map<number, string>();
 
       const rootTrace = traceFor.roadmap();
       const root = await tx.artifactLayer.create({
@@ -464,6 +449,19 @@ export async function regenerateBelow(
 
   await withTransaction(
     async (tx) => {
+      // Reconciliation snapshot (guided-activation restructure): a manual
+      // Sprint's story links point at specific ArtifactLayer story rows,
+      // which this function deletes-and-recreates-with-new-ids for whichever
+      // layer is edited — the manual Sprint row itself survives (repackSprints
+      // only touches origin:"auto" rows), but can silently lose its story
+      // links in the process. Compared against the same query after repack
+      // runs, below, to flag (never silently drop) any manual Sprint whose
+      // linked-story count went down.
+      const manualSprintsBefore = await tx.sprint.findMany({
+        where: { prototypeId, origin: "manual" },
+        select: { id: true, _count: { select: { stories: true } } },
+      });
+
       if (editedLayer === "roadmap") {
         // Rebuild features (and everything beneath) under the surviving phases.
         await tx.artifactLayer.deleteMany({ where: { prototypeId, type: "feature" } });
@@ -614,6 +612,23 @@ export async function regenerateBelow(
 
       stats.sprints = await repackSprints(tx, prototypeId, intake, methodology);
 
+      if (manualSprintsBefore.length > 0) {
+        const beforeCounts = new Map(manualSprintsBefore.map((s) => [s.id, s._count.stories]));
+        const manualSprintsAfter = await tx.sprint.findMany({
+          where: { prototypeId, origin: "manual" },
+          select: { id: true, _count: { select: { stories: true } } },
+        });
+        const regressedIds = manualSprintsAfter
+          .filter((s) => s._count.stories < (beforeCounts.get(s.id) ?? 0))
+          .map((s) => s.id);
+        if (regressedIds.length > 0) {
+          await tx.sprint.updateMany({
+            where: { id: { in: regressedIds } },
+            data: { status: "needs_reconciliation" },
+          });
+        }
+      }
+
       // Downstream waterfall locks reset — must be reviewed and re-locked in order.
       const idx = LAYER_SEQUENCE.indexOf(editedLayer);
       await tx.layerLock.updateMany({
@@ -650,12 +665,24 @@ function decomposeForRegen(cap: CapabilityInput, ctx: NarrativeContext): Planned
 // ---------- agile-layer recompute (sprints, releases) ----------
 
 /**
- * Rebuilds sprints and releases from the CURRENT story rows in strict
- * roadmap order. Manual sprint moves are reset — the agile layer is always
- * recomputed when the waterfall foundation moves. Kanban (`sprintMode:
- * "continuous_flow"`) creates no `Sprint` rows at all — every story's
- * `sprintId` stays null, and `Release` dates come from cumulative-throughput
- * math instead of discrete sprint spans.
+ * Rebuilds AUTO-origin sprints and releases from the CURRENT story rows in
+ * strict roadmap order. Kanban (`sprintMode: "continuous_flow"`) creates no
+ * `Sprint` rows at all — every auto-pool story's `sprintId` stays null, and
+ * `Release` dates come from cumulative-throughput math instead of discrete
+ * sprint spans.
+ *
+ * Guided-activation restructure: this only ever touches `origin:"auto"`
+ * Release/Sprint rows — any `origin:"manual"` row (created through the
+ * explicit Create Release / Plan Sprint flow) is left completely alone, and
+ * every phase a manual Release already claims is excluded from the auto
+ * packing pool entirely (its stories' `sprintId` is never touched here — see
+ * the manual sprint-creation route for how those get assigned). Auto
+ * sprintNumber/release-order values are offset past the current max manual
+ * value to guarantee no unique-constraint collision; this can make auto
+ * sprint numbers not perfectly chronological relative to manual ones when a
+ * manually-claimed phase sits earlier in roadmap order than an auto one —
+ * documented trade-off, not a bug, given the alternative is a full
+ * renumbering pass across both origins on every repack.
  */
 export async function repackSprints(
   tx: Db,
@@ -664,8 +691,24 @@ export async function repackSprints(
   methodology: Methodology = "hybrid",
 ): Promise<number> {
   const profile = METHODOLOGY_PROFILES[resolveMethodology(methodology)];
-  await tx.sprint.deleteMany({ where: { prototypeId } }); // SetNull clears story.sprintId
-  await tx.release.deleteMany({ where: { prototypeId } });
+
+  const manualReleases = await tx.release.findMany({
+    where: { prototypeId, origin: "manual" },
+    select: { phaseNumber: true, order: true },
+  });
+  const manualSprints = await tx.sprint.findMany({
+    where: { prototypeId, origin: "manual" },
+    select: { sprintNumber: true },
+  });
+  const claimedPhaseNumbers = new Set(manualReleases.map((r) => r.phaseNumber));
+  const releaseOrderOffset =
+    manualReleases.length > 0 ? Math.max(...manualReleases.map((r) => r.order)) : 0;
+  const sprintNumberOffset =
+    manualSprints.length > 0 ? Math.max(...manualSprints.map((s) => s.sprintNumber)) : 0;
+
+  // SetNull clears story.sprintId for auto sprints only — manual rows untouched.
+  await tx.sprint.deleteMany({ where: { prototypeId, origin: "auto" } });
+  await tx.release.deleteMany({ where: { prototypeId, origin: "auto" } });
 
   const rows = await tx.artifactLayer.findMany({
     where: { prototypeId, type: { in: ["roadmap_phase", "feature", "epic", "story"] } },
@@ -685,9 +728,12 @@ export async function repackSprints(
     .filter((r) => r.type === "roadmap_phase")
     .sort((a, b) => a.order - b.order);
 
+  // Manually-claimed phases are excluded here — their stories never enter
+  // the auto pool, so their sprintId is never touched below.
   const ordered: { rowId: string; shim: { points: number; sprintNumber: number }; phaseNumber: number }[] = [];
   for (const phase of phaseRows) {
     const phaseNumber = (parseJson(phase.contentJson).phaseNumber as number | undefined) ?? 1;
+    if (claimedPhaseNumbers.has(phaseNumber)) continue;
     for (const feature of childrenOf(phase.id, "feature")) {
       for (const epic of childrenOf(feature.id, "epic")) {
         for (const story of childrenOf(epic.id, "story")) {
@@ -711,9 +757,9 @@ export async function repackSprints(
       sprintLengthWeeks: intake.sprintLengthWeeks,
       startDate: intake.startDate,
     });
-    // Every story's sprintId is already null here — the `sprint.deleteMany`
-    // above SetNulls it, and Kanban never assigns one — so there's nothing
-    // further to update on the story rows themselves.
+    // Every auto-pool story's sprintId is already null here — the
+    // `sprint.deleteMany` above SetNulls it, and Kanban never assigns one —
+    // so there's nothing further to update on the story rows themselves.
     const phasesPresent = [...new Set(ordered.map((o) => o.phaseNumber))].sort((a, b) => a - b);
     const releaseRows = phasesPresent
       .map((phaseNumber, i) => {
@@ -725,7 +771,8 @@ export async function repackSprints(
           name: RELEASE_NAMES[phaseNumber] ?? `Release ${i + 1}`,
           phaseNumber,
           targetDate,
-          order: i + 1,
+          order: i + 1 + releaseOrderOffset,
+          origin: "auto",
         };
       })
       .filter((r): r is NonNullable<typeof r> => r != null);
@@ -748,7 +795,7 @@ export async function repackSprints(
         });
       }
     }
-    return 0; // zero Sprint rows for Kanban
+    return 0; // zero auto Sprint rows for Kanban
   }
 
   const sprints = packSprints({
@@ -758,7 +805,7 @@ export async function repackSprints(
     startDate: intake.startDate,
   });
 
-  // Releases: one per phase present, cut at that phase's sprints.
+  // Releases: one per (non-claimed) phase present, cut at that phase's sprints.
   const phasesPresent = [...new Set(sprints.map((s) => s.phaseNumber))].sort((a, b) => a - b);
   const releaseRows = phasesPresent.map((phaseNumber, i) => {
     const phaseSprints = sprints.filter((s) => s.phaseNumber === phaseNumber);
@@ -768,30 +815,37 @@ export async function repackSprints(
       name: RELEASE_NAMES[phaseNumber] ?? `Release ${i + 1}`,
       phaseNumber,
       targetDate: phaseSprints[phaseSprints.length - 1].endDate,
-      order: i + 1,
+      order: i + 1 + releaseOrderOffset,
+      origin: "auto",
     };
   });
   if (releaseRows.length > 0) await tx.release.createMany({ data: releaseRows });
   const releaseIdByPhase = new Map(releaseRows.map((r) => [r.phaseNumber, r.id]));
 
+  // sprintIdByOriginalNumber is keyed by packSprints()'s own 1..N numbering
+  // (which `ordered`'s shim.sprintNumber references) — kept separate from the
+  // OFFSET value persisted to the `sprintNumber` column below, so the offset
+  // never breaks the story->sprint id lookup.
+  const sprintIdByOriginalNumber = new Map(sprints.map((s) => [s.sprintNumber, randomUUID()]));
   const sprintRows = sprints.map((sprint) => ({
-    id: randomUUID(),
+    id: sprintIdByOriginalNumber.get(sprint.sprintNumber)!,
     prototypeId,
-    sprintNumber: sprint.sprintNumber,
+    sprintNumber: sprint.sprintNumber + sprintNumberOffset,
     phaseNumber: sprint.phaseNumber,
     startDate: sprint.startDate,
     endDate: sprint.endDate,
     capacityPoints: sprint.capacityPoints,
+    origin: "auto",
     releaseId: releaseIdByPhase.get(sprint.phaseNumber) ?? null,
   }));
   if (sprintRows.length > 0) await tx.sprint.createMany({ data: sprintRows });
-  const sprintIdByNumber = new Map(sprintRows.map((r) => [r.sprintNumber, r.id]));
 
   // Group by resolved sprintId so each distinct sprint needs one updateMany
-  // instead of one update per story row.
+  // instead of one update per story row. Only ever touches auto-pool rows
+  // (claimed-phase stories were excluded from `ordered` above).
   const rowIdsBySprintId = new Map<string | null, string[]>();
   for (const o of ordered) {
-    const sprintId = sprintIdByNumber.get(o.shim.sprintNumber) ?? null;
+    const sprintId = sprintIdByOriginalNumber.get(o.shim.sprintNumber) ?? null;
     const list = rowIdsBySprintId.get(sprintId) ?? [];
     list.push(o.rowId);
     rowIdsBySprintId.set(sprintId, list);
@@ -802,6 +856,7 @@ export async function repackSprints(
 
   // Refresh phase date ranges from the repacked sprints (display data only —
   // sprint-layer changes never restructure locked waterfall rows, FR-18).
+  // Naturally a no-op for claimed phases: phaseSprints is empty for them.
   for (const phase of phaseRows) {
     const content = parseJson(phase.contentJson);
     const phaseNumber = (content.phaseNumber as number | undefined) ?? 1;
