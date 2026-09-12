@@ -32,22 +32,35 @@ export default function RefreshBar(props: {
   const [confirm, setConfirm] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Versioning foundation (directive §17/§25): a second, distinct confirm
+  // step — the engine refuses to touch an approved baseline silently, so a
+  // 409 with this flag means "the user already confirmed the normal
+  // regenerate warning, but this plan is also approved" — never auto-retried,
+  // always its own explicit click.
+  const [approvedImpactMessage, setApprovedImpactMessage] = useState<string | null>(null);
 
   const hasManualData = (props.manualReleaseCount ?? 0) > 0 || (props.manualSprintCount ?? 0) > 0;
 
-  const run = async () => {
+  const run = async (confirmApprovedImpact?: boolean) => {
     setBusy(true);
     setError(null);
-    const res = await apiFetch(`/api/initiatives/${props.initiativeId}/recalculate`, {
-      method: "POST",
-      body: { mode: "full" },
-    });
+    const res = await apiFetch<{ requiresApprovedImpactConfirmation?: boolean }>(
+      `/api/initiatives/${props.initiativeId}/recalculate`,
+      { method: "POST", body: { mode: "full", confirmApprovedImpact } },
+    );
     setBusy(false);
-    setConfirm(false);
     if (!res.ok) {
+      if (res.data?.requiresApprovedImpactConfirmation) {
+        setConfirm(false);
+        setApprovedImpactMessage(res.error ?? "This would affect an approved baseline.");
+        return;
+      }
+      setConfirm(false);
       setError(res.error ?? "Regenerate failed.");
       return;
     }
+    setConfirm(false);
+    setApprovedImpactMessage(null);
     router.refresh();
   };
 
@@ -94,12 +107,37 @@ export default function RefreshBar(props: {
                 Cancel
               </button>
               <ButtonLoader
-                onClick={run}
+                onClick={() => void run()}
                 loading={busy}
                 loadingLabel="Regenerating"
                 className="!bg-amber-600 hover:!bg-amber-700 disabled:hover:!bg-amber-600"
               >
                 Regenerate
+              </ButtonLoader>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {approvedImpactMessage && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+            <h3 className="text-lg font-semibold text-amber-900">This plan has an approved baseline</h3>
+            <p className="mt-2 text-sm text-neutral-600">{approvedImpactMessage}</p>
+            <div className="mt-5 flex justify-end gap-3">
+              <button
+                onClick={() => setApprovedImpactMessage(null)}
+                className="rounded-lg border border-neutral-300 px-4 py-2 text-sm font-medium hover:bg-neutral-50"
+              >
+                Cancel
+              </button>
+              <ButtonLoader
+                onClick={() => void run(true)}
+                loading={busy}
+                loadingLabel="Regenerating"
+                className="!bg-red-600 hover:!bg-red-700 disabled:hover:!bg-red-600"
+              >
+                Regenerate anyway
               </ButtonLoader>
             </div>
           </div>

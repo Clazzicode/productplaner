@@ -166,7 +166,11 @@ export default function PlanningQuestionnaire(props: {
         method: "PATCH",
         body: { outcomeStatement: success.outcomeStatement, outcomeMetric: success.outcomeMetric },
       }),
-      apiFetch(`/api/initiatives/${initiativeId}`, {
+      // Writes an Initiative-specific override, not the shared Project value
+      // (src/app/api/initiatives/[id]/assumptions/route.ts) — the wire
+      // contract keeps these field names even though they now resolve
+      // through Project inheritance server-side.
+      apiFetch(`/api/initiatives/${initiativeId}/assumptions`, {
         method: "PATCH",
         body: {
           targetLaunchDate: success.targetLaunchDate || null,
@@ -191,7 +195,7 @@ export default function PlanningQuestionnaire(props: {
           historicalVelocityPoints: delivery.historicalVelocityPoints === "" ? null : delivery.historicalVelocityPoints,
         },
       }),
-      apiFetch(`/api/initiatives/${initiativeId}`, {
+      apiFetch(`/api/initiatives/${initiativeId}/assumptions`, {
         method: "PATCH",
         body: {
           ...(delivery.averageHourlyRate === "" ? {} : { averageHourlyRate: Number(delivery.averageHourlyRate) }),

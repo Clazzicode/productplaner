@@ -20,9 +20,73 @@ export const qualifyingSchema = z.object({
   statedMethodology: z.enum(["hybrid", "agile_scrum", "waterfall", "kanban", "not_sure"]),
 });
 
+// Account/workspace -> Project -> Initiative restructure: budget/target date/
+// rate now live on Project (shared across its initiatives); an Initiative may
+// still override any of the three (see initiativeOverridesPatchSchema below)
+// but no longer sets them directly at creation.
+export const projectCreateSchema = z.object({
+  name: z.string().trim().min(3, "Give the project a name (3+ characters)."),
+  description: z.string().trim().default(""),
+  goal: z.string().trim().default(""),
+  targetLaunchDate: z.coerce.date().nullable().optional(),
+  budget: z.number().min(0).max(1_000_000_000).nullable().optional(),
+  averageHourlyRate: z.number().min(1).max(5000).optional(),
+  planningApproach: z.string().trim().default(""),
+});
+
+export const projectPatchSchema = z
+  .object({
+    name: z.string().trim().min(3).optional(),
+    description: z.string().trim().optional(),
+    goal: z.string().trim().optional(),
+    targetLaunchDate: z.coerce.date().nullable().optional(),
+    budget: z.number().min(0).max(1_000_000_000).nullable().optional(),
+    averageHourlyRate: z.number().min(1).max(5000).optional(),
+    planningApproach: z.string().trim().optional(),
+  })
+  .refine((v) => Object.keys(v).length > 0, { message: "Nothing to update." });
+
+// `projectId` is optional: the Phase 2 Project-picker UI passes one to attach
+// a new Initiative to an existing Project (reusing its shared context); until
+// that UI exists, omitting it auto-creates a fresh, clean Project (directive
+// §6 — a new Project inherits nothing from any other) from the same
+// name/budget/rate/date fields this endpoint accepted directly before the
+// Project layer existed, so the existing intake flows keep working unchanged.
+export const roadmapStatusEntityTypeSchema = z.enum([
+  "project",
+  "initiative",
+  "feature",
+  "epic",
+  "story",
+  "sprint",
+  "release",
+]);
+
+export const roadmapStatusSetSchema = z.object({
+  color: z.enum(["green", "yellow", "red"]),
+  reason: z.string().trim().max(500).default(""),
+  // "system" only when accepting a recommendation the server itself computed
+  // and echoed back — the route re-validates this, never trusts it blindly.
+  source: z.enum(["manual", "system"]).default("manual"),
+});
+
+export const decisionCreateSchema = z.object({
+  title: z.string().trim().min(3, "Give the decision a short title (3+ characters)."),
+  description: z.string().trim().default(""),
+  initiativeId: z.string().min(1).nullable().optional(),
+});
+
+export const riskCreateSchema = z.object({
+  description: z.string().trim().min(3, "Describe the risk (3+ characters)."),
+  severity: z.enum(["low", "medium", "high", "critical"]).default("medium"),
+  initiativeId: z.string().min(1).nullable().optional(),
+});
+
 export const initiativeCreateSchema = z.object({
+  projectId: z.string().min(1).optional(),
   name: z.string().trim().min(3, "Give the initiative a name (3+ characters)."),
   description: z.string().trim().default(""),
+  intakeMethod: z.enum(["guided", "import", "use_project_context", "connect"]).nullable().optional(),
   targetLaunchDate: z.coerce.date().nullable().optional(),
   budget: z.number().min(0).max(1_000_000_000).nullable().optional(),
   averageHourlyRate: z.number().min(1).max(5000).optional(),
@@ -32,9 +96,16 @@ export const initiativePatchSchema = z
   .object({
     name: z.string().trim().min(3).optional(),
     description: z.string().trim().optional(),
-    targetLaunchDate: z.coerce.date().nullable().optional(),
-    budget: z.number().min(0).max(1_000_000_000).nullable().optional(),
-    averageHourlyRate: z.number().min(1).max(5000).optional(),
+  })
+  .refine((v) => Object.keys(v).length > 0, { message: "Nothing to update." });
+
+// Initiative-specific override of a Project-level economic field — null
+// explicitly clears the override back to inheriting the Project's value.
+export const initiativeOverridesPatchSchema = z
+  .object({
+    targetLaunchDateOverride: z.coerce.date().nullable().optional(),
+    budgetOverride: z.number().min(0).max(1_000_000_000).nullable().optional(),
+    averageHourlyRateOverride: z.number().min(1).max(5000).nullable().optional(),
   })
   .refine((v) => Object.keys(v).length > 0, { message: "Nothing to update." });
 
@@ -168,6 +239,7 @@ export const syncActionSchema = z.object({
 
 export const recalculatePlanSchema = z.object({
   mode: z.enum(["full", "respect_locks"]),
+  confirmApprovedImpact: z.boolean().optional(),
 });
 
 export const methodologySchema = z.enum(["hybrid", "agile_scrum", "waterfall", "kanban"]);

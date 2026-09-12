@@ -17,16 +17,46 @@ export async function POST(request: Request) {
     return jsonError("Complete the qualifying questions before creating an initiative.", 403);
   }
 
+  // Never trust a client-supplied projectId on its own (directive: the
+  // application decides tenancy, not the request) — it must resolve to a
+  // real Project in the actor's own organization, same "resolve from the DB
+  // relationship chain" pattern every other route in this codebase follows.
+  let projectId: string;
+  if (parsed.data.projectId) {
+    const project = await db.project.findUnique({
+      where: { id: parsed.data.projectId },
+      select: { id: true, organizationId: true },
+    });
+    if (!project || project.organizationId !== user.organizationId) {
+      return jsonError("Project not found.", 404);
+    }
+    projectId = project.id;
+  } else {
+    // No Project chosen (no Project-picker UI exists yet) — auto-create a
+    // fresh one from this same request, so this endpoint's existing callers
+    // (the guided/simplified intake wizards) keep working unchanged.
+    const project = await db.project.create({
+      data: {
+        organizationId: user.organizationId,
+        createdByUserId: user.id,
+        name: `${parsed.data.name} — Project`,
+        targetLaunchDate: parsed.data.targetLaunchDate ?? null,
+        budget: parsed.data.budget ?? null,
+        averageHourlyRate: parsed.data.averageHourlyRate,
+      },
+    });
+    projectId = project.id;
+  }
+
   const initiative = await db.initiative.create({
     data: {
       organizationId: user.organizationId,
+      projectId,
       userId: user.id,
       qualifyingProfileId: profile.id,
       name: parsed.data.name,
       description: parsed.data.description,
-      targetLaunchDate: parsed.data.targetLaunchDate ?? null,
-      budget: parsed.data.budget ?? null,
-      averageHourlyRate: parsed.data.averageHourlyRate,
+      intakeMethod: parsed.data.intakeMethod ?? null,
       status: "intake_in_progress",
       intakeAnswerSet: { create: {} },
       // Formalizes the creator's existing implicit ownership as a real Owner

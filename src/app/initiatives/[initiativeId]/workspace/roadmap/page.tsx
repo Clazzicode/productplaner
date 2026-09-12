@@ -8,6 +8,7 @@ import RoadmapLegacyViews from "@/components/workspace/RoadmapLegacyViews";
 import RoadmapToolbar from "@/components/workspace/RoadmapToolbar";
 import RoadmapViewSwitcher from "@/components/workspace/RoadmapViewSwitcher";
 import TraceBadge from "@/components/workspace/TraceBadge";
+import CoachMark from "@/components/coachmarks/CoachMark";
 import TimelineRoadmap from "@/components/workspace/timeline/TimelineRoadmap";
 import { requireCurrentUser } from "@/lib/auth/session";
 import { db, establishAuthContext } from "@/lib/db";
@@ -211,6 +212,7 @@ export default async function RoadmapPage({
       title="Roadmap"
       description="One page, three lenses over the same plan — Timeline for scanning work over time, Milestones for strategic checkpoints, Connections for dependencies."
     >
+      <CoachMark coachMarkKey="roadmap" className="mb-4" />
       <RoadmapViewSwitcher timeline={timelineView} milestones={milestonesView} connections={connectionsView} />
       <RoadmapLegacyViews list={listView} board={boardView} />
     </RoadmapToolbar>

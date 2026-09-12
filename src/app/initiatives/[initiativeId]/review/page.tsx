@@ -7,6 +7,7 @@ import { DEFAULT_ASSUMPTIONS } from "@/lib/generation/constants";
 import { computeEffectiveCapacity } from "@/lib/generation/cost";
 import { loadIntakeInput } from "@/lib/generation/engine";
 import { validateIntake } from "@/lib/generation/validateIntake";
+import { resolveInitiativeEconomics } from "@/lib/projectContext";
 
 export const dynamic = "force-dynamic";
 
@@ -24,6 +25,7 @@ export default async function GenerationReviewPage({
     include: {
       intakeAnswerSet: true,
       prototype: { include: { sprints: true, releases: true } },
+      project: { select: { budget: true, averageHourlyRate: true, targetLaunchDate: true } },
     },
   });
   if (!initiative || !initiative.intakeAnswerSet) notFound();
@@ -43,7 +45,8 @@ export default async function GenerationReviewPage({
   const capacityPoints = computeEffectiveCapacity(intakeInput);
 
   const d = DEFAULT_ASSUMPTIONS;
-  const rate = initiative.averageHourlyRate ?? d.averageHourlyRate;
+  const economics = resolveInitiativeEconomics(initiative, initiative.project);
+  const rate = economics.averageHourlyRate ?? d.averageHourlyRate;
   const assumptions: AssumptionRow[] = [
     { label: "Team size", value: `${intakeRow.teamSize ?? "?"} people`, isDefault: false },
     {
@@ -78,8 +81,8 @@ export default async function GenerationReviewPage({
     },
     {
       label: "Available budget",
-      value: initiative.budget != null ? `$${initiative.budget.toLocaleString()}` : "Not set",
-      isDefault: initiative.budget == null,
+      value: economics.budget != null ? `$${economics.budget.toLocaleString()}` : "Not set",
+      isDefault: economics.budget == null,
     },
     {
       label: "Historical velocity",

@@ -30,6 +30,8 @@ import { profileFor } from "@/lib/generation/methodology";
 import { LAYER_LABELS, type LayerType } from "@/lib/generation/types";
 import { validateIntake } from "@/lib/generation/validateIntake";
 import { resolveWorkingRole } from "@/lib/onboarding/resolveWorkingRole";
+import { resolveInitiativeEconomics } from "@/lib/projectContext";
+import { getResolvedStatus } from "@/lib/roadmapStatus/service";
 import { readOnboardingStateServer } from "@/lib/onboarding/tempStateServer";
 import { deriveRoleRoadmapView, type RoleRoadmapCapability, type RoleRoadmapInput } from "@/lib/roadmap/roleRoadmapView";
 
@@ -66,6 +68,7 @@ export default async function DashboardPage({
       prototype: { include: { layerLocks: true } },
       syncConnections: true,
       integrationConnections: { include: { provider: { select: { name: true } } } },
+      project: { select: { budget: true, averageHourlyRate: true, targetLaunchDate: true } },
     },
   });
   if (!initiative || !initiative.intakeAnswerSet) notFound();
@@ -123,10 +126,12 @@ export default async function DashboardPage({
   const warnings = validateIntake(intakeInput).warnings;
   const forecast = computeCapacityForecast(sprints);
   const totalPlannedPoints = stories.reduce((n, s) => n + (s.points ?? 1), 0);
+  const economics = resolveInitiativeEconomics(initiative, initiative.project);
+  const initiativeStatus = await getResolvedStatus(user.organizationId, "initiative", initiativeId);
   const model = buildCostModel({
     capacity: intakeInput,
-    averageHourlyRate: initiative.averageHourlyRate,
-    budget: initiative.budget,
+    averageHourlyRate: economics.averageHourlyRate,
+    budget: economics.budget,
     totalSprints: sprints.length,
     totalPlannedPoints,
   });
@@ -466,12 +471,13 @@ export default async function DashboardPage({
         description={initiative.description}
         methodology={initiative.methodology}
         releaseTarget={
-          initiative.targetLaunchDate?.toLocaleDateString() ??
+          economics.targetLaunchDate?.toLocaleDateString() ??
           releases[releases.length - 1]?.targetDate.toLocaleDateString() ??
           null
         }
         updatedAt={initiative.updatedAt}
         baselineApprovedAt={prototype.approvedAt}
+        status={initiativeStatus}
         isOrgAdmin={user.accessLevel === "org_admin"}
       />
 

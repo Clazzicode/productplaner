@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import { apiFetch } from "@/lib/clientApi";
 import Avatar from "@/components/ui/Avatar";
 import { ButtonLoader } from "@/components/ui/loading";
+import { useCoachMarks } from "@/components/coachmarks/CoachMarkProvider";
 
 /**
  * Guided-activation restructure (reference doc §12): the profile/account
@@ -18,11 +19,12 @@ import { ButtonLoader } from "@/components/ui/loading";
  * and /api/admin/* route re-checks accessLevel server-side regardless
  * (reference doc §12: "Hiding the UI link alone is not security").
  *
- * The reference doc's example menu lists "Profile" and "Preferences" as two
- * separate items; this app has one personal settings surface
- * (/account/settings, API-key management), not two, so this collapses them
- * into a single accurately-labeled "Account Settings" item rather than
- * inventing a second, redundant, or empty page.
+ * "Account Settings" (formerly the per-user Anthropic API key page) was
+ * removed when bring-your-own-key was retired — all AI calls now route
+ * through the shared platform gateway (src/lib/ai/client.ts), so there is
+ * no personal AI setting left to manage. Re-add an entry here if a real
+ * personal setting is introduced later; an empty settings page is worse
+ * than no link.
  */
 // `dropUp`: MobileNavDrawer's bottomContent instance sits at the very bottom
 // of the drawer's own overflow-hidden panel — opening downward (the desktop
@@ -34,6 +36,7 @@ export default function AccountMenu(props: { userName: string; accessLevel: stri
   const [busy, setBusy] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const isOrgAdmin = props.accessLevel === "org_admin";
+  const { replay } = useCoachMarks();
 
   useEffect(() => {
     if (!open) return;
@@ -86,12 +89,20 @@ export default function AccountMenu(props: { userName: string; accessLevel: stri
             props.dropUp ? "bottom-full mb-2" : "top-full mt-2"
           }`}
         >
-          <Link href="/account/settings" role="menuitem" className={itemClass} onClick={() => setOpen(false)}>
-            Account Settings
-          </Link>
           <Link href="/organizations" role="menuitem" className={itemClass} onClick={() => setOpen(false)}>
             Switch Organization
           </Link>
+          <button
+            type="button"
+            role="menuitem"
+            className={itemClass}
+            onClick={() => {
+              setOpen(false);
+              void replay();
+            }}
+          >
+            Replay Product Tour
+          </button>
 
           {isOrgAdmin && (
             <>

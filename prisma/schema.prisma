@@ -24,6 +24,11 @@ model Organization {
   // backfill note on OrganizationMember below). Informational only — never an
   // authorization signal by itself, membership is what RLS/app code check.
   workspaceType           String                   @default("team") // solo | team
+  // Directive §28: null = fall back to 4% of the platform-wide monthly AI
+  // budget (env PLATFORM_AI_MONTHLY_BUDGET_USD), and only if that platform
+  // budget is actually configured — never a flat 4% reservation with no
+  // platform cap set. See src/lib/ai/budget.ts's resolveOrganizationAiBudget().
+  aiMonthlyBudgetUsd      Float?
   ownerUserId             String?
   owner                   User?                    @relation("OrganizationOwner", fields: [ownerUserId], references: [id], onDelete: SetNull)
   // Renamed relation (was `users`) now that User.organizationId -> homeOrganizationId:
@@ -34,6 +39,10 @@ model Organization {
   members                 OrganizationMember[]
   teams                   Team[]
   initiatives             Initiative[]
+  projects                Project[]
+  decisions               Decision[]
+  risks                   Risk[]
+  roadmapStatuses         RoadmapStatus[]
   integrationConnections  IntegrationConnection[]
   dashboardConfigurations DashboardConfiguration[]
   aiUsageEvents           AiUsageEvent[]
@@ -42,26 +51,26 @@ model Organization {
 }
 
 model User {
-  id                       String               @id @default(cuid())
+  id                     String               @id @default(cuid())
   // Step [AUTH]. Bridges to Supabase Auth's auth.users.id. Nullable until the
   // one-time backfill (docs/V2-MULTI-TENANT-AUTH.md) links every existing User
   // row to a real auth.users row; required for every row created afterward.
   // Deliberately NOT the primary key: User.id (cuid) is already referenced by
   // 7+ other tables' FKs, and existing ids aren't valid UUID text, so bridging
   // via a separate column is additive and leaves every existing FK untouched.
-  authUserId               String?              @unique @db.Uuid
+  authUserId             String?              @unique @db.Uuid
   // Renamed from `organizationId`: this is now the user's *default* workspace,
   // not their only one — see OrganizationMember for actual (possibly
   // multi-org) membership. @map keeps the underlying column name unchanged
   // (no data migration needed) while forcing every direct Prisma read of the
   // old field name to fail to compile, so each call site gets an explicit,
   // reviewed decision: "home org" or "resolved active org" (getCurrentUser()).
-  homeOrganizationId       String               @map("organizationId")
-  homeOrganization         Organization         @relation("OrganizationHomeUsers", fields: [homeOrganizationId], references: [id])
-  ownedOrganizations       Organization[]       @relation("OrganizationOwner")
-  memberships              OrganizationMember[]
-  name                     String
-  email                    String               @unique
+  homeOrganizationId     String               @map("organizationId")
+  homeOrganization       Organization         @relation("OrganizationHomeUsers", fields: [homeOrganizationId], references: [id])
+  ownedOrganizations     Organization[]       @relation("OrganizationOwner")
+  memberships            OrganizationMember[]
+  name                   String
+  email                  String               @unique
   // Step 8B (docs/V2-USERS-TEAMS.md). String + default, matching this schema's
   // existing convention (e.g. Initiative.status) rather than a native enum.
   // Default "org_admin" is deliberate: today there is exactly one User per
@@ -76,28 +85,28 @@ model User {
   // request from the resolved active org's membership row, so existing
   // `accessLevel === "org_admin"` checks throughout the codebase keep working
   // unchanged. New code should read OrganizationMember.role directly.
-  accessLevel              String               @default("org_admin") // standard_user | org_admin
+  accessLevel            String               @default("org_admin") // standard_user | org_admin
   // Nullable, no default, deliberately: Working Role has lived only in the
   // Step 4 onboarding cookie (src/lib/onboarding/tempStateServer.ts) and there
   // is no truthful value to backfill an existing User row with. Populated
   // naturally as a user completes/updates onboarding — see docs/V2-USERS-TEAMS.md
   // "Auth Transition" for the read-persisted-fall-back-to-cookie strategy.
-  workingRole              String? // product_management | project_manager | product_owner
-  memberType               String               @default("internal") // internal | external
-  status                   String               @default("active") // active | disabled | archived
-  // AES-256-GCM ciphertext (src/lib/security/secretBox.ts), never the raw key —
-  // used only for this user's own document-import requests, never shared
-  // across accounts. updatedAt tracks rotation, not read for anything else.
-  anthropicApiKeyEncrypted String?
-  anthropicApiKeyUpdatedAt DateTime?
-  profiles                 QualifyingProfile[]
-  initiatives              Initiative[]
-  teamMemberships          TeamMember[]
-  initiativeAccess         InitiativeAccess[]
-  aiUsageEvents            AiUsageEvent[]
-  aiRequestLocks           AiRequestLock[]
-  intakeAiAnalyses         IntakeAiAnalysis[]
-  createdAt                DateTime             @default(now())
+  workingRole            String? // product_management | project_manager | product_owner
+  memberType             String               @default("internal") // internal | external
+  status                 String               @default("active") // active | disabled | archived
+  profiles               QualifyingProfile[]
+  initiatives            Initiative[]
+  createdProjects        Project[]
+  decisionsDecided       Decision[]
+  risksOwned             Risk[]
+  roadmapStatusesUpdated RoadmapStatus[]
+  coachMarkDismissals    CoachMarkDismissal[]
+  teamMemberships        TeamMember[]
+  initiativeAccess       InitiativeAccess[]
+  aiUsageEvents          AiUsageEvent[]
+  aiRequestLocks         AiRequestLock[]
+  intakeAiAnalyses       IntakeAiAnalysis[]
+  createdAt              DateTime             @default(now())
 }
 
 // Step [AUTH] (docs/V2-MULTI-TENANT-AUTH.md). Real multi-org membership: one
@@ -181,6 +190,132 @@ model InitiativeAccess {
   @@unique([initiativeId, teamId])
 }
 
+// Step [PROJECT] — inserted above Initiative per the account/workspace ->
+// project -> initiative restructure. Holds the context that is genuinely
+// shared across an account's initiatives (budget, rate, target date, team,
+// constraints, stakeholders, planning approach, connected systems) so a
+// second Initiative in the same Project doesn't have to re-ask for it.
+// `organizationId` is denormalized directly here (mirrors Initiative's own
+// FK shape) rather than inferred — Project is only ever created by a user
+// who already has an active OrganizationMember row, so RLS's
+// is_org_member("organizationId") is already satisfiable at insert time, no
+// bootstrap-visibility migration needed (unlike Organization/OrganizationMember
+// at signup).
+model Project {
+  id                   String       @id @default(cuid())
+  // RESTRICT by default (no onDelete clause) — matches the existing
+  // Initiative/Team/IntegrationConnection/AiUsageEvent convention of
+  // org-root-owned rows: organizationId is a denormalized RLS-scoping
+  // column, not the cascade path. Deletion cascades through the more
+  // specific parent (projectId/initiativeId below) instead.
+  organizationId       String
+  organization         Organization @relation(fields: [organizationId], references: [id])
+  createdByUserId      String
+  createdByUser        User         @relation(fields: [createdByUserId], references: [id])
+  name                 String
+  description          String       @default("")
+  goal                 String       @default("")
+  budget               Float? // optional available budget (Planning & Cost Logic §24)
+  averageHourlyRate    Float?       @default(85) // §17/§31 prototype assumption, user-overridable
+  targetLaunchDate     DateTime? // "target / projected go-live"
+  teamCompositionJson  String       @default("{}") // serialized team info, matching this schema's JSON-in-String convention
+  constraintsJson      String       @default("[]")
+  stakeholdersJson     String       @default("[]")
+  planningApproach     String       @default("")
+  connectedSystemsJson String       @default("[]")
+  defaultMethodology   String       @default("hybrid") // inherited default; Initiative.methodology may still override
+  initiatives          Initiative[]
+  decisions            Decision[]
+  risks                Risk[]
+  createdAt            DateTime     @default(now())
+  updatedAt            DateTime     @updatedAt
+}
+
+// Net-new — referenced throughout Project Home / initiative workflows but
+// previously only computed display logic (dashboard "Decisions Required"),
+// never a persisted fact. initiativeId is nullable: a decision can belong to
+// the Project as a whole or to one specific Initiative within it.
+model Decision {
+  id              String       @id @default(cuid())
+  organizationId  String // RESTRICT by default — see Project's organization relation comment
+  organization    Organization @relation(fields: [organizationId], references: [id])
+  projectId       String
+  project         Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  initiativeId    String?
+  initiative      Initiative?  @relation(fields: [initiativeId], references: [id], onDelete: Cascade)
+  title           String
+  description     String       @default("")
+  decidedByUserId String?
+  decidedByUser   User?        @relation(fields: [decidedByUserId], references: [id])
+  decidedAt       DateTime?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+}
+
+// Net-new, distinct from the ephemeral IntakeAiAnalysis.risksJson (a raw AI
+// suggestion list) — this is a structured, persisted, user-reviewed risk.
+model Risk {
+  id             String       @id @default(cuid())
+  organizationId String // RESTRICT by default — see Project's organization relation comment
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  projectId      String
+  project        Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  initiativeId   String?
+  initiative     Initiative?  @relation(fields: [initiativeId], references: [id], onDelete: Cascade)
+  description    String
+  severity       String       @default("medium") // low | medium | high | critical
+  status         String       @default("open") // open | mitigated | accepted | closed
+  ownerUserId    String?
+  owner          User?        @relation(fields: [ownerUserId], references: [id])
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+}
+
+// Coach marks (directive §4 "Experienced"): short, dismissible callouts shown
+// once per key, re-triggerable anytime from the account menu regardless of
+// dismissal state — this table only ever grows "dismissed" rows, it's not
+// itself the re-trigger mechanism (that's just navigating back to the
+// anchored page while rows still say "dismissed" vs. a client-side "tour
+// mode" flag — see src/lib/coachMarks). userId-scoped, not org-scoped: a
+// coach mark's relevance is purely personal (has *this user* seen it), so no
+// RLS policy needs to walk an organization chain — "own rows only" is enough.
+model CoachMarkDismissal {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  key         String
+  dismissedAt DateTime @default(now())
+
+  @@unique([userId, key])
+}
+
+// Red/Yellow/Green roadmap status (directive: consistent status language
+// reusable across Project/Initiative/Feature/Epic/Story/Sprint/Release).
+// Deliberately NOT built on health.ts's numeric schedule/cost/scope bands —
+// those stay a separate, clearly-labeled BUSINESS RULE REQUIRED concept (see
+// src/lib/generation/health.ts's own doc comment). `color`/`reason` are the
+// current, possibly-manually-set status; `entityType`+`entityId` is generic
+// so future entity kinds (sprint/release/feature) need no schema change, only
+// wiring. One row per entity — `source` distinguishes a user's deliberate
+// choice from one that started as an accepted system recommendation, but
+// once accepted it IS the current status, not a suggestion pending review.
+model RoadmapStatus {
+  id              String       @id @default(cuid())
+  organizationId  String
+  organization    Organization @relation(fields: [organizationId], references: [id])
+  entityType      String // project | initiative | feature | epic | story | sprint | release
+  entityId        String
+  color           String // green | yellow | red
+  source          String       @default("manual") // manual | system
+  reason          String       @default("")
+  updatedByUserId String?
+  updatedByUser   User?        @relation(fields: [updatedByUserId], references: [id])
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  @@unique([entityType, entityId])
+}
+
 model QualifyingProfile {
   id                String       @id @default(cuid())
   userId            String
@@ -197,31 +332,51 @@ model QualifyingProfile {
 }
 
 model Initiative {
-  id                      String                   @id @default(cuid())
-  organizationId          String
-  organization            Organization             @relation(fields: [organizationId], references: [id])
-  userId                  String
-  user                    User                     @relation(fields: [userId], references: [id])
-  qualifyingProfileId     String?
-  qualifyingProfile       QualifyingProfile?       @relation(fields: [qualifyingProfileId], references: [id])
-  name                    String
-  description             String                   @default("")
-  methodology             String                   @default("hybrid")
-  status                  String                   @default("draft") // draft | intake_in_progress | generated
-  targetLaunchDate        DateTime? // optional, from initiative creation
-  budget                  Float? // optional available budget (Planning & Cost Logic §24)
-  averageHourlyRate       Float?                   @default(85) // §17/§31 prototype assumption, user-overridable
-  intakeAnswerSet         IntakeAnswerSet?
-  prototype               Prototype?
-  syncConnections         SyncConnection[]
-  integrationConnections  IntegrationConnection[]
-  initiativeAccess        InitiativeAccess[]
-  aiUsageEvents           AiUsageEvent[]
-  aiRequestLocks          AiRequestLock[]
-  intakeAiAnalyses        IntakeAiAnalysis[]
-  planningWeightOverrides PlanningWeightOverride[]
-  createdAt               DateTime                 @default(now())
-  updatedAt               DateTime                 @updatedAt
+  id                        String                   @id @default(cuid())
+  // Kept denormalized (not inferred via projectId -> Project.organizationId)
+  // deliberately: every existing RLS policy and resolveInitiativeAccess/
+  // getResolvedAccess read this column directly, not through a join — see
+  // the RLS migration for Project, which mirrors initiative_all exactly
+  // rather than rewriting any of those.
+  organizationId            String
+  organization              Organization             @relation(fields: [organizationId], references: [id])
+  projectId                 String
+  project                   Project                  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  userId                    String
+  user                      User                     @relation(fields: [userId], references: [id])
+  qualifyingProfileId       String?
+  qualifyingProfile         QualifyingProfile?       @relation(fields: [qualifyingProfileId], references: [id])
+  name                      String
+  description               String                   @default("")
+  methodology               String                   @default("hybrid")
+  status                    String                   @default("draft") // draft | intake_in_progress | generated
+  // How this initiative's intake began — persisted (was only ephemeral
+  // client state in ProductDirectionBootstrap before this). guided | import |
+  // use_project_context | connect (reserved, not yet enabled).
+  intakeMethod              String?
+  // Override-if-set, inherit-from-Project-if-null — resolve via
+  // resolveInitiativeEconomics() in src/lib/projectContext.ts, never read
+  // directly. Directive §9: "ask only initiative-specific questions ...
+  // unless the initiative overrides them." Superseded the old direct
+  // budget/averageHourlyRate/targetLaunchDate columns (moved onto Project).
+  targetLaunchDateOverride  DateTime?
+  budgetOverride            Float?
+  averageHourlyRateOverride Float?
+  intakeAnswerSet           IntakeAnswerSet?
+  prototype                 Prototype?
+  syncConnections           SyncConnection[]
+  integrationConnections    IntegrationConnection[]
+  initiativeAccess          InitiativeAccess[]
+  aiUsageEvents             AiUsageEvent[]
+  aiRequestLocks            AiRequestLock[]
+  intakeAiAnalyses          IntakeAiAnalysis[]
+  planningWeightOverrides   PlanningWeightOverride[]
+  decisions                 Decision[]
+  risks                     Risk[]
+  createdAt                 DateTime                 @default(now())
+  updatedAt                 DateTime                 @updatedAt
+
+  @@index([projectId])
 }
 
 model IntakeAnswerSet {
@@ -526,10 +681,11 @@ model PlanningWeightOverride {
 
 // ---------- AI Foundation (docs/V2-AI-FOUNDATION.md) ----------
 // Server-side only: every call uses the server ANTHROPIC_API_KEY env var,
-// never a value exposed to the client. Deliberately separate from
-// User.anthropicApiKeyEncrypted above, which stays dedicated to the
-// existing per-user intake-document-import feature (src/lib/intakeImport) —
-// that flow is untouched by this section.
+// never a value exposed to the client. The intake-document-import feature
+// (src/lib/intakeImport) used to call Anthropic directly with a per-user key
+// (User.anthropicApiKeyEncrypted) — that field is gone; import is now the
+// DOCUMENT_UNDERSTANDING action below, routed through the same gateway as
+// every other AI call.
 
 model AiCapability {
   id                       String   @id @default(cuid())
@@ -547,19 +703,24 @@ model AiCapability {
 // for the in-flight marker), so usage history and limit-counting queries
 // never need to filter out in-progress rows.
 model AiUsageEvent {
-  id             String       @id @default(cuid())
-  userId         String
-  user           User         @relation(fields: [userId], references: [id])
-  organizationId String
-  organization   Organization @relation(fields: [organizationId], references: [id])
-  initiativeId   String?
-  initiative     Initiative?  @relation(fields: [initiativeId], references: [id], onDelete: Cascade)
-  action         String // AiActionKey
-  success        Boolean
-  inputTokens    Int          @default(0)
-  outputTokens   Int          @default(0)
-  errorMessage   String?
-  createdAt      DateTime     @default(now())
+  id               String       @id @default(cuid())
+  userId           String
+  user             User         @relation(fields: [userId], references: [id])
+  organizationId   String
+  organization     Organization @relation(fields: [organizationId], references: [id])
+  initiativeId     String?
+  initiative       Initiative?  @relation(fields: [initiativeId], references: [id], onDelete: Cascade)
+  action           String // AiActionKey
+  success          Boolean
+  inputTokens      Int          @default(0)
+  outputTokens     Int          @default(0)
+  // Computed at record-time from src/lib/ai/pricing.ts's published per-model
+  // rates (a technical fact, not an invented business rule — directive §28)
+  // — never recomputed retroactively, so a historical event's cost stays
+  // accurate even if rates change later.
+  estimatedCostUsd Float        @default(0)
+  errorMessage     String?
+  createdAt        DateTime     @default(now())
 
   @@index([userId, action, createdAt])
   @@index([organizationId, action, createdAt])

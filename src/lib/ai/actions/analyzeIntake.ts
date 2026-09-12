@@ -80,8 +80,8 @@ const ANALYZE_INTAKE_TOOL: Anthropic.Tool = {
     // emitting real JSON structure (reproduced consistently in testing —
     // stop_reason is still "tool_use", so this fails silently unless the
     // response is actually validated). Nested item-level `required` below
-    // is unaffected and kept, matching src/lib/intakeImport/analyzeDocument.ts's
-    // precedent. Zod (analyzeIntakeResultSchema) remains the real
+    // is unaffected and kept, matching documentUnderstanding.ts's precedent
+    // (src/lib/ai/actions/documentUnderstanding.ts). Zod (analyzeIntakeResultSchema) remains the real
     // completeness gate — a field the model omits still fails validation.
   },
 };

@@ -3,6 +3,7 @@ import { requireInitiativeApiAccess } from "@/lib/access/guards";
 import { jsonError, zodMessage } from "@/lib/api";
 import { requireCurrentUserApi } from "@/lib/auth/session";
 import { db, establishAuthContext } from "@/lib/db";
+import { resolveInitiativeEconomics } from "@/lib/projectContext";
 import { initiativePatchSchema } from "@/lib/validation/schemas";
 
 export async function GET(
@@ -20,18 +21,21 @@ export async function GET(
     where: { id },
     select: {
       id: true,
+      projectId: true,
       name: true,
       description: true,
       methodology: true,
       status: true,
-      targetLaunchDate: true,
-      budget: true,
-      averageHourlyRate: true,
       updatedAt: true,
+      targetLaunchDateOverride: true,
+      budgetOverride: true,
+      averageHourlyRateOverride: true,
+      project: { select: { budget: true, averageHourlyRate: true, targetLaunchDate: true } },
     },
   });
   if (!initiative) return jsonError("Initiative not found.", 404);
-  return NextResponse.json(initiative);
+  const { project, ...rest } = initiative;
+  return NextResponse.json({ ...rest, ...resolveInitiativeEconomics(initiative, project) });
 }
 
 export async function PATCH(

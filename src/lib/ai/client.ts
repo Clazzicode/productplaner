@@ -3,9 +3,9 @@ import { AiDisabledError } from "./errors";
 
 // Centralized server-side Anthropic access (docs/V2-AI-FOUNDATION.md).
 // Reads the server ANTHROPIC_API_KEY env var only — never a value sent from
-// or exposed to the client. This is deliberately separate from the existing
-// per-user key flow (User.anthropicApiKeyEncrypted, src/lib/intakeImport),
-// which keeps using each user's own key for that one feature.
+// or exposed to the client. Every AI action goes through this one client;
+// the per-user bring-your-own-key flow (User.anthropicApiKeyEncrypted) has
+// been removed (directive §30/§37) — see src/lib/ai/actions/documentUnderstanding.ts.
 
 /** Global kill switch (req #8). Unset/missing = enabled; only the literal
  * string "false" disables. An env var, not a DB flag, so it still works

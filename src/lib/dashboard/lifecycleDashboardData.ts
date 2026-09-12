@@ -9,6 +9,7 @@
 import { db } from "@/lib/db";
 import { profileFor } from "@/lib/generation/methodology";
 import { resolveLifecycleState, type LifecycleResolution } from "@/lib/lifecycle/resolveLifecycleState";
+import { resolveTargetLaunchDate } from "@/lib/projectContext";
 import { timeOfDayGreeting } from "./globalDashboardData";
 
 export interface LifecycleInitiativeSummary {
@@ -44,7 +45,8 @@ export async function loadLifecycleDashboardData(
       name: true,
       status: true,
       methodology: true,
-      targetLaunchDate: true,
+      targetLaunchDateOverride: true,
+      project: { select: { targetLaunchDate: true } },
       prototype: {
         select: {
           id: true,
@@ -75,7 +77,7 @@ export async function loadLifecycleDashboardData(
       id: current.id,
       name: current.name,
       methodologyLabel: profileFor(current.methodology).label,
-      targetLaunchDate: current.targetLaunchDate,
+      targetLaunchDate: resolveTargetLaunchDate(current, current.project),
       phaseCount,
       featureCount,
     };

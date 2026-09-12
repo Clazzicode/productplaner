@@ -12,6 +12,7 @@ import { db } from "@/lib/db";
 import { computeCapacityForecast } from "@/lib/generation/capacityForecast";
 import { scheduleHealth, type HealthStatus } from "@/lib/generation/health";
 import { resolveLifecycleState, STAGE_PROGRESS_PERCENT } from "@/lib/lifecycle/resolveLifecycleState";
+import { resolveTargetLaunchDate } from "@/lib/projectContext";
 
 export interface AdminOrgSummary {
   activeUsers: number;
@@ -174,6 +175,7 @@ export async function loadAdminDashboardData(organizationId: string): Promise<Ad
         include: {
           user: { select: { id: true, name: true } },
           prototype: { select: { id: true } },
+          project: { select: { targetLaunchDate: true } },
         },
       }),
       db.initiativeAccess.findMany({
@@ -301,10 +303,11 @@ export async function loadAdminDashboardData(organizationId: string): Promise<Ad
       }
     }
 
-    if (init.targetLaunchDate && init.targetLaunchDate >= today) {
+    const targetLaunchDate = resolveTargetLaunchDate(init, init.project);
+    if (targetLaunchDate && targetLaunchDate >= today) {
       const launchHref = init.status === "generated" ? `/initiatives/${init.id}/dashboard` : `/initiatives/${init.id}/intake`;
-      timeline.push({ date: init.targetLaunchDate, label: `${init.name} go-live target`, kind: "launch", initiativeName: init.name, href: launchHref });
-      approachingLaunch.push({ name: init.name, date: init.targetLaunchDate, href: launchHref });
+      timeline.push({ date: targetLaunchDate, label: `${init.name} go-live target`, kind: "launch", initiativeName: init.name, href: launchHref });
+      approachingLaunch.push({ name: init.name, date: targetLaunchDate, href: launchHref });
     }
 
     portfolio.push({

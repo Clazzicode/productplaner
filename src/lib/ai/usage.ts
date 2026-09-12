@@ -1,6 +1,8 @@
 import { db } from "@/lib/db";
 import { getAiCapabilityConfig } from "./registry";
 import { isAiEnabled } from "./client";
+import { getOrganizationAiSpendThisMonthUsd, resolveOrganizationAiBudgetUsd } from "./budget";
+import { estimateCostUsd } from "./pricing";
 import type { AiActionKey, AiCapabilityConfig } from "./types";
 import {
   AiCapabilityDisabledError,
@@ -74,6 +76,21 @@ export async function assertAiActionAllowed(params: {
     );
   }
 
+  // $ budget tier (directive §28), on top of the count-based limits above —
+  // only enforced when a budget actually resolves (org override, or 4% of a
+  // configured platform budget). No configured budget = no $ cap here,
+  // matching the directive's explicit correction against a flat reservation.
+  const orgBudgetUsd = await resolveOrganizationAiBudgetUsd(params.organizationId);
+  if (orgBudgetUsd != null) {
+    const spentUsd = await getOrganizationAiSpendThisMonthUsd(params.organizationId);
+    if (spentUsd >= orgBudgetUsd) {
+      throw new AiUsageLimitExceededError(
+        "Your organization has reached its monthly AI budget for this billing period. Existing projects and approved artifacts are still available.",
+        "organization",
+      );
+    }
+  }
+
   const release = await acquireLock({
     scopeKey: deriveScopeKey(params),
     action: params.action,
@@ -126,6 +143,8 @@ export async function recordAiUsage(data: {
   outputTokens?: number;
   errorMessage?: string;
 }): Promise<{ id: string }> {
+  const inputTokens = data.inputTokens ?? 0;
+  const outputTokens = data.outputTokens ?? 0;
   return db.aiUsageEvent.create({
     data: {
       userId: data.userId,
@@ -133,8 +152,9 @@ export async function recordAiUsage(data: {
       initiativeId: data.initiativeId ?? null,
       action: data.action,
       success: data.success,
-      inputTokens: data.inputTokens ?? 0,
-      outputTokens: data.outputTokens ?? 0,
+      inputTokens,
+      outputTokens,
+      estimatedCostUsd: estimateCostUsd(inputTokens, outputTokens),
       errorMessage: data.errorMessage,
     },
     select: { id: true },

@@ -31,9 +31,28 @@ const ROLE_ORDER: WorkingRole[] = [
   "other",
 ];
 
-type StartingPoint = "fresh" | "import";
+type StartingPoint = "fresh" | "import" | "use_project_context";
 
-export default function ProductDirectionBootstrap(props: { hasProfile: boolean; workingRole: WorkingRole | null }) {
+export interface ExistingProjectSummary {
+  id: string;
+  name: string;
+  /** Whether this Project already has real shared context to reuse (budget,
+   * rate, or target date already set, or a prior initiative) — directive §9:
+   * "use existing project context" only makes sense once there's context. */
+  hasContext: boolean;
+  budget: number | null;
+  averageHourlyRate: number | null;
+  targetLaunchDate: string | null;
+}
+
+export default function ProductDirectionBootstrap(props: {
+  hasProfile: boolean;
+  workingRole: WorkingRole | null;
+  /** Set when reached via Project Home's "+ New initiative" (directive §8/§9)
+   * — attaches the new Initiative to this Project instead of auto-creating a
+   * fresh one, and offers "Use existing project context" as a starting point. */
+  project?: ExistingProjectSummary | null;
+}) {
   const router = useRouter();
   const [roleAnswer, setRoleAnswer] = useState<WorkingRole | null>(
     props.hasProfile ? (props.workingRole ?? "product_management") : props.workingRole,
@@ -54,7 +73,9 @@ export default function ProductDirectionBootstrap(props: { hasProfile: boolean; 
   // "Connect existing work" has no real integration-import path yet
   // (Integrations Hub is demo-only), so it's honestly marked unavailable
   // rather than pretending to do something — reference doc §11.
-  const [startingPoint, setStartingPoint] = useState<StartingPoint>("fresh");
+  const [startingPoint, setStartingPoint] = useState<StartingPoint>(
+    props.project?.hasContext ? "use_project_context" : "fresh",
+  );
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -92,7 +113,11 @@ export default function ProductDirectionBootstrap(props: { hasProfile: boolean; 
 
     const initRes = await apiFetch<{ initiativeId: string }>("/api/initiatives", {
       method: "POST",
-      body: { name: values.name },
+      body: {
+        name: values.name,
+        ...(props.project ? { projectId: props.project.id } : {}),
+        intakeMethod: startingPoint === "fresh" ? "guided" : startingPoint,
+      },
     });
     if (!initRes.ok || !initRes.data) {
       setSubmitting(false);
@@ -175,23 +200,45 @@ export default function ProductDirectionBootstrap(props: { hasProfile: boolean; 
                     <ChoiceCard
                       selected={startingPoint === "fresh"}
                       onClick={() => setStartingPoint("fresh")}
-                      label="Start fresh"
+                      label="Guide me through it"
                       hint="Answer a few questions to build the plan from scratch."
                     />
                     <ChoiceCard
                       selected={startingPoint === "import"}
                       onClick={() => setStartingPoint("import")}
-                      label="Import existing work"
+                      label="Import my existing work"
                       hint="Pull details from a document instead of typing them here."
                     />
-                    <ChoiceCard
-                      selected={false}
-                      onClick={() => {}}
-                      className="cursor-not-allowed opacity-50"
-                      label="Connect existing work"
-                      hint="Not yet available — no live integration import exists yet."
-                    />
+                    {props.project ? (
+                      <ChoiceCard
+                        selected={startingPoint === "use_project_context"}
+                        onClick={() => setStartingPoint("use_project_context")}
+                        label="Use project context"
+                        hint={`Reuse ${props.project.name}'s budget, rate, and target date — just add this initiative's details.`}
+                      />
+                    ) : (
+                      <ChoiceCard
+                        selected={false}
+                        onClick={() => {}}
+                        className="cursor-not-allowed opacity-50"
+                        label="Connect existing work"
+                        hint="Not yet available — no live integration import exists yet."
+                      />
+                    )}
                   </div>
+                  {props.project && startingPoint === "use_project_context" && (
+                    <p className="mt-3 rounded-lg bg-accent/[0.06] px-3 py-2 text-xs text-text-secondary">
+                      {props.project.hasContext
+                        ? `Budget${props.project.budget != null ? ` ($${props.project.budget.toLocaleString()})` : ""}, rate${
+                            props.project.averageHourlyRate != null ? ` ($${props.project.averageHourlyRate}/hr)` : ""
+                          }, and target date${
+                            props.project.targetLaunchDate
+                              ? ` (${new Date(props.project.targetLaunchDate).toLocaleDateString()})`
+                              : ""
+                          } carry over from ${props.project.name} automatically — you'll only be asked what's specific to this initiative.`
+                        : `${props.project.name} doesn't have shared context set yet — this initiative's details will still become available for future initiatives to reuse.`}
+                    </p>
+                  )}
                 </div>
 
                 <div className="mt-7 border-t border-neutral-100 pt-7">

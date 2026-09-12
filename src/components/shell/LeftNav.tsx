@@ -83,6 +83,7 @@ export default function LeftNav(props: { initiatives: NavInitiative[] }) {
           title: "Plan",
           items: [
             { label: "Dashboard", href: "/home" },
+            { label: "Projects", href: "/projects" },
             { label: "Initiatives", href: "/initiatives" },
             scoped("workspace/roadmap", "Roadmap"),
             scoped("workspace/features", "Planning Workspace"),
@@ -112,6 +113,7 @@ export default function LeftNav(props: { initiatives: NavInitiative[] }) {
           title: "Plan",
           items: [
             { label: "Dashboard", href: "/home" },
+            { label: "Projects", href: "/projects" },
             { label: "Initiatives", href: "/initiatives" },
           ],
         },

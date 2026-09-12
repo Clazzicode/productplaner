@@ -1,7 +1,10 @@
 import Link from "next/link";
+import ApprovePlanButton from "@/components/dashboard/ApprovePlanButton";
+import StatusBadge from "@/components/roadmapStatus/StatusBadge";
 import { Badge } from "@/components/ui/Badge";
 import PageHeader from "@/components/ui/PageHeader";
 import WorkspaceBreadcrumb from "@/components/workspace/WorkspaceBreadcrumb";
+import type { ResolvedStatus } from "@/lib/roadmapStatus/types";
 import MethodologySwitcher from "./MethodologySwitcher";
 
 export default function DashboardHeader(props: {
@@ -12,6 +15,7 @@ export default function DashboardHeader(props: {
   releaseTarget: string | null;
   updatedAt: Date;
   baselineApprovedAt: Date | null;
+  status: ResolvedStatus;
   /** Step 8C — the initiative-centric path to "Who has access?"
    * (docs/V2-RESOURCE-ACCESS.md §14). Only rendered for an Organization
    * Admin, since /admin/access is gated the same way. */
@@ -20,7 +24,10 @@ export default function DashboardHeader(props: {
   return (
     <div>
       <WorkspaceBreadcrumb initiativeId={props.initiativeId} initiativeName={props.name} />
-      <div className="mt-2">
+      <div className="mt-2 flex flex-wrap items-start gap-2">
+        <StatusBadge entityType="initiative" entityId={props.initiativeId} status={props.status} />
+      </div>
+      <div className="mt-1">
         <PageHeader
           title={props.name}
           description={
@@ -38,10 +45,12 @@ export default function DashboardHeader(props: {
                 )}
                 <span className="text-neutral-300">·</span>
                 <span>Updated {props.updatedAt.toLocaleDateString()}</span>
-                {props.baselineApprovedAt && (
+                {props.baselineApprovedAt ? (
                   <Badge variant="emerald">
                     Baseline approved {props.baselineApprovedAt.toLocaleDateString()}
                   </Badge>
+                ) : (
+                  <ApprovePlanButton initiativeId={props.initiativeId} />
                 )}
               </span>
             </>

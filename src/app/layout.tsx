@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import AppShell from "@/components/shell/AppShell";
+import { CoachMarkProvider } from "@/components/coachmarks/CoachMarkProvider";
 import { listAuthorizedInitiativeIds } from "@/lib/access/initiativeAccess";
 import { getCurrentUser } from "@/lib/auth/session";
 import { db, establishAuthContext } from "@/lib/db";
@@ -49,20 +50,27 @@ export default async function RootLayout({
       })
     : [];
 
+  // Directive §4 "Experienced": coach marks show automatically once for this
+  // tier; everyone else only sees them via "Replay Product Tour".
+  const experienceLevel = user?.profiles[0]?.experienceLevel;
+  const autoActive = experienceLevel === "experienced" || experienceLevel === "expert";
+
   return (
     <html
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
-        <AppShell
-          hasProfile={(user?.profiles.length ?? 0) > 0}
-          userName={user?.name ?? ""}
-          accessLevel={user?.accessLevel ?? "standard_user"}
-          initiatives={initiatives}
-        >
-          {children}
-        </AppShell>
+        <CoachMarkProvider signedIn={user != null} autoActive={autoActive}>
+          <AppShell
+            hasProfile={(user?.profiles.length ?? 0) > 0}
+            userName={user?.name ?? ""}
+            accessLevel={user?.accessLevel ?? "standard_user"}
+            initiatives={initiatives}
+          >
+            {children}
+          </AppShell>
+        </CoachMarkProvider>
       </body>
     </html>
   );

@@ -27,6 +27,7 @@ import { scheduleHealth, type HealthStatus } from "@/lib/generation/health";
 import { LAYER_LABELS, type LayerType } from "@/lib/generation/types";
 import { resolveLifecycleState, STAGE_LABEL, STAGE_PROGRESS_PERCENT } from "@/lib/lifecycle/resolveLifecycleState";
 import { validateIntake } from "@/lib/generation/validateIntake";
+import { resolveTargetLaunchDate } from "@/lib/projectContext";
 
 export interface InitiativeOverview {
   id: string;
@@ -131,6 +132,7 @@ export async function loadGlobalDashboardData(
       syncConnections: true,
       integrationConnections: { select: { lastSyncAt: true, provider: { select: { name: true } } } },
       intakeAnswerSet: { select: { updatedAt: true } },
+      project: { select: { targetLaunchDate: true } },
     },
   });
 
@@ -369,9 +371,10 @@ export async function loadGlobalDashboardData(
       };
     }),
     ...initiatives
-      .filter((i) => i.targetLaunchDate != null && i.targetLaunchDate >= today)
-      .map((i) => ({
-        date: i.targetLaunchDate!,
+      .map((i) => ({ i, targetLaunchDate: resolveTargetLaunchDate(i, i.project) }))
+      .filter((row) => row.targetLaunchDate != null && row.targetLaunchDate >= today)
+      .map(({ i, targetLaunchDate }) => ({
+        date: targetLaunchDate!,
         label: `${i.name} go-live target`,
         kind: "launch" as const,
         initiativeName: multiInitiative ? i.name : null,

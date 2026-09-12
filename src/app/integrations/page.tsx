@@ -2,6 +2,7 @@ import IntegrationsHub, {
   type HubConnection,
   type HubProvider,
 } from "@/components/integrations/IntegrationsHub";
+import CoachMark from "@/components/coachmarks/CoachMark";
 import { ContainedLayout } from "@/components/layout/PageLayouts";
 import PageHeader from "@/components/ui/PageHeader";
 import { requireCurrentUser } from "@/lib/auth/session";
@@ -77,6 +78,7 @@ export default async function IntegrationsPage() {
         title="Integrations"
         description={`Connection hub — ${connectedCount} of ${hubProviders.length} tools connected. The platform stays the system of record; execution tools receive the work.`}
       />
+      <CoachMark coachMarkKey="integrations" className="mt-4" />
       <div className="mt-6">
         <IntegrationsHub
           providers={hubProviders}

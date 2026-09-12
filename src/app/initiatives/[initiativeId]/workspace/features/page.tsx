@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Badge, riskBadgeVariant } from "@/components/ui/Badge";
+import CoachMark from "@/components/coachmarks/CoachMark";
 import EditableArtifact from "@/components/workspace/EditableArtifact";
 import ExplainBadge from "@/components/workspace/ExplainBadge";
 import TraceBadge from "@/components/workspace/TraceBadge";
@@ -43,6 +44,7 @@ export default async function FeaturesPage({
       <p className="mt-1 text-sm text-neutral-500">
         Each feature from intake appears once here, grouped by roadmap phase.
       </p>
+      <CoachMark coachMarkKey="planning_workspace" className="mt-4" />
 
       <div className="mt-6 space-y-6">
         {phases.map((phase) => (

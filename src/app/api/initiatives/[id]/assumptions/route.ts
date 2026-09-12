@@ -11,13 +11,23 @@ import {
   repackSprints,
 } from "@/lib/generation/engine";
 import { resolveMethodology } from "@/lib/generation/methodology";
+import { resolveInitiativeEconomics } from "@/lib/projectContext";
 import { assumptionsPatchSchema } from "@/lib/validation/schemas";
 
 // Capacity/cost assumptions (§31) stay editable after generation — they are
 // prototype assumptions, not intake answers (FR-06 permanence does not apply).
 // Changing them recomputes only the flexible agile layers (§29 / FR-18).
-
-const INITIATIVE_FIELDS = ["averageHourlyRate", "budget", "targetLaunchDate"] as const;
+//
+// Wire contract unchanged (averageHourlyRate/budget/targetLaunchDate) even
+// though these now live on Project — editing them here writes an
+// Initiative-specific *Override* column instead (directive §9: an initiative
+// may override shared Project context without changing it for siblings),
+// resolved back to the same field names on read via resolveInitiativeEconomics().
+const INITIATIVE_OVERRIDE_FIELDS = {
+  averageHourlyRate: "averageHourlyRateOverride",
+  budget: "budgetOverride",
+  targetLaunchDate: "targetLaunchDateOverride",
+} as const;
 const INTAKE_FIELDS = [
   "utilizationRatePercent",
   "capacityBufferPercent",
@@ -39,16 +49,20 @@ export async function GET(
 
   const initiative = await db.initiative.findUnique({
     where: { id },
-    include: { intakeAnswerSet: true },
+    include: {
+      intakeAnswerSet: true,
+      project: { select: { budget: true, averageHourlyRate: true, targetLaunchDate: true } },
+    },
   });
   if (!initiative || !initiative.intakeAnswerSet) return jsonError("Initiative not found.", 404);
   const intake = initiative.intakeAnswerSet;
+  const economics = resolveInitiativeEconomics(initiative, initiative.project);
 
   return NextResponse.json({
     assumptions: {
-      averageHourlyRate: initiative.averageHourlyRate ?? DEFAULT_ASSUMPTIONS.averageHourlyRate,
-      budget: initiative.budget,
-      targetLaunchDate: initiative.targetLaunchDate,
+      averageHourlyRate: economics.averageHourlyRate ?? DEFAULT_ASSUMPTIONS.averageHourlyRate,
+      budget: economics.budget,
+      targetLaunchDate: economics.targetLaunchDate,
       sprintLengthWeeks: intake.sprintLengthWeeks,
       utilizationRatePercent: intake.utilizationRatePercent,
       capacityBufferPercent: intake.capacityBufferPercent,
@@ -90,8 +104,8 @@ export async function PATCH(
 
   const initiativeData: Record<string, unknown> = {};
   const intakeData: Record<string, unknown> = {};
-  for (const key of INITIATIVE_FIELDS) {
-    if (key in parsed.data) initiativeData[key] = parsed.data[key];
+  for (const [wireKey, column] of Object.entries(INITIATIVE_OVERRIDE_FIELDS)) {
+    if (wireKey in parsed.data) initiativeData[column] = parsed.data[wireKey as keyof typeof parsed.data];
   }
   for (const key of INTAKE_FIELDS) {
     if (key in parsed.data) intakeData[key] = parsed.data[key];

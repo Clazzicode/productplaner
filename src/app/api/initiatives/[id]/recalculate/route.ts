@@ -4,6 +4,7 @@ import { jsonError, zodMessage } from "@/lib/api";
 import { requireCurrentUserApi } from "@/lib/auth/session";
 import { establishAuthContext } from "@/lib/db";
 import {
+  ApprovedBaselineImpactError,
   IntakeInvalidError,
   RecalculateBlockedError,
   recalculatePlan,
@@ -25,7 +26,9 @@ export async function POST(
   if (!parsed.success) return jsonError(zodMessage(parsed.error), 422);
 
   try {
-    const result = await recalculatePlan(id, parsed.data.mode);
+    const result = await recalculatePlan(id, parsed.data.mode, {
+      confirmApprovedImpact: parsed.data.confirmApprovedImpact,
+    });
     return NextResponse.json({ ok: true, ...result });
   } catch (err) {
     if (err instanceof IntakeInvalidError) {
@@ -33,6 +36,9 @@ export async function POST(
         { error: "Intake has unresolved flags.", validation: err.validation },
         { status: 422 },
       );
+    }
+    if (err instanceof ApprovedBaselineImpactError) {
+      return NextResponse.json({ error: err.message, requiresApprovedImpactConfirmation: true }, { status: 409 });
     }
     if (err instanceof RecalculateBlockedError) {
       return jsonError(err.message, 409);

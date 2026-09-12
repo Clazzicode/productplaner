@@ -25,6 +25,15 @@ const AI_CAPABILITIES: AiCapabilityConfig[] = [
     description:
       "Analyzes an initiative's intake data and returns a qualitative summary, assumptions, missing information, risks, recommended roadmap phases, and rationale.",
   },
+  {
+    action: "DOCUMENT_UNDERSTANDING",
+    enabled: true,
+    maxOutputTokens: 4096,
+    userMonthlyLimit: 50,
+    organizationMonthlyLimit: 500,
+    description:
+      "Reads an uploaded document (PDF/DOCX/PPTX) and extracts planning information as a draft for the user to review and approve — never written directly to the database.",
+  },
 ];
 
 let seeded = false;

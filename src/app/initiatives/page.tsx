@@ -1,12 +1,15 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import CoachMark from "@/components/coachmarks/CoachMark";
 import { ContainedLayout } from "@/components/layout/PageLayouts";
+import StatusBadge from "@/components/roadmapStatus/StatusBadge";
 import { Badge, type BadgeVariant } from "@/components/ui/Badge";
 import PageHeader from "@/components/ui/PageHeader";
 import { listAuthorizedInitiativeIds } from "@/lib/access/initiativeAccess";
 import { requireCurrentUser } from "@/lib/auth/session";
 import { db, establishAuthContext } from "@/lib/db";
 import { resolveLifecycleState, STAGE_LABEL } from "@/lib/lifecycle/resolveLifecycleState";
+import { getResolvedStatuses } from "@/lib/roadmapStatus/service";
 
 export const dynamic = "force-dynamic";
 
@@ -45,6 +48,7 @@ export default async function InitiativesPage() {
       syncConnections: true,
     },
   });
+  const statuses = await getResolvedStatuses(user.organizationId, "initiative", initiatives.map((i) => i.id));
 
   return (
     <ContainedLayout className="max-w-4xl">
@@ -61,6 +65,7 @@ export default async function InitiativesPage() {
           </Link>
         }
       />
+      <CoachMark coachMarkKey="initiatives" className="mt-4" />
 
       {initiatives.length === 0 ? (
         <div className="mt-12 rounded-2xl border border-dashed border-neutral-300 bg-white p-12 text-center">
@@ -100,7 +105,14 @@ export default async function InitiativesPage() {
                 >
                   <div className="flex items-center justify-between gap-4">
                     <h2 className="font-semibold">{initiative.name}</h2>
-                    <Badge variant={status.variant}>{status.label}</Badge>
+                    <div className="flex items-center gap-2">
+                      <StatusBadge
+                        entityType="initiative"
+                        entityId={initiative.id}
+                        status={statuses.get(initiative.id) ?? { color: null, source: null, reason: "", recommendation: null }}
+                      />
+                      <Badge variant={status.variant}>{status.label}</Badge>
+                    </div>
                   </div>
                   {initiative.description && (
                     <p className="mt-1 line-clamp-2 text-sm text-neutral-500">

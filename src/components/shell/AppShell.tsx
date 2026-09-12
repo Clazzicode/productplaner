@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
 import AccountMenu from "@/components/auth/AccountMenu";
+import AiUsageBanner from "@/components/ai/AiUsageBanner";
 import { isBareRoute } from "./bareMode";
 import LeftNav, { type NavInitiative } from "./LeftNav";
 import MobileNavDrawer from "./MobileNavDrawer";
@@ -106,7 +107,12 @@ export default function AppShell(props: {
           userName={props.userName}
           onOpenMenu={() => setDrawerOpen(true)}
         />
-        <main className="min-w-0 flex-1">{props.children}</main>
+        <main className="min-w-0 flex-1">
+          <div className="px-6 pt-4">
+            <AiUsageBanner />
+          </div>
+          {props.children}
+        </main>
       </div>
     </div>
   );

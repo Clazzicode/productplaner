@@ -1,5 +1,19 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { AI_MODEL, getAnthropicClient } from "@/lib/ai/client";
+import { assertAiActionAllowed, recordAiUsage } from "@/lib/ai/usage";
 import { intakeImportDraftSchema, type IntakeImportDraft } from "@/lib/validation/schemas";
+
+// DOCUMENT_UNDERSTANDING (directive §14A) — reads a supplied document and
+// extracts planning information only. Deliberately does not perform
+// research (§14B) and does not write the extraction to the database itself
+// (§14C is a separate concern) — the caller (the intake import route) hands
+// the returned draft back to the client for review; only user-accepted
+// fields are ever saved, through the same endpoints manual entry uses.
+//
+// Consolidated onto the shared platform gateway (directive §30/§37: no more
+// bring-your-own-key) — this used to call Anthropic directly with a
+// decrypted per-user key (src/lib/intakeImport/analyzeDocument.ts, now
+// folded in here). Same tool schema and system prompt, unchanged.
 
 const TOOL_NAME = "submit_intake_draft";
 
@@ -61,29 +75,82 @@ const INTAKE_IMPORT_TOOL: Anthropic.Tool = {
   },
 };
 
-// apiKey is the requesting user's own key (decrypted from User.anthropicApiKeyEncrypted,
-// src/lib/security/secretBox.ts) — this call never falls back to a shared/server-wide key.
-export async function analyzeIntakeDocument(documentText: string, apiKey: string): Promise<IntakeImportDraft> {
-  const client = new Anthropic({ apiKey });
+export interface RunDocumentUnderstandingParams {
+  documentText: string;
+  initiativeId: string;
+  userId: string;
+  organizationId: string;
+}
 
-  const response = await client.messages.create({
-    model: process.env.ANTHROPIC_MODEL || "claude-sonnet-5",
-    max_tokens: 4096,
-    system: SYSTEM_PROMPT,
-    messages: [{ role: "user", content: `Document text:\n\n${documentText}` }],
-    tools: [INTAKE_IMPORT_TOOL],
-    tool_choice: { type: "tool", name: TOOL_NAME },
+export async function runDocumentUnderstanding(params: RunDocumentUnderstandingParams): Promise<IntakeImportDraft> {
+  const { documentText, initiativeId, userId, organizationId } = params;
+
+  const { capability, release } = await assertAiActionAllowed({
+    action: "DOCUMENT_UNDERSTANDING",
+    userId,
+    organizationId,
+    initiativeId,
   });
 
-  const toolUse = response.content.find((block) => block.type === "tool_use");
-  if (!toolUse) throw new Error("Model did not return structured output.");
+  try {
+    let response: Anthropic.Message;
+    try {
+      response = await getAnthropicClient().messages.create({
+        model: AI_MODEL,
+        max_tokens: capability.maxOutputTokens,
+        system: SYSTEM_PROMPT,
+        messages: [{ role: "user", content: `Document text:\n\n${documentText}` }],
+        tools: [INTAKE_IMPORT_TOOL],
+        tool_choice: { type: "tool", name: TOOL_NAME },
+      });
+    } catch (err) {
+      await recordAiUsage({
+        userId,
+        organizationId,
+        initiativeId,
+        action: "DOCUMENT_UNDERSTANDING",
+        success: false,
+        errorMessage: err instanceof Error ? err.message : "Anthropic API request failed.",
+      });
+      throw err;
+    }
 
-  const parsed = intakeImportDraftSchema.parse(toolUse.input);
-  return {
-    ...parsed,
-    // A name is the one field the model was required to set (`required: ["name"]`
-    // in the tool schema) — the lenient schema still lets it through empty on a
-    // malformed response, so drop anything that didn't survive with a real name.
-    capabilities: (parsed.capabilities ?? []).filter((c) => c.name.trim().length >= 3),
-  };
+    const toolUse = response.content.find((block) => block.type === "tool_use");
+    if (!toolUse) {
+      await recordAiUsage({
+        userId,
+        organizationId,
+        initiativeId,
+        action: "DOCUMENT_UNDERSTANDING",
+        success: false,
+        inputTokens: response.usage.input_tokens,
+        outputTokens: response.usage.output_tokens,
+        errorMessage: "Model did not return structured output.",
+      });
+      throw new Error("Model did not return structured output.");
+    }
+
+    const parsed = intakeImportDraftSchema.parse(toolUse.input);
+    const draft: IntakeImportDraft = {
+      ...parsed,
+      // A name is the one field the model was required to set (`required: ["name"]`
+      // in the tool schema) — the lenient schema still lets it through empty on a
+      // malformed response, so drop anything that didn't survive with a real name.
+      capabilities: (parsed.capabilities ?? []).filter((c) => c.name.trim().length >= 3),
+    };
+
+    await recordAiUsage({
+      userId,
+      organizationId,
+      initiativeId,
+      action: "DOCUMENT_UNDERSTANDING",
+      success: true,
+      inputTokens: response.usage.input_tokens,
+      outputTokens: response.usage.output_tokens,
+    });
+
+    return draft;
+  } finally {
+    await release();
+  }
 }

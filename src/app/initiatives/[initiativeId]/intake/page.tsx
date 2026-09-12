@@ -8,6 +8,7 @@ import { requireCurrentUser } from "@/lib/auth/session";
 import { db, establishAuthContext } from "@/lib/db";
 import { depthFromExperience } from "@/lib/questionnaire/roleGuidance";
 import { readOnboardingStateServer } from "@/lib/onboarding/tempStateServer";
+import { resolveInitiativeEconomics } from "@/lib/projectContext";
 
 export const dynamic = "force-dynamic";
 
@@ -35,6 +36,7 @@ export default async function IntakePage({
             capabilities: { orderBy: { order: "asc" }, include: { dependsOnEdges: true } },
           },
         },
+        project: { select: { budget: true, averageHourlyRate: true, targetLaunchDate: true } },
       },
     }),
     readOnboardingStateServer(),
@@ -42,6 +44,7 @@ export default async function IntakePage({
   if (!initiative || !initiative.intakeAnswerSet) notFound();
   const intake = initiative.intakeAnswerSet;
   const alreadyGenerated = intake.status === "generated";
+  const economics = resolveInitiativeEconomics(initiative, initiative.project);
 
   // Guidance depth now comes from experienceLevel alone — QualifyingProfile.role no
   // longer participates (it's a legacy placeholder value, see
@@ -88,10 +91,10 @@ export default async function IntakePage({
         success={{
           outcomeStatement: intake.outcomeStatement,
           outcomeMetric: intake.outcomeMetric,
-          targetLaunchDate: initiative.targetLaunchDate
-            ? initiative.targetLaunchDate.toISOString().slice(0, 10)
+          targetLaunchDate: economics.targetLaunchDate
+            ? economics.targetLaunchDate.toISOString().slice(0, 10)
             : "",
-          budget: initiative.budget != null ? String(initiative.budget) : "",
+          budget: economics.budget != null ? String(economics.budget) : "",
         }}
         delivery={{
           teamSize: intake.teamSize ?? "",
@@ -101,7 +104,7 @@ export default async function IntakePage({
           capacityBufferPercent: intake.capacityBufferPercent,
           hoursPerStoryPoint: intake.hoursPerStoryPoint,
           historicalVelocityPoints: intake.historicalVelocityPoints ?? "",
-          averageHourlyRate: initiative.averageHourlyRate != null ? String(initiative.averageHourlyRate) : "",
+          averageHourlyRate: economics.averageHourlyRate != null ? String(economics.averageHourlyRate) : "",
         }}
         currentMethodology={initiative.methodology}
         capabilities={intake.capabilities.map((c) => ({

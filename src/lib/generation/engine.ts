@@ -892,6 +892,18 @@ export type RecalculateDetail =
 
 export class RecalculateBlockedError extends Error {}
 
+/**
+ * Versioning foundation (directive §17/§25): thrown instead of silently
+ * regenerating when the prototype has an approved baseline
+ * (Prototype.approvedAt, set by snapshotApprovedBaseline — see
+ * src/app/api/initiatives/[id]/approve-plan/route.ts for how a plan becomes
+ * approved now that the full FR-11/12/13 lock ceremony stays disabled) and
+ * the caller hasn't explicitly confirmed the impact. The route/UI must show
+ * what would change and let the user confirm before retrying with
+ * `confirmApprovedImpact: true` — never a silent overwrite of approved work.
+ */
+export class ApprovedBaselineImpactError extends Error {}
+
 export interface RecalculateResult {
   prototypeId: string;
   mode: RecalculateMode;
@@ -950,8 +962,18 @@ export function capabilitySetDrifted(
 export async function recalculatePlan(
   initiativeId: string,
   mode: RecalculateMode,
+  options: { confirmApprovedImpact?: boolean } = {},
 ): Promise<RecalculateResult> {
   if (mode === "full") {
+    if (!options.confirmApprovedImpact) {
+      const existing = await db.prototype.findUnique({ where: { initiativeId }, select: { approvedAt: true } });
+      if (existing?.approvedAt) {
+        throw new ApprovedBaselineImpactError(
+          `This initiative has an approved baseline (approved ${existing.approvedAt.toLocaleDateString()}). ` +
+            "Full regenerate replaces the entire plan. Confirm to proceed anyway.",
+        );
+      }
+    }
     // generatePrototype never touches Capability rows — clear any Timeline
     // drag-and-drop phase overrides here so "Full regenerate" actually
     // discards them, matching what its confirm-modal copy promises
@@ -983,6 +1005,16 @@ export async function recalculatePlan(
   const branch = determineRespectLocksBranch(
     initiative.prototype.layerLocks.map((l) => ({ layerType: l.layerType, state: l.state })),
   );
+
+  // repack_only is deliberately exempt — it only recomputes the always-
+  // flexible agile layer (sprints), never the waterfall structure an
+  // approved baseline actually protects.
+  if (branch.kind !== "repack_only" && initiative.prototype.approvedAt && !options.confirmApprovedImpact) {
+    throw new ApprovedBaselineImpactError(
+      `This initiative has an approved baseline (approved ${initiative.prototype.approvedAt.toLocaleDateString()}). ` +
+        "This recalculation would rebuild part of the approved plan. Confirm to proceed anyway.",
+    );
+  }
 
   if (branch.kind === "full_fallback_no_locks") {
     const { prototypeId: id } = await generatePrototype(initiativeId);

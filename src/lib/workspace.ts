@@ -6,6 +6,7 @@ import { explainPriorityScore } from "@/lib/generation/explain/priorityScore";
 import { loadIntakeInput } from "@/lib/generation/engine";
 import { computePriorityScore } from "@/lib/generation/scoring";
 import { getEffectiveWeights } from "@/lib/planningWeights/planningWeights";
+import { resolveInitiativeEconomics } from "@/lib/projectContext";
 import type { TraceCapabilityView, TraceIntakeView } from "@/lib/trace";
 
 /** Shared workspace loader: initiative, prototype, locks, and the intake
@@ -95,7 +96,12 @@ export async function loadCostContext(
   const [initiative, sprintCount, stories, intakeInput, priorityWeights] = await Promise.all([
     db.initiative.findUnique({
       where: { id: initiativeId },
-      select: { budget: true, averageHourlyRate: true },
+      select: {
+        budgetOverride: true,
+        averageHourlyRateOverride: true,
+        targetLaunchDateOverride: true,
+        project: { select: { budget: true, averageHourlyRate: true, targetLaunchDate: true } },
+      },
     }),
     db.sprint.count({ where: { prototypeId } }),
     db.artifactLayer.findMany({
@@ -107,10 +113,11 @@ export async function loadCostContext(
   ]);
 
   const totalPlannedPoints = stories.reduce((n, s) => n + (s.points ?? 1), 0);
+  const economics = initiative ? resolveInitiativeEconomics(initiative, initiative.project) : null;
   const model = buildCostModel({
     capacity: intakeInput,
-    averageHourlyRate: initiative?.averageHourlyRate,
-    budget: initiative?.budget,
+    averageHourlyRate: economics?.averageHourlyRate,
+    budget: economics?.budget,
     totalSprints: sprintCount,
     totalPlannedPoints,
   });

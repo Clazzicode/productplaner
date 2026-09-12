@@ -1,5 +1,6 @@
 import { format } from "date-fns";
 import { notFound } from "next/navigation";
+import CoachMark from "@/components/coachmarks/CoachMark";
 import CreateReleaseForm from "@/components/workspace/CreateReleaseForm";
 import CreateSprintForm from "@/components/workspace/CreateSprintForm";
 import SprintMoveSelect from "@/components/workspace/SprintMoveSelect";
@@ -198,6 +199,7 @@ export default async function SprintsPage({
             ? "Waterfall: the sprint and release plan became a fixed schedule once the baseline was approved — it can no longer be rebalanced."
             : "Create releases and plan sprints directly here — nothing is auto-assigned. Regenerating the plan from Living Plan rebuilds everything, including releases and sprints you've created."}
       </p>
+      <CoachMark coachMarkKey="sprints_releases" className="mt-4" />
       {/* Releases strip */}
       <div className="mt-5 flex flex-wrap items-start gap-3">
         {releases.map((rel) => (

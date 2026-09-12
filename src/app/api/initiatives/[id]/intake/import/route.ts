@@ -3,18 +3,26 @@ import { requireInitiativeApiAccess } from "@/lib/access/guards";
 import { jsonError } from "@/lib/api";
 import { requireCurrentUserApi } from "@/lib/auth/session";
 import { establishAuthContext } from "@/lib/db";
-import { analyzeIntakeDocument } from "@/lib/intakeImport/analyzeDocument";
+import { runDocumentUnderstanding } from "@/lib/ai/actions/documentUnderstanding";
+import {
+  AiCapabilityDisabledError,
+  AiDisabledError,
+  AiRequestInProgressError,
+  AiUsageLimitExceededError,
+} from "@/lib/ai/errors";
 import {
   MAX_IMPORT_FILE_BYTES,
   SUPPORTED_IMPORT_EXTENSIONS,
   extractDocumentText,
   isSupportedImportExtension,
 } from "@/lib/intakeImport/extractText";
-import { decryptSecret } from "@/lib/security/secretBox";
 
 // Analysis only — this route never writes to the database. The extracted draft
 // goes back to the client for review; accepted fields are saved through the
 // same PATCH /intake and POST /capabilities endpoints manual entry already uses.
+//
+// Routes through the shared platform AI gateway (DOCUMENT_UNDERSTANDING) —
+// no per-user API key anymore (directive §30/§37: bring-your-own-key removed).
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
@@ -26,19 +34,6 @@ export async function POST(
   establishAuthContext(user.authUserId);
   const guard = await requireInitiativeApiAccess(user, id, "edit");
   if (!guard.ok) return guard.response;
-
-  // Every user brings their own key (Settings → Anthropic API key) — there is
-  // no shared/server-wide fallback, so this call only ever uses the requesting
-  // account's own key.
-  if (!user.anthropicApiKeyEncrypted) {
-    return jsonError("Add your Anthropic API key in Settings to use document import.", 422);
-  }
-  let apiKey: string;
-  try {
-    apiKey = decryptSecret(user.anthropicApiKeyEncrypted);
-  } catch {
-    return jsonError("Your saved API key could not be read — please re-enter it in Settings.", 422);
-  }
 
   const form = await request.formData().catch(() => null);
   const file = form?.get("file");
@@ -65,9 +60,20 @@ export async function POST(
   }
 
   try {
-    const draft = await analyzeIntakeDocument(text, apiKey);
+    const draft = await runDocumentUnderstanding({
+      documentText: text,
+      initiativeId: id,
+      userId: user.id,
+      organizationId: user.organizationId,
+    });
     return NextResponse.json({ draft, sourceFileName: file.name });
-  } catch {
+  } catch (err) {
+    if (err instanceof AiDisabledError) return jsonError("AI features are currently disabled.", 503);
+    if (err instanceof AiCapabilityDisabledError) return jsonError(err.message, 403);
+    if (err instanceof AiUsageLimitExceededError) return jsonError(err.message, 429);
+    if (err instanceof AiRequestInProgressError) {
+      return jsonError("An import is already processing for this initiative.", 409);
+    }
     return jsonError("Could not analyze that document — please try again.", 502);
   }
 }
