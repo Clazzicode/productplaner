@@ -36,7 +36,7 @@ export default function ActivationHome(props: { userName: string; greeting: stri
   return (
     <div className="mx-auto max-w-2xl py-10">
       <p className="text-xs font-semibold uppercase tracking-widest text-accent">Your dashboard</p>
-      <h1 className="mt-1.5 text-3xl font-bold text-text-primary">
+      <h1 className="mt-1.5 break-words text-3xl font-bold text-text-primary">
         {props.greeting}, {firstName}
       </h1>
       <p className="mt-2 text-lg text-text-secondary">Let&apos;s build your first product plan.</p>

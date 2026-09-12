@@ -3,9 +3,12 @@ import Avatar from "@/components/ui/Avatar";
 // Desktop and mobile app-chrome bars. Kept as one component (not a generic
 // slot-passthrough) because they render genuinely different content, not the
 // same content in a different layout: mobile has a hamburger + truncated
-// current-initiative title + bare avatar; desktop has the full switcher/+New
-// row and account actions. Chrome stays light (matches the CRM reference's own
-// top bar, which is white, not dark — only the nav rail goes dark).
+// current-initiative title + an avatar that opens the same drawer (its
+// account actions live in MobileNavDrawer's bottomContent, not here — a
+// second full AccountMenu dropdown has no room in this bar); desktop has the
+// full switcher/+New row and account actions inline. Chrome stays light
+// (matches the CRM reference's own top bar, which is white, not dark — only
+// the nav rail goes dark).
 export default function TopHeader(props: {
   switcherAndNew: React.ReactNode;
   accountActions: React.ReactNode;
@@ -32,7 +35,14 @@ export default function TopHeader(props: {
         <span className="min-w-0 flex-1 truncate text-sm font-semibold text-text-primary">
           {props.currentName}
         </span>
-        <Avatar name={props.userName} />
+        <button
+          type="button"
+          onClick={props.onOpenMenu}
+          aria-label="Open account menu"
+          className="shrink-0 rounded-full"
+        >
+          <Avatar name={props.userName} />
+        </button>
       </header>
     </>
   );

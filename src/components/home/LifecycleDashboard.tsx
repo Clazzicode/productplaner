@@ -49,7 +49,7 @@ export default function LifecycleDashboard(props: {
   return (
     <div className="mx-auto max-w-2xl py-10">
       <p className="text-xs font-semibold uppercase tracking-widest text-accent">Your dashboard</p>
-      <h1 className="mt-1.5 text-2xl font-bold text-text-primary">
+      <h1 className="mt-1.5 break-words text-2xl font-bold text-text-primary">
         {props.greeting}, {firstName}
       </h1>
 
@@ -70,7 +70,7 @@ export default function LifecycleDashboard(props: {
         <dl className="mt-3 space-y-1.5 text-sm">
           <div className="flex gap-2">
             <dt className="w-28 shrink-0 text-text-muted">Product</dt>
-            <dd className="text-text-primary">{summary.name}</dd>
+            <dd className="min-w-0 break-words text-text-primary">{summary.name}</dd>
           </div>
           <div className="flex gap-2">
             <dt className="w-28 shrink-0 text-text-muted">Planning style</dt>

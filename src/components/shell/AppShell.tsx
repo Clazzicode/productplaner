@@ -86,8 +86,6 @@ export default function AppShell(props: {
     </div>
   );
 
-  const accountActions = <AccountMenu userName={props.userName} accessLevel={props.accessLevel} />;
-
   return (
     <div className="flex min-h-screen">
       <div className="hidden lg:contents">
@@ -98,12 +96,12 @@ export default function AppShell(props: {
         onClose={() => setDrawerOpen(false)}
         initiatives={props.initiatives}
         topContent={switcherAndNew}
-        bottomContent={accountActions}
+        bottomContent={<AccountMenu userName={props.userName} accessLevel={props.accessLevel} dropUp />}
       />
       <div className="flex min-w-0 flex-1 flex-col">
         <TopHeader
           switcherAndNew={switcherAndNew}
-          accountActions={accountActions}
+          accountActions={<AccountMenu userName={props.userName} accessLevel={props.accessLevel} />}
           currentName={currentName}
           userName={props.userName}
           onOpenMenu={() => setDrawerOpen(true)}

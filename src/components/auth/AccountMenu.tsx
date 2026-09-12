@@ -24,7 +24,11 @@ import { ButtonLoader } from "@/components/ui/loading";
  * into a single accurately-labeled "Account Settings" item rather than
  * inventing a second, redundant, or empty page.
  */
-export default function AccountMenu(props: { userName: string; accessLevel: string }) {
+// `dropUp`: MobileNavDrawer's bottomContent instance sits at the very bottom
+// of the drawer's own overflow-hidden panel — opening downward (the desktop
+// default) clips the menu off-screen entirely. Found via real mobile-width
+// testing, not assumed.
+export default function AccountMenu(props: { userName: string; accessLevel: string; dropUp?: boolean }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -65,6 +69,7 @@ export default function AccountMenu(props: { userName: string; accessLevel: stri
         onClick={() => setOpen((v) => !v)}
         aria-haspopup="menu"
         aria-expanded={open}
+        aria-label={`Account menu for ${props.userName}`}
         className="flex items-center gap-2 rounded-full py-1 pl-1 pr-2.5 text-sm text-neutral-600 transition hover:bg-neutral-100"
       >
         <Avatar name={props.userName} />
@@ -77,7 +82,9 @@ export default function AccountMenu(props: { userName: string; accessLevel: stri
       {open && (
         <div
           role="menu"
-          className="absolute right-0 top-full z-50 mt-2 w-56 rounded-xl border border-neutral-200 bg-white p-1.5 shadow-lg"
+          className={`absolute right-0 z-50 w-56 rounded-xl border border-neutral-200 bg-white p-1.5 shadow-lg ${
+            props.dropUp ? "bottom-full mb-2" : "top-full mt-2"
+          }`}
         >
           <Link href="/account/settings" role="menuitem" className={itemClass} onClick={() => setOpen(false)}>
             Account Settings
@@ -98,6 +105,7 @@ export default function AccountMenu(props: { userName: string; accessLevel: stri
           <div className="my-1.5 border-t border-neutral-100" />
           <ButtonLoader
             type="button"
+            role="menuitem"
             variant="plain"
             onClick={() => void logOut()}
             loading={busy}
