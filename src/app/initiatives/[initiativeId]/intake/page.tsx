@@ -79,6 +79,8 @@ export default async function IntakePage({
       )}
       <PlanningQuestionnaire
         initiativeId={initiative.id}
+        projectId={initiative.projectId}
+        experienceLevel={initiative.qualifyingProfile?.experienceLevel ?? null}
         workingRole={onboarding.workingRole ?? null}
         verbose={verbose}
         alreadyGenerated={alreadyGenerated}

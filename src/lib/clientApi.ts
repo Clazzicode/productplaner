@@ -25,3 +25,19 @@ export async function apiFetch<T = Record<string, unknown>>(
     return { ok: false, error: "Network error — is the dev server running?" };
   }
 }
+
+/** Same result shape as apiFetch, for multipart/form-data uploads — never
+ * JSON.stringify a FormData body (this is why apiFetch itself can't be
+ * reused for document upload). */
+export async function uploadFile<T = Record<string, unknown>>(url: string, formData: FormData): Promise<ApiResult<T>> {
+  try {
+    const res = await fetch(url, { method: "POST", body: formData });
+    const body = (await res.json().catch(() => ({}))) as T & { error?: string };
+    if (!res.ok) {
+      return { ok: false, error: body.error ?? `Request failed (${res.status})`, data: body };
+    }
+    return { ok: true, data: body };
+  } catch {
+    return { ok: false, error: "Network error — is the dev server running?" };
+  }
+}

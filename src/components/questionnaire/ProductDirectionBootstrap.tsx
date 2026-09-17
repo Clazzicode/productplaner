@@ -9,12 +9,27 @@ import { readOnboardingState, writeOnboardingState } from "@/lib/onboarding/temp
 import { WORKING_ROLE_META } from "@/lib/onboarding/roleOptions";
 import { EXPERIENCE_LEVEL_OPTIONS, type SimplifiedExperienceLevel } from "@/lib/onboarding/experienceOptions";
 import type { WorkingRole } from "@/lib/onboarding/types";
-import { ButtonLoader } from "@/components/ui/loading";
+import { ButtonLoader, GenerationProgress } from "@/components/ui/loading";
+import AlreadyKnownFromProject from "./AlreadyKnownFromProject";
 import SectionProgress from "./SectionProgress";
 import GuidanceBanner from "./GuidanceBanner";
 import { ChoiceCard } from "./Choice";
 import ProductDirectionFields, { type ProductDirectionValues } from "./ProductDirectionFields";
 import SimplifiedIntakeWizard from "./SimplifiedIntakeWizard";
+
+// Directive item 18: a meaningful checklist, not a generic spinner, honest
+// about which steps really happen — the qualifying-profile save only runs
+// when the user has no profile yet (see submit()), so a profile-holding
+// user's list can't include a step for a call that won't run. See
+// GenerationProgress's own contract: every step shown as done must have
+// really completed.
+const STEPS_NEW_PROFILE = [
+  "Saving your setup",
+  "Creating your initiative",
+  "Saving your answers",
+  "Preparing initiative workspace",
+];
+const STEPS_EXISTING_PROFILE = ["Creating your initiative", "Saving your answers", "Preparing initiative workspace"];
 
 // Guided-activation restructure (reference doc §13): full 6-option Working
 // Role list, matching WorkingRoleSelector — this component's own role
@@ -70,10 +85,15 @@ export default function ProductDirectionBootstrap(props: {
     props.project?.hasContext ? "use_project_context" : "fresh",
   );
   const [submitting, setSubmitting] = useState(false);
+  const [step, setStep] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
   const verbose = depthFromExperience(props.hasProfile ? undefined : experienceLevel);
   const showSimplifiedWizard = !props.hasProfile && isSimplifiedIntakeExperience(experienceLevel);
+  const creationSteps = props.hasProfile ? STEPS_EXISTING_PROFILE : STEPS_NEW_PROFILE;
+  // Offsets the two steps that only run when there's no profile yet, so the
+  // same setStep() calls below work for either list.
+  const stepOffset = props.hasProfile ? 0 : 1;
 
   const pickRole = (value: WorkingRole) => {
     setRoleAnswer(value);
@@ -84,6 +104,7 @@ export default function ProductDirectionBootstrap(props: {
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
+    setStep(0);
     setError(null);
 
     if (!props.hasProfile) {
@@ -104,6 +125,7 @@ export default function ProductDirectionBootstrap(props: {
       }
     }
 
+    setStep(stepOffset);
     const initRes = await apiFetch<{ initiativeId: string }>("/api/initiatives", {
       method: "POST",
       body: {
@@ -119,15 +141,30 @@ export default function ProductDirectionBootstrap(props: {
     }
 
     const { initiativeId } = initRes.data;
+    setStep(stepOffset + 1);
     await apiFetch(`/api/initiatives/${initiativeId}/intake`, {
       method: "PATCH",
       body: { problemStatement: values.problemStatement, targetCustomer: values.targetCustomer },
     });
 
-    setSubmitting(false);
+    // Deliberately not resetting `submitting` on the success path — it stays
+    // true (showing the final step) through the real interval until the
+    // route change unmounts this component, matching
+    // SimplifiedIntakeWizard.tsx's own precedent for the same
+    // GenerationProgress component.
+    setStep(stepOffset + 2);
     router.push(`/initiatives/${initiativeId}/intake`);
     router.refresh();
   };
+
+  if (submitting) {
+    return (
+      <div>
+        <SectionProgress current={0} />
+        <GenerationProgress title="Creating your initiative" steps={creationSteps} currentStep={step} />
+      </div>
+    );
+  }
 
   return (
     <div>
@@ -220,17 +257,7 @@ export default function ProductDirectionBootstrap(props: {
                     )}
                   </div>
                   {props.project && startingPoint === "use_project_context" && (
-                    <p className="mt-3 rounded-lg bg-accent/[0.06] px-3 py-2 text-xs text-text-secondary">
-                      {props.project.hasContext
-                        ? `Budget${props.project.budget != null ? ` ($${props.project.budget.toLocaleString()})` : ""}, rate${
-                            props.project.averageHourlyRate != null ? ` ($${props.project.averageHourlyRate}/hr)` : ""
-                          }, and target date${
-                            props.project.targetLaunchDate
-                              ? ` (${new Date(props.project.targetLaunchDate).toLocaleDateString()})`
-                              : ""
-                          } carry over from ${props.project.name} automatically — you'll only be asked what's specific to this initiative.`
-                        : `${props.project.name} doesn't have shared context set yet — this initiative's details will still become available for future initiatives to reuse.`}
-                    </p>
+                    <AlreadyKnownFromProject project={props.project} />
                   )}
                 </div>
 
@@ -260,8 +287,7 @@ export default function ProductDirectionBootstrap(props: {
                 <div className="mt-8 flex justify-end">
                   <ButtonLoader
                     type="submit"
-                    loading={submitting}
-                    loadingLabel="Creating"
+                    loading={false}
                     disabled={values.name.trim().length < 3}
                     className="px-6 py-3"
                   >

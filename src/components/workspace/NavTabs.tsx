@@ -10,6 +10,9 @@ export const BASE_TABS = [
   { slug: "sprints", label: "Sprints & Releases" },
   { slug: "capacity", label: "Capacity & Cost" },
   { slug: "executive", label: "Executive View" },
+  // Directive item 2: "Add Documents" from inside the initiative workspace
+  // — no entry point existed here before Document Import & Approved Context.
+  { slug: "documents", label: "Documents" },
 ] as const;
 
 // Cosmetic relabeling on top of the real per-methodology generation/locking

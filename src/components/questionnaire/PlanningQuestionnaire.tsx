@@ -20,7 +20,7 @@ import GuidanceBanner from "./GuidanceBanner";
 import { ChoiceCard, ChoicePill } from "./Choice";
 import { FIELD_CLASS } from "./fieldStyles";
 import ProductDirectionFields, { type ProductDirectionValues } from "./ProductDirectionFields";
-import ImportIntakePanel from "./ImportIntakePanel";
+import DocumentReviewPanel from "@/components/documents/DocumentReviewPanel";
 
 export interface CapabilityView {
   id: string;
@@ -105,6 +105,8 @@ const EXECUTION_TOOL_OPTIONS = [
 
 export default function PlanningQuestionnaire(props: {
   initiativeId: string;
+  projectId: string;
+  experienceLevel?: string | null;
   workingRole: WorkingRole | null;
   verbose: boolean;
   alreadyGenerated: boolean;
@@ -255,13 +257,19 @@ export default function PlanningQuestionnaire(props: {
       {step === 0 && (
         <Card>
           <GuidanceBanner section="productDirection" workingRole={workingRole} />
-          <ImportIntakePanel
+          <DocumentReviewPanel
+            scope="initiative_only"
+            projectId={props.projectId}
             initiativeId={initiativeId}
-            productDirection={productDirection}
-            success={success}
-            onApplyProductDirection={(patch) => setProductDirection((v) => ({ ...v, ...patch }))}
-            onApplySuccess={(patch) => setSuccess((s) => ({ ...s, ...patch }))}
-            onCapabilityAdded={(cap) => setCaps((c) => [...c, cap])}
+            experienceLevel={props.experienceLevel}
+            // Approving a document-derived fact crystallizes straight into
+            // IntakeAnswerSet/Initiative/Capability (see
+            // src/lib/context/crystallize.ts) — not into this form's local
+            // React state the way manual field edits work. A full reload is
+            // the simplest correct way to pick that up (router.refresh()
+            // alone re-renders the server tree but doesn't reset an
+            // already-mounted client component's useState).
+            onContextChanged={() => window.location.reload()}
           />
           <ProductDirectionFields
             values={productDirection}
