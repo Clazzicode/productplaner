@@ -20,6 +20,13 @@ export const qualifyingSchema = z.object({
   statedMethodology: z.enum(["hybrid", "agile_scrum", "waterfall", "kanban", "not_sure"]),
 });
 
+// Directive item 3: experience level must be changeable later in Settings.
+// Reuses qualifyingSchema's own enum rather than redeclaring it, so the two
+// can never drift apart.
+export const qualifyingExperienceLevelPatchSchema = z.object({
+  experienceLevel: qualifyingSchema.shape.experienceLevel,
+});
+
 // Account/workspace -> Project -> Initiative restructure: budget/target date/
 // rate now live on Project (shared across its initiatives); an Initiative may
 // still override any of the three (see initiativeOverridesPatchSchema below)
@@ -167,60 +174,74 @@ export const capabilityUpsertSchema = z.object({
   dependsOn: z.array(z.string()).default([]),
 });
 
-// Draft extracted from an imported document (PPTX/DOCX/PDF) by the intake-import
-// AI call. Unlike intakePatchSchema/capabilityUpsertSchema above, this is lenient
-// by design: the model's output is untrusted and occasionally imprecise, but a
-// partial draft is still useful to show the user, so invalid pieces are dropped
-// (via .catch) instead of failing the whole response.
-const trimmedTextDraft = z.string().trim().min(1).optional().catch(undefined);
+// Document Import & Approved Context (directive §3). Scalar fact fieldKeys
+// the AI's generic `items[]` array may propose — "feature" and "risk" are
+// deliberately NOT here: they arrive via their own typed arrays below
+// (features/risks), since they're structured objects, not single string
+// values, and get their ContextItem.fieldKey ("feature"/"risk") assigned by
+// the caller from which array they came from, not from the model.
+// "dependency"/"assumption" are valid extraction targets but are never
+// crystallized into a real relation (see src/lib/context/crystallize.ts) —
+// approving one is traceability-only, a deliberate scope cut.
+export const contextExtractionFieldKeySchema = z.enum([
+  "project_name",
+  "description",
+  "goal",
+  "budget",
+  "projected_go_live",
+  "team",
+  "constraints",
+  "stakeholders",
+  "initiative_name",
+  "initiative_goal",
+  "success_measure",
+  "initiative_target_date",
+  "dependency",
+  "assumption",
+]);
+export const contextExtractionScopeSchema = z.enum(["project", "initiative"]);
+export const contextItemKindSchema = z.enum(["explicit", "interpretation"]);
 
-export const intakeImportCapabilityDraftSchema = z.object({
-  name: z.string().trim().catch(""),
-  description: trimmedTextDraft,
-  isMvp: z.boolean().optional().catch(undefined),
-  effortSize: effortSizeSchema.optional().catch(undefined),
-  businessValue: businessValueSchema.optional().catch(undefined),
-  riskLevel: riskLevelSchema.optional().catch(undefined),
+// Strict — the model's output is untrusted, but unlike the old lenient
+// .catch()-per-field drafts (which silently substituted defaults for
+// malformed pieces), a malformed item here is dropped whole, item-by-item,
+// by the caller (src/lib/ai/actions/documentUnderstanding.ts, via
+// .safeParse() per raw array element) — never schema-swallowed silently.
+export const contextExtractionItemSchema = z.object({
+  fieldKey: contextExtractionFieldKeySchema,
+  scope: contextExtractionScopeSchema,
+  kind: contextItemKindSchema,
+  value: z.string().trim().min(1).max(2000),
+  sourceChunkIndex: z.number().int().min(0),
 });
 
-export const intakeImportDraftSchema = z.object({
-  productDirection: z
-    .object({
-      name: trimmedTextDraft,
-      problemStatement: trimmedTextDraft,
-      targetCustomer: trimmedTextDraft,
-    })
-    .optional()
-    .catch({}),
-  success: z
-    .object({
-      outcomeStatement: trimmedTextDraft,
-      outcomeMetric: trimmedTextDraft,
-      targetLaunchDate: z
-        .string()
-        .regex(/^\d{4}-\d{2}-\d{2}$/)
-        .optional()
-        .catch(undefined),
-      budget: z.number().min(0).max(1_000_000_000).optional().catch(undefined),
-    })
-    .optional()
-    .catch({}),
-  capabilities: z.array(intakeImportCapabilityDraftSchema).optional().catch([]),
-  warnings: z.array(z.string()).optional().catch([]),
+export const contextExtractionFeatureSchema = z.object({
+  name: z.string().trim().min(3),
+  description: z.string().trim().optional(),
+  isMvp: z.boolean().optional(),
+  effortSize: effortSizeSchema.optional(),
+  businessValue: businessValueSchema.optional(),
+  riskLevel: riskLevelSchema.optional(),
+  kind: contextItemKindSchema,
+  sourceChunkIndex: z.number().int().min(0),
 });
 
-export type IntakeImportDraft = z.infer<typeof intakeImportDraftSchema>;
-
-// Document import is now two real round trips (extract, then analyze) so the
-// client can show genuine staged progress instead of one opaque "working"
-// state — see src/components/questionnaire/ImportIntakePanel.tsx and
-// src/app/api/initiatives/[id]/intake/import/{extract,}/route.ts. Capped at
-// the same MAX_EXTRACTED_CHARS the extract step already enforces server-side;
-// this is defense-in-depth against a tampered request, not a new limit.
-export const documentUnderstandingRequestSchema = z.object({
-  text: z.string().trim().min(1).max(40_000),
-  sourceFileName: z.string().trim().min(1).max(255),
+export const contextExtractionRiskSchema = z.object({
+  description: z.string().trim().min(3),
+  severity: riskLevelSchema.optional(),
+  kind: contextItemKindSchema,
+  sourceChunkIndex: z.number().int().min(0),
 });
+
+export const contextExtractionResultSchema = z.object({
+  items: z.array(z.unknown()).optional().default([]),
+  features: z.array(z.unknown()).optional().default([]),
+  risks: z.array(z.unknown()).optional().default([]),
+  warnings: z.array(z.string()).optional().default([]),
+});
+export type ContextExtractionItem = z.infer<typeof contextExtractionItemSchema>;
+export type ContextExtractionFeature = z.infer<typeof contextExtractionFeatureSchema>;
+export type ContextExtractionRisk = z.infer<typeof contextExtractionRiskSchema>;
 
 export const artifactPatchSchema = z
   .object({
@@ -250,6 +271,10 @@ export const syncActionSchema = z.object({
 
 export const recalculatePlanSchema = z.object({
   mode: z.enum(["full", "respect_locks"]),
+  confirmApprovedImpact: z.boolean().optional(),
+});
+
+export const generateSchema = z.object({
   confirmApprovedImpact: z.boolean().optional(),
 });
 
@@ -290,10 +315,10 @@ export const integrationActionSchema = z.object({
 });
 
 // AI Foundation (docs/V2-AI-FOUNDATION.md). The ANALYZE_INTAKE response
-// shape — validated strictly (req #11), unlike the lenient `.catch()`-based
-// intakeImportDraftSchema above: that draft is a human-reviewed preview
-// before anything is saved, this result is saved directly, so a malformed
-// response must fail loudly rather than silently save partial/wrong data.
+// shape — validated strictly (req #11), same posture as
+// contextExtractionItemSchema above: a malformed response must fail loudly
+// (or, for context extraction, be dropped item-by-item) rather than silently
+// save partial/wrong data.
 // Deliberately has no date/sprint/story-point/capacity field anywhere — the
 // shape itself makes it structurally impossible for a saved AI response to
 // carry a deterministic-calculation value (req #13).
@@ -318,3 +343,135 @@ export const analyzeIntakeResultSchema = z.object({
 });
 
 export type AnalyzeIntakeResult = z.infer<typeof analyzeIntakeResultSchema>;
+
+// ---------- AI Assist (Section 4) — tool-output schemas ----------
+// Shared explainability fields every AI Assist candidate carries, captured
+// at generation time (Section 4 §12: "do not generate explanations later
+// from memory") — never a date/points/capacity/dependency-order field
+// anywhere in this group, matching GLOBAL_PRODUCT_PLANNING_RULES.
+
+const assistExplainFields = {
+  why: z.string().min(1),
+  informationUsed: z.string().min(1),
+  assumptions: z.array(z.string().min(1)).max(10).default([]),
+  sources: z.array(z.string().min(1)).max(10).default([]),
+};
+
+export const roadmapInsightResultSchema = z.object({
+  title: z.string().min(1).max(120),
+  synopsis: z.string().min(1).max(300),
+  impact: z.string().min(1),
+  ...assistExplainFields,
+});
+export type RoadmapInsightResult = z.infer<typeof roadmapInsightResultSchema>;
+
+export const proposeFeatureCandidateSchema = z.object({
+  name: z.string().trim().min(3).max(120),
+  description: z.string().trim().max(2000).optional(),
+  isMvp: z.boolean().optional(),
+  effortSize: effortSizeSchema.optional(),
+  businessValue: businessValueSchema.optional(),
+  riskLevel: riskLevelSchema.optional(),
+  ...assistExplainFields,
+});
+export const proposeFeaturesResultSchema = z.object({
+  candidates: z.array(proposeFeatureCandidateSchema).max(10),
+});
+export type ProposeFeatureCandidate = z.infer<typeof proposeFeatureCandidateSchema>;
+
+const proposedAcSchema = z.object({
+  existingArtifactLayerId: z.string().nullable(),
+  title: z.string().trim().min(1).max(160),
+  body: z.string().trim().min(1),
+});
+const proposedStorySchema = z.object({
+  existingArtifactLayerId: z.string().nullable(),
+  title: z.string().trim().min(1).max(160),
+  body: z.string().trim().min(1),
+  acceptanceCriteria: z.array(proposedAcSchema).max(6).default([]),
+});
+const proposedEpicSchema = z.object({
+  existingArtifactLayerId: z.string().nullable(),
+  title: z.string().trim().min(1).max(160),
+  body: z.string().trim().min(1),
+  stories: z.array(proposedStorySchema).max(10).default([]),
+});
+export const proposeStoryContentResultSchema = z.object({
+  epics: z.array(proposedEpicSchema).max(6),
+  ...assistExplainFields,
+});
+export type ProposeStoryContentResult = z.infer<typeof proposeStoryContentResultSchema>;
+
+export const proposeDependencyCandidateSchema = z.object({
+  fromCapabilityId: z.string().min(1),
+  toCapabilityId: z.string().min(1),
+  ...assistExplainFields,
+});
+export const proposeDependenciesResultSchema = z.object({
+  candidates: z.array(proposeDependencyCandidateSchema).max(10),
+});
+export type ProposeDependencyCandidate = z.infer<typeof proposeDependencyCandidateSchema>;
+
+export const proposeRiskCandidateSchema = z.object({
+  description: z.string().trim().min(3).max(500),
+  severity: riskLevelSchema.default("medium"),
+  ...assistExplainFields,
+});
+export const proposeRisksResultSchema = z.object({
+  candidates: z.array(proposeRiskCandidateSchema).max(10),
+});
+export type ProposeRiskCandidate = z.infer<typeof proposeRiskCandidateSchema>;
+
+// Release/sprint recommendations deliberately have no date/points/capacity
+// field — grouping-only content; the real date/points math stays engine- or
+// user-owned. "Apply" pre-fills the existing manual release/sprint form
+// rather than writing a date itself (src/lib/ai/assist/apply).
+export const recommendReleasesResultSchema = z.object({
+  recommendationType: z.enum(["new_grouping", "adjustment"]),
+  targetReleaseId: z.string().nullable().default(null),
+  suggestedName: z.string().trim().max(120).optional(),
+  suggestedPhaseNumber: z.number().int().min(1).max(3).optional(),
+  groupedCapabilityIds: z.array(z.string()).max(30).default([]),
+  ...assistExplainFields,
+});
+export type RecommendReleasesResult = z.infer<typeof recommendReleasesResultSchema>;
+
+export const recommendSprintsResultSchema = z.object({
+  recommendationType: z.enum(["new_structure", "adjustment"]),
+  targetSprintId: z.string().nullable().default(null),
+  note: z.string().min(1),
+  storyIdsToMove: z.array(z.string()).max(30).default([]),
+  ...assistExplainFields,
+});
+export type RecommendSprintsResult = z.infer<typeof recommendSprintsResultSchema>;
+
+export const recommendStatusResultSchema = z.object({
+  impact: z.string().min(1),
+  ...assistExplainFields,
+});
+export type RecommendStatusResult = z.infer<typeof recommendStatusResultSchema>;
+
+// ---------- AI Assist — API request-body schemas ----------
+
+export const aiAssistApplySchema = z.object({
+  editedContent: z.record(z.string(), z.unknown()).optional(),
+  confirmApprovedImpact: z.boolean().optional(),
+});
+
+export const aiAssistDismissSchema = z.object({
+  reason: z.string().trim().max(500).optional(),
+});
+
+export const aiAssistMarkAppliedSchema = z.object({
+  appliedEntityType: z.enum(["release", "sprint"]),
+  appliedEntityId: z.string().min(1),
+});
+
+export const aiAssistContentTriggerSchema = z.object({
+  featureId: z.string().min(1),
+});
+
+export const aiAssistStatusTriggerSchema = z.object({
+  entityType: z.enum(["project", "initiative"]),
+  entityId: z.string().min(1),
+});

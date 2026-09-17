@@ -148,27 +148,47 @@ export async function recordAiUsage(data: {
   userId: string;
   organizationId: string;
   initiativeId?: string | null;
+  // Section 5 §21 — direct project scoping, and the artifact this event
+  // created or reused, without going through the AiJob indirection.
+  projectId?: string | null;
+  aiAssistItemId?: string | null;
   action: AiActionKey;
   success: boolean;
+  // Section 5 §22 — "generation" (a real Anthropic call happened) vs
+  // "reuse" (the fingerprint reuse gate served an existing artifact, no
+  // call made). Defaults to "generation" so every pre-Section-5 call site
+  // keeps working unchanged.
+  kind?: "generation" | "reuse";
+  model?: string;
   inputTokens?: number;
   outputTokens?: number;
+  cacheCreationInputTokens?: number;
+  cacheReadInputTokens?: number;
   errorMessage?: string;
   aiJobId?: string | null;
   resultSummary?: Record<string, unknown>;
 }): Promise<{ id: string }> {
   const inputTokens = data.inputTokens ?? 0;
   const outputTokens = data.outputTokens ?? 0;
+  const cacheCreationInputTokens = data.cacheCreationInputTokens ?? 0;
+  const cacheReadInputTokens = data.cacheReadInputTokens ?? 0;
   const event = await db.aiUsageEvent.create({
     data: {
       userId: data.userId,
       organizationId: data.organizationId,
       initiativeId: data.initiativeId ?? null,
+      projectId: data.projectId ?? null,
+      aiAssistItemId: data.aiAssistItemId ?? null,
       aiJobId: data.aiJobId ?? null,
       action: data.action,
+      kind: data.kind ?? "generation",
+      model: data.model ?? "",
       success: data.success,
       inputTokens,
       outputTokens,
-      estimatedCostUsd: estimateCostUsd(inputTokens, outputTokens),
+      cacheCreationInputTokens,
+      cacheReadInputTokens,
+      estimatedCostUsd: estimateCostUsd(inputTokens, outputTokens, cacheCreationInputTokens, cacheReadInputTokens),
       errorMessage: data.errorMessage,
     },
     select: { id: true },

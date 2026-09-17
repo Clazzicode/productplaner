@@ -42,12 +42,15 @@ model Organization {
   projects                Project[]
   decisions               Decision[]
   risks                   Risk[]
+  documents               Document[]
+  contextItems            ContextItem[]
   roadmapStatuses         RoadmapStatus[]
   integrationConnections  IntegrationConnection[]
   dashboardConfigurations DashboardConfiguration[]
   aiUsageEvents           AiUsageEvent[]
   aiRequestLocks          AiRequestLock[]
   aiJobs                  AiJob[]
+  aiAssistItems           AiAssistItem[]
   createdAt               DateTime                 @default(now())
 }
 
@@ -100,6 +103,8 @@ model User {
   createdProjects        Project[]
   decisionsDecided       Decision[]
   risksOwned             Risk[]
+  documentsUploaded      Document[]
+  contextItemsApproved   ContextItem[] @relation("ContextItemApprovedBy")
   roadmapStatusesUpdated RoadmapStatus[]
   coachMarkDismissals    CoachMarkDismissal[]
   teamMemberships        TeamMember[]
@@ -108,6 +113,10 @@ model User {
   aiRequestLocks         AiRequestLock[]
   aiJobs                 AiJob[]
   intakeAiAnalyses       IntakeAiAnalysis[]
+  roadmapVersionsApproved RoadmapVersion[]
+  aiAssistItemsGenerated  AiAssistItem[] @relation("AiAssistItemGeneratedBy")
+  aiAssistItemsApplied    AiAssistItem[] @relation("AiAssistItemAppliedBy")
+  aiAssistItemsDismissed  AiAssistItem[] @relation("AiAssistItemDismissedBy")
   createdAt              DateTime             @default(now())
 }
 
@@ -229,9 +238,17 @@ model Project {
   initiatives          Initiative[]
   decisions            Decision[]
   risks                Risk[]
+  documents            Document[]
+  contextItems         ContextItem[]
   aiJobs               AiJob[]
+  aiAssistItems        AiAssistItem[]
+  aiUsageEvents        AiUsageEvent[]
   createdAt            DateTime     @default(now())
   updatedAt            DateTime     @updatedAt
+  // Directive item 12: "recently opened project," distinct from updatedAt
+  // (last edited). Bumped fire-and-forget whenever Project Home loads for an
+  // authorized member — never awaited, never blocks the page.
+  lastOpenedAt         DateTime?
 }
 
 // Net-new — referenced throughout Project Home / initiative workflows but
@@ -272,6 +289,103 @@ model Risk {
   owner          User?        @relation(fields: [ownerUserId], references: [id])
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
+}
+
+// ---------- Document Import & Approved Context (directive §3) ----------
+// UPLOAD -> VALIDATE -> STORE -> EXTRACT -> ANALYZE -> STRUCTURE -> IDENTIFY
+// GAPS -> IDENTIFY CONFLICTS -> USER REVIEW -> APPROVE -> SAVE STRUCTURED
+// CONTEXT. Deliberately two models, not one: Document is the immutable
+// upload + its raw extraction; ContextItem is one reviewable fact/feature/
+// risk proposed from it. Approving a ContextItem CRYSTALLIZES it straight
+// into the real Project/Initiative/Capability/Risk row it represents (see
+// src/lib/context/crystallize.ts) rather than into a second, parallel
+// "structured context" store — future planning code just reads those real
+// models like it already does. ContextItem stays behind as the traceability/
+// history record independent of whatever the live column says later.
+
+// Raw file bytes stored directly in Postgres (Bytes/bytea), not Supabase
+// Storage — no storage bucket/policy system exists anywhere in this app
+// today, files are already capped at 8MB (MAX_IMPORT_FILE_BYTES), and this
+// way the exact same Postgres RLS already covering every other table covers
+// documents too, with no second authorization system to design/test.
+model Document {
+  id                   String        @id @default(cuid())
+  organizationId       String // direct column, not a join — see RLS migration comment
+  organization         Organization  @relation(fields: [organizationId], references: [id])
+  projectId            String // always set, even for an initiative-only doc (its initiative's project)
+  project              Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  initiativeId         String? // null = project_shared; set = initiative_only
+  initiative           Initiative?   @relation(fields: [initiativeId], references: [id], onDelete: Cascade)
+  scope                String // project_shared | initiative_only
+  uploadedByUserId     String
+  uploadedByUser       User          @relation(fields: [uploadedByUserId], references: [id])
+  fileName             String
+  fileExt              String // pdf | docx | pptx
+  fileSizeBytes        Int
+  fileBytes            Bytes
+  status               String        @default("uploaded") // uploaded | extracted | analyzed | failed
+  processingError      String? // user-facing reason when status="failed" — never a silent failure
+  extractedChunksJson  String? // serialized DocumentChunk[] (src/lib/documents/extractChunks.ts), set once extraction succeeds
+  // Explicit "this replaces an earlier upload" link (directive item 24) —
+  // never auto-detected by filename. The old Document row/bytes are never
+  // deleted (directive item 20).
+  supersedesDocumentId String?
+  supersedesDocument   Document?     @relation("DocumentSupersedes", fields: [supersedesDocumentId], references: [id])
+  supersededBy         Document[]    @relation("DocumentSupersedes")
+  contextItems         ContextItem[]
+  createdAt            DateTime      @default(now())
+  updatedAt            DateTime      @updatedAt
+
+  @@index([projectId])
+  @@index([initiativeId])
+}
+
+// One row per reviewable fact/feature/risk an import proposes. Never
+// approved by default (directive item 17) — status starts "extracted" and
+// only reaches "approved" through an explicit user action that also
+// crystallizes it (see model comment above).
+model ContextItem {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  projectId      String
+  project        Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  initiativeId   String? // null = a project-level fact
+  initiative     Initiative?  @relation(fields: [initiativeId], references: [id], onDelete: Cascade)
+  documentId     String // source — every ContextItem originates from an import
+  document       Document     @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  // project_name | description | goal | budget | projected_go_live | team |
+  // constraints | stakeholders | initiative_name | initiative_goal |
+  // success_measure | initiative_target_date | feature | risk | dependency | assumption
+  fieldKey       String
+  kind           String // explicit | interpretation — directive item 10
+  // Serialized proposed value: a plain string for scalar facts, a small
+  // JSON object for feature/risk (name/description/isMvp/effortSize/
+  // businessValue/riskLevel, or description/severity).
+  valueJson         String
+  sourceExcerpt     String // original text snippet supporting this item
+  sourceChunkIndex  Int?
+  sourceHeading     String?
+  sourcePageNumber  Int? // PDF only
+  sourceSlideNumber Int? // PPTX only
+  // extracted | needs_review | approved | rejected | conflict | needs_clarification
+  status                         String        @default("extracted")
+  conflictWithItemId             String? // another pending ContextItem for the same field, disagreeing
+  conflictWithItem               ContextItem?  @relation("ContextItemConflict", fields: [conflictWithItemId], references: [id])
+  conflictedBy                   ContextItem[] @relation("ContextItemConflict")
+  conflictsWithExistingValueText String? // snapshot of the CURRENT approved value it disagreed with, if any
+  // The user's FINAL value — may differ from valueJson if they edited it
+  // before approving (directive item 16) — this is what actually got
+  // crystallized.
+  approvedValueText String?
+  approvedByUserId  String?
+  approvedByUser    User?         @relation("ContextItemApprovedBy", fields: [approvedByUserId], references: [id], onDelete: SetNull)
+  approvedAt        DateTime?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  @@index([projectId, initiativeId, fieldKey])
+  @@index([documentId])
 }
 
 // Coach marks (directive §4 "Experienced"): short, dismissible callouts shown
@@ -377,6 +491,10 @@ model Initiative {
   planningWeightOverrides   PlanningWeightOverride[]
   decisions                 Decision[]
   risks                     Risk[]
+  documents                 Document[]
+  contextItems              ContextItem[]
+  roadmapVersions           RoadmapVersion[]
+  aiAssistItems             AiAssistItem[]
   createdAt                 DateTime                 @default(now())
   updatedAt                 DateTime                 @updatedAt
 
@@ -428,6 +546,8 @@ model Capability {
   dependedOnBy            CapabilityDependency[] @relation("ToCapability")
   artifacts               ArtifactLayer[]
   createdAt               DateTime               @default(now())
+
+  @@index([intakeAnswerSetId])
 }
 
 model CapabilityDependency {
@@ -448,12 +568,56 @@ model Prototype {
   status               String          @default("active")
   approvedBaselineJson String? // FR-13 snapshot, serialized JSON
   approvedAt           DateTime?
+  // Roadmap versioning foundation. computeRoadmapInputsFingerprint() output
+  // captured the moment this prototype was generated (src/lib/generation/
+  // fingerprint.ts) — compared against a fresh recompute by
+  // hasRoadmapDrifted() to show a non-blocking "inputs changed" signal on the
+  // workspace page. Null for any prototype generated before this feature
+  // shipped — treated as "no signal," never a false positive.
+  inputsFingerprintAtGeneration String?
   layers               ArtifactLayer[]
   sprints              Sprint[]
   releases             Release[]
   layerLocks           LayerLock[]
   createdAt            DateTime        @default(now())
   updatedAt            DateTime        @updatedAt
+}
+
+// Roadmap versioning foundation. Append-only archive of past approved
+// roadmap states, deliberately FK'd to the stable Initiative rather than to
+// Prototype — a Prototype row is destroyed and recreated by
+// generatePrototype() on every regenerate (idempotent delete+create), so a
+// version-history row that must survive that churn cannot hang off it.
+// Rows are created eagerly at approval time (recordApprovedRoadmapVersion,
+// called from POST .../approve-plan) so "Roadmap vN — Approved" is visible
+// in history immediately, not only once a later version exists.
+// generatePrototype() also calls ensureApprovedVersionArchived immediately
+// before its delete+recreate as a defensive backfill for approved
+// prototypes that predate this feature or hit the rare crash-between-awaits
+// window — normally a no-op, not a second primary write path. See
+// src/lib/generation/versioning.ts.
+model RoadmapVersion {
+  id           String     @id @default(cuid())
+  initiativeId String
+  initiative   Initiative @relation(fields: [initiativeId], references: [id], onDelete: Cascade)
+  // Explicit and immutable, assigned once at write time — never recomputed
+  // at read time, so a version label a user has already seen can never
+  // shift under them later.
+  versionNumber Int
+  status       String     @default("draft") // draft | approved | superseded
+  snapshotJson String // same {capturedAt, layers, sprints, releases} shape Prototype.approvedBaselineJson uses
+  // computeRoadmapInputsFingerprint() output at the moment this version was
+  // recorded. Null only for versions defensively backfilled by
+  // ensureApprovedVersionArchived's legacy-data path, where the true
+  // at-time-of-approval fingerprint is genuinely unrecoverable.
+  inputsFingerprint String?
+  approvedAt       DateTime?
+  approvedByUserId String?
+  approvedByUser   User?      @relation(fields: [approvedByUserId], references: [id], onDelete: SetNull)
+  createdAt        DateTime   @default(now())
+
+  @@unique([initiativeId, versionNumber])
+  @@index([initiativeId, createdAt])
 }
 
 // One row per strict waterfall layer type. Locking is coarse-grained: the whole
@@ -699,6 +863,15 @@ model AiCapability {
   userMonthlyLimit         Int      @default(50)
   organizationMonthlyLimit Int      @default(500)
   description              String   @default("")
+  // Section 5 — AI Operation Registry metadata (§5/§24). Extends this
+  // already-runtime-configurable per-action config rather than a second,
+  // parallel static registry — same "seeded once, then only DB-edited"
+  // philosophy this model's header comment already documents.
+  maxContextTokens         Int      @default(8000) // input-side budget cap, alongside maxOutputTokens's output-side cap
+  requiredContextLayersJson String  @default("[]") // ContextLayer[] this operation always needs — see src/lib/ai/context/types.ts
+  optionalContextLayersJson String  @default("[]") // ContextLayer[] included when the budget allows, trimmed first under pressure
+  outputType               String   @default("") // free-text label of what this operation produces, for operational/reporting clarity only
+  reusable                 Boolean  @default(true) // whether a saved result may be served again via the fingerprint reuse gate
   createdAt                DateTime @default(now())
   updatedAt                DateTime @updatedAt
 }
@@ -707,29 +880,58 @@ model AiCapability {
 // for the in-flight marker), so usage history and limit-counting queries
 // never need to filter out in-progress rows.
 model AiUsageEvent {
-  id               String       @id @default(cuid())
+  id               String        @id @default(cuid())
   userId           String
-  user             User         @relation(fields: [userId], references: [id])
+  user             User          @relation(fields: [userId], references: [id])
   organizationId   String
-  organization     Organization @relation(fields: [organizationId], references: [id])
+  organization     Organization  @relation(fields: [organizationId], references: [id])
+  // Section 5 §21: direct project scoping — previously only reachable
+  // indirectly via aiJobId -> AiJob.projectId. SetNull (not Cascade, unlike
+  // AiJob.projectId) deliberately: a usage/cost ledger row is a historical
+  // fact that should outlive the project it was about, not disappear with it.
+  projectId        String?
+  project          Project?      @relation(fields: [projectId], references: [id], onDelete: SetNull)
   initiativeId     String?
-  initiative       Initiative?  @relation(fields: [initiativeId], references: [id], onDelete: Cascade)
+  initiative       Initiative?   @relation(fields: [initiativeId], references: [id], onDelete: Cascade)
   aiJobId          String?
-  aiJob            AiJob?       @relation(fields: [aiJobId], references: [id], onDelete: SetNull)
+  aiJob            AiJob?        @relation(fields: [aiJobId], references: [id], onDelete: SetNull)
+  // Section 5 §21: direct link to the artifact this event created or
+  // reused, for "artifact created / artifact reused" tracking without going
+  // through the AiJob indirection (a "reuse" event has no AiJob at all).
+  aiAssistItemId   String?
+  aiAssistItem     AiAssistItem? @relation(fields: [aiAssistItemId], references: [id], onDelete: SetNull)
   action           String // AiActionKey
+  // Section 5 §22: "generation" (a real Anthropic call happened) vs "reuse"
+  // (the fingerprint reuse gate served an existing artifact — inputTokens/
+  // outputTokens/estimatedCostUsd are 0). Distinct from `success`, which is
+  // only meaningful for a real "generation" attempt.
+  kind             String        @default("generation") // generation | reuse
+  // Section 5 §21: the model string actually used for this call. Empty for
+  // "reuse" rows (no call was made) and for events recorded before this
+  // column existed.
+  model            String        @default("")
   success          Boolean
-  inputTokens      Int          @default(0)
-  outputTokens     Int          @default(0)
+  inputTokens      Int           @default(0)
+  outputTokens     Int           @default(0)
+  // Section 5 §20/§21: Anthropic prompt-caching token counts, from the
+  // response's usage.cache_creation_input_tokens/cache_read_input_tokens.
+  cacheCreationInputTokens Int   @default(0)
+  cacheReadInputTokens     Int   @default(0)
   // Computed at record-time from src/lib/ai/pricing.ts's published per-model
   // rates (a technical fact, not an invented business rule — directive §28)
   // — never recomputed retroactively, so a historical event's cost stays
   // accurate even if rates change later.
-  estimatedCostUsd Float        @default(0)
+  estimatedCostUsd Float         @default(0)
   errorMessage     String?
-  createdAt        DateTime     @default(now())
+  createdAt        DateTime      @default(now())
 
   @@index([userId, action, createdAt])
   @@index([organizationId, action, createdAt])
+  // Section 5 §43: the confirmed-missing index for an org-wide, cross-action,
+  // date-range aggregate (getOrganizationAiSpendThisMonthUsd, reporting.ts) —
+  // the existing (organizationId, action, createdAt) index can't efficiently
+  // seek a query with no `action` filter.
+  @@index([organizationId, createdAt])
 }
 
 // Ephemeral duplicate-request guard. scopeKey is the initiativeId for an
@@ -781,9 +983,89 @@ model AiJob {
   completedAt       DateTime?
   errorMessage      String?
   resultSummaryJson String? // serialized JSON — foundation-level completion synopsis data
+  // Section 5 §40: internal-only, lightweight context-audit trail — which
+  // context tiers/record ids/versions were loaded for this job (e.g.
+  // [{"layer":"project","type":"Project","id":"proj_1","version":"..."}]).
+  // Never the tier's actual text content, never the assembled prompt — same
+  // lightweight-reference scale as resultSummaryJson. Never shown to end
+  // users; debugging/traceability only.
+  contextAuditJson  String?
   usageEvents       AiUsageEvent[]
+  aiAssistItems     AiAssistItem[]
 
   @@index([organizationId, actionKey, startedAt])
+}
+
+// ---------- AI Assist (Section 4) ----------
+// Secondary, optional, dismissible AI-sourced proposals/observations that sit
+// beside the authoritative plan (Prototype/ArtifactLayer/Sprint/Release,
+// still produced entirely by src/lib/generation/* — never by this table).
+// One polymorphic table (actionKey is the category discriminator), matching
+// this schema's existing precedent for ArtifactLayer's 6-way tree, rather
+// than 8 near-identical tables — every category shares the same lifecycle
+// shell (scope, fingerprint/reuse, Synopsis/Details explainability fields,
+// Apply/Edit/Dismiss, versioning/supersession). "Apply" always routes
+// through a real mutation path a human could use by hand (crystallizeFeature/
+// crystallizeRisk, setRoadmapStatus, ArtifactLayer title/body update, or an
+// existing manual release/sprint route) — never a bespoke write that bypasses
+// normal validation/locking. See src/lib/ai/assist/*.
+model AiAssistItem {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  projectId      String
+  project        Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  initiativeId   String? // null = project-level only (goal/budget/targetLaunchDate insights)
+  initiative     Initiative?  @relation(fields: [initiativeId], references: [id], onDelete: Cascade)
+
+  actionKey  String // AiActionKey — also the category discriminator (feature_proposal | content_proposal | ...)
+  targetType String // initiative | project | feature | release | sprint | capability_pair
+  targetId   String? // null = whole-scope; else a real row id, or "<fromCapabilityId>:<toCapabilityId>" for a dependency candidate
+  status     String  @default("proposed") // proposed | applied | edited_and_applied | dismissed | stale | superseded
+  version    Int     @default(1)
+
+  supersedesItemId String?
+  supersedes        AiAssistItem?  @relation("AiAssistSupersession", fields: [supersedesItemId], references: [id])
+  supersededBy      AiAssistItem[] @relation("AiAssistSupersession")
+
+  fingerprint       String // hash of the approved-context slice this was generated from
+  aiJobId           String?
+  aiJob             AiJob?   @relation(fields: [aiJobId], references: [id], onDelete: SetNull)
+  aiModelUsed       String
+  generatedByUserId String
+  generatedByUser   User     @relation("AiAssistItemGeneratedBy", fields: [generatedByUserId], references: [id])
+
+  title               String
+  synopsis            String // always-visible Level 1 summary
+  informationUsed     String @default("")
+  why                 String @default("")
+  impact              String @default("") // recommended action / what applying this changes
+  assumptionsJson     String @default("[]") // always shown separately — never silently promoted to fact
+  sourcesJson         String @default("[]")
+  rulesAppliedJson    String @default("[]")
+  proposedContentJson String @default("{}") // category-specific draft payload
+
+  appliedByUserId    String?
+  appliedByUser      User?     @relation("AiAssistItemAppliedBy", fields: [appliedByUserId], references: [id], onDelete: SetNull)
+  appliedAt          DateTime?
+  appliedValueJson   String? // final (possibly user-edited) content actually applied
+  appliedEntityType  String? // capability | artifact_layer | capability_dependency | risk | roadmap_status | release | sprint
+  appliedEntityId    String?
+
+  dismissedByUserId String?
+  dismissedByUser   User?     @relation("AiAssistItemDismissedBy", fields: [dismissedByUserId], references: [id], onDelete: SetNull)
+  dismissedAt       DateTime?
+  dismissReason     String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  usageEvents AiUsageEvent[]
+
+  @@index([initiativeId, actionKey, targetType, targetId, status])
+  @@index([projectId, actionKey, status])
+  @@index([organizationId, actionKey, createdAt])
+  @@index([aiJobId])
 }
 
 // Validated ANALYZE_INTAKE output. Additive-only alongside IntakeAnswerSet/

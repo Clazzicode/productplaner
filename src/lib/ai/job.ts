@@ -47,3 +47,11 @@ export async function failAiJob(jobId: string, errorMessage: string): Promise<vo
     .update({ where: { id: jobId }, data: { status: "failed", completedAt: new Date(), errorMessage } })
     .catch(() => {});
 }
+
+// Section 5 §40 — internal-only, lightweight context-audit trail (record
+// type/id/version references, never the assembled prompt text itself — see
+// src/lib/ai/context/types.ts's ContextAudit, which is exactly what's
+// serialized here unmodified).
+export async function setAiJobContextAudit(jobId: string, audit: Record<string, unknown>): Promise<void> {
+  await db.aiJob.update({ where: { id: jobId }, data: { contextAuditJson: JSON.stringify(audit) } }).catch(() => {});
+}

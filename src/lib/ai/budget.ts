@@ -19,16 +19,34 @@ export function getPlatformAiMonthlyBudgetUsd(): number | null {
   return Number.isFinite(n) && n > 0 ? n : null;
 }
 
-const DEFAULT_ORG_SHARE_OF_PLATFORM_BUDGET = 0.04;
+const DEFAULT_ORG_SHARE_OF_PLATFORM_BUDGET_PERCENT = 4;
 
-/** Organization.aiMonthlyBudgetUsd if explicitly set; otherwise 4% of the
- * platform budget IF one is configured; otherwise null (no $ cap — the
- * existing per-action count limits in usage.ts still apply regardless). */
+/** Section 5 §27 — "this should remain configurable": the 4% default org
+ * share is a planning default, not a hardcoded literal. Reads
+ * PLATFORM_AI_DEFAULT_ORG_SHARE_PERCENT as a 0-100 percent (env, same
+ * operator-level-setting reasoning as getPlatformAiMonthlyBudgetUsd above);
+ * unset/invalid/out-of-range falls back to the documented 4% default. */
+export function resolveDefaultOrgSharePercent(): number {
+  const raw = process.env.PLATFORM_AI_DEFAULT_ORG_SHARE_PERCENT;
+  if (!raw) return DEFAULT_ORG_SHARE_OF_PLATFORM_BUDGET_PERCENT;
+  const n = Number(raw);
+  return Number.isFinite(n) && n >= 0 && n <= 100 ? n : DEFAULT_ORG_SHARE_OF_PLATFORM_BUDGET_PERCENT;
+}
+
+/** Organization.aiMonthlyBudgetUsd if explicitly set; otherwise
+ * resolveDefaultOrgSharePercent()% of the platform budget IF one is
+ * configured; otherwise null (no $ cap — the existing per-action count
+ * limits in usage.ts still apply regardless). Per directive §28: this is a
+ * default allocation and a configurable cap, never a guaranteed percentage
+ * of unlimited platform capacity — with more than a handful of
+ * organizations, they cannot all simultaneously receive this share of one
+ * fixed global budget, and this function makes no attempt to pretend
+ * otherwise. */
 export async function resolveOrganizationAiBudgetUsd(organizationId: string): Promise<number | null> {
   const org = await db.organization.findUnique({ where: { id: organizationId }, select: { aiMonthlyBudgetUsd: true } });
   if (org?.aiMonthlyBudgetUsd != null) return org.aiMonthlyBudgetUsd;
   const platformBudget = getPlatformAiMonthlyBudgetUsd();
-  return platformBudget != null ? platformBudget * DEFAULT_ORG_SHARE_OF_PLATFORM_BUDGET : null;
+  return platformBudget != null ? platformBudget * (resolveDefaultOrgSharePercent() / 100) : null;
 }
 
 export async function getOrganizationAiSpendThisMonthUsd(organizationId: string): Promise<number> {
