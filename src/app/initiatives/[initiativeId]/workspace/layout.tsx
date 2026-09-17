@@ -6,10 +6,12 @@ import PageHeader from "@/components/ui/PageHeader";
 import JiraSyncPanel from "@/components/workspace/JiraSyncPanel";
 import NavTabs from "@/components/workspace/NavTabs";
 import RefreshBar from "@/components/workspace/RefreshBar";
+import RoadmapVersionPanel from "@/components/workspace/RoadmapVersionPanel";
 import WorkspaceBreadcrumb from "@/components/workspace/WorkspaceBreadcrumb";
 import { requireCurrentUser } from "@/lib/auth/session";
 import { requireInitiativeView } from "@/lib/access/guards";
 import { db, establishAuthContext } from "@/lib/db";
+import { hasRoadmapDrifted } from "@/lib/generation/fingerprint";
 import { profileFor, resolveMethodology } from "@/lib/generation/methodology";
 import { loadWorkspace } from "@/lib/workspace";
 
@@ -40,9 +42,10 @@ export default async function WorkspaceLayout({
   }
   const methodology = resolveMethodology(ws.initiative.methodology);
   const profile = profileFor(ws.initiative.methodology);
-  const [manualReleaseCount, manualSprintCount] = await Promise.all([
+  const [manualReleaseCount, manualSprintCount, drifted] = await Promise.all([
     db.release.count({ where: { prototypeId: ws.prototype.id, origin: "manual" } }),
     db.sprint.count({ where: { prototypeId: ws.prototype.id, origin: "manual" } }),
+    hasRoadmapDrifted(initiativeId),
   ]);
 
   return (
@@ -70,14 +73,26 @@ export default async function WorkspaceLayout({
                     Baseline approved {new Date(ws.prototype.approvedAt).toLocaleDateString()}
                   </Badge>
                 )}
+                {drifted && (
+                  <Badge
+                    variant="amber"
+                    className="ml-2"
+                    title="Approved inputs (features, priorities, dependencies, dates, or budget) changed since this roadmap was generated."
+                  >
+                    Inputs changed since generated
+                  </Badge>
+                )}
               </>
             }
             primaryAction={
-              <JiraSyncPanel
-                initiativeId={initiativeId}
-                status={ws.jira?.status ?? "not_connected"}
-                lastSyncedAt={ws.jira?.lastSyncedAt?.toISOString() ?? null}
-              />
+              <div className="flex items-center gap-2">
+                <RoadmapVersionPanel initiativeId={initiativeId} />
+                <JiraSyncPanel
+                  initiativeId={initiativeId}
+                  status={ws.jira?.status ?? "not_connected"}
+                  lastSyncedAt={ws.jira?.lastSyncedAt?.toISOString() ?? null}
+                />
+              </div>
             }
           />
         </div>

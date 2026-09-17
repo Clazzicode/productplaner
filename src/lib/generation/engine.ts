@@ -11,8 +11,10 @@ import {
   type NarrativeContext,
 } from "./decompose";
 import { computeEffectiveCapacity } from "./cost";
+import { computeRoadmapInputsFingerprint } from "./fingerprint";
 import { METHODOLOGY_PROFILES, resolveMethodology } from "./methodology";
 import { validateIntake } from "./validateIntake";
+import { ensureApprovedVersionArchived } from "./versioning";
 import {
   LAYER_SEQUENCE,
   type CapabilityInput,
@@ -306,9 +308,10 @@ function addFeatureTree(
 // ---------- full generation (FR-08/FR-09) ----------
 
 export async function generatePrototype(initiativeId: string): Promise<{ prototypeId: string }> {
-  const [intake, initiativeRow] = await Promise.all([
+  const [intake, initiativeRow, inputsFingerprintAtGeneration] = await Promise.all([
     loadIntakeInput(initiativeId),
     db.initiative.findUniqueOrThrow({ where: { id: initiativeId }, select: { methodology: true } }),
+    computeRoadmapInputsFingerprint(initiativeId),
   ]);
   const methodology = resolveMethodology(initiativeRow.methodology);
   const validation = validateIntake(intake);
@@ -319,9 +322,30 @@ export async function generatePrototype(initiativeId: string): Promise<{ prototy
 
   const prototypeId = await withTransaction(
     async (tx) => {
+      // Roadmap versioning foundation: an approved prototype's content is
+      // about to be destroyed by the deleteMany below — preserve it as
+      // history first. Normally a no-op (POST .../approve-plan already
+      // recorded this version eagerly at approval time via
+      // recordApprovedRoadmapVersion); this only self-heals a pre-existing
+      // approved prototype that predates this feature, or a rare crash
+      // between that route's two awaited calls. Reaching this point with an
+      // approved existing prototype always means the caller already passed
+      // recalculatePlan's ApprovedBaselineImpactError guard (confirmApprovedImpact:
+      // true) — generatePrototype itself doesn't need its own confirm flag.
+      const existing = await tx.prototype.findUnique({
+        where: { initiativeId },
+        select: { approvedAt: true, approvedBaselineJson: true },
+      });
+      if (existing?.approvedAt && existing.approvedBaselineJson) {
+        await ensureApprovedVersionArchived(tx, {
+          initiativeId,
+          approvedBaselineJson: existing.approvedBaselineJson,
+          approvedAt: existing.approvedAt,
+        });
+      }
       // Idempotent: regenerating from intake replaces any prior prototype.
       await tx.prototype.deleteMany({ where: { initiativeId } });
-      const proto = await tx.prototype.create({ data: { initiativeId } });
+      const proto = await tx.prototype.create({ data: { initiativeId, inputsFingerprintAtGeneration } });
 
       await tx.layerLock.createMany({
         data: LAYER_SEQUENCE.map((layerType, i) => ({

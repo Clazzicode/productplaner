@@ -4,6 +4,7 @@ import { jsonError } from "@/lib/api";
 import { requireCurrentUserApi } from "@/lib/auth/session";
 import { db, establishAuthContext } from "@/lib/db";
 import { snapshotApprovedBaseline } from "@/lib/generation/locking";
+import { recordApprovedRoadmapVersion } from "@/lib/generation/versioning";
 
 // Versioning foundation (directive §17/§25). The full FR-11/12/13 per-layer
 // lock ceremony stays disabled platform-wide (a deliberate product decision —
@@ -24,5 +25,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   if (!prototype) return jsonError("Generate a plan before approving it.", 404);
 
   await snapshotApprovedBaseline(prototype.id);
-  return NextResponse.json({ ok: true });
+  const { versionNumber } = await recordApprovedRoadmapVersion({
+    initiativeId: id,
+    prototypeId: prototype.id,
+    approvedByUserId: authGuard.user.id,
+  });
+  return NextResponse.json({ ok: true, versionNumber });
 }

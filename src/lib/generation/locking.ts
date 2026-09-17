@@ -1,6 +1,7 @@
 import { db } from "@/lib/db";
 import { regenerateBelow, type RegenStats } from "./engine";
 import { METHODOLOGY_PROFILES, resolveMethodology } from "./methodology";
+import { buildLiveSnapshot } from "./versioning";
 import {
   LAYER_FOR_ARTIFACT,
   LAYER_LABELS,
@@ -113,34 +114,11 @@ export async function assertArtifactEditable(
 
 /** FR-13: the approved prototype state, stored as the plan-health baseline. */
 export async function snapshotApprovedBaseline(prototypeId: string): Promise<void> {
-  const [layers, sprints, releases] = await Promise.all([
-    db.artifactLayer.findMany({
-      where: { prototypeId },
-      orderBy: [{ type: "asc" }, { order: "asc" }],
-      select: {
-        id: true,
-        type: true,
-        parentId: true,
-        order: true,
-        title: true,
-        body: true,
-        points: true,
-        sprintId: true,
-        sourceCapabilityId: true,
-      },
-    }),
-    db.sprint.findMany({ where: { prototypeId }, orderBy: { sprintNumber: "asc" } }),
-    db.release.findMany({ where: { prototypeId }, orderBy: { order: "asc" } }),
-  ]);
+  const snapshot = await buildLiveSnapshot(db, prototypeId);
   await db.prototype.update({
     where: { id: prototypeId },
     data: {
-      approvedBaselineJson: JSON.stringify({
-        capturedAt: new Date().toISOString(),
-        layers,
-        sprints,
-        releases,
-      }),
+      approvedBaselineJson: JSON.stringify(snapshot),
       approvedAt: new Date(),
     },
   });
