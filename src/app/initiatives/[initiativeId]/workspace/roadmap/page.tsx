@@ -10,6 +10,7 @@ import RoadmapViewSwitcher from "@/components/workspace/RoadmapViewSwitcher";
 import TraceBadge from "@/components/workspace/TraceBadge";
 import CoachMark from "@/components/coachmarks/CoachMark";
 import TimelineRoadmap from "@/components/workspace/timeline/TimelineRoadmap";
+import AiAssistPanel from "@/components/ai/AiAssistPanel";
 import { requireCurrentUser } from "@/lib/auth/session";
 import { db, establishAuthContext } from "@/lib/db";
 import { PHASE_NAMES } from "@/lib/generation/constants";
@@ -215,6 +216,11 @@ export default async function RoadmapPage({
       <CoachMark coachMarkKey="roadmap" className="mb-4" />
       <RoadmapViewSwitcher timeline={timelineView} milestones={milestonesView} connections={connectionsView} />
       <RoadmapLegacyViews list={listView} board={boardView} />
+
+      {/* Secondary to the roadmap above, never the main output (Section 4). */}
+      <div className="mt-8 max-w-xl">
+        <AiAssistPanel initiativeId={initiativeId} scope="roadmap" />
+      </div>
     </RoadmapToolbar>
   );
 }

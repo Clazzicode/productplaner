@@ -19,6 +19,8 @@ export default function AiExplainBadge(props: {
   assumptions?: string[];
   sources: string[];
   rulesApplied?: string[];
+  /** Section 4 — what applying this recommendation would actually change. */
+  impact?: string;
 }) {
   const [open, setOpen] = useState(false);
   const assumptions = props.assumptions ?? [];
@@ -81,6 +83,13 @@ export default function AiExplainBadge(props: {
                   </span>
                 ))}
               </span>
+            </span>
+          )}
+
+          {props.impact && (
+            <span className="mt-3 block border-t border-neutral-100 pt-3">
+              <span className="block text-xs font-semibold uppercase tracking-wide text-violet-600">Impact</span>
+              <span className="mt-1 block text-sm text-neutral-700">{props.impact}</span>
             </span>
           )}
         </span>

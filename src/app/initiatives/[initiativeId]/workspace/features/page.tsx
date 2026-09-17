@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Badge, riskBadgeVariant } from "@/components/ui/Badge";
 import CoachMark from "@/components/coachmarks/CoachMark";
+import AiAssistPanel from "@/components/ai/AiAssistPanel";
 import EditableArtifact from "@/components/workspace/EditableArtifact";
 import ExplainBadge from "@/components/workspace/ExplainBadge";
 import TraceBadge from "@/components/workspace/TraceBadge";
@@ -130,6 +131,11 @@ export default async function FeaturesPage({
             </div>
           </section>
         ))}
+      </div>
+
+      {/* Secondary to the feature hierarchy above (Section 4). */}
+      <div className="mt-8 max-w-xl">
+        <AiAssistPanel initiativeId={initiativeId} scope="features" />
       </div>
     </div>
   );

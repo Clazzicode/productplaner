@@ -1,6 +1,7 @@
 import { format } from "date-fns";
 import { notFound } from "next/navigation";
 import CoachMark from "@/components/coachmarks/CoachMark";
+import AiAssistPanel from "@/components/ai/AiAssistPanel";
 import CreateReleaseForm from "@/components/workspace/CreateReleaseForm";
 import CreateSprintForm from "@/components/workspace/CreateSprintForm";
 import SprintMoveSelect from "@/components/workspace/SprintMoveSelect";
@@ -355,6 +356,11 @@ export default async function SprintsPage({
           })}
         </div>
       )}
+
+      {/* Secondary to the sprint plan above (Section 4). */}
+      <div className="mt-8 max-w-xl">
+        <AiAssistPanel initiativeId={initiativeId} scope="sprints" />
+      </div>
     </div>
   );
 }
