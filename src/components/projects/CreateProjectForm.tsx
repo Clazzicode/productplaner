@@ -3,10 +3,20 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { apiFetch } from "@/lib/clientApi";
-import { ButtonLoader } from "@/components/ui/loading";
+import { ButtonLoader, GenerationProgress } from "@/components/ui/loading";
 
 const FIELD_CLASS =
   "rounded-lg border border-neutral-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none";
+
+// Directive item 10: a meaningful checklist, not a generic spinner — but
+// honest about it. Project creation is genuinely one network request today
+// (no separate backend "permissions" phase exists to report on — org
+// membership/permissions already exist from signup), so this is two real
+// steps, not padded to match a longer illustrative example.
+// GenerationProgress's own contract (src/components/ui/loading/GenerationProgress.tsx)
+// is explicit: every step shown as done must have really happened, never a
+// timer — `step` only ever advances from a real await boundary below.
+const PROJECT_CREATION_STEPS = ["Creating your project", "Opening your project home"];
 
 /**
  * A brand-new Project starts a clean context (directive §6) — nothing here
@@ -23,11 +33,13 @@ export default function CreateProjectForm() {
   const [targetLaunchDate, setTargetLaunchDate] = useState("");
   const [planningApproach, setPlanningApproach] = useState("");
   const [busy, setBusy] = useState(false);
+  const [step, setStep] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setBusy(true);
+    setStep(0);
     setError(null);
     const res = await apiFetch<{ projectId: string }>("/api/projects", {
       method: "POST",
@@ -46,9 +58,18 @@ export default function CreateProjectForm() {
       setError(res.error ?? "Could not create the project.");
       return;
     }
+    // Deliberately not resetting `busy` on the success path — it stays true
+    // (showing step 1) through the real interval until the route change
+    // unmounts this component, matching SimplifiedIntakeWizard.tsx's own
+    // precedent for the same GenerationProgress component.
+    setStep(1);
     router.push(`/projects/${res.data.projectId}`);
     router.refresh();
   };
+
+  if (busy) {
+    return <GenerationProgress title="Creating your project" steps={PROJECT_CREATION_STEPS} currentStep={step} />;
+  }
 
   return (
     <form onSubmit={submit} className="rounded-3xl border border-neutral-200 bg-white p-8 shadow-md">
@@ -122,8 +143,7 @@ export default function CreateProjectForm() {
       <div className="mt-6 flex justify-end">
         <ButtonLoader
           type="submit"
-          loading={busy}
-          loadingLabel="Creating"
+          loading={false}
           disabled={name.trim().length < 3}
           className="px-6 py-3"
         >

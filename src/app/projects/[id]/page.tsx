@@ -5,6 +5,7 @@ import { Badge, type BadgeVariant } from "@/components/ui/Badge";
 import Breadcrumb from "@/components/ui/Breadcrumb";
 import { ContainedLayout } from "@/components/layout/PageLayouts";
 import DecisionsPanel from "@/components/projects/DecisionsPanel";
+import DocumentsPanel from "@/components/projects/DocumentsPanel";
 import RisksPanel from "@/components/projects/RisksPanel";
 import StatusBadge from "@/components/roadmapStatus/StatusBadge";
 import { requireCurrentUser } from "@/lib/auth/session";
@@ -22,16 +23,19 @@ const STATUS_META: Record<string, { label: string; variant: BadgeVariant }> = {
 /**
  * Project Home (directive §7) — the working container for related
  * initiatives. Shows the shared context entered once and reused by every
- * initiative beneath it (directive §9), plus decisions and risks tracked at
- * the Project level. Documents/research sections are intentionally omitted —
- * those are Phase 4/7 foundations, not built yet; showing an always-empty
- * section for them would add nothing.
+ * initiative beneath it (directive §9), plus decisions, risks, and
+ * documents tracked at the Project level. Research/recent-activity remain
+ * out of scope for this pass.
  */
 export default async function ProjectHomePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const user = await requireCurrentUser();
   establishAuthContext(user.authUserId);
   await requireProjectPageAccess(user, id);
+
+  // Directive item 12: "recently opened project" — fire-and-forget, never
+  // awaited, never blocks the page render.
+  void db.project.update({ where: { id }, data: { lastOpenedAt: new Date() } }).catch(() => {});
 
   const project = await db.project.findUnique({
     where: { id },
@@ -125,7 +129,7 @@ export default async function ProjectHomePage({ params }: { params: Promise<{ id
         )}
       </div>
 
-      <div className="mt-8 grid gap-4 sm:grid-cols-2">
+      <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <DecisionsPanel
           projectId={project.id}
           decisions={project.decisions.map((d) => ({
@@ -139,6 +143,7 @@ export default async function ProjectHomePage({ params }: { params: Promise<{ id
           projectId={project.id}
           risks={project.risks.map((r) => ({ id: r.id, description: r.description, severity: r.severity, status: r.status }))}
         />
+        <DocumentsPanel projectId={project.id} experienceLevel={user.profiles[0]?.experienceLevel} />
       </div>
     </ContainedLayout>
   );

@@ -1,5 +1,11 @@
 import type { WorkingRole } from "./types";
 
+/** The three primary roles offered during onboarding and in Settings
+ * (directive item 7: "Do not add Developer as a primary role") — same
+ * values/order WorkingRoleSelector.tsx already hardcodes locally, shared
+ * here so Settings doesn't need a third duplicate of this list. */
+export const WORKING_ROLE_ORDER: WorkingRole[] = ["product_management", "product_owner", "project_manager"];
+
 /** Single source of truth for Working Role display copy — previously
  * duplicated verbatim across WorkingRoleSelector, ProductDirectionBootstrap,
  * and WelcomeQualifying. Stored values are unchanged; only `product_management`'s

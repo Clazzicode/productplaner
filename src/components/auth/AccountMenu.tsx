@@ -21,10 +21,10 @@ import { useCoachMarks } from "@/components/coachmarks/CoachMarkProvider";
  *
  * "Account Settings" (formerly the per-user Anthropic API key page) was
  * removed when bring-your-own-key was retired — all AI calls now route
- * through the shared platform gateway (src/lib/ai/client.ts), so there is
- * no personal AI setting left to manage. Re-add an entry here if a real
- * personal setting is introduced later; an empty settings page is worse
- * than no link.
+ * through the shared platform gateway (src/lib/ai/client.ts), so there was
+ * no personal AI setting left to manage. Re-added below (directive item 3)
+ * now that there's a real personal setting again: experience level and
+ * working role, both changeable after onboarding at /account/settings.
  */
 // `dropUp`: MobileNavDrawer's bottomContent instance sits at the very bottom
 // of the drawer's own overflow-hidden panel — opening downward (the desktop
@@ -89,6 +89,9 @@ export default function AccountMenu(props: { userName: string; accessLevel: stri
             props.dropUp ? "bottom-full mb-2" : "top-full mt-2"
           }`}
         >
+          <Link href="/account/settings" role="menuitem" className={itemClass} onClick={() => setOpen(false)}>
+            Settings
+          </Link>
           <Link href="/organizations" role="menuitem" className={itemClass} onClick={() => setOpen(false)}>
             Switch Organization
           </Link>

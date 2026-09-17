@@ -3,7 +3,7 @@ import { jsonError, zodMessage } from "@/lib/api";
 import { requireCurrentUserApi } from "@/lib/auth/session";
 import { db, establishAuthContext } from "@/lib/db";
 import { clearOnboardingStateServer } from "@/lib/onboarding/tempStateServer";
-import { qualifyingSchema } from "@/lib/validation/schemas";
+import { qualifyingExperienceLevelPatchSchema, qualifyingSchema } from "@/lib/validation/schemas";
 
 export async function POST(request: Request) {
   const parsed = qualifyingSchema.safeParse(await request.json());
@@ -44,4 +44,25 @@ export async function POST(request: Request) {
   // answered.
   await clearOnboardingStateServer();
   return NextResponse.json({ profileId: profile.id });
+}
+
+/** Directive item 3: "Allow it to be changed later in Settings" — updates the
+ * user's existing profile row rather than creating a second one. */
+export async function PATCH(request: Request) {
+  const parsed = qualifyingExperienceLevelPatchSchema.safeParse(await request.json());
+  if (!parsed.success) return jsonError(zodMessage(parsed.error), 422);
+
+  const authGuard = await requireCurrentUserApi();
+  if (!authGuard.ok) return authGuard.response;
+  const user = authGuard.user;
+  establishAuthContext(user.authUserId);
+
+  const profile = user.profiles[0];
+  if (!profile) return jsonError("Finish onboarding before changing this.", 409);
+
+  await db.qualifyingProfile.update({
+    where: { id: profile.id },
+    data: { experienceLevel: parsed.data.experienceLevel },
+  });
+  return NextResponse.json({ ok: true });
 }

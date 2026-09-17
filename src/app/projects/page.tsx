@@ -96,6 +96,9 @@ export default async function ProjectsPage() {
                   {project.targetLaunchDate && (
                     <span>Target: {project.targetLaunchDate.toLocaleDateString()}</span>
                   )}
+                  {project.lastOpenedAt && (
+                    <span>Last opened: {project.lastOpenedAt.toLocaleDateString()}</span>
+                  )}
                 </div>
               </Link>
             </li>

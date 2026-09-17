@@ -54,6 +54,11 @@ export default async function RootLayout({
   // tier; everyone else only sees them via "Replay Product Tour".
   const experienceLevel = user?.profiles[0]?.experienceLevel;
   const autoActive = experienceLevel === "experienced" || experienceLevel === "expert";
+  // Directive item 6 (guided tour): the three initiative-scoped coach marks
+  // (roadmap/planning_workspace/sprints_releases) need one real initiative to
+  // route to — reuse the initiative list already loaded above rather than a
+  // second query.
+  const generatedInitiativeId = initiatives.find((i) => i.status === "generated")?.id ?? null;
 
   return (
     <html
@@ -61,7 +66,11 @@ export default async function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
-        <CoachMarkProvider signedIn={user != null} autoActive={autoActive}>
+        <CoachMarkProvider
+          signedIn={user != null}
+          autoActive={autoActive}
+          generatedInitiativeId={generatedInitiativeId}
+        >
           <AppShell
             hasProfile={(user?.profiles.length ?? 0) > 0}
             userName={user?.name ?? ""}

@@ -14,12 +14,14 @@ const ROLE_ORDER: WorkingRole[] = ["product_management", "product_owner", "proje
 /**
  * Guided-activation restructure (reference doc §2/§13): Role/Working Context
  * is now the third onboarding step, right after Experience Calibration —
- * previously second, straight after Workspace Setup. Continuing here moves
- * into the merged adaptive-questions/initiative-creation step (decision #1),
- * not back to /welcome. Expanded from 3 to the reference doc's full 6-option
- * list (§13) — see roleOptions.ts for the added Business Analyst /
- * Founder-Business Lead / Other entries; none of them reject the user the
- * way WelcomeQualifying's old "Something else" branch used to.
+ * previously second, straight after Workspace Setup. Continuing here is the
+ * last onboarding step, so it routes to Projects Home (directive §5/§37) —
+ * not back to /welcome, and not straight into initiative creation (Projects
+ * Home's own empty state is what prompts the user to create a first Project
+ * next). Expanded from 3 to the reference doc's full 6-option list (§13) —
+ * see roleOptions.ts for the added Business Analyst / Founder-Business Lead /
+ * Other entries; none of them reject the user the way WelcomeQualifying's
+ * old "Something else" branch used to.
  */
 export default function WorkingRoleSelector() {
   const router = useRouter();
@@ -43,7 +45,7 @@ export default function WorkingRoleSelector() {
     // (not fire-and-forget) so the next page's resolveWorkingRole() call sees
     // the persisted value immediately rather than racing the write.
     await apiFetch("/api/account/working-role", { method: "PATCH", body: { workingRole: selected } });
-    router.push("/initiatives/new");
+    router.push("/projects");
   };
 
   return (
