@@ -25,7 +25,7 @@ The production-foundation milestone is implemented in the `v2-redesign` working 
 
 | Check | Result |
 | --- | --- |
-| Full unit/integration test suite | 65 files, 538 tests passed |
+| Full suite against the connected Supabase database | 66 files, 545 tests passed |
 | Focused authentication/authorization/RLS suite | 8 files, 75 tests passed |
 | TypeScript | Passed |
 | ESLint with zero warnings | Passed |
@@ -42,8 +42,18 @@ The migrations were replayed in disposable PGlite, applied to the connected `pro
 
 Next.js and related build dependencies were upgraded to patched releases. The remaining audit findings are confined to the Prisma CLI build-time dependency chain. The runtime application does not import that tooling. Details and the upgrade boundary are recorded in `docs/DEPENDENCY-REMEDIATION.md`.
 
-## Deployment gate
+## Deployment status
 
-Before production rollout, verify `/api/ready` on the deployed application, exercise backup restore, and configure edge rate limits and alerts using `docs/OPERATIONAL-READINESS.md`.
+Commit `5aab3e9` is pushed to `v2-redesign`; its Vercel preview reached `READY`, and the pull-request CI job passed every step. The preview is protected by Vercel Authentication, so an unauthenticated external probe could not verify `/api/ready`.
+
+## Remaining production risks
+
+- Configure durable edge/API-gateway rate limits for authentication, document analysis and AI-generation endpoints.
+- Enable Supabase Auth leaked-password protection; the current security advisor still reports it disabled.
+- Exercise and record a database restore, then set the backup/PITR retention policy.
+- Connect structured logs to monitoring and alerting, and verify the readiness endpoint from an authenticated deployment check.
+- Define data retention/deletion and incident/disaster-recovery procedures.
+- Establish separate staging and production Supabase/Vercel environments before production traffic.
+- Introduce a centrally managed feature-flag service when user-visible rollouts begin. The existing environment flag only contains demo integrations.
 
 The next product milestone can be Jira Export MVP after that staging gate passes. The current code deliberately contains Jira as a local demo path only.

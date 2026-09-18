@@ -9,7 +9,7 @@
 
 ## Required before production traffic
 
-- Apply and verify the four new migrations in a staging Supabase branch before production. Confirm the runtime `DATABASE_URL` connects as `app_rw`; readiness deliberately fails for `postgres`, `service_role`, or another RLS-bypassing role.
+- All five production-foundation migrations are applied to the connected `productplaner` Supabase project and the live isolation suite passes. Before production traffic, establish a separate staging environment and confirm its runtime `DATABASE_URL` connects as `app_rw`; readiness deliberately fails for `postgres`, `service_role`, or another RLS-bypassing role.
 - Put rate limiting at the edge/API gateway with a durable shared counter. Cover sign-in, sign-up, document analysis and AI generation first. A process-memory limiter is unsuitable for horizontally scaled/serverless deployment.
 - Enable managed point-in-time recovery or daily encrypted backups. Define retention, run a restore into an isolated environment at least quarterly, and record recovery time/data-loss results.
 - Store secrets only in the deployment secret manager; rotate Supabase service credentials and AI provider credentials on a schedule and after staff/access changes.
