@@ -1,15 +1,28 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
+import { ContainedLayout } from "@/components/layout/PageLayouts";
+import { Badge } from "@/components/ui/Badge";
+import PageHeader from "@/components/ui/PageHeader";
 import JiraSyncPanel from "@/components/workspace/JiraSyncPanel";
-import LockBar from "@/components/workspace/LockBar";
 import NavTabs from "@/components/workspace/NavTabs";
 import RefreshBar from "@/components/workspace/RefreshBar";
-import { db } from "@/lib/db";
+import RoadmapVersionPanel from "@/components/workspace/RoadmapVersionPanel";
+import WorkspaceBreadcrumb from "@/components/workspace/WorkspaceBreadcrumb";
+import { requireCurrentUser } from "@/lib/auth/session";
+import { requireInitiativeView } from "@/lib/access/guards";
+import { db, establishAuthContext } from "@/lib/db";
+import { hasRoadmapDrifted } from "@/lib/generation/fingerprint";
 import { profileFor, resolveMethodology } from "@/lib/generation/methodology";
-import { artifactCounts, loadWorkspace } from "@/lib/workspace";
+import { loadWorkspace } from "@/lib/workspace";
 
 export const dynamic = "force-dynamic";
 
+/**
+ * Covers every workspace sub-page (roadmap/features/epics/sprints/capacity/
+ * executive/stories) with one View check, since they all render inside this
+ * shared layout — the minimum coverage docs/V2-RESOURCE-ACCESS.md §12 calls
+ * for without touching each page individually.
+ */
 export default async function WorkspaceLayout({
   children,
   params,
@@ -18,69 +31,85 @@ export default async function WorkspaceLayout({
   params: Promise<{ initiativeId: string }>;
 }) {
   const { initiativeId } = await params;
+  const user = await requireCurrentUser();
+  establishAuthContext(user.authUserId);
+  await requireInitiativeView(user, initiativeId);
   const ws = await loadWorkspace(initiativeId);
   if (!ws) {
     const initiative = await db.initiative.findUnique({ where: { id: initiativeId } });
     if (!initiative) notFound();
     redirect(`/initiatives/${initiativeId}/intake`);
   }
-  const counts = await artifactCounts(ws.prototype.id);
   const methodology = resolveMethodology(ws.initiative.methodology);
   const profile = profileFor(ws.initiative.methodology);
+  const [manualReleaseCount, manualSprintCount, drifted] = await Promise.all([
+    db.release.count({ where: { prototypeId: ws.prototype.id, origin: "manual" } }),
+    db.sprint.count({ where: { prototypeId: ws.prototype.id, origin: "manual" } }),
+    hasRoadmapDrifted(initiativeId),
+  ]);
 
   return (
-    <div className="mx-auto min-h-screen max-w-6xl px-6 py-8">
+    <ContainedLayout>
       <header className="no-print">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <Link href="/home" className="text-sm text-neutral-500 hover:text-neutral-800">
-              ← Initiatives
-            </Link>
-            <h1 className="mt-1 text-2xl font-bold">{ws.initiative.name}</h1>
-            <p className="mt-0.5 text-sm text-neutral-500">
-              Working prototype · {profile.label} ·{" "}
-              <Link
-                href={`/initiatives/${initiativeId}/intake`}
-                className="text-indigo-600 hover:underline"
-              >
-                view intake answers
-              </Link>
-              {ws.prototype.approvedAt && (
-                <span className="ml-2 rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-800">
-                  Baseline approved {new Date(ws.prototype.approvedAt).toLocaleDateString()}
-                </span>
-              )}
-            </p>
-          </div>
-          <JiraSyncPanel
-            initiativeId={initiativeId}
-            status={ws.jira?.status ?? "not_connected"}
-            lastSyncedAt={ws.jira?.lastSyncedAt?.toISOString() ?? null}
+        <WorkspaceBreadcrumb
+          initiativeId={initiativeId}
+          initiativeName={ws.initiative.name}
+          methodology={ws.initiative.methodology}
+        />
+        <div className="mt-2">
+          <PageHeader
+            title={ws.initiative.name}
+            description={
+              <>
+                Working prototype · {profile.label} ·{" "}
+                <Link
+                  href={`/initiatives/${initiativeId}/intake`}
+                  className="text-indigo-600 hover:underline"
+                >
+                  view intake answers
+                </Link>
+                {ws.prototype.approvedAt && (
+                  <Badge variant="emerald" className="ml-2">
+                    Baseline approved {new Date(ws.prototype.approvedAt).toLocaleDateString()}
+                  </Badge>
+                )}
+                {drifted && (
+                  <Badge
+                    variant="amber"
+                    className="ml-2"
+                    title="Approved inputs (features, priorities, dependencies, dates, or budget) changed since this roadmap was generated."
+                  >
+                    Inputs changed since generated
+                  </Badge>
+                )}
+              </>
+            }
+            primaryAction={
+              <div className="flex items-center gap-2">
+                <RoadmapVersionPanel initiativeId={initiativeId} />
+                <JiraSyncPanel
+                  initiativeId={initiativeId}
+                  status={ws.jira?.status ?? "not_connected"}
+                  lastSyncedAt={ws.jira?.lastSyncedAt?.toISOString() ?? null}
+                />
+              </div>
+            }
           />
         </div>
-        <div className="mt-5">
-          <LockBar
-            initiativeId={initiativeId}
-            locks={ws.locks.map((l) => ({
-              layerType: l.layerType,
-              state: l.state,
-              everLocked: l.everLocked,
-            }))}
-            counts={counts}
-            methodology={methodology}
-          />
+        <div className="mt-4">
           <RefreshBar
             initiativeId={initiativeId}
-            locks={ws.locks.map((l) => ({ layerType: l.layerType, state: l.state }))}
+            manualReleaseCount={manualReleaseCount}
+            manualSprintCount={manualSprintCount}
           />
         </div>
-        <div className="mt-5">
+        <div className="mt-4">
           <NavTabs initiativeId={initiativeId} methodology={methodology} />
         </div>
       </header>
-      <main className="rounded-b-2xl rounded-tr-2xl border border-t-0 border-neutral-200 bg-white p-6 shadow-sm print:border-0 print:shadow-none">
+      <main className="mt-4 rounded-xl border border-border-subtle bg-white p-6 shadow-[0_8px_28px_rgba(46,71,125,0.06)] print:border-0 print:shadow-none">
         {children}
       </main>
-    </div>
+    </ContainedLayout>
   );
 }

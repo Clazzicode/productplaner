@@ -1,6 +1,8 @@
-import { db } from "@/lib/db";
+import { currentAuthUserId, db, withTransaction } from "@/lib/db";
+import { auditInitiative } from "@/lib/audit";
 import { regenerateBelow, type RegenStats } from "./engine";
 import { METHODOLOGY_PROFILES, resolveMethodology } from "./methodology";
+import { buildLiveSnapshot, recordApprovedRoadmapVersion } from "./versioning";
 import {
   LAYER_FOR_ARTIFACT,
   LAYER_LABELS,
@@ -48,6 +50,11 @@ export async function lockLayer(
   prototypeId: string,
   layerType: LayerType,
 ): Promise<{ regenerated: RegenStats | null }> {
+  return withTransaction(() => lockLayerInternal(prototypeId, layerType), { timeout: 120_000 });
+}
+
+async function lockLayerInternal(prototypeId: string, layerType: LayerType): Promise<{ regenerated: RegenStats | null }> {
+  const actor = await requireLockAuthority(prototypeId);
   const [locks, prototype] = await Promise.all([
     db.layerLock.findMany({ where: { prototypeId } }),
     db.prototype.findUniqueOrThrow({
@@ -77,7 +84,10 @@ export async function lockLayer(
 
   if (layerType === "acceptance_criteria") {
     await snapshotApprovedBaseline(prototypeId);
+    await recordApprovedRoadmapVersion({ initiativeId: prototype.initiativeId, prototypeId, approvedByUserId: actor.id });
   }
+
+  await auditInitiative(prototype.initiativeId, "plan.locked", { layerType });
 
   return { regenerated };
 }
@@ -87,12 +97,27 @@ export async function lockLayer(
  * never be open for editing while a descendant claims to be final.
  */
 export async function unlockLayer(prototypeId: string, layerType: LayerType): Promise<void> {
+  return withTransaction(async () => {
+  await requireLockAuthority(prototypeId);
   const idx = LAYER_SEQUENCE.indexOf(layerType);
   if (idx < 0) throw new Error(`Unknown layer: ${layerType}`);
   await db.layerLock.updateMany({
     where: { prototypeId, sequence: { gte: idx + 1 } },
     data: { state: "unlocked" },
   });
+  const prototype = await db.prototype.findUniqueOrThrow({ where: { id: prototypeId }, select: { initiativeId: true } });
+  await auditInitiative(prototype.initiativeId, "plan.unlocked", { layerType });
+  });
+}
+
+async function requireLockAuthority(prototypeId: string) {
+  const authUserId = currentAuthUserId();
+  if (!authUserId) throw new Error("Authentication required.");
+  const prototype = await db.prototype.findUniqueOrThrow({ where: { id: prototypeId }, include: { initiative: true } });
+  const membership = await db.organizationMember.findFirst({ where: { authUserId, organizationId: prototype.initiative.organizationId, status: "active", role: { in: ["owner", "admin"] } } });
+  const actor = await db.user.findUnique({ where: { authUserId } });
+  if (!membership || actor?.status !== "active") throw new Error("Organization administrator required.");
+  return actor;
 }
 
 /** Throws if the artifact's governing waterfall layer is locked (FR-11). */
@@ -113,34 +138,11 @@ export async function assertArtifactEditable(
 
 /** FR-13: the approved prototype state, stored as the plan-health baseline. */
 export async function snapshotApprovedBaseline(prototypeId: string): Promise<void> {
-  const [layers, sprints, releases] = await Promise.all([
-    db.artifactLayer.findMany({
-      where: { prototypeId },
-      orderBy: [{ type: "asc" }, { order: "asc" }],
-      select: {
-        id: true,
-        type: true,
-        parentId: true,
-        order: true,
-        title: true,
-        body: true,
-        points: true,
-        sprintId: true,
-        sourceCapabilityId: true,
-      },
-    }),
-    db.sprint.findMany({ where: { prototypeId }, orderBy: { sprintNumber: "asc" } }),
-    db.release.findMany({ where: { prototypeId }, orderBy: { order: "asc" } }),
-  ]);
+  const snapshot = await buildLiveSnapshot(db, prototypeId);
   await db.prototype.update({
     where: { id: prototypeId },
     data: {
-      approvedBaselineJson: JSON.stringify({
-        capturedAt: new Date().toISOString(),
-        layers,
-        sprints,
-        releases,
-      }),
+      approvedBaselineJson: JSON.stringify(snapshot),
       approvedAt: new Date(),
     },
   });

@@ -1,25 +1,49 @@
 "use client";
 
-import Link from "next/link";
 import { usePathname } from "next/navigation";
+import type { NavigationItemProps } from "./NavigationItem";
+import Sidebar from "./Sidebar";
 
 export interface NavInitiative {
   id: string;
   name: string;
   status: string; // draft | intake_in_progress | generated
-}
-
-interface NavItem {
-  label: string;
-  href: string | null; // null = disabled with explanation
-  disabledReason?: string;
-  activePrefix?: string;
+  project: { id: string; name: string } | null;
+  syncConnections: { status: string }[];
 }
 
 /**
- * Persistent left navigation, grouped by the planning chain
- * (Product platform spec §1.1). Initiative-scoped links follow the
+ * Persistent left navigation, grouped per docs/V2-APPLICATION-SHELL-BLUEPRINT.md §2
+ * (PLAN / INTELLIGENCE / ORGANIZATION). Initiative-scoped links follow the
  * initiative in the current URL, falling back to the most recent one.
+ *
+ * "Guided Intake" and "Epics & Stories" — present in the old flat nav — are
+ * deliberately not top-level items here: Epics & Stories is already reachable via
+ * NavTabs on every workspace page, and Guided Intake is reachable via the
+ * "view intake answers" link already in workspace/layout.tsx's header on every
+ * workspace page. See docs/V2-DESIGN-SYSTEM.md "Focused-Flow Exclusions".
+ *
+ * Implementation note (Step 7B — docs/V2-STANDARD-DASHBOARD.md): "Dashboard" now
+ * points at the global Standard Dashboard (`/home`), not the current initiative's
+ * dashboard — superseding the Step 6C "Dashboard Interim Behavior" note in
+ * docs/V2-SHELL-COHESION-QA.md. The initiative list moved to `/initiatives` so
+ * "Initiatives" could keep its own destination.
+ *
+ * Guided-activation restructure (reference doc §10/§11, Block 5): two real
+ * changes from the previous flat version. First, progressive disclosure — a
+ * user with no initiative at all sees a minimal nav (Home, Initiatives,
+ * "Create Your First Plan," Organization) instead of five-sixths of the
+ * platform rendered as unexplained gray dead ends. Second, once an initiative
+ * exists, a lifecycle-locked item (Roadmap/Planning Workspace/Sprints &
+ * Releases/Capacity & Cost/Reports, before the plan is generated) carries the
+ * resolver's real unlock action instead of a bare disabled tooltip — see
+ * NavigationItem's `disabled.cta`. Genuinely unbuilt items (Risks & Blockers,
+ * Decisions, Activity) keep the plain "not yet available" treatment: no `cta`,
+ * because no unlock path exists to offer.
+ *
+ * The ADMIN group that used to live here has moved to the profile/account
+ * menu (Block 6) — administrative navigation no longer occupies permanent
+ * space in the standard product sidebar (reference doc §12).
  */
 export default function LeftNav(props: { initiatives: NavInitiative[] }) {
   const pathname = usePathname() ?? "";
@@ -32,94 +56,82 @@ export default function LeftNav(props: { initiatives: NavInitiative[] }) {
     null;
   const generated = current?.status === "generated";
 
-  const scoped = (suffix: string, label: string): NavItem =>
+  const scoped = (suffix: string, label: string): NavigationItemProps =>
     current && generated
       ? { label, href: `/initiatives/${current.id}/${suffix}` }
-      : {
-          label,
-          href: null,
-          disabledReason: current
-            ? "Available once this initiative's plan is generated."
-            : "Create an initiative first.",
-        };
+      : current
+        ? {
+            label,
+            href: null,
+            disabled: {
+              reason: "Available once this initiative's plan has been generated.",
+              cta: { label: "Generate Plan", href: `/initiatives/${current.id}/intake` },
+            },
+          }
+        : {
+            label,
+            href: null,
+            disabled: {
+              reason: "Create an initiative first.",
+              cta: { label: "Create Initiative", href: "/initiatives/new" },
+            },
+          };
 
-  const groups: { title: string; items: NavItem[] }[] = [
-    {
-      title: "Overview",
-      items: [scoped("dashboard", "Dashboard"), { label: "Initiatives", href: "/home" }],
-    },
-    {
-      title: "Planning",
-      items: [
-        current
-          ? { label: "Guided Intake", href: `/initiatives/${current.id}/intake` }
-          : { label: "Guided Intake", href: null, disabledReason: "Create an initiative first." },
-        scoped("workspace/roadmap", "Roadmap"),
-        scoped("workspace/features", "Features"),
-        scoped("workspace/epics", "Epics & Stories"),
-      ],
-    },
-    {
-      title: "Execution",
-      items: [
-        scoped("workspace/sprints", "Sprints & Releases"),
-        scoped("workspace/capacity", "Capacity & Cost"),
-      ],
-    },
-    {
-      title: "Outputs",
-      items: [scoped("workspace/executive", "Executive Presentation")],
-    },
-    {
-      title: "Tools",
-      items: [{ label: "Integrations", href: "/integrations" }],
-    },
-  ];
+  const groups: { title: string; items: NavigationItemProps[] }[] = current
+    ? [
+        {
+          title: "Plan",
+          items: [
+            { label: "Dashboard", href: "/home" },
+            { label: "Projects", href: "/projects" },
+            { label: "Initiatives", href: "/initiatives" },
+            scoped("workspace/roadmap", "Roadmap"),
+            scoped("workspace/features", "Planning Workspace"),
+            scoped("workspace/sprints", "Sprints & Releases"),
+          ],
+        },
+        {
+          title: "Delivery",
+          items: [
+            scoped("workspace/capacity", "Capacity & Cost"),
+            { label: "Risks & Blockers", href: "/risks" },
+            { label: "Decisions", href: "/decisions" },
+          ],
+        },
+        {
+          title: "Intelligence",
+          items: [scoped("workspace/executive", "Reports")],
+        },
+        {
+          title: "Organization",
+          items: [
+            { label: "Teams & Stakeholders", href: "/teams" },
+            { label: "Integrations", href: "/integrations" },
+            { label: "Activity", href: "/activity" },
+          ],
+        },
+      ]
+    : [
+        {
+          title: "Plan",
+          items: [
+            { label: "Dashboard", href: "/home" },
+            { label: "Projects", href: "/projects" },
+            { label: "Initiatives", href: "/initiatives" },
+          ],
+        },
+        {
+          title: "Setup",
+          items: [{ label: "Create Your First Plan", href: "/initiatives/new" }],
+        },
+        {
+          title: "Organization",
+          items: [
+            { label: "Teams & Stakeholders", href: "/teams" },
+            { label: "Integrations", href: "/integrations" },
+          ],
+        },
+      ];
 
-  return (
-    <nav className="no-print flex h-full w-56 shrink-0 flex-col gap-5 overflow-y-auto border-r border-neutral-200 bg-white px-3 py-5">
-      <Link href="/home" className="px-2">
-        <span className="text-xs font-semibold uppercase tracking-widest text-indigo-600">
-          Guided Planning
-        </span>
-      </Link>
-      {groups.map((group) => (
-        <div key={group.title}>
-          <p className="px-2 text-[10px] font-semibold uppercase tracking-widest text-neutral-400">
-            {group.title}
-          </p>
-          <ul className="mt-1.5 space-y-0.5">
-            {group.items.map((item) => {
-              const active =
-                item.href != null &&
-                (pathname === item.href || pathname.startsWith(`${item.href}/`));
-              return (
-                <li key={item.label}>
-                  {item.href ? (
-                    <Link
-                      href={item.href}
-                      className={`block rounded-lg px-2 py-1.5 text-sm font-medium transition ${
-                        active
-                          ? "bg-indigo-50 text-indigo-700"
-                          : "text-neutral-600 hover:bg-neutral-50 hover:text-neutral-900"
-                      }`}
-                    >
-                      {item.label}
-                    </Link>
-                  ) : (
-                    <span
-                      title={item.disabledReason}
-                      className="block cursor-not-allowed rounded-lg px-2 py-1.5 text-sm font-medium text-neutral-300"
-                    >
-                      {item.label}
-                    </span>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
-        </div>
-      ))}
-    </nav>
-  );
+  return <Sidebar groups={groups} />;
 }

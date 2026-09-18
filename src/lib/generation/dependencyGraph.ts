@@ -78,6 +78,10 @@ export function orderByDependencyAndPriority(
           MVP_IMPORTANCE_SCORE[deriveMvpImportance(b)] -
           MVP_IMPORTANCE_SCORE[deriveMvpImportance(a)];
         if (mvpDiff !== 0) return mvpDiff;
+        // Deliberately on default weights: this is deep-engine sort-comparator
+        // tie-breaking with no org/initiative context threaded to it, and the
+        // value never reaches a user — unlike workspace.ts's priorityByCapability,
+        // which does use an initiative's resolved (possibly overridden) weights.
         const priorityDiff =
           computePriorityScore(b, dependedOnBy.get(b.id) ?? 0) -
           computePriorityScore(a, dependedOnBy.get(a.id) ?? 0);

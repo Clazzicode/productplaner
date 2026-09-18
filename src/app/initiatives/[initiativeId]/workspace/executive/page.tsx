@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import ExecutiveReport from "@/components/executive/ExecutiveReport";
+import { requireCurrentUser } from "@/lib/auth/session";
+import { establishAuthContext } from "@/lib/db";
 import { loadWorkspace } from "@/lib/workspace";
 
 export const dynamic = "force-dynamic";
@@ -11,6 +13,8 @@ export default async function ExecutivePage({
   params: Promise<{ initiativeId: string }>;
 }) {
   const { initiativeId } = await params;
+  const user = await requireCurrentUser();
+  establishAuthContext(user.authUserId);
   const ws = await loadWorkspace(initiativeId);
   if (!ws) notFound();
 

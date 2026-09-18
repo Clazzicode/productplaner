@@ -1,13 +1,21 @@
 import { format } from "date-fns";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import EmptyState from "@/components/ui/EmptyState";
 import EditableArtifact from "@/components/workspace/EditableArtifact";
 import RoadmapBoard, { type BoardPhase } from "@/components/workspace/RoadmapBoard";
-import RoadmapViewToggle from "@/components/workspace/RoadmapViewToggle";
+import RoadmapLegacyViews from "@/components/workspace/RoadmapLegacyViews";
+import RoadmapToolbar from "@/components/workspace/RoadmapToolbar";
+import RoadmapViewSwitcher from "@/components/workspace/RoadmapViewSwitcher";
 import TraceBadge from "@/components/workspace/TraceBadge";
-import { db } from "@/lib/db";
+import CoachMark from "@/components/coachmarks/CoachMark";
+import TimelineRoadmap from "@/components/workspace/timeline/TimelineRoadmap";
+import AiAssistPanel from "@/components/ai/AiAssistPanel";
+import { requireCurrentUser } from "@/lib/auth/session";
+import { db, establishAuthContext } from "@/lib/db";
 import { PHASE_NAMES } from "@/lib/generation/constants";
 import { profileFor } from "@/lib/generation/methodology";
+import { loadRoadmapTimelineData, serializeTimelineData } from "@/lib/roadmap/loadRoadmapTimelineData";
 import { traceEntriesFor } from "@/lib/trace";
 import { loadCostContext, loadWorkspace } from "@/lib/workspace";
 
@@ -27,9 +35,10 @@ export default async function RoadmapPage({
   params: Promise<{ initiativeId: string }>;
 }) {
   const { initiativeId } = await params;
+  const user = await requireCurrentUser();
+  establishAuthContext(user.authUserId);
   const ws = await loadWorkspace(initiativeId);
   if (!ws) notFound();
-  const locked = ws.isLocked("roadmap");
   const cost = await loadCostContext(initiativeId, ws.prototype.id);
 
   const root = await db.artifactLayer.findFirst({
@@ -91,7 +100,6 @@ export default async function RoadmapPage({
             artifactId={root.id}
             title={root.title}
             body={root.body}
-            locked={locked}
             titleClassName="text-xl font-bold"
           />
         </div>
@@ -122,7 +130,6 @@ export default async function RoadmapPage({
                     artifactId={phase.id}
                     title={phase.title}
                     body={phase.body}
-                    locked={locked}
                     titleClassName="text-lg font-semibold text-indigo-900"
                   />
                 </div>
@@ -130,7 +137,7 @@ export default async function RoadmapPage({
                   {phaseCost > 0 && (
                     <span
                       className="rounded-full bg-white px-3 py-1 text-xs font-medium text-neutral-600"
-                      title="Sum of this phase's capability costs (§25) — story points × cost per point"
+                      title="Sum of this phase's feature costs (§25) — story points × cost per point"
                     >
                       ~${Math.round(phaseCost).toLocaleString()}
                     </span>
@@ -164,25 +171,56 @@ export default async function RoadmapPage({
       </div>
 
       <p className="mt-6 text-xs text-neutral-400">
-        Roadmap is waterfall layer 1 of 5 — it must lock before the Feature Hierarchy can.
         Phase date ranges are computed from the sprint plan (the FR-07 dual capacity mapping).
       </p>
     </div>
   );
 
-  const timelineView = (
+  const boardView = (
     <div>
       {profile.roadmapMode === "continuous_backlog" ? (
         <p className="rounded-lg bg-neutral-50 px-3 py-3 text-sm text-neutral-500">
-          The Timeline board isn&apos;t available for Agile/Scrum — its phases are a continuously
-          re-ranked backlog, not fixed categories a capability can be pinned to. Switch
-          methodology to Hybrid, Waterfall, or Kanban to use it.
+          The Board isn&apos;t available for Agile/Scrum — its phases are a continuously re-ranked
+          backlog, not fixed categories a feature can be pinned to. Switch methodology to
+          Hybrid, Waterfall, or Kanban to use it.
         </p>
       ) : (
-        <RoadmapBoard initiativeId={initiativeId} phases={boardPhases} locked={locked} />
+        <RoadmapBoard initiativeId={initiativeId} phases={boardPhases} />
       )}
     </div>
   );
 
-  return <RoadmapViewToggle list={listView} timeline={timelineView} />;
+  const timelineData = await loadRoadmapTimelineData(initiativeId, ws.prototype.id, ws.initiative.methodology);
+  const timelineView = (
+    <TimelineRoadmap initiativeId={initiativeId} data={serializeTimelineData(timelineData)} />
+  );
+
+  const milestonesView = (
+    <EmptyState
+      title="Milestones is coming in Step 9C"
+      description="Releases, the projected go-live date, and the approved-baseline checkpoint will plot on one strategic timeline here — not built yet."
+    />
+  );
+  const connectionsView = (
+    <EmptyState
+      title="Connections is coming in Step 9D"
+      description="Feature dependencies will render as a relationship map here — not built yet."
+    />
+  );
+
+  return (
+    <RoadmapToolbar
+      title="Roadmap"
+      description="One page, three lenses over the same plan — Timeline for scanning work over time, Milestones for strategic checkpoints, Connections for dependencies."
+    >
+      <CoachMark coachMarkKey="roadmap" className="mb-4" />
+      <RoadmapViewSwitcher timeline={timelineView} milestones={milestonesView} connections={connectionsView} />
+      <RoadmapLegacyViews list={listView} board={boardView} />
+
+      {/* Secondary to the roadmap above, never the main output (Section 4). */}
+      <div className="mt-8 max-w-xl">
+        <AiAssistPanel initiativeId={initiativeId} scope="roadmap" />
+      </div>
+    </RoadmapToolbar>
+  );
 }

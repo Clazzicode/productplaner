@@ -2,15 +2,19 @@ import IntegrationsHub, {
   type HubConnection,
   type HubProvider,
 } from "@/components/integrations/IntegrationsHub";
-import { getCurrentUser } from "@/lib/auth/session";
-import { db } from "@/lib/db";
+import CoachMark from "@/components/coachmarks/CoachMark";
+import { ContainedLayout } from "@/components/layout/PageLayouts";
+import PageHeader from "@/components/ui/PageHeader";
+import { requireCurrentUser } from "@/lib/auth/session";
+import { db, establishAuthContext } from "@/lib/db";
 import { ensureProvidersSeeded } from "@/lib/sync/integrationSeed";
 
 export const dynamic = "force-dynamic";
 
 export default async function IntegrationsPage() {
+  const user = await requireCurrentUser();
+  establishAuthContext(user.authUserId);
   await ensureProvidersSeeded();
-  const user = await getCurrentUser();
 
   const [providers, connections, initiatives] = await Promise.all([
     db.integrationProvider.findMany({
@@ -69,16 +73,12 @@ export default async function IntegrationsPage() {
   ).length;
 
   return (
-    <main className="mx-auto max-w-6xl px-6 py-8">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold">Integrations</h1>
-          <p className="mt-1 text-sm text-neutral-500">
-            Demo-mode connection hub — {connectedCount} of {hubProviders.length} tools connected.
-            The platform stays the system of record; execution tools receive the work.
-          </p>
-        </div>
-      </div>
+    <ContainedLayout>
+      <PageHeader
+        title="Integrations"
+        description={`Connection hub — ${connectedCount} of ${hubProviders.length} tools connected. The platform stays the system of record; execution tools receive the work.`}
+      />
+      <CoachMark coachMarkKey="integrations" className="mt-4" />
       <div className="mt-6">
         <IntegrationsHub
           providers={hubProviders}
@@ -87,6 +87,6 @@ export default async function IntegrationsPage() {
           defaultInitiativeId={generated[0]?.id ?? null}
         />
       </div>
-    </main>
+    </ContainedLayout>
   );
 }

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Modal from "@/components/ui/Modal";
 import { apiFetch } from "@/lib/clientApi";
+import { ButtonLoader } from "@/components/ui/loading";
 import type { HubInitiative, HubProvider } from "./IntegrationsHub";
 
 /**
@@ -47,7 +48,7 @@ export default function ConnectDemoModal(props: {
     });
     setBusy(false);
     if (!res.ok) {
-      setError(res.error ?? "Could not save the demo connection.");
+      setError(res.error ?? "Could not save the connection.");
       return;
     }
     props.onSaved();
@@ -56,9 +57,9 @@ export default function ConnectDemoModal(props: {
   const input = "mt-1 w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none";
 
   return (
-    <Modal open title={`Connect ${provider.name} (demo)`} onClose={props.onClose}>
+    <Modal open title={`Connect ${provider.name}`} onClose={props.onClose}>
       <p className="text-sm text-neutral-500">
-        Demo mode — values are stored locally, nothing leaves this prototype. {provider.description}
+        {provider.description} Connection details are saved to your workspace only.
       </p>
       <div className="mt-4 space-y-3">
         <label className="block text-sm font-medium">
@@ -81,7 +82,7 @@ export default function ConnectDemoModal(props: {
           <input
             value={form.workspaceName}
             onChange={(e) => setForm({ ...form, workspaceName: e.target.value })}
-            placeholder={`e.g. acme.${provider.key}.demo`}
+            placeholder={`e.g. acme.${provider.key}`}
             className={input}
           />
         </label>
@@ -141,7 +142,7 @@ export default function ConnectDemoModal(props: {
               </label>
             </div>
             <div className="rounded-lg bg-neutral-50 p-3 text-xs text-neutral-500">
-              <p className="font-semibold text-neutral-700">Field mapping (demo)</p>
+              <p className="font-semibold text-neutral-700">Field mapping</p>
               <p className="mt-1">
                 Epic → {provider.name} Epic · Story → {provider.name}{" "}
                 {provider.key === "azure_devops" ? "User Story" : "Story"} · Acceptance criteria →
@@ -156,13 +157,14 @@ export default function ConnectDemoModal(props: {
         <button onClick={props.onClose} className="text-sm text-neutral-500 hover:text-neutral-800">
           Cancel
         </button>
-        <button
+        <ButtonLoader
           onClick={save}
-          disabled={busy || (isExecution && form.projectKey.trim().length === 0)}
-          className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50"
+          loading={busy}
+          loadingLabel="Saving"
+          disabled={isExecution && form.projectKey.trim().length === 0}
         >
-          {busy ? "Saving…" : "Save demo connection"}
-        </button>
+          Save connection
+        </ButtonLoader>
       </div>
     </Modal>
   );

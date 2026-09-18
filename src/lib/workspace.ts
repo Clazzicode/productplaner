@@ -1,9 +1,13 @@
+import type { Explanation } from "@/lib/explainability/types";
 import { db } from "@/lib/db";
+import { PRIORITY_WEIGHTS } from "@/lib/generation/constants";
 import { buildCostModel, type CostModel } from "@/lib/generation/cost";
+import { explainPriorityScore } from "@/lib/generation/explain/priorityScore";
 import { loadIntakeInput } from "@/lib/generation/engine";
 import { computePriorityScore } from "@/lib/generation/scoring";
+import { getEffectiveWeights } from "@/lib/planningWeights/planningWeights";
+import { resolveInitiativeEconomics } from "@/lib/projectContext";
 import type { TraceCapabilityView, TraceIntakeView } from "@/lib/trace";
-import type { LayerType } from "@/lib/generation/types";
 
 /** Shared workspace loader: initiative, prototype, locks, and the intake
  * views the trace drawer needs. Pages layer their own artifact queries on top. */
@@ -54,8 +58,12 @@ export async function loadWorkspace(initiativeId: string) {
   );
 
   const locks = initiative.prototype.layerLocks;
-  const isLocked = (layerType: LayerType) =>
-    locks.find((l) => l.layerType === layerType)?.state === "locked";
+  // The waterfall layer-lock ceremony has been removed platform-wide —
+  // always unlocked/editable, including for initiatives that had a layer
+  // locked before this change (there's no unlock UI/route left to reach
+  // those otherwise). `locks` itself stays available for the Recent
+  // Activity feed's historical "X locked" entries.
+  const isLocked = (): boolean => false;
 
   return {
     initiative,
@@ -73,6 +81,7 @@ export interface WorkspaceCostContext {
   pointsByCapability: Map<string, number>;
   costByCapability: Map<string, number>; // §25 capability cost
   priorityByCapability: Map<string, number>; // §5 priority score
+  priorityExplanationByCapability: Map<string, Explanation>; // "how was this calculated?"
 }
 
 /**
@@ -84,10 +93,15 @@ export async function loadCostContext(
   initiativeId: string,
   prototypeId: string,
 ): Promise<WorkspaceCostContext> {
-  const [initiative, sprintCount, stories, intakeInput] = await Promise.all([
+  const [initiative, sprintCount, stories, intakeInput, priorityWeights] = await Promise.all([
     db.initiative.findUnique({
       where: { id: initiativeId },
-      select: { budget: true, averageHourlyRate: true },
+      select: {
+        budgetOverride: true,
+        averageHourlyRateOverride: true,
+        targetLaunchDateOverride: true,
+        project: { select: { budget: true, averageHourlyRate: true, targetLaunchDate: true } },
+      },
     }),
     db.sprint.count({ where: { prototypeId } }),
     db.artifactLayer.findMany({
@@ -95,13 +109,15 @@ export async function loadCostContext(
       select: { points: true, sourceCapabilityId: true },
     }),
     loadIntakeInput(initiativeId),
+    getEffectiveWeights(initiativeId, "priorityWeights"),
   ]);
 
   const totalPlannedPoints = stories.reduce((n, s) => n + (s.points ?? 1), 0);
+  const economics = initiative ? resolveInitiativeEconomics(initiative, initiative.project) : null;
   const model = buildCostModel({
     capacity: intakeInput,
-    averageHourlyRate: initiative?.averageHourlyRate,
-    budget: initiative?.budget,
+    averageHourlyRate: economics?.averageHourlyRate,
+    budget: economics?.budget,
     totalSprints: sprintCount,
     totalPlannedPoints,
   });
@@ -122,24 +138,20 @@ export async function loadCostContext(
   for (const cap of intakeInput.capabilities) {
     for (const d of cap.dependsOn) dependedOnBy.set(d, (dependedOnBy.get(d) ?? 0) + 1);
   }
+  const resolvedPriorityWeights = priorityWeights as typeof PRIORITY_WEIGHTS;
   const priorityByCapability = new Map<string, number>(
-    intakeInput.capabilities.map((c) => [c.id, computePriorityScore(c, dependedOnBy.get(c.id) ?? 0)]),
+    intakeInput.capabilities.map((c) => [
+      c.id,
+      computePriorityScore(c, dependedOnBy.get(c.id) ?? 0, resolvedPriorityWeights),
+    ]),
+  );
+  const priorityExplanationByCapability = new Map<string, Explanation>(
+    intakeInput.capabilities.map((c) => [
+      c.id,
+      explainPriorityScore(c, dependedOnBy.get(c.id) ?? 0, resolvedPriorityWeights),
+    ]),
   );
 
-  return { model, pointsByCapability, costByCapability, priorityByCapability };
+  return { model, pointsByCapability, costByCapability, priorityByCapability, priorityExplanationByCapability };
 }
 
-export async function artifactCounts(prototypeId: string) {
-  const grouped = await db.artifactLayer.groupBy({
-    by: ["type"],
-    where: { prototypeId },
-    _count: { _all: true },
-  });
-  const count = (t: string) => grouped.find((g) => g.type === t)?._count._all ?? 0;
-  return {
-    features: count("feature"),
-    epics: count("epic"),
-    stories: count("story"),
-    acs: count("acceptance_criterion"),
-  };
-}

@@ -1,6 +1,9 @@
+import { withApi } from "@/lib/observability";
 import { NextResponse } from "next/server";
+import { requireInitiativeApiAccess } from "@/lib/access/guards";
 import { jsonError, zodMessage } from "@/lib/api";
-import { db } from "@/lib/db";
+import { requireCurrentUserApi } from "@/lib/auth/session";
+import { db, establishAuthContext } from "@/lib/db";
 import { generatePrototype, IntakeInvalidError } from "@/lib/generation/engine";
 import { methodologyChangeSchema } from "@/lib/validation/schemas";
 
@@ -10,11 +13,17 @@ import { methodologyChangeSchema } from "@/lib/validation/schemas";
  * different roadmap/lock/sprint shape, so there's no safe partial merge
  * (see recalculatePlan's "full" mode, which this reuses).
  */
-export async function POST(
+async function POSTHandler(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
+  const authGuard = await requireCurrentUserApi();
+  if (!authGuard.ok) return authGuard.response;
+  establishAuthContext(authGuard.user.authUserId);
+  const guard = await requireInitiativeApiAccess(authGuard.user, id, "edit");
+  if (!guard.ok) return guard.response;
+
   const parsed = methodologyChangeSchema.safeParse(await request.json());
   if (!parsed.success) return jsonError(zodMessage(parsed.error), 422);
 
@@ -41,3 +50,5 @@ export async function POST(
     return jsonError(err instanceof Error ? err.message : "Methodology switch failed.", 500);
   }
 }
+
+export const POST = withApi(POSTHandler);

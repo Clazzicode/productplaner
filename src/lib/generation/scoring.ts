@@ -20,13 +20,16 @@ export interface ValueFactors {
   riskComplianceScore: number; // 1-5
 }
 
-/** §2 weighted score: (CI×0.30)+(RI×0.30)+(SA×0.25)+(RC×0.15), range 1–5. */
-export function computeBusinessValueScore(f: ValueFactors): number {
+/** §2 weighted score: (CI×0.30)+(RI×0.30)+(SA×0.25)+(RC×0.15), range 1–5.
+ * `weights` defaults to the code-level constants — pass the initiative's
+ * resolved weights (src/lib/planningWeights/weightResolution.ts) to honor an
+ * editable override; omitting it reproduces today's exact behavior. */
+export function computeBusinessValueScore(f: ValueFactors, weights: typeof VALUE_FACTOR_WEIGHTS = VALUE_FACTOR_WEIGHTS): number {
   const raw =
-    f.customerImpactScore * VALUE_FACTOR_WEIGHTS.customerImpact +
-    f.revenueImpactScore * VALUE_FACTOR_WEIGHTS.revenueImpact +
-    f.strategicAlignmentScore * VALUE_FACTOR_WEIGHTS.strategicAlignment +
-    f.riskComplianceScore * VALUE_FACTOR_WEIGHTS.riskCompliance;
+    f.customerImpactScore * weights.customerImpact +
+    f.revenueImpactScore * weights.revenueImpact +
+    f.strategicAlignmentScore * weights.strategicAlignment +
+    f.riskComplianceScore * weights.riskCompliance;
   return Math.round(raw * 100) / 100;
 }
 
@@ -106,13 +109,23 @@ export function effectiveBusinessValueScore(cap: {
 /**
  * §5: (Business Value × 0.45) + (MVP Importance × 0.25)
  *    + (Dependency Importance × 0.15) + (Risk Reduction Value × 0.15)
+ *
+ * `weights` defaults to the code-level constants — pass the initiative's
+ * resolved weights (src/lib/planningWeights/weightResolution.ts) to honor an
+ * editable override; omitting it reproduces today's exact behavior. Deep-
+ * engine callers with no org/initiative context (e.g. dependencyGraph.ts's
+ * internal sort comparator) intentionally omit it and stay on the defaults.
  */
-export function computePriorityScore(cap: CapabilityInput, dependedOnByCount: number): number {
+export function computePriorityScore(
+  cap: CapabilityInput,
+  dependedOnByCount: number,
+  weights: typeof PRIORITY_WEIGHTS = PRIORITY_WEIGHTS,
+): number {
   const raw =
-    effectiveBusinessValueScore(cap) * PRIORITY_WEIGHTS.businessValue +
-    MVP_IMPORTANCE_SCORE[deriveMvpImportance(cap)] * PRIORITY_WEIGHTS.mvpImportance +
-    dependencyImportanceScore(dependedOnByCount) * PRIORITY_WEIGHTS.dependencyImportance +
-    riskReductionScore(cap.riskLevel ?? "medium", cap.isMvp) * PRIORITY_WEIGHTS.riskReduction;
+    effectiveBusinessValueScore(cap) * weights.businessValue +
+    MVP_IMPORTANCE_SCORE[deriveMvpImportance(cap)] * weights.mvpImportance +
+    dependencyImportanceScore(dependedOnByCount) * weights.dependencyImportance +
+    riskReductionScore(cap.riskLevel ?? "medium", cap.isMvp) * weights.riskReduction;
   return Math.round(raw * 100) / 100;
 }
 

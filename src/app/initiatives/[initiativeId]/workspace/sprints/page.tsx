@@ -1,8 +1,12 @@
 import { format } from "date-fns";
 import { notFound } from "next/navigation";
-import ExplainCallout from "@/components/demo/ExplainCallout";
+import CoachMark from "@/components/coachmarks/CoachMark";
+import AiAssistPanel from "@/components/ai/AiAssistPanel";
+import CreateReleaseForm from "@/components/workspace/CreateReleaseForm";
+import CreateSprintForm from "@/components/workspace/CreateSprintForm";
 import SprintMoveSelect from "@/components/workspace/SprintMoveSelect";
-import { db } from "@/lib/db";
+import { requireCurrentUser } from "@/lib/auth/session";
+import { db, establishAuthContext } from "@/lib/db";
 import { profileFor } from "@/lib/generation/methodology";
 import { loadCostContext, loadWorkspace } from "@/lib/workspace";
 
@@ -14,6 +18,8 @@ export default async function SprintsPage({
   params: Promise<{ initiativeId: string }>;
 }) {
   const { initiativeId } = await params;
+  const user = await requireCurrentUser();
+  establishAuthContext(user.authUserId);
   const ws = await loadWorkspace(initiativeId);
   if (!ws) notFound();
   const cost = await loadCostContext(initiativeId, ws.prototype.id);
@@ -44,6 +50,46 @@ export default async function SprintsPage({
       },
     }),
   ]);
+
+  // Guided-activation restructure: data for the manual Create Release / Plan
+  // Sprint forms. Phases are identified by contentJson.phaseNumber (not a
+  // queryable column), same parse-in-application-code pattern the Kanban
+  // flowPhases block below already uses.
+  const parsePhaseNumber = (raw: string): number => {
+    try {
+      return (JSON.parse(raw) as { phaseNumber?: number }).phaseNumber ?? 1;
+    } catch {
+      return 1;
+    }
+  };
+  const phaseRows = await db.artifactLayer.findMany({
+    where: { prototypeId: ws.prototype.id, type: "roadmap_phase" },
+    orderBy: { order: "asc" },
+    select: { title: true, contentJson: true },
+  });
+  const manualReleasePhaseNumbers = new Set(
+    releases.filter((r) => r.origin === "manual").map((r) => r.phaseNumber),
+  );
+  const availablePhases = phaseRows
+    .map((p) => ({ phaseNumber: parsePhaseNumber(p.contentJson), title: p.title }))
+    .filter((p) => !manualReleasePhaseNumbers.has(p.phaseNumber));
+
+  const unassignedStoryRows = await db.artifactLayer.findMany({
+    where: { prototypeId: ws.prototype.id, type: "story", sprintId: null },
+    select: {
+      id: true,
+      title: true,
+      points: true,
+      parent: { select: { parent: { select: { parent: { select: { contentJson: true } } } } } },
+    },
+  });
+  const unassignedStoriesByPhase = new Map<number, { id: string; title: string; points: number }[]>();
+  for (const s of unassignedStoryRows) {
+    const phaseNumber = parsePhaseNumber(s.parent?.parent?.parent?.contentJson ?? "{}");
+    const list = unassignedStoriesByPhase.get(phaseNumber) ?? [];
+    list.push({ id: s.id, title: s.title, points: s.points ?? 1 });
+    unassignedStoriesByPhase.set(phaseNumber, list);
+  }
 
   // Dependency check (non-blocking, FR-12: the sprint layer stays flexible):
   // warn when a capability has stories scheduled before a dependency finishes.
@@ -152,31 +198,54 @@ export default async function SprintsPage({
           ? "Kanban continuous flow — no fixed sprints. Stories are worked in priority order; release dates are forecasted from cumulative throughput."
           : agileFrozen
             ? "Waterfall: the sprint and release plan became a fixed schedule once the baseline was approved — it can no longer be rebalanced."
-            : "Agile execution layers — flexible beneath the locked waterfall structure. Moving stories here never restructures locked layers above. Re-locking an upper layer recomputes this plan."}
+            : "Create releases and plan sprints directly here — nothing is auto-assigned. Regenerating the plan from Living Plan rebuilds everything, including releases and sprints you've created."}
       </p>
-      <ExplainCallout>
-        {isKanban
-          ? "Throughput is the same estimated capacity number as everywhere else in the platform, expressed as points per week instead of points per sprint — cumulative story points divided by throughput gives each phase's forecasted completion date."
-          : "Stories were packed into sprints in strict roadmap order against the estimated sprint capacity — a story only joins the current sprint if it fits, phases never mix in one sprint, and each sprint shows its planned story cost against the full labor allocation."}
-      </ExplainCallout>
-
+      <CoachMark coachMarkKey="sprints_releases" className="mt-4" />
       {/* Releases strip */}
-      <div className="mt-5 flex flex-wrap gap-3">
+      <div className="mt-5 flex flex-wrap items-start gap-3">
         {releases.map((rel) => (
           <div
             key={rel.id}
             className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm"
           >
-            <p className="font-semibold text-emerald-900">{rel.name}</p>
+            <p className="font-semibold text-emerald-900">
+              {rel.name}
+              {rel.origin === "manual" && (
+                <span className="ml-1.5 rounded-full bg-emerald-200 px-1.5 py-0.5 text-[10px] font-medium text-emerald-900">
+                  Confirmed
+                </span>
+              )}
+            </p>
             <p className="text-xs text-emerald-700">
               {isKanban
                 ? "Forecasted"
-                : `Sprint${rel.sprints.length === 1 ? "" : "s"} ${rel.sprints.map((s) => s.sprintNumber).join(", ")}`}{" "}
+                : `Sprint${rel.sprints.length === 1 ? "" : "s"} ${rel.sprints.map((s) => s.sprintNumber).join(", ") || "none yet"}`}{" "}
               · ships {format(rel.targetDate, "MMM d, yyyy")}
             </p>
+            {!isKanban && rel.origin === "manual" && !agileFrozen && (
+              <div className="mt-2">
+                <CreateSprintForm
+                  releaseId={rel.id}
+                  releaseName={rel.name}
+                  availableStories={unassignedStoriesByPhase.get(rel.phaseNumber) ?? []}
+                  defaultCapacityPoints={cost.model.sprintPointCapacity}
+                />
+              </div>
+            )}
           </div>
         ))}
       </div>
+
+      {/* Guided-activation restructure: the explicit Create Release step
+          (reference doc §8 STATE 4) — available as soon as a plan exists
+          (this page never renders without one), for any phase without a
+          release yet. The waterfall roadmap-lock ceremony this used to
+          require has been removed platform-wide. */}
+      {!isKanban && !agileFrozen && (
+        <div className="mt-4">
+          <CreateReleaseForm initiativeId={initiativeId} availablePhases={availablePhases} />
+        </div>
+      )}
 
       {agileFrozen && (
         <div className="mt-4 rounded-xl border border-neutral-300 bg-neutral-50 p-4 text-sm text-neutral-600">
@@ -287,6 +356,11 @@ export default async function SprintsPage({
           })}
         </div>
       )}
+
+      {/* Secondary to the sprint plan above (Section 4). */}
+      <div className="mt-8 max-w-xl">
+        <AiAssistPanel initiativeId={initiativeId} scope="sprints" />
+      </div>
     </div>
   );
 }

@@ -18,8 +18,18 @@ export const VALUE_SCORE: Record<BusinessValue, number> = {
   critical: 5,
 };
 
-// §2 weighted sub-factor scoring: each factor 1–5.
-export const VALUE_FACTOR_WEIGHTS = {
+// §2 weighted sub-factor scoring: each factor 1–5. Index signature keeps this
+// structurally compatible with Record<string, number> (the shape resolved/
+// stored weight overrides move around as) in both cast directions.
+export interface ValueFactorWeights {
+  [key: string]: number;
+  customerImpact: number;
+  revenueImpact: number;
+  strategicAlignment: number;
+  riskCompliance: number;
+}
+
+export const VALUE_FACTOR_WEIGHTS: ValueFactorWeights = {
   customerImpact: 0.3,
   revenueImpact: 0.3,
   strategicAlignment: 0.25,
@@ -58,8 +68,17 @@ export const MVP_IMPORTANCE_LABELS: Record<MvpImportance, string> = {
   optional: "Optional",
 };
 
-// §5 priority-score weights.
-export const PRIORITY_WEIGHTS = {
+// §5 priority-score weights. Index signature keeps this structurally
+// compatible with Record<string, number> in both cast directions.
+export interface PriorityWeights {
+  [key: string]: number;
+  businessValue: number;
+  mvpImportance: number;
+  dependencyImportance: number;
+  riskReduction: number;
+}
+
+export const PRIORITY_WEIGHTS: PriorityWeights = {
   businessValue: 0.45,
   mvpImportance: 0.25,
   dependencyImportance: 0.15,

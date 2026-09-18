@@ -2,9 +2,9 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import ExplainCallout from "@/components/demo/ExplainCallout";
 import { Badge, type BadgeVariant } from "@/components/ui/Badge";
 import { apiFetch } from "@/lib/clientApi";
+import { ButtonLoader } from "@/components/ui/loading";
 import ConnectDemoModal from "./ConnectDemoModal";
 import SyncLogPanel, { type SyncLogView } from "./SyncLogPanel";
 
@@ -62,10 +62,10 @@ const PROVIDER_BRAND: Record<string, string> = {
 const STATUS_META: Record<string, { label: string; variant: BadgeVariant }> = {
   available: { label: "Available", variant: "neutral" },
   needs_configuration: { label: "Needs configuration", variant: "amber" },
-  demo_connected: { label: "Demo connected", variant: "indigo" },
+  demo_connected: { label: "Connected", variant: "indigo" },
   sync_ready: { label: "Sync ready", variant: "indigo" },
   sync_complete: { label: "Sync complete", variant: "emerald" },
-  demo_error: { label: "Demo error", variant: "red" },
+  demo_error: { label: "Error", variant: "red" },
 };
 
 export default function IntegrationsHub(props: {
@@ -117,7 +117,7 @@ export default function IntegrationsHub(props: {
   return (
     <div>
       {/* Search + category pills */}
-      <div className="flex flex-wrap items-center gap-3">
+      <div className="flex flex-wrap items-center gap-3 rounded-xl border border-border-subtle bg-white p-3 shadow-sm">
         <input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
@@ -129,7 +129,7 @@ export default function IntegrationsHub(props: {
             <button
               key={c.key}
               onClick={() => setCategory(c.key)}
-              className={`rounded-full px-3 py-1.5 text-xs font-medium transition ${
+              className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
                 category === c.key
                   ? "bg-indigo-600 text-white"
                   : "bg-white text-neutral-500 hover:text-neutral-800"
@@ -160,7 +160,7 @@ export default function IntegrationsHub(props: {
           const busy = (k: string) => busyKey === `${provider.key}:${k}`;
 
           return (
-            <div key={provider.id} className="rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm">
+            <div key={provider.id} className={`rounded-xl border bg-white p-5 shadow-[0_8px_28px_rgba(46,71,125,0.06)] ${provider.isFeatured ? "border-indigo-200 ring-1 ring-indigo-50" : "border-border-subtle"}`}>
               <div className="flex flex-wrap items-start gap-4">
                 {/* Left: logo + identity */}
                 <div className="flex min-w-0 flex-1 items-start gap-3">
@@ -169,7 +169,7 @@ export default function IntegrationsHub(props: {
                     className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-lg font-bold text-white"
                     style={{ backgroundColor: brand }}
                   >
-                    {provider.name.slice(0, 1)}
+                    {provider.key === "jira" ? "◆" : provider.name.slice(0, 1)}
                   </span>
                   <div className="min-w-0">
                     <p className="flex flex-wrap items-center gap-2 font-semibold">
@@ -178,7 +178,6 @@ export default function IntegrationsHub(props: {
                         {provider.category.replace("_", " ")}
                       </span>
                       {provider.isFeatured && <Badge variant="indigo">Featured</Badge>}
-                      <Badge variant="neutral">Demo available</Badge>
                     </p>
                     <p className="mt-0.5 text-sm text-neutral-500">{provider.description}</p>
                     <p className="mt-1 text-xs text-neutral-400">
@@ -225,8 +224,9 @@ export default function IntegrationsHub(props: {
                             : setModalProvider(provider)
                         }
                         busy={busy("reconnect")}
+                        loadingLabel={conn && !conn.isEnabled ? "Reconnecting" : "Connecting"}
                       >
-                        {conn && !conn.isEnabled ? "Reconnect" : "Connect demo"}
+                        {conn && !conn.isEnabled ? "Reconnect" : "Connect"}
                       </ActionButton>
                     )}
                     {connected && (
@@ -239,13 +239,15 @@ export default function IntegrationsHub(props: {
                             primary
                             onClick={() => act(provider, { action: "sync", connectionId: conn!.id }, "sync")}
                             busy={busy("sync")}
+                            loadingLabel="Syncing"
                           >
-                            Run demo sync
+                            Sync now
                           </ActionButton>
                         )}
                         <ActionButton
                           onClick={() => act(provider, { action: "disconnect", connectionId: conn!.id }, "disconnect")}
                           busy={busy("disconnect")}
+                          loadingLabel="Disconnecting"
                         >
                           Disconnect
                         </ActionButton>
@@ -272,12 +274,6 @@ export default function IntegrationsHub(props: {
         )}
       </div>
 
-      <ExplainCallout>
-        The hub behaves like a real connection system — configuration modals, statuses, sync logs
-        and fake issue keys — but every action is simulated locally: no OAuth, no credentials, no
-        outbound calls (spec §2.10).
-      </ExplainCallout>
-
       {modalProvider && (
         <ConnectDemoModal
           provider={modalProvider}
@@ -297,7 +293,7 @@ export default function IntegrationsHub(props: {
           onClose={() => setModalProvider(null)}
           onSaved={() => {
             setModalProvider(null);
-            setToast(`${modalProvider.name} demo connection saved.`);
+            setToast(`${modalProvider.name} connection saved.`);
             router.refresh();
           }}
         />
@@ -311,18 +307,16 @@ function ActionButton(props: {
   onClick: () => void;
   primary?: boolean;
   busy?: boolean;
+  loadingLabel?: string;
 }) {
   return (
-    <button
+    <ButtonLoader
       onClick={props.onClick}
-      disabled={props.busy}
-      className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition disabled:opacity-50 ${
-        props.primary
-          ? "bg-indigo-600 text-white hover:bg-indigo-700"
-          : "border border-neutral-300 text-neutral-600 hover:bg-neutral-50"
-      }`}
+      loading={!!props.busy}
+      loadingLabel={props.loadingLabel}
+      variant={props.primary ? "primary" : "secondary"}
     >
-      {props.busy ? "Working…" : props.children}
-    </button>
+      {props.children}
+    </ButtonLoader>
   );
 }

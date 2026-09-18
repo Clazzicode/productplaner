@@ -50,7 +50,7 @@ export function buildFeatureForCapability(cap: CapabilityInput): Omit<PlannedFea
     body:
       cap.description.trim().length > 0
         ? cap.description.trim()
-        : `Delivers the "${cap.name}" capability.`,
+        : `Delivers the "${cap.name}" feature.`,
     isMvp: cap.isMvp,
   };
 }

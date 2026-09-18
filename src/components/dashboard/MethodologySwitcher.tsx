@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { apiFetch } from "@/lib/clientApi";
+import { ButtonLoader } from "@/components/ui/loading";
 
 const OPTIONS: { value: string; label: string; blurb: string }[] = [
   { value: "hybrid", label: "Hybrid Waterfall", blurb: "Strict sequential locking, MVP-gated roadmap, discrete sprints." },
@@ -93,13 +94,15 @@ export default function MethodologySwitcher(props: { initiativeId: string; curre
               >
                 Cancel
               </button>
-              <button
+              <ButtonLoader
                 onClick={confirm}
-                disabled={busy || choice === props.current}
-                className="rounded-lg bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700 disabled:opacity-50"
+                disabled={choice === props.current}
+                loading={busy}
+                loadingLabel="Regenerating"
+                className="!bg-amber-600 hover:!bg-amber-700 disabled:hover:!bg-amber-600"
               >
-                {busy ? "Regenerating…" : "Switch & regenerate"}
-              </button>
+                Switch & regenerate
+              </ButtonLoader>
             </div>
           </div>
         </div>

@@ -1,13 +1,22 @@
+import { withApi } from "@/lib/observability";
 import { NextResponse } from "next/server";
+import { requireInitiativeApiAccess } from "@/lib/access/guards";
 import { jsonError, zodMessage } from "@/lib/api";
-import { db } from "@/lib/db";
+import { requireCurrentUserApi } from "@/lib/auth/session";
+import { db, establishAuthContext } from "@/lib/db";
 import { intakePatchSchema } from "@/lib/validation/schemas";
 
-export async function PATCH(
+async function PATCHHandler(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
+  const authGuard = await requireCurrentUserApi();
+  if (!authGuard.ok) return authGuard.response;
+  establishAuthContext(authGuard.user.authUserId);
+  const guard = await requireInitiativeApiAccess(authGuard.user, id, "edit");
+  if (!guard.ok) return guard.response;
+
   const parsed = intakePatchSchema.safeParse(await request.json());
   if (!parsed.success) return jsonError(zodMessage(parsed.error), 422);
 
@@ -21,3 +30,5 @@ export async function PATCH(
   await db.intakeAnswerSet.update({ where: { id: intake.id }, data: parsed.data });
   return NextResponse.json({ ok: true });
 }
+
+export const PATCH = withApi(PATCHHandler);
