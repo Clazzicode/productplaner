@@ -51,7 +51,7 @@ export default async function InitiativesPage() {
   const statuses = await getResolvedStatuses(user.organizationId, "initiative", initiatives.map((i) => i.id));
 
   return (
-    <ContainedLayout className="max-w-4xl">
+    <ContainedLayout>
       <PageHeader
         eyebrow="Guided Product Planning Platform"
         title="Your initiatives"
@@ -82,7 +82,7 @@ export default async function InitiativesPage() {
           </Link>
         </div>
       ) : (
-        <ul className="mt-8 space-y-3">
+        <ul className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {initiatives.map((initiative) => {
             const stageLabel = STAGE_LABEL[
               resolveLifecycleState({
@@ -101,10 +101,10 @@ export default async function InitiativesPage() {
               <li key={initiative.id}>
                 <Link
                   href={href}
-                  className="block rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm transition hover:border-indigo-300 hover:shadow"
+                  className="group block h-full rounded-xl border border-border-subtle bg-white p-5 shadow-[0_8px_28px_rgba(46,71,125,0.06)] transition hover:-translate-y-0.5 hover:border-indigo-300 hover:shadow-lg"
                 >
                   <div className="flex items-center justify-between gap-4">
-                    <h2 className="font-semibold">{initiative.name}</h2>
+                    <h2 className="font-semibold text-text-primary group-hover:text-accent">{initiative.name}</h2>
                     <div className="flex items-center gap-2">
                       <StatusBadge
                         entityType="initiative"

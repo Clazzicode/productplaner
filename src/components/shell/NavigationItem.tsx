@@ -21,6 +21,17 @@ export interface NavigationItemProps {
   disabled?: NavDisabledState;
 }
 
+const ICONS: Record<string, string> = {
+  Dashboard: "⌂", Projects: "□", Initiatives: "◎", Roadmap: "◇",
+  "Planning Workspace": "▦", "Sprints & Releases": "▤", "Capacity & Cost": "▥",
+  "Risks & Blockers": "△", Decisions: "▣", Reports: "▥",
+  "Teams & Stakeholders": "♙", Integrations: "↗", Activity: "⌁",
+};
+
+function ItemLabel({ label }: { label: string }) {
+  return <span className="flex items-center gap-3"><span aria-hidden className="w-5 text-center text-base text-[#b9c9ee]">{ICONS[label] ?? "·"}</span><span>{label}</span></span>;
+}
+
 export default function NavigationItem(props: NavigationItemProps) {
   const pathname = usePathname() ?? "";
 
@@ -36,7 +47,7 @@ export default function NavigationItem(props: NavigationItemProps) {
           title={props.disabled?.reason}
           className="block rounded-lg px-2 py-1.5 transition hover:bg-nav-hover"
         >
-          <span className="block text-sm font-medium text-text-inverse-muted">{props.label}</span>
+          <span className="block text-sm font-medium text-text-inverse-muted"><ItemLabel label={props.label} /></span>
           <span className="block text-[10px] leading-tight text-text-inverse-muted/70">{cta.label}</span>
         </Link>
       );
@@ -44,9 +55,9 @@ export default function NavigationItem(props: NavigationItemProps) {
     return (
       <span
         title={props.disabled?.reason}
-        className="block cursor-not-allowed rounded-lg px-2 py-1.5 text-sm font-medium text-text-inverse-muted opacity-50"
+        className="block cursor-not-allowed rounded-lg px-2.5 py-2 text-sm font-medium text-text-inverse-muted opacity-50"
       >
-        {props.label}
+        <ItemLabel label={props.label} />
       </span>
     );
   }
@@ -56,13 +67,13 @@ export default function NavigationItem(props: NavigationItemProps) {
   return (
     <Link
       href={props.href}
-      className={`block rounded-lg px-2 py-1.5 text-sm font-medium transition ${
+      className={`block rounded-lg px-2.5 py-2 text-sm font-medium transition ${
         active
           ? "bg-nav-selected text-text-inverse"
           : "text-text-inverse-muted hover:bg-nav-hover hover:text-text-inverse"
       }`}
     >
-      {props.label}
+      <ItemLabel label={props.label} />
     </Link>
   );
 }

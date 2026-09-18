@@ -96,18 +96,18 @@ export default async function WorkspaceLayout({
             }
           />
         </div>
-        <div className="mt-5">
+        <div className="mt-4">
           <RefreshBar
             initiativeId={initiativeId}
             manualReleaseCount={manualReleaseCount}
             manualSprintCount={manualSprintCount}
           />
         </div>
-        <div className="mt-5">
+        <div className="mt-4">
           <NavTabs initiativeId={initiativeId} methodology={methodology} />
         </div>
       </header>
-      <main className="rounded-b-2xl rounded-tr-2xl border border-t-0 border-neutral-200 bg-white p-6 shadow-sm print:border-0 print:shadow-none">
+      <main className="mt-4 rounded-xl border border-border-subtle bg-white p-6 shadow-[0_8px_28px_rgba(46,71,125,0.06)] print:border-0 print:shadow-none">
         {children}
       </main>
     </ContainedLayout>

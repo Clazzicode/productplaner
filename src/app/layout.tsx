@@ -50,7 +50,13 @@ export default async function RootLayout({
     ? await db.initiative.findMany({
         where: { id: { in: authorizedInitiativeIds ?? [] } },
         orderBy: { updatedAt: "desc" },
-        select: { id: true, name: true, status: true },
+        select: {
+          id: true,
+          name: true,
+          status: true,
+          project: { select: { id: true, name: true } },
+          syncConnections: { where: { tool: "jira" }, select: { status: true }, take: 1 },
+        },
       })
     : [];
 

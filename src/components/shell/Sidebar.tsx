@@ -14,9 +14,12 @@ export default function Sidebar(props: {
   footer?: React.ReactNode;
 }) {
   return (
-    <nav className="no-print sticky top-0 flex h-screen w-56 shrink-0 flex-col gap-5 overflow-y-auto border-r border-border-nav bg-nav px-3 py-5">
-      <Link href={props.titleHref ?? "/home"} className="px-2">
-        <span className="text-xs font-semibold uppercase tracking-widest text-text-inverse">
+    <nav className="no-print sticky top-0 flex h-screen w-[242px] shrink-0 flex-col gap-5 overflow-y-auto border-r border-border-nav bg-nav px-3 py-5 shadow-[8px_0_32px_rgba(7,22,47,0.12)]">
+      <Link href={props.titleHref ?? "/home"} className="flex items-center gap-3 px-2 py-1">
+        <span className="relative grid h-8 w-8 place-items-center overflow-hidden rounded-full bg-[linear-gradient(135deg,#796dff,#356cff)] shadow-[0_0_24px_rgba(91,91,255,.45)]">
+          <span className="ml-0.5 h-0 w-0 border-y-[6px] border-l-[9px] border-y-transparent border-l-white" />
+        </span>
+        <span className="text-sm font-bold uppercase tracking-[0.08em] text-text-inverse">
           {props.title ?? "Guided Planning"}
         </span>
       </Link>

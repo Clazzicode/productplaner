@@ -4,7 +4,7 @@
 export function Card(props: { children: React.ReactNode; className?: string }) {
   return (
     <section
-      className={`rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm ${props.className ?? ""}`}
+      className={`rounded-xl border border-border-subtle bg-white p-5 shadow-[0_8px_28px_rgba(46,71,125,0.06)] ${props.className ?? ""}`}
     >
       {props.children}
     </section>
@@ -13,7 +13,7 @@ export function Card(props: { children: React.ReactNode; className?: string }) {
 
 export function CardTitle(props: { children: React.ReactNode; className?: string }) {
   return (
-    <h2 className={`text-sm font-semibold text-neutral-800 ${props.className ?? ""}`}>
+    <h2 className={`text-sm font-semibold text-text-primary ${props.className ?? ""}`}>
       {props.children}
     </h2>
   );

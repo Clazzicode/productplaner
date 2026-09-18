@@ -36,7 +36,7 @@ export function Badge(props: {
   return (
     <span
       title={props.title}
-      className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${VARIANTS[props.variant ?? "neutral"]} ${props.className ?? ""}`}
+      className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ${VARIANTS[props.variant ?? "neutral"]} ${props.className ?? ""}`}
     >
       {props.children}
     </span>

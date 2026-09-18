@@ -26,11 +26,11 @@ export default async function TeamsPage() {
   });
 
   return (
-    <ContainedLayout className="max-w-5xl">
+    <ContainedLayout>
       <PageHeader
         eyebrow="Organization"
         title="Teams & Stakeholders"
-        description="Who's grouped together, and — for now — who's on each team. Initiative access moves here in Step 8C."
+        description="Understand the teams and stakeholders contributing to planning and delivery."
       />
       <div className="mt-6">
         <TeamsList

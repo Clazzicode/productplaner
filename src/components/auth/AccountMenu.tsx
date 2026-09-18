@@ -73,7 +73,7 @@ export default function AccountMenu(props: { userName: string; accessLevel: stri
         aria-haspopup="menu"
         aria-expanded={open}
         aria-label={`Account menu for ${props.userName}`}
-        className="flex items-center gap-2 rounded-full py-1 pl-1 pr-2.5 text-sm text-neutral-600 transition hover:bg-neutral-100"
+        className="flex items-center gap-2 rounded-full py-1 pl-1 pr-2.5 text-sm text-text-secondary transition hover:bg-[#edf3ff]"
       >
         <Avatar name={props.userName} />
         <span className="hidden max-w-32 truncate font-medium sm:inline">{props.userName}</span>

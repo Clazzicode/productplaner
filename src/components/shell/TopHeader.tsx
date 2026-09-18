@@ -18,7 +18,7 @@ export default function TopHeader(props: {
 }) {
   return (
     <>
-      <header className="no-print hidden items-center justify-between gap-4 border-b border-border-subtle bg-panel px-6 py-3 lg:flex">
+      <header className="no-print sticky top-0 z-30 hidden min-h-[78px] items-center justify-between gap-4 border-b border-border-subtle bg-white/95 px-7 py-2.5 backdrop-blur lg:flex">
         {props.switcherAndNew}
         {props.accountActions}
       </header>

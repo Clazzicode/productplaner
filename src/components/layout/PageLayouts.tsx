@@ -24,15 +24,15 @@ export function FocusedLayout(props: { children: React.ReactNode; className?: st
  * primitive's concern.
  */
 export function ContainedLayout(props: { children: React.ReactNode; className?: string }) {
-  return <div className={`mx-auto min-h-screen max-w-6xl px-6 py-8 ${props.className ?? ""}`}>{props.children}</div>;
+  return <div className={`mx-auto min-h-screen max-w-[1480px] px-5 py-7 sm:px-7 lg:px-8 ${props.className ?? ""}`}>{props.children}</div>;
 }
 
 export function DashboardLayout(props: { children: React.ReactNode; className?: string }) {
-  return <div className={`mx-auto max-w-7xl px-6 py-8 ${props.className ?? ""}`}>{props.children}</div>;
+  return <div className={`mx-auto max-w-[1480px] px-5 py-7 sm:px-7 lg:px-8 ${props.className ?? ""}`}>{props.children}</div>;
 }
 
 export function WideLayout(props: { children: React.ReactNode; className?: string }) {
-  return <div className={`mx-auto max-w-[1600px] px-6 py-8 ${props.className ?? ""}`}>{props.children}</div>;
+  return <div className={`mx-auto max-w-[1680px] px-5 py-7 sm:px-7 lg:px-8 ${props.className ?? ""}`}>{props.children}</div>;
 }
 
 export function TableLayout(props: { children: React.ReactNode; className?: string }) {

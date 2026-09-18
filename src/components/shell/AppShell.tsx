@@ -41,9 +41,13 @@ export default function AppShell(props: {
 
   const urlMatch = pathname.match(/^\/initiatives\/([^/]+)/);
   const currentId = urlMatch?.[1] ?? "";
-  const currentInitiative = props.initiatives.find((i) => i.id === currentId);
+  const routeInitiative = props.initiatives.find((i) => i.id === currentId);
+  const currentInitiative =
+    routeInitiative ??
+    props.initiatives.find((i) => i.status === "generated") ??
+    props.initiatives[0];
 
-  const bare = isBareRoute(pathname, props.hasProfile, currentInitiative);
+  const bare = isBareRoute(pathname, props.hasProfile, routeInitiative);
 
   if (bare) {
     return props.children;
@@ -60,35 +64,55 @@ export default function AppShell(props: {
   };
 
   const switcherAndNew = (
-    <div className="flex items-center gap-3">
-      {props.initiatives.length > 0 && (
-        <select
-          value={props.initiatives.some((i) => i.id === currentId) ? currentId : ""}
-          onChange={(e) => switchInitiative(e.target.value)}
-          className="max-w-64 rounded-lg border border-neutral-300 bg-white px-3 py-1.5 text-sm font-medium focus:border-indigo-500 focus:outline-none"
+    <div className="flex min-w-0 items-end gap-3">
+      {currentInitiative?.project && (
+        <Link
+          href={`/projects/${currentInitiative.project.id}`}
+          className="hidden min-w-52 rounded-lg border border-[#d4def1] bg-white px-3 py-2 text-sm font-semibold text-text-primary shadow-sm xl:block"
         >
-          <option value="" disabled>
-            Switch initiative…
-          </option>
-          {props.initiatives.map((i) => (
-            <option key={i.id} value={i.id}>
-              {i.name}
-              {i.status !== "generated" ? " (intake)" : ""}
-            </option>
-          ))}
-        </select>
+          <span className="mb-1 block text-[10px] font-medium text-text-muted">Project</span>
+          <span className="block max-w-56 truncate">▣ &nbsp;{currentInitiative.project.name}</span>
+        </Link>
+      )}
+      {props.initiatives.length > 0 && (
+        <label className="min-w-0 xl:min-w-80">
+          <span className="mb-1 block text-[10px] font-medium text-text-muted">Initiative</span>
+          <select
+            value={currentInitiative?.id ?? ""}
+            onChange={(e) => switchInitiative(e.target.value)}
+            className="w-full max-w-96 rounded-lg border border-[#d4def1] bg-white px-3 py-2 text-sm font-semibold text-text-primary shadow-sm focus:border-indigo-500 focus:outline-none"
+          >
+            <option value="" disabled>Switch initiative…</option>
+            {props.initiatives.map((i) => (
+              <option key={i.id} value={i.id}>
+                {i.name}{i.status !== "generated" ? " (intake)" : ""}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+      {currentInitiative && (
+        <Link
+          href="/integrations"
+          className="hidden h-[38px] items-center gap-2 rounded-lg border border-[#d4def1] bg-white px-3 text-sm font-semibold text-text-primary shadow-sm md:flex"
+        >
+          <span className="text-[#315cff]">◆</span>
+          {currentInitiative.syncConnections[0]?.status === "connected" ? (
+            <><span className="h-2 w-2 rounded-full bg-emerald-500" /> Connected to Jira</>
+          ) : "Connect Jira"}
+        </Link>
       )}
       <Link
         href="/initiatives/new"
-        className="rounded-lg bg-indigo-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-indigo-700"
+        className="hidden h-[38px] items-center rounded-lg bg-accent px-3 text-sm font-semibold text-white shadow-sm hover:bg-accent-hover 2xl:flex"
       >
-        + New
+        + New initiative
       </Link>
     </div>
   );
 
   return (
-    <div className="flex min-h-screen">
+    <div className="flex min-h-screen bg-surface">
       <div className="hidden lg:contents">
         <LeftNav initiatives={props.initiatives} />
       </div>
@@ -107,7 +131,7 @@ export default function AppShell(props: {
           userName={props.userName}
           onOpenMenu={() => setDrawerOpen(true)}
         />
-        <main className="min-w-0 flex-1">
+        <main className="min-w-0 flex-1 bg-[radial-gradient(circle_at_82%_0%,#edf1ff_0,transparent_30%)]">
           <div className="px-6 pt-4">
             <AiUsageBanner />
           </div>

@@ -8,9 +8,9 @@ export interface NavInitiative {
   id: string;
   name: string;
   status: string; // draft | intake_in_progress | generated
+  project: { id: string; name: string } | null;
+  syncConnections: { status: string }[];
 }
-
-const NOT_YET_AVAILABLE = "Not yet available.";
 
 /**
  * Persistent left navigation, grouped per docs/V2-APPLICATION-SHELL-BLUEPRINT.md §2
@@ -91,20 +91,23 @@ export default function LeftNav(props: { initiatives: NavInitiative[] }) {
           ],
         },
         {
-          title: "Intelligence",
+          title: "Delivery",
           items: [
-            { label: "Risks & Blockers", href: null, disabled: { reason: NOT_YET_AVAILABLE } },
-            { label: "Decisions", href: null, disabled: { reason: NOT_YET_AVAILABLE } },
             scoped("workspace/capacity", "Capacity & Cost"),
-            scoped("workspace/executive", "Reports"),
+            { label: "Risks & Blockers", href: "/risks" },
+            { label: "Decisions", href: "/decisions" },
           ],
+        },
+        {
+          title: "Intelligence",
+          items: [scoped("workspace/executive", "Reports")],
         },
         {
           title: "Organization",
           items: [
             { label: "Teams & Stakeholders", href: "/teams" },
             { label: "Integrations", href: "/integrations" },
-            { label: "Activity", href: null, disabled: { reason: NOT_YET_AVAILABLE } },
+            { label: "Activity", href: "/activity" },
           ],
         },
       ]

@@ -117,7 +117,7 @@ export default function IntegrationsHub(props: {
   return (
     <div>
       {/* Search + category pills */}
-      <div className="flex flex-wrap items-center gap-3">
+      <div className="flex flex-wrap items-center gap-3 rounded-xl border border-border-subtle bg-white p-3 shadow-sm">
         <input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
@@ -129,7 +129,7 @@ export default function IntegrationsHub(props: {
             <button
               key={c.key}
               onClick={() => setCategory(c.key)}
-              className={`rounded-full px-3 py-1.5 text-xs font-medium transition ${
+              className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
                 category === c.key
                   ? "bg-indigo-600 text-white"
                   : "bg-white text-neutral-500 hover:text-neutral-800"
@@ -160,7 +160,7 @@ export default function IntegrationsHub(props: {
           const busy = (k: string) => busyKey === `${provider.key}:${k}`;
 
           return (
-            <div key={provider.id} className="rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm">
+            <div key={provider.id} className={`rounded-xl border bg-white p-5 shadow-[0_8px_28px_rgba(46,71,125,0.06)] ${provider.isFeatured ? "border-indigo-200 ring-1 ring-indigo-50" : "border-border-subtle"}`}>
               <div className="flex flex-wrap items-start gap-4">
                 {/* Left: logo + identity */}
                 <div className="flex min-w-0 flex-1 items-start gap-3">
@@ -169,7 +169,7 @@ export default function IntegrationsHub(props: {
                     className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-lg font-bold text-white"
                     style={{ backgroundColor: brand }}
                   >
-                    {provider.name.slice(0, 1)}
+                    {provider.key === "jira" ? "◆" : provider.name.slice(0, 1)}
                   </span>
                   <div className="min-w-0">
                     <p className="flex flex-wrap items-center gap-2 font-semibold">

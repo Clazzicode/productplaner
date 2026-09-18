@@ -59,15 +59,15 @@ export default function TeamsList(props: { isOrgAdmin: boolean; teams: TeamRow[]
           description="Teams group people so they can be granted access to initiatives together, once Step 8C ships."
         />
       ) : (
-        <ul className="space-y-2">
+        <ul className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {props.teams.map((t) => (
             <li key={t.id}>
               <Link
                 href={`/teams/${t.id}`}
-                className="block rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm transition hover:border-indigo-300 hover:shadow"
+                className="block h-full rounded-xl border border-border-subtle bg-white p-5 shadow-[0_8px_28px_rgba(46,71,125,0.06)] transition hover:-translate-y-0.5 hover:border-indigo-300 hover:shadow-lg"
               >
                 <div className="flex items-center justify-between gap-3">
-                  <p className="font-semibold text-text-primary">{t.name}</p>
+                  <span className="mr-3 grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-indigo-50 font-bold text-accent">{t.name.slice(0, 1).toUpperCase()}</span><p className="min-w-0 flex-1 font-semibold text-text-primary">{t.name}</p>
                   <p className="text-xs text-text-muted">
                     {t.memberCount} {t.memberCount === 1 ? "member" : "members"}
                     {t.externalCount > 0 && ` (${t.externalCount} external)`}

@@ -1,32 +1,32 @@
 @import "tailwindcss";
 
 :root {
-  --background: #f7f7fb;
-  --foreground: #1c1c28;
+  --background: #f5f8ff;
+  --foreground: #0d1b3e;
 
   /* Shell surfaces — only navigation/chrome go dark; the workspace stays a
      light neutral (--surface below), unchanged in spirit from --background.
      See docs/V2-DESIGN-SYSTEM.md "Surface Hierarchy". */
-  --surface-nav: #14161d;
-  --surface-nav-hover: #1f2229;
-  --surface-nav-selected: #262a3a;
-  --surface-chrome: #1b1e26;
-  --surface: #f7f7fb;
+  --surface-nav: #07162f;
+  --surface-nav-hover: #102546;
+  --surface-nav-selected: #302a89;
+  --surface-chrome: #ffffff;
+  --surface: #f5f8ff;
   --surface-panel: #ffffff;
-  --border-subtle: #e5e5ea;
-  --border-nav: #262a33;
+  --border-subtle: #dfe7f5;
+  --border-nav: #183155;
 
   /* Text */
-  --text-primary: #1c1c28;
-  --text-secondary: #52525b;
-  --text-muted: #8b8b96;
+  --text-primary: #0d1b3e;
+  --text-secondary: #44557a;
+  --text-muted: #7080a4;
   --text-inverse: #f4f4f6;
   --text-inverse-muted: #9296a6;
   --text-disabled: #b8b8c2;
 
   /* Accent — tokenizes the app's existing indigo-600/700, not a new color. */
-  --accent: #4f46e5;
-  --accent-hover: #4338ca;
+  --accent: #4238f4;
+  --accent-hover: #3026d7;
 
   /* Health — a 4-tier semantic scale for future roadmap/product-health status.
      Distinct hues, deliberately NOT aliases of Badge's existing emerald/amber/
@@ -74,6 +74,15 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-sans), system-ui, sans-serif;
+}
+
+::selection {
+  background: #cbdcff;
+  color: #0d1b3e;
+}
+
+button, a, input, select, textarea {
+  outline-color: var(--accent);
 }
 
 @media print {
