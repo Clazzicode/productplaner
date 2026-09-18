@@ -1,8 +1,9 @@
+import { withApi } from "@/lib/observability";
 import { NextResponse } from "next/server";
 import { requireCurrentUserApi } from "@/lib/auth/session";
 import { db, establishAuthContext } from "@/lib/db";
 
-export async function GET() {
+async function GETHandler() {
   const authGuard = await requireCurrentUserApi();
   if (!authGuard.ok) return authGuard.response;
   establishAuthContext(authGuard.user.authUserId);
@@ -16,7 +17,7 @@ export async function GET() {
 
 /** "Replay Product Tour" (account menu) — clears every dismissal so coach
  * marks reappear at their anchors without replaying the full onboarding. */
-export async function DELETE() {
+async function DELETEHandler() {
   const authGuard = await requireCurrentUserApi();
   if (!authGuard.ok) return authGuard.response;
   establishAuthContext(authGuard.user.authUserId);
@@ -24,3 +25,6 @@ export async function DELETE() {
   await db.coachMarkDismissal.deleteMany({ where: { userId: authGuard.user.id } });
   return NextResponse.json({ ok: true });
 }
+
+export const GET = withApi(GETHandler);
+export const DELETE = withApi(DELETEHandler);

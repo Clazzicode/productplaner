@@ -1,10 +1,12 @@
+import { withApi } from "@/lib/observability";
+import { requireOrganizationRole } from "@/lib/access/organizationRole";
 import { NextResponse } from "next/server";
 import { jsonError, zodMessage } from "@/lib/api";
 import { requireCurrentUserApi } from "@/lib/auth/session";
 import { db, establishAuthContext } from "@/lib/db";
 import { projectCreateSchema } from "@/lib/validation/schemas";
 
-export async function GET() {
+async function GETHandler() {
   const authGuard = await requireCurrentUserApi();
   if (!authGuard.ok) return authGuard.response;
   const user = authGuard.user;
@@ -30,7 +32,7 @@ export async function GET() {
   });
 }
 
-export async function POST(request: Request) {
+async function POSTHandler(request: Request) {
   const parsed = projectCreateSchema.safeParse(await request.json());
   if (!parsed.success) return jsonError(zodMessage(parsed.error), 422);
 
@@ -38,6 +40,8 @@ export async function POST(request: Request) {
   if (!authGuard.ok) return authGuard.response;
   const user = authGuard.user;
   establishAuthContext(user.authUserId);
+  const roleGuard = requireOrganizationRole(user, ["owner", "admin"]);
+  if (!roleGuard.ok) return roleGuard.response;
 
   // A brand-new Project starts a clean context — it inherits nothing from any
   // other Project (directive §6): every field below comes only from this
@@ -57,3 +61,6 @@ export async function POST(request: Request) {
   });
   return NextResponse.json({ projectId: project.id });
 }
+
+export const GET = withApi(GETHandler);
+export const POST = withApi(POSTHandler);

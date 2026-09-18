@@ -1,3 +1,4 @@
+import { withApi } from "@/lib/observability";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { jsonError, zodMessage } from "@/lib/api";
@@ -9,7 +10,7 @@ const changeSchema = z.object({ permission: z.enum(["owner", "edit", "view"]) })
 
 const LAST_OWNER_MESSAGE = "This is the only Owner on this initiative — grant Owner to someone else first.";
 
-export async function PATCH(
+async function PATCHHandler(
   request: Request,
   { params }: { params: Promise<{ grantId: string }> },
 ) {
@@ -32,7 +33,7 @@ export async function PATCH(
   return NextResponse.json(result.data);
 }
 
-export async function DELETE(
+async function DELETEHandler(
   _request: Request,
   { params }: { params: Promise<{ grantId: string }> },
 ) {
@@ -50,3 +51,6 @@ export async function DELETE(
   }
   return NextResponse.json(result.data);
 }
+
+export const PATCH = withApi(PATCHHandler);
+export const DELETE = withApi(DELETEHandler);

@@ -1,3 +1,4 @@
+import { withApi } from "@/lib/observability";
 import { NextResponse } from "next/server";
 import { requireInitiativeApiAccess } from "@/lib/access/guards";
 import { jsonError } from "@/lib/api";
@@ -16,7 +17,7 @@ const SCOPE_ACTIONS: Record<string, AiActionKey[]> = {
   sprints: ["RECOMMEND_SPRINTS"],
 };
 
-export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
+async function GETHandler(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const authGuard = await requireCurrentUserApi();
   if (!authGuard.ok) return authGuard.response;
@@ -59,3 +60,5 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
 
   return NextResponse.json({ items, pendingJobs });
 }
+
+export const GET = withApi(GETHandler);

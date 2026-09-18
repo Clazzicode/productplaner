@@ -55,8 +55,8 @@ export default async function NewInitiativeInProjectPage({ params }: { params: P
           id: project.id,
           name: project.name,
           hasContext,
-          budget: project.budget,
-          averageHourlyRate: project.averageHourlyRate,
+          budget: project.budget == null ? null : Number(project.budget),
+          averageHourlyRate: project.averageHourlyRate == null ? null : Number(project.averageHourlyRate),
           targetLaunchDate: project.targetLaunchDate?.toISOString() ?? null,
         }}
       />

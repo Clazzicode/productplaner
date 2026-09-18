@@ -1,3 +1,4 @@
+import { withApi } from "@/lib/observability";
 import { NextResponse } from "next/server";
 import { requireInitiativeApiAccess } from "@/lib/access/guards";
 import { jsonError, zodMessage } from "@/lib/api";
@@ -8,7 +9,7 @@ import { runProposeStoryContent } from "@/lib/ai/actions/proposeStoryContent";
 import { mapAssistActionError } from "@/lib/ai/assist/routeErrors";
 
 // AI Assist trigger — PROPOSE_STORY_CONTENT (Section 4). Body: { featureId }.
-export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
+async function POSTHandler(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const authGuard = await requireCurrentUserApi();
   if (!authGuard.ok) return authGuard.response;
@@ -42,3 +43,5 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     return mapAssistActionError(err);
   }
 }
+
+export const POST = withApi(POSTHandler);

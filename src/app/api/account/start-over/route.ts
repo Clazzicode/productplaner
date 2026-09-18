@@ -1,4 +1,6 @@
+import { withApi } from "@/lib/observability";
 import { NextResponse } from "next/server";
+import { demoIntegrationsEnabled } from "@/lib/sync/demoPolicy";
 import { requireCurrentUserApi } from "@/lib/auth/session";
 import { establishAuthContext, withTransaction } from "@/lib/db";
 
@@ -11,16 +13,19 @@ import { establishAuthContext, withTransaction } from "@/lib/db";
  * automatically. Org-wide IntegrationConnections are deliberately left
  * untouched — they aren't per-initiative journey state.
  */
-export async function POST() {
+async function POSTHandler() {
+  if (!demoIntegrationsEnabled()) return NextResponse.json({ error: "Demo reset is disabled." }, { status: 403 });
   const authGuard = await requireCurrentUserApi();
   if (!authGuard.ok) return authGuard.response;
   const user = authGuard.user;
   establishAuthContext(user.authUserId);
   await withTransaction((tx) =>
     Promise.all([
-      tx.initiative.deleteMany({ where: { userId: user.id } }),
+      tx.initiative.deleteMany({ where: { userId: user.id, organizationId: user.organizationId } }),
       tx.qualifyingProfile.deleteMany({ where: { userId: user.id } }),
     ]),
   );
   return NextResponse.json({ ok: true });
 }
+
+export const POST = withApi(POSTHandler);

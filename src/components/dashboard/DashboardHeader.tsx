@@ -49,9 +49,9 @@ export default function DashboardHeader(props: {
                   <Badge variant="emerald">
                     Baseline approved {props.baselineApprovedAt.toLocaleDateString()}
                   </Badge>
-                ) : (
+                ) : props.isOrgAdmin ? (
                   <ApprovePlanButton initiativeId={props.initiativeId} />
-                )}
+                ) : null}
               </span>
             </>
           }

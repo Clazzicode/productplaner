@@ -4,6 +4,7 @@
 // Jira-only jiraStub.ts used by the workspace JiraSyncPanel.
 
 import { db } from "@/lib/db";
+import { assertDemoIntegrationsEnabled } from "./demoPolicy";
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -27,6 +28,7 @@ async function providerByKey(providerKey: string) {
 
 /** Connect or reconfigure a demo connection. Configured = has a project key. */
 export async function connectDemo(args: ConnectArgs) {
+  assertDemoIntegrationsEnabled();
   const provider = await providerByKey(args.providerKey);
   const configured = Boolean(args.projectKey?.trim() || provider.category !== "execution");
   const status = configured ? "demo_connected" : "needs_configuration";
@@ -41,7 +43,8 @@ export async function connectDemo(args: ConnectArgs) {
     configuredByUserId: args.configuredByUserId,
     configuredAt: new Date(),
     isEnabled: true,
-    settingsJson: JSON.stringify(args.settings ?? {}),
+    // Only boolean demo switches are accepted; never persist credentials.
+    settingsJson: JSON.stringify(Object.fromEntries(Object.entries(args.settings ?? {}).filter(([key, value]) => /^(generate_demo_keys|create_demo_issue_refs)$/.test(key) && typeof value === "boolean"))),
   };
   // findFirst + update/create instead of upsert: the compound unique includes
   // a nullable initiativeId, which Postgres/Prisma can't match on NULL.
@@ -66,6 +69,7 @@ export async function connectDemo(args: ConnectArgs) {
 }
 
 export async function disconnectDemo(connectionId: string) {
+  assertDemoIntegrationsEnabled();
   return db.integrationConnection.update({
     where: { id: connectionId },
     data: { status: "available", isEnabled: false },
@@ -73,6 +77,7 @@ export async function disconnectDemo(connectionId: string) {
 }
 
 export async function reconnectDemo(connectionId: string) {
+  assertDemoIntegrationsEnabled();
   const conn = await db.integrationConnection.findUniqueOrThrow({
     where: { id: connectionId },
     include: { provider: true },
@@ -93,6 +98,7 @@ export async function runDemoSync(connectionId: string): Promise<{
   itemsProcessed: number;
   message: string;
 }> {
+  assertDemoIntegrationsEnabled();
   const conn = await db.integrationConnection.findUniqueOrThrow({
     where: { id: connectionId },
     include: { provider: true },

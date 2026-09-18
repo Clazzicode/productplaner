@@ -1,3 +1,4 @@
+import { withApi } from "@/lib/observability";
 import { NextResponse } from "next/server";
 import { requireInitiativeApiAccess } from "@/lib/access/guards";
 import { jsonError, zodMessage } from "@/lib/api";
@@ -11,7 +12,7 @@ import { mapAssistActionError } from "@/lib/ai/assist/routeErrors";
 // { entityType: "project" | "initiative", entityId }. Scoped to this
 // initiative or its own project only — never an arbitrary org-wide entity
 // id, even though the caller is already access-checked for this initiative.
-export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
+async function POSTHandler(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const authGuard = await requireCurrentUserApi();
   if (!authGuard.ok) return authGuard.response;
@@ -41,3 +42,5 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     return mapAssistActionError(err);
   }
 }
+
+export const POST = withApi(POSTHandler);

@@ -1,3 +1,4 @@
+import { withApi } from "@/lib/observability";
 import { NextResponse } from "next/server";
 import { requireInitiativeApiAccess } from "@/lib/access/guards";
 import { requireProjectApiAccess } from "@/lib/access/projectAccess";
@@ -12,7 +13,7 @@ import { roadmapStatusEntityTypeSchema, roadmapStatusSetSchema } from "@/lib/val
 // organizationId resolution path built yet (they'd need to walk
 // ArtifactLayer -> Prototype -> Initiative), so they're read-only via the
 // batch GET until that's added alongside their own UI.
-export async function PATCH(request: Request, { params }: { params: Promise<{ entityType: string; entityId: string }> }) {
+async function PATCHHandler(request: Request, { params }: { params: Promise<{ entityType: string; entityId: string }> }) {
   const { entityType, entityId } = await params;
   const entityTypeParsed = roadmapStatusEntityTypeSchema.safeParse(entityType);
   if (!entityTypeParsed.success) return jsonError("Invalid entityType.", 422);
@@ -58,3 +59,5 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ en
   });
   return NextResponse.json({ ok: true });
 }
+
+export const PATCH = withApi(PATCHHandler);

@@ -1,3 +1,4 @@
+import { withApi } from "@/lib/observability";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { jsonError, zodMessage } from "@/lib/api";
@@ -52,7 +53,7 @@ function parseWorkingRole(value: string): WorkingRole | null {
  * Dashboard Configuration is presentation only — these routes never touch
  * `accessLevel`, `memberType`, or `InitiativeAccess`.
  */
-export async function POST(request: Request, { params }: { params: Promise<{ workingRole: string }> }) {
+async function POSTHandler(request: Request, { params }: { params: Promise<{ workingRole: string }> }) {
   const { workingRole: rawRole } = await params;
   const authGuard = await requireCurrentUserApi();
   if (!authGuard.ok) return authGuard.response;
@@ -73,7 +74,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ wor
   return NextResponse.json({ widgets: view });
 }
 
-export async function DELETE(_request: Request, { params }: { params: Promise<{ workingRole: string }> }) {
+async function DELETEHandler(_request: Request, { params }: { params: Promise<{ workingRole: string }> }) {
   const { workingRole: rawRole } = await params;
   const authGuard = await requireCurrentUserApi();
   if (!authGuard.ok) return authGuard.response;
@@ -90,3 +91,6 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
   const view = await getRoleConfigurationView(actor.organizationId, workingRole);
   return NextResponse.json({ widgets: view });
 }
+
+export const POST = withApi(POSTHandler);
+export const DELETE = withApi(DELETEHandler);

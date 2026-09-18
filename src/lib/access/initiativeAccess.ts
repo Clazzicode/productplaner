@@ -46,7 +46,7 @@ export async function getResolvedAccess(
   actor: ActorRow,
   initiativeId: string,
 ): Promise<ResolvedAccess | "not_found"> {
-  const initiative = await db.initiative.findUnique({ where: { id: initiativeId }, select: { id: true, organizationId: true } });
+  const initiative = await db.initiative.findUnique({ where: { id: initiativeId, organizationId: actor.organizationId }, select: { id: true, organizationId: true } });
   if (!initiative) return "not_found";
   if (actor.organizationId !== initiative.organizationId) return "not_found";
 
@@ -82,13 +82,13 @@ export async function listAuthorizedInitiativeIds(actor: ActorRow): Promise<stri
   }
 
   const [directGrants, memberships] = await Promise.all([
-    db.initiativeAccess.findMany({ where: { userId: actor.id }, select: { initiativeId: true } }),
+    db.initiativeAccess.findMany({ where: { userId: actor.id, initiative: { organizationId: actor.organizationId } }, select: { initiativeId: true } }),
     db.teamMember.findMany({ where: { userId: actor.id }, select: { teamId: true } }),
   ]);
   const teamIds = memberships.map((m) => m.teamId);
   const teamGrants =
     teamIds.length > 0
-      ? await db.initiativeAccess.findMany({ where: { teamId: { in: teamIds } }, select: { initiativeId: true } })
+      ? await db.initiativeAccess.findMany({ where: { teamId: { in: teamIds }, initiative: { organizationId: actor.organizationId } }, select: { initiativeId: true } })
       : [];
 
   const ids = new Set([...directGrants.map((g) => g.initiativeId), ...teamGrants.map((g) => g.initiativeId)]);

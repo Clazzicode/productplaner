@@ -47,7 +47,7 @@ export default async function EpicsPage({
     <div>
       <h2 className="text-xl font-bold">Epics &amp; user stories</h2>
       <p className="mt-1 text-sm text-neutral-500">
-        Edit an epic's title or description directly — open a story for its acceptance criteria.
+        Edit an epic&apos;s title or description directly — open a story for its acceptance criteria.
       </p>
 
       <div className="mt-6 space-y-8">

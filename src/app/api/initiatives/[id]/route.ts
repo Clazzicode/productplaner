@@ -1,3 +1,4 @@
+import { withApi } from "@/lib/observability";
 import { NextResponse } from "next/server";
 import { requireInitiativeApiAccess } from "@/lib/access/guards";
 import { jsonError, zodMessage } from "@/lib/api";
@@ -6,7 +7,7 @@ import { db, establishAuthContext } from "@/lib/db";
 import { resolveInitiativeEconomics } from "@/lib/projectContext";
 import { initiativePatchSchema } from "@/lib/validation/schemas";
 
-export async function GET(
+async function GETHandler(
   _request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
@@ -38,7 +39,7 @@ export async function GET(
   return NextResponse.json({ ...rest, ...resolveInitiativeEconomics(initiative, project) });
 }
 
-export async function PATCH(
+async function PATCHHandler(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
@@ -58,3 +59,6 @@ export async function PATCH(
   await db.initiative.update({ where: { id }, data: parsed.data });
   return NextResponse.json({ ok: true });
 }
+
+export const GET = withApi(GETHandler);
+export const PATCH = withApi(PATCHHandler);

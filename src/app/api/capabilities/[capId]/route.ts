@@ -1,4 +1,6 @@
+import { withApi } from "@/lib/observability";
 import { NextResponse } from "next/server";
+import { withPlanningMutation } from "@/lib/generation/mutation";
 import { requireInitiativeApiAccess } from "@/lib/access/guards";
 import { jsonError, zodMessage } from "@/lib/api";
 import { requireCurrentUserApi } from "@/lib/auth/session";
@@ -25,7 +27,7 @@ async function loadEditable(capId: string) {
   return { capability };
 }
 
-export async function PATCH(
+async function PATCHHandler(
   request: Request,
   { params }: { params: Promise<{ capId: string }> },
 ) {
@@ -59,7 +61,7 @@ export async function PATCH(
   });
   const validDeps = dependsOn.filter((d) => siblings.some((c) => c.id === d));
 
-  await withTransaction((tx) =>
+  await withPlanningMutation(capability!.intakeAnswerSet.initiative.id, "capability.updated", () => withTransaction((tx) =>
     Promise.all([
       tx.capabilityDependency.deleteMany({ where: { fromCapabilityId: capId } }),
       tx.capability.update({
@@ -71,11 +73,11 @@ export async function PATCH(
         },
       }),
     ]),
-  );
+  ));
   return NextResponse.json({ ok: true });
 }
 
-export async function DELETE(
+async function DELETEHandler(
   _request: Request,
   { params }: { params: Promise<{ capId: string }> },
 ) {
@@ -90,6 +92,9 @@ export async function DELETE(
   const guard = await requireInitiativeApiAccess(authGuard.user, capability!.intakeAnswerSet.initiative.id, "edit");
   if (!guard.ok) return guard.response;
 
-  await db.capability.delete({ where: { id: capId } });
+  await withPlanningMutation(capability!.intakeAnswerSet.initiative.id, "capability.deleted", () => db.capability.delete({ where: { id: capId } }));
   return NextResponse.json({ ok: true });
 }
+
+export const PATCH = withApi(PATCHHandler);
+export const DELETE = withApi(DELETEHandler);

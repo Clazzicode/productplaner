@@ -1,3 +1,4 @@
+import { withApi } from "@/lib/observability";
 import { NextResponse } from "next/server";
 import { jsonError, zodMessage } from "@/lib/api";
 import { requireCurrentUserApi } from "@/lib/auth/session";
@@ -12,7 +13,7 @@ import { requireAiAssistItemAccess } from "@/lib/ai/assist/itemAccess";
 // release/sprint row itself was already created through the platform's
 // normal manual endpoint (POST /api/initiatives/[id]/releases, POST
 // /api/releases/[releaseId]/sprints, POST /api/artifacts/[id]/move-sprint).
-export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
+async function POSTHandler(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const authGuard = await requireCurrentUserApi();
   if (!authGuard.ok) return authGuard.response;
@@ -47,3 +48,5 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   });
   return NextResponse.json({ item: updated });
 }
+
+export const POST = withApi(POSTHandler);

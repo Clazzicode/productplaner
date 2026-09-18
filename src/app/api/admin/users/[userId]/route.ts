@@ -1,3 +1,4 @@
+import { withApi } from "@/lib/observability";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { jsonError, zodMessage } from "@/lib/api";
@@ -35,7 +36,7 @@ const userPatchSchema = z
  * prototype still has exactly one session-bound user, so it has never been
  * exercised against a real second, lower-privileged user.
  */
-export async function PATCH(
+async function PATCHHandler(
   request: Request,
   { params }: { params: Promise<{ userId: string }> },
 ) {
@@ -51,6 +52,21 @@ export async function PATCH(
 
   const target = await db.user.findUnique({ where: { id: userId } });
   if (!target || target.homeOrganizationId !== actor.organizationId) return jsonError("User not found.", 404);
+  const membership = target.authUserId ? await db.organizationMember.findUnique({
+    where: { organizationId_authUserId: { organizationId: actor.organizationId, authUserId: target.authUserId } },
+  }) : null;
+  if (!membership) return jsonError("Member not found.", 404);
+  if (membership.role === "owner" && (parsed.data.accessLevel || parsed.data.status)) {
+    return jsonError("Owner access must be preserved. Transfer ownership before changing this membership.", 409);
+  }
+  if (actor.permissionRole !== "owner" && (membership.role === "admin" || parsed.data.accessLevel === "org_admin")) {
+    return jsonError("Only an organization owner can manage administrators.", 403);
+  }
+  // User.status is global. This legacy screen must not disable a person in
+  // other workspaces as a side effect of managing this membership.
+  if (parsed.data.status && target.authUserId && await db.organizationMember.count({
+    where: { authUserId: target.authUserId, organizationId: { not: actor.organizationId } },
+  })) return jsonError("Manage this person's organization membership; global status changes are unavailable for multi-organization users.", 409);
 
   const demotingFromOrgAdmin = parsed.data.accessLevel === "standard_user" && target.accessLevel === "org_admin";
   const disabling = parsed.data.status && parsed.data.status !== "active" && target.status === "active";
@@ -83,3 +99,5 @@ export async function PATCH(
   });
   return NextResponse.json(updated);
 }
+
+export const PATCH = withApi(PATCHHandler);

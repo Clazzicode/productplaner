@@ -1,3 +1,4 @@
+import { withApi } from "@/lib/observability";
 import { NextResponse } from "next/server";
 import { requireInitiativeApiAccess } from "@/lib/access/guards";
 import { requireCurrentUserApi } from "@/lib/auth/session";
@@ -8,7 +9,7 @@ import { mapAssistActionError } from "@/lib/ai/assist/routeErrors";
 // AI Assist trigger — RECOMMEND_SPRINTS (Section 4). Never invents team
 // capacity/velocity — runRecommendSprints throws InsufficientContextError
 // (mapped to 422) before any Anthropic call if team size isn't entered yet.
-export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
+async function POSTHandler(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const authGuard = await requireCurrentUserApi();
   if (!authGuard.ok) return authGuard.response;
@@ -24,3 +25,5 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     return mapAssistActionError(err);
   }
 }
+
+export const POST = withApi(POSTHandler);

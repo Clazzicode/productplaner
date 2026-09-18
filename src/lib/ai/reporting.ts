@@ -68,7 +68,7 @@ export async function getOrganizationUsageSummary(
     existing.inputTokens += row._sum.inputTokens ?? 0;
     existing.outputTokens += row._sum.outputTokens ?? 0;
     existing.cacheReadInputTokens += row._sum.cacheReadInputTokens ?? 0;
-    existing.estimatedCostUsd += row._sum.estimatedCostUsd ?? 0;
+    existing.estimatedCostUsd += Number(row._sum.estimatedCostUsd ?? 0);
     byActionMap.set(row.action, existing);
   }
   const byAction = [...byActionMap.values()].sort((a, b) => a.action.localeCompare(b.action));

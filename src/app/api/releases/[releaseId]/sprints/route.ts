@@ -1,3 +1,4 @@
+import { withApi } from "@/lib/observability";
 import { NextResponse } from "next/server";
 import { requireInitiativeApiAccess } from "@/lib/access/guards";
 import { jsonError, zodMessage } from "@/lib/api";
@@ -12,7 +13,7 @@ import { createSprintSchema } from "@/lib/validation/schemas";
  * confirmed, keeping the manual chain (Release -> Sprint) separate from
  * whatever the engine's auto-repack is doing for other, unclaimed phases.
  */
-export async function POST(
+async function POSTHandler(
   request: Request,
   { params }: { params: Promise<{ releaseId: string }> },
 ) {
@@ -96,3 +97,5 @@ export async function POST(
 
   return NextResponse.json({ ok: true, sprint, assignedStoryCount: validStoryIds.length });
 }
+
+export const POST = withApi(POSTHandler);

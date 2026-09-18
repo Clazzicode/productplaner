@@ -1,3 +1,4 @@
+import { withApi } from "@/lib/observability";
 import { NextResponse } from "next/server";
 import { requireInitiativeApiAccess } from "@/lib/access/guards";
 import { jsonError } from "@/lib/api";
@@ -6,7 +7,7 @@ import { establishAuthContext } from "@/lib/db";
 import { loadIntakeInput } from "@/lib/generation/engine";
 import { validateIntake } from "@/lib/generation/validateIntake";
 
-export async function GET(
+async function GETHandler(
   _request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
@@ -24,3 +25,5 @@ export async function GET(
     return jsonError("Initiative not found.", 404);
   }
 }
+
+export const GET = withApi(GETHandler);

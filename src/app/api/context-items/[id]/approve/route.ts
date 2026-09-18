@@ -1,3 +1,4 @@
+import { withApi } from "@/lib/observability";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireContextItemApiAccess } from "@/lib/access/documentAccess";
@@ -15,7 +16,7 @@ const approveSchema = z.object({ value: z.string().trim().min(1).optional() });
 // given, is the user's edited wording (item 16: "the user's approved
 // version [becomes] the canonical value") — omitted means accept the AI's
 // suggested value as-is.
-export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
+async function POSTHandler(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const authGuard = await requireCurrentUserApi();
   if (!authGuard.ok) return authGuard.response;
@@ -49,3 +50,5 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
   return NextResponse.json({ ok: true });
 }
+
+export const POST = withApi(POSTHandler);

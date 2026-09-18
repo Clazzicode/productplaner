@@ -1,3 +1,4 @@
+import { withApi } from "@/lib/observability";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { jsonError, zodMessage } from "@/lib/api";
@@ -10,7 +11,7 @@ const teamCreateSchema = z.object({
 });
 
 /** Flat teams only — no nesting, no team roles (docs/V2-ACCESS-TEAMS-VISIBILITY.md §3). */
-export async function POST(request: Request) {
+async function POSTHandler(request: Request) {
   const authGuard = await requireCurrentUserApi();
   if (!authGuard.ok) return authGuard.response;
   const actor = authGuard.user;
@@ -29,3 +30,5 @@ export async function POST(request: Request) {
   });
   return NextResponse.json(team, { status: 201 });
 }
+
+export const POST = withApi(POSTHandler);

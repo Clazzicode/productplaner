@@ -1,3 +1,4 @@
+import { withApi } from "@/lib/observability";
 import { NextResponse } from "next/server";
 import { jsonError, zodMessage } from "@/lib/api";
 import { requireCurrentUserApi } from "@/lib/auth/session";
@@ -5,7 +6,7 @@ import { db, establishAuthContext } from "@/lib/db";
 import { clearOnboardingStateServer } from "@/lib/onboarding/tempStateServer";
 import { qualifyingExperienceLevelPatchSchema, qualifyingSchema } from "@/lib/validation/schemas";
 
-export async function POST(request: Request) {
+async function POSTHandler(request: Request) {
   const parsed = qualifyingSchema.safeParse(await request.json());
   if (!parsed.success) return jsonError(zodMessage(parsed.error), 422);
   const data = parsed.data;
@@ -48,7 +49,7 @@ export async function POST(request: Request) {
 
 /** Directive item 3: "Allow it to be changed later in Settings" — updates the
  * user's existing profile row rather than creating a second one. */
-export async function PATCH(request: Request) {
+async function PATCHHandler(request: Request) {
   const parsed = qualifyingExperienceLevelPatchSchema.safeParse(await request.json());
   if (!parsed.success) return jsonError(zodMessage(parsed.error), 422);
 
@@ -66,3 +67,6 @@ export async function PATCH(request: Request) {
   });
   return NextResponse.json({ ok: true });
 }
+
+export const POST = withApi(POSTHandler);
+export const PATCH = withApi(PATCHHandler);

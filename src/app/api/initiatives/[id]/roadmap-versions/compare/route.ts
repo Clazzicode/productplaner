@@ -1,3 +1,4 @@
+import { withApi } from "@/lib/observability";
 import { NextResponse } from "next/server";
 import { requireInitiativeApiAccess } from "@/lib/access/guards";
 import { jsonError } from "@/lib/api";
@@ -27,7 +28,7 @@ async function resolveSnapshot(
 // (each side is either "current" or an integer versionNumber). Resolves both
 // sides to the same {capturedAt, layers, ...} shape and returns a small,
 // spec-scoped diff summary — never a generic JSON diff.
-export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
+async function GETHandler(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const authGuard = await requireCurrentUserApi();
   if (!authGuard.ok) return authGuard.response;
@@ -54,3 +55,5 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   const diff = diffRoadmapSnapshots(fromSnapshot, toSnapshot, cost.model.costPerStoryPoint);
   return NextResponse.json({ diff });
 }
+
+export const GET = withApi(GETHandler);

@@ -1,3 +1,4 @@
+import { withApi } from "@/lib/observability";
 import { NextResponse } from "next/server";
 import { requireInitiativeApiAccess } from "@/lib/access/guards";
 import { jsonError, zodMessage } from "@/lib/api";
@@ -11,7 +12,7 @@ import {
 } from "@/lib/generation/engine";
 import { recalculatePlanSchema } from "@/lib/validation/schemas";
 
-export async function POST(
+async function POSTHandler(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
@@ -46,3 +47,5 @@ export async function POST(
     return jsonError(err instanceof Error ? err.message : "Recalculate failed.", 500);
   }
 }
+
+export const POST = withApi(POSTHandler);

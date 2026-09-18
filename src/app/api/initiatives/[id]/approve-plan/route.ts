@@ -1,8 +1,10 @@
+import { withApi } from "@/lib/observability";
 import { NextResponse } from "next/server";
+import { requireOrganizationRole } from "@/lib/access/organizationRole";
 import { requireInitiativeApiAccess } from "@/lib/access/guards";
 import { jsonError } from "@/lib/api";
 import { requireCurrentUserApi } from "@/lib/auth/session";
-import { db, establishAuthContext } from "@/lib/db";
+import { db, establishAuthContext, withTransaction } from "@/lib/db";
 import { snapshotApprovedBaseline } from "@/lib/generation/locking";
 import { recordApprovedRoadmapVersion } from "@/lib/generation/versioning";
 
@@ -13,14 +15,17 @@ import { recordApprovedRoadmapVersion } from "@/lib/generation/versioning";
 // approve action, reusing the same snapshotApprovedBaseline() the old lock
 // ceremony used to call only after all five layers were locked. Once set,
 // recalculatePlan() refuses to silently rebuild the plan (ApprovedBaselineImpactError).
-export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
+async function POSTHandler(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const authGuard = await requireCurrentUserApi();
   if (!authGuard.ok) return authGuard.response;
   establishAuthContext(authGuard.user.authUserId);
+  const roleGuard = requireOrganizationRole(authGuard.user, ["owner", "admin"]);
+  if (!roleGuard.ok) return roleGuard.response;
   const guard = await requireInitiativeApiAccess(authGuard.user, id, "edit");
   if (!guard.ok) return guard.response;
 
+  return withTransaction(async () => {
   const prototype = await db.prototype.findUnique({ where: { initiativeId: id }, select: { id: true } });
   if (!prototype) return jsonError("Generate a plan before approving it.", 404);
 
@@ -31,4 +36,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     approvedByUserId: authGuard.user.id,
   });
   return NextResponse.json({ ok: true, versionNumber });
+  }, { timeout: 120_000 });
 }
+
+export const POST = withApi(POSTHandler);

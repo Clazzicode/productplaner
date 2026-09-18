@@ -5,15 +5,20 @@
 // read Initiative.budget/averageHourlyRate/targetLaunchDate directly must
 // resolve through here instead — never read the override columns raw.
 
+type MonetaryValue = number | { toNumber(): number };
+export function moneyNumber(value: MonetaryValue | null): number | null {
+  return value == null ? null : typeof value === "number" ? value : value.toNumber();
+}
+
 export interface ProjectEconomics {
-  budget: number | null;
-  averageHourlyRate: number | null;
+  budget: MonetaryValue | null;
+  averageHourlyRate: MonetaryValue | null;
   targetLaunchDate: Date | null;
 }
 
 export interface InitiativeEconomicsOverride {
-  budgetOverride: number | null;
-  averageHourlyRateOverride: number | null;
+  budgetOverride: MonetaryValue | null;
+  averageHourlyRateOverride: MonetaryValue | null;
   targetLaunchDateOverride: Date | null;
 }
 
@@ -33,8 +38,8 @@ export function resolveInitiativeEconomics(
   project: ProjectEconomics,
 ): ResolvedInitiativeEconomics {
   return {
-    budget: initiative.budgetOverride ?? project.budget,
-    averageHourlyRate: initiative.averageHourlyRateOverride ?? project.averageHourlyRate,
+    budget: moneyNumber(initiative.budgetOverride ?? project.budget),
+    averageHourlyRate: moneyNumber(initiative.averageHourlyRateOverride ?? project.averageHourlyRate),
     targetLaunchDate: initiative.targetLaunchDateOverride ?? project.targetLaunchDate,
   };
 }
@@ -47,15 +52,15 @@ export function resolveTargetLaunchDate(
 }
 
 export function resolveBudget(
-  initiative: { budgetOverride: number | null },
-  project: { budget: number | null },
+  initiative: { budgetOverride: MonetaryValue | null },
+  project: { budget: MonetaryValue | null },
 ): number | null {
-  return initiative.budgetOverride ?? project.budget;
+  return moneyNumber(initiative.budgetOverride ?? project.budget);
 }
 
 export function resolveAverageHourlyRate(
-  initiative: { averageHourlyRateOverride: number | null },
-  project: { averageHourlyRate: number | null },
+  initiative: { averageHourlyRateOverride: MonetaryValue | null },
+  project: { averageHourlyRate: MonetaryValue | null },
 ): number | null {
-  return initiative.averageHourlyRateOverride ?? project.averageHourlyRate;
+  return moneyNumber(initiative.averageHourlyRateOverride ?? project.averageHourlyRate);
 }

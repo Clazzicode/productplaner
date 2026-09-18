@@ -1,3 +1,4 @@
+import { withApi } from "@/lib/observability";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { jsonError, zodMessage } from "@/lib/api";
@@ -29,7 +30,7 @@ const workingRoleSchema = z.object({
  * docs/V2-USERS-TEAMS.md "Working Role Cookie Transition" for why both still
  * happen during the transition period.
  */
-export async function PATCH(request: Request) {
+async function PATCHHandler(request: Request) {
   const parsed = workingRoleSchema.safeParse(await request.json());
   if (!parsed.success) return jsonError(zodMessage(parsed.error), 422);
 
@@ -43,3 +44,5 @@ export async function PATCH(request: Request) {
   });
   return NextResponse.json({ ok: true });
 }
+
+export const PATCH = withApi(PATCHHandler);

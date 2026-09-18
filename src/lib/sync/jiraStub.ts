@@ -1,4 +1,5 @@
 import { db } from "@/lib/db";
+import { assertDemoIntegrationsEnabled } from "./demoPolicy";
 
 // STUB ONLY (per scope): simulates FR-14's one-way Jira push entirely locally.
 // No HTTP call leaves this module — "sync" writes fake DEMO-n keys onto epics
@@ -7,6 +8,7 @@ import { db } from "@/lib/db";
 const FAKE_PROJECT_KEY = "DEMO";
 
 export async function connectJira(initiativeId: string) {
+  assertDemoIntegrationsEnabled();
   return db.syncConnection.upsert({
     where: { initiativeId_tool: { initiativeId, tool: "jira" } },
     create: {
@@ -24,6 +26,7 @@ export async function syncToJira(initiativeId: string): Promise<{
   pushed: number;
   projectKey: string;
 }> {
+  assertDemoIntegrationsEnabled();
   const conn = await db.syncConnection.findUnique({
     where: { initiativeId_tool: { initiativeId, tool: "jira" } },
   });

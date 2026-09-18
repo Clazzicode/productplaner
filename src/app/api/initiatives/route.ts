@@ -1,10 +1,11 @@
+import { withApi } from "@/lib/observability";
 import { NextResponse } from "next/server";
 import { jsonError, zodMessage } from "@/lib/api";
 import { getActiveProfile, requireCurrentUserApi } from "@/lib/auth/session";
 import { db, establishAuthContext } from "@/lib/db";
 import { initiativeCreateSchema } from "@/lib/validation/schemas";
 
-export async function POST(request: Request) {
+async function POSTHandler(request: Request) {
   const parsed = initiativeCreateSchema.safeParse(await request.json());
   if (!parsed.success) return jsonError(zodMessage(parsed.error), 422);
 
@@ -67,3 +68,5 @@ export async function POST(request: Request) {
   });
   return NextResponse.json({ initiativeId: initiative.id });
 }
+
+export const POST = withApi(POSTHandler);

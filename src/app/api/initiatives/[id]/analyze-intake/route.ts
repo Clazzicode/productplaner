@@ -1,3 +1,4 @@
+import { withApi } from "@/lib/observability";
 import { NextResponse } from "next/server";
 import { requireInitiativeApiAccess } from "@/lib/access/guards";
 import { jsonError } from "@/lib/api";
@@ -16,7 +17,7 @@ import {
 // writes exclusively to the new IntakeAiAnalysis/AiUsageEvent tables, never
 // to IntakeAnswerSet/Capability or anything the deterministic generation
 // engine owns.
-export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
+async function POSTHandler(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const authGuard = await requireCurrentUserApi();
   if (!authGuard.ok) return authGuard.response;
@@ -45,3 +46,5 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     return jsonError("Could not analyze this initiative — please try again.", 502);
   }
 }
+
+export const POST = withApi(POSTHandler);

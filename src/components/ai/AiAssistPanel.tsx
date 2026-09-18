@@ -68,8 +68,17 @@ export default function AiAssistPanel(props: { initiativeId: string; scope: Scop
   }, [initiativeId, scope]);
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    let active = true;
+    void apiFetch<ListResponse>(`/api/initiatives/${initiativeId}/ai-assist?scope=${scope}`).then((result) => {
+      if (!active) return;
+      if (result.ok && result.data) {
+        setItems(result.data.items);
+        setPendingJobs(result.data.pendingJobs);
+      }
+      setLoading(false);
+    });
+    return () => { active = false; };
+  }, [initiativeId, scope]);
 
   async function trigger(action: AiActionKey) {
     const path = TRIGGER_PATH[action];

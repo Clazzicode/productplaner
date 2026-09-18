@@ -1,3 +1,4 @@
+import { withApi } from "@/lib/observability";
 import { NextResponse } from "next/server";
 import { requireInitiativeApiAccess } from "@/lib/access/guards";
 import { requireCurrentUserApi } from "@/lib/auth/session";
@@ -6,7 +7,7 @@ import { runProposeFeatures } from "@/lib/ai/actions/proposeFeatures";
 import { mapAssistActionError } from "@/lib/ai/assist/routeErrors";
 
 // AI Assist trigger — PROPOSE_FEATURES (Section 4).
-export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
+async function POSTHandler(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const authGuard = await requireCurrentUserApi();
   if (!authGuard.ok) return authGuard.response;
@@ -22,3 +23,5 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     return mapAssistActionError(err);
   }
 }
+
+export const POST = withApi(POSTHandler);

@@ -1,3 +1,4 @@
+import { withApi } from "@/lib/observability";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { jsonError, zodMessage } from "@/lib/api";
@@ -6,7 +7,7 @@ import { establishAuthContext } from "@/lib/db";
 
 const switchSchema = z.object({ organizationId: z.string().trim().min(1) });
 
-export async function POST(request: Request) {
+async function POSTHandler(request: Request) {
   const guard = await requireCurrentUserApi();
   if (!guard.ok) return guard.response;
   establishAuthContext(guard.user.authUserId);
@@ -21,3 +22,5 @@ export async function POST(request: Request) {
 
   return NextResponse.json({ ok: true });
 }
+
+export const POST = withApi(POSTHandler);

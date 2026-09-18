@@ -1,3 +1,4 @@
+import { withApi } from "@/lib/observability";
 import { NextResponse } from "next/server";
 import { requireInitiativeApiAccess } from "@/lib/access/guards";
 import { jsonError, zodMessage } from "@/lib/api";
@@ -14,7 +15,7 @@ import { createReleaseSchema } from "@/lib/validation/schemas";
  * ceremony this used to also require has been removed platform-wide. See
  * resolveLifecycleState.ts.
  */
-export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
+async function POSTHandler(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const authGuard = await requireCurrentUserApi();
   if (!authGuard.ok) return authGuard.response;
@@ -86,3 +87,5 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
   return NextResponse.json({ ok: true, release });
 }
+
+export const POST = withApi(POSTHandler);

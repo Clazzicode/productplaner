@@ -1,5 +1,6 @@
 import type { Prisma } from "@prisma/client";
-import { db, withTransaction } from "@/lib/db";
+import { currentAuthUserId, db, withTransaction } from "@/lib/db";
+import { auditInitiative } from "@/lib/audit";
 import { computeRoadmapInputsFingerprint } from "./fingerprint";
 
 // Roadmap versioning foundation. Kept in its own file, separate from
@@ -33,12 +34,39 @@ export async function buildLiveSnapshot(tx: Tx | typeof db, prototypeId: string)
         points: true,
         sprintId: true,
         sourceCapabilityId: true,
+        contentJson: true,
+        traceAnswerKeys: true,
+        traceNote: true,
+        externalRef: true,
       },
     }),
     tx.sprint.findMany({ where: { prototypeId }, orderBy: { sprintNumber: "asc" } }),
     tx.release.findMany({ where: { prototypeId }, orderBy: { order: "asc" } }),
   ]);
-  return { capturedAt: new Date().toISOString(), layers, sprints, releases };
+  const prototype = await tx.prototype.findUniqueOrThrow({ where: { id: prototypeId }, select: { initiativeId: true } });
+  const initiative = await tx.initiative.findUniqueOrThrow({ where: { id: prototype.initiativeId }, include: { intakeAnswerSet: { include: { capabilities: { include: { dependsOnEdges: true } } } } } });
+  const locks = await tx.layerLock.findMany({ where: { prototypeId } });
+  return { capturedAt: new Date().toISOString(), layers, sprints, releases, initiative, locks };
+}
+
+/** Immutable checkpoint before a working plan is replaced or regenerated. */
+export async function archiveWorkingVersion(prototypeId: string): Promise<void> {
+  await withTransaction(async (tx) => {
+    const prototype = await tx.prototype.findUniqueOrThrow({ where: { id: prototypeId } });
+    if (prototype.approvedAt && prototype.approvedBaselineJson) {
+      await ensureApprovedVersionArchived(tx, { initiativeId: prototype.initiativeId, approvedAt: prototype.approvedAt, approvedBaselineJson: prototype.approvedBaselineJson });
+    }
+    const authUserId = currentAuthUserId();
+    const actor = authUserId ? await tx.user.findUnique({ where: { authUserId }, select: { id: true } }) : null;
+    await tx.roadmapVersion.create({ data: {
+      initiativeId: prototype.initiativeId,
+      versionNumber: await nextVersionNumber(tx, prototype.initiativeId),
+      status: "draft",
+      authoredByUserId: actor?.id,
+      snapshotJson: JSON.stringify(await buildLiveSnapshot(tx, prototypeId)),
+      inputsFingerprint: await computeRoadmapInputsFingerprint(prototype.initiativeId),
+    } });
+  });
 }
 
 async function nextVersionNumber(tx: Tx, initiativeId: string): Promise<number> {
@@ -76,7 +104,7 @@ export async function recordApprovedRoadmapVersion(args: {
       data: { status: "superseded" },
     });
     const versionNumber = await nextVersionNumber(tx, args.initiativeId);
-    await tx.roadmapVersion.create({
+    const version = await tx.roadmapVersion.create({
       data: {
         initiativeId: args.initiativeId,
         versionNumber,
@@ -85,8 +113,19 @@ export async function recordApprovedRoadmapVersion(args: {
         inputsFingerprint,
         approvedAt: prototype.approvedAt,
         approvedByUserId: args.approvedByUserId,
+        authoredByUserId: args.approvedByUserId,
       },
     });
+    const initiative = await tx.initiative.findUniqueOrThrow({ where: { id: args.initiativeId }, select: { organizationId: true, projectId: true } });
+    await tx.planApproval.create({ data: {
+      organizationId: initiative.organizationId,
+      projectId: initiative.projectId,
+      initiativeId: args.initiativeId,
+      planVersionId: version.id,
+      approvedBy: args.approvedByUserId,
+      approvedAt: prototype.approvedAt,
+    } });
+    await auditInitiative(args.initiativeId, "plan.approved", { versionId: version.id, versionNumber });
     return { versionNumber };
   });
 }

@@ -140,8 +140,13 @@ export default function PlanningQuestionnaire(props: {
   }, [initiativeId]);
 
   useEffect(() => {
-    if (step === 5) void refreshValidation();
-  }, [step, refreshValidation]);
+    if (step !== 5) return;
+    let active = true;
+    void apiFetch<{ errors: Flag[]; warnings: Flag[] }>(`/api/initiatives/${initiativeId}/validate`).then((result) => {
+      if (active && result.ok && result.data) setValidation(result.data);
+    });
+    return () => { active = false; };
+  }, [step, initiativeId]);
 
   const jump = (i: number) => setStep(i);
 

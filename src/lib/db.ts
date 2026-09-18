@@ -34,6 +34,7 @@ import { AsyncLocalStorage } from "node:async_hooks";
 type AuthContext = { authUserId: string | null };
 
 const authContext = new AsyncLocalStorage<AuthContext>();
+const transactionContext = new AsyncLocalStorage<Prisma.TransactionClient>();
 
 /**
  * Call this yourself, in the same function that will use `db`/`withTransaction`
@@ -44,6 +45,10 @@ const authContext = new AsyncLocalStorage<AuthContext>();
  */
 export function establishAuthContext(authUserId: string | null): void {
   authContext.enterWith({ authUserId });
+}
+
+export function currentAuthUserId(): string | null {
+  return authContext.getStore()?.authUserId ?? null;
 }
 
 /** Narrow escape hatch for genuinely trusted, unauthenticated server code
@@ -91,7 +96,7 @@ if (process.env.NODE_ENV !== "production") globalForPrisma.rawPrisma = rawDb;
  * try to open its own nested transaction. Use `withTransaction()` instead for
  * anything that needs multiple statements to commit atomically.
  */
-export const db = rawDb.$extends({
+const requestDb = rawDb.$extends({
   name: "rls-request-context",
   query: {
     $allOperations({ args, query }) {
@@ -100,6 +105,17 @@ export const db = rawDb.$extends({
         .$transaction([rawDb.$executeRaw`select set_config('request.jwt.claims', ${claims}, true)`, query(args)])
         .then(([, result]) => result);
     },
+  },
+});
+
+// Business services may compose several existing services without opening
+// independent transactions. Resolve delegates at call time, scoped to the
+// async operation; concurrent requests never share a transaction client.
+export const db = new Proxy(requestDb, {
+  get(target, property) {
+    const client = transactionContext.getStore() ?? target;
+    const value = Reflect.get(client, property);
+    return typeof value === "function" ? value.bind(client) : value;
   },
 });
 
@@ -113,9 +129,11 @@ export function withTransaction<T>(
   fn: (tx: Prisma.TransactionClient) => Promise<T>,
   options?: { maxWait?: number; timeout?: number },
 ): Promise<T> {
+  const existing = transactionContext.getStore();
+  if (existing) return fn(existing);
   const claims = claimsJson();
   return rawDb.$transaction(async (tx) => {
     await tx.$executeRaw`select set_config('request.jwt.claims', ${claims}, true)`;
-    return fn(tx);
-  }, options);
+    return transactionContext.run(tx, () => fn(tx));
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, ...options });
 }

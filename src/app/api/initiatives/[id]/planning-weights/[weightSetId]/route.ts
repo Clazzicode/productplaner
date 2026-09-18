@@ -1,3 +1,4 @@
+import { withApi } from "@/lib/observability";
 import { NextResponse } from "next/server";
 import { getResolvedAccess, type ActorRow } from "@/lib/access/initiativeAccess";
 import { meetsMinimum } from "@/lib/access/resolution";
@@ -46,7 +47,7 @@ async function loadGate(actor: ActorRow, initiativeId: string, weightSetId: stri
   return { ok: true as const, canEdit };
 }
 
-export async function PATCH(
+async function PATCHHandler(
   request: Request,
   { params }: { params: Promise<{ id: string; weightSetId: string }> },
 ) {
@@ -76,7 +77,7 @@ export async function PATCH(
   return NextResponse.json({ weights });
 }
 
-export async function DELETE(
+async function DELETEHandler(
   _request: Request,
   { params }: { params: Promise<{ id: string; weightSetId: string }> },
 ) {
@@ -95,3 +96,6 @@ export async function DELETE(
   const weights = await getEffectiveWeights(id, weightSetId as WeightSetId);
   return NextResponse.json({ weights });
 }
+
+export const PATCH = withApi(PATCHHandler);
+export const DELETE = withApi(DELETEHandler);

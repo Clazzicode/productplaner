@@ -1,3 +1,4 @@
+import { withApi } from "@/lib/observability";
 import { NextResponse } from "next/server";
 import { requireInitiativeApiAccess } from "@/lib/access/guards";
 import { jsonError, zodMessage } from "@/lib/api";
@@ -12,7 +13,7 @@ import {
 import { getEffectiveWeights } from "@/lib/planningWeights/planningWeights";
 import { capabilityUpsertSchema } from "@/lib/validation/schemas";
 
-export async function POST(
+async function POSTHandler(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
@@ -59,3 +60,5 @@ export async function POST(
   });
   return NextResponse.json({ capabilityId: capability.id });
 }
+
+export const POST = withApi(POSTHandler);

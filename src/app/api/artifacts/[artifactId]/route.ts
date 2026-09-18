@@ -1,4 +1,6 @@
+import { withApi } from "@/lib/observability";
 import { NextResponse } from "next/server";
+import { withPlanningMutation } from "@/lib/generation/mutation";
 import { requireInitiativeApiAccess } from "@/lib/access/guards";
 import { jsonError, zodMessage } from "@/lib/api";
 import { requireCurrentUserApi } from "@/lib/auth/session";
@@ -7,7 +9,7 @@ import { assertArtifactEditable, LockedLayerError } from "@/lib/generation/locki
 import type { ArtifactType } from "@/lib/generation/types";
 import { artifactPatchSchema } from "@/lib/validation/schemas";
 
-export async function PATCH(
+async function PATCHHandler(
   request: Request,
   { params }: { params: Promise<{ artifactId: string }> },
 ) {
@@ -35,6 +37,11 @@ export async function PATCH(
     throw err;
   }
 
-  await db.artifactLayer.update({ where: { id: artifactId }, data: parsed.data });
+  await withPlanningMutation(artifact.prototype.initiativeId, "artifact.updated", async () => {
+    await assertArtifactEditable(artifact.prototypeId, artifact.type as ArtifactType);
+    await db.artifactLayer.update({ where: { id: artifactId }, data: parsed.data });
+  }, true);
   return NextResponse.json({ ok: true });
 }
+
+export const PATCH = withApi(PATCHHandler);

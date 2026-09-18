@@ -1,3 +1,9 @@
+import { withApi } from "@/lib/observability";
+import { validateApplyTargets } from "@/lib/ai/assist/apply/validateTargets";
+import { archiveWorkingVersion } from "@/lib/generation/versioning";
+import { auditInitiative } from "@/lib/audit";
+import { requireInitiativeApiAccess } from "@/lib/access/guards";
+import { requireProjectApiAccess } from "@/lib/access/projectAccess";
 import { NextResponse } from "next/server";
 import { jsonError, zodMessage } from "@/lib/api";
 import { requireCurrentUserApi } from "@/lib/auth/session";
@@ -13,7 +19,7 @@ import { AiAssistApplyBlockedError, DependencyAlreadyExistsError } from "@/lib/a
 // this explicit user action. `editedContent` lets the user's edits (not the
 // AI's raw proposal) be what's actually written — status becomes
 // "edited_and_applied" instead of "applied" so that distinction survives.
-export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
+async function POSTHandler(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const authGuard = await requireCurrentUserApi();
   if (!authGuard.ok) return authGuard.response;
@@ -42,9 +48,15 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         return jsonError("This recommendation type doesn't apply directly — use its own form.", 400);
       }
       const proposed = JSON.parse(item.proposedContentJson) as { color: "green" | "yellow" | "red"; reason: string };
+      const targetType: "project" | "initiative" = item.targetType;
+      const targetGuard = targetType === "project"
+        ? await requireProjectApiAccess(user, item.targetId ?? "")
+        : await requireInitiativeApiAccess(user, item.targetId ?? "", "edit");
+      if (!targetGuard.ok) return targetGuard.response;
+      return withTransaction(async () => {
       const applied = await applyStatusRecommendation({
         organizationId: item.organizationId,
-        entityType: item.targetType,
+        entityType: targetType,
         entityId: item.targetId ?? "",
         color: proposed.color,
         reason: proposed.reason,
@@ -62,6 +74,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         },
       });
       return NextResponse.json({ item: updated, applied });
+      });
     }
 
     if (!isApplicableThroughDispatcher(item.actionKey)) {
@@ -69,7 +82,17 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     }
 
     const { updated, applied } = await withTransaction(async (tx) => {
+      await validateApplyTargets(tx, item, content);
+      // Detect a concurrent Apply before any content is changed.
+      const claimed = await tx.aiAssistItem.updateMany({ where: { id, status: { in: ["proposed", "stale"] } }, data: { status: nextStatus } });
+      if (claimed.count !== 1) throw new Error("Suggestion was already applied.");
+      const prototype = item.initiativeId ? await tx.prototype.findUnique({ where: { initiativeId: item.initiativeId } }) : null;
+      if (prototype) await archiveWorkingVersion(prototype.id);
       const applied = await applyAiAssistItem(tx, item, content, confirmApprovedImpact ?? false);
+      if (prototype && item.actionKey === "PROPOSE_STORY_CONTENT") {
+        await tx.prototype.update({ where: { id: prototype.id }, data: { approvedAt: null, approvedBaselineJson: null } });
+      }
+      if (item.initiativeId) await auditInitiative(item.initiativeId, "ai_suggestion.applied", { itemId: id, actionKey: item.actionKey });
       const updated = await tx.aiAssistItem.update({
         where: { id },
         data: {
@@ -96,3 +119,5 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     return jsonError("Could not apply this suggestion — please try again.", 502);
   }
 }
+
+export const POST = withApi(POSTHandler);

@@ -1,3 +1,4 @@
+import { withApi } from "@/lib/observability";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { jsonError, zodMessage } from "@/lib/api";
@@ -19,7 +20,7 @@ const REASONS: Record<string, { message: string; status: number }> = {
 
 /** Owner is never grantable to a team — enforced here, not just left to the
  * picker (docs/V2-ACCESS-TEAMS-VISIBILITY.md §4). */
-export async function POST(
+async function POSTHandler(
   request: Request,
   { params }: { params: Promise<{ initiativeId: string }> },
 ) {
@@ -49,3 +50,5 @@ export async function POST(
   }
   return NextResponse.json(result.data, { status: 201 });
 }
+
+export const POST = withApi(POSTHandler);

@@ -1,4 +1,6 @@
+import { withApi } from "@/lib/observability";
 import { NextResponse } from "next/server";
+import { withPlanningMutation } from "@/lib/generation/mutation";
 import { requireInitiativeApiAccess } from "@/lib/access/guards";
 import { jsonError, zodMessage } from "@/lib/api";
 import { requireCurrentUserApi } from "@/lib/auth/session";
@@ -10,7 +12,7 @@ import { moveSprintSchema } from "@/lib/validation/schemas";
 // waterfall layers above are locked (FR-12 — sprint layers stay flexible) —
 // except under Waterfall, where the agile layer itself freezes once the
 // baseline is approved (assertAgileLayerEditable).
-export async function POST(
+async function POSTHandler(
   request: Request,
   { params }: { params: Promise<{ artifactId: string }> },
 ) {
@@ -50,9 +52,14 @@ export async function POST(
   });
   if (!sprint) return jsonError("Sprint not found.", 404);
 
+  await withPlanningMutation(prototype.initiativeId, "artifact.sprint_moved", async () => {
+  await assertAgileLayerEditable(prototype.initiativeId);
   await db.artifactLayer.update({
     where: { id: artifactId },
     data: { sprintId: sprint.id },
   });
+  }, true);
   return NextResponse.json({ ok: true });
 }
+
+export const POST = withApi(POSTHandler);

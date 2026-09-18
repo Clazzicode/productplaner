@@ -14,7 +14,8 @@ import { computeEffectiveCapacity } from "./cost";
 import { computeRoadmapInputsFingerprint } from "./fingerprint";
 import { METHODOLOGY_PROFILES, resolveMethodology } from "./methodology";
 import { validateIntake } from "./validateIntake";
-import { ensureApprovedVersionArchived } from "./versioning";
+import { archiveWorkingVersion, ensureApprovedVersionArchived } from "./versioning";
+import { auditInitiative } from "@/lib/audit";
 import {
   LAYER_SEQUENCE,
   type CapabilityInput,
@@ -308,6 +309,10 @@ function addFeatureTree(
 // ---------- full generation (FR-08/FR-09) ----------
 
 export async function generatePrototype(initiativeId: string): Promise<{ prototypeId: string }> {
+  return withTransaction(() => generatePrototypeInternal(initiativeId), { timeout: 120_000 });
+}
+
+async function generatePrototypeInternal(initiativeId: string): Promise<{ prototypeId: string }> {
   const [intake, initiativeRow, inputsFingerprintAtGeneration] = await Promise.all([
     loadIntakeInput(initiativeId),
     db.initiative.findUniqueOrThrow({ where: { id: initiativeId }, select: { methodology: true } }),
@@ -334,7 +339,7 @@ export async function generatePrototype(initiativeId: string): Promise<{ prototy
       // true) — generatePrototype itself doesn't need its own confirm flag.
       const existing = await tx.prototype.findUnique({
         where: { initiativeId },
-        select: { approvedAt: true, approvedBaselineJson: true },
+        select: { id: true, approvedAt: true, approvedBaselineJson: true },
       });
       if (existing?.approvedAt && existing.approvedBaselineJson) {
         await ensureApprovedVersionArchived(tx, {
@@ -343,7 +348,8 @@ export async function generatePrototype(initiativeId: string): Promise<{ prototy
           approvedAt: existing.approvedAt,
         });
       }
-      // Idempotent: regenerating from intake replaces any prior prototype.
+      if (existing) await archiveWorkingVersion(existing.id);
+      // Replace working rows only after preserving a complete checkpoint.
       await tx.prototype.deleteMany({ where: { initiativeId } });
       const proto = await tx.prototype.create({ data: { initiativeId, inputsFingerprintAtGeneration } });
 
@@ -425,6 +431,7 @@ export async function generatePrototype(initiativeId: string): Promise<{ prototy
         where: { initiativeId },
         data: { status: "generated", validatedAt: new Date() },
       });
+      await auditInitiative(initiativeId, "plan.generated", { prototypeId: proto.id });
       return proto.id;
     },
     { timeout: 120_000 },
@@ -461,6 +468,11 @@ export async function regenerateBelow(
   prototypeId: string,
   editedLayer: LayerType,
 ): Promise<RegenStats> {
+  return withTransaction(() => regenerateBelowInternal(prototypeId, editedLayer), { timeout: 120_000 });
+}
+
+async function regenerateBelowInternal(prototypeId: string, editedLayer: LayerType): Promise<RegenStats> {
+  await archiveWorkingVersion(prototypeId);
   const proto = await db.prototype.findUniqueOrThrow({
     where: { id: prototypeId },
     select: { initiativeId: true, initiative: { select: { methodology: true } } },
@@ -663,6 +675,8 @@ export async function regenerateBelow(
     { timeout: 120_000 },
   );
 
+  await db.prototype.update({ where: { id: prototypeId }, data: { approvedAt: null, approvedBaselineJson: null } });
+  await auditInitiative(proto.initiativeId, "plan.regenerated", { prototypeId, editedLayer });
   return stats;
 }
 
@@ -987,6 +1001,14 @@ export async function recalculatePlan(
   initiativeId: string,
   mode: RecalculateMode,
   options: { confirmApprovedImpact?: boolean } = {},
+): Promise<RecalculateResult> {
+  return withTransaction(() => recalculatePlanInternal(initiativeId, mode, options), { timeout: 120_000 });
+}
+
+async function recalculatePlanInternal(
+  initiativeId: string,
+  mode: RecalculateMode,
+  options: { confirmApprovedImpact?: boolean },
 ): Promise<RecalculateResult> {
   if (mode === "full") {
     if (!options.confirmApprovedImpact) {

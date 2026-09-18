@@ -1,3 +1,4 @@
+import { withApi } from "@/lib/observability";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { jsonError, zodMessage } from "@/lib/api";
@@ -11,7 +12,7 @@ const addMemberSchema = z.object({ userId: z.string().min(1) });
  * (@@unique([teamId, userId]) on TeamMember) — this just turns that
  * constraint violation into a friendly response instead of a 500.
  */
-export async function POST(
+async function POSTHandler(
   request: Request,
   { params }: { params: Promise<{ teamId: string }> },
 ) {
@@ -48,3 +49,5 @@ export async function POST(
     throw err;
   }
 }
+
+export const POST = withApi(POSTHandler);

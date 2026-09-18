@@ -1,4 +1,6 @@
+import { withApi } from "@/lib/observability";
 import { NextResponse } from "next/server";
+import { withPlanningMutation } from "@/lib/generation/mutation";
 import { requireInitiativeApiAccess } from "@/lib/access/guards";
 import { jsonError, zodMessage } from "@/lib/api";
 import { requireCurrentUserApi } from "@/lib/auth/session";
@@ -36,7 +38,7 @@ const INTAKE_FIELDS = [
   "historicalVelocityPoints",
 ] as const;
 
-export async function GET(
+async function GETHandler(
   _request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
@@ -75,7 +77,7 @@ export async function GET(
   });
 }
 
-export async function PATCH(
+async function PATCHHandler(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
@@ -88,6 +90,8 @@ export async function PATCH(
 
   const parsed = assumptionsPatchSchema.safeParse(await request.json());
   if (!parsed.success) return jsonError(zodMessage(parsed.error), 422);
+
+  return withPlanningMutation(id, "assumptions.updated", async () => {
 
   const initiative = await db.initiative.findUnique({
     where: { id },
@@ -136,4 +140,8 @@ export async function PATCH(
   }
 
   return NextResponse.json({ ok: true, sprintsRepacked: sprints });
+  });
 }
+
+export const GET = withApi(GETHandler);
+export const PATCH = withApi(PATCHHandler);

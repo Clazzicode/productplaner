@@ -1,3 +1,4 @@
+import { withApi } from "@/lib/observability";
 import { NextResponse } from "next/server";
 import { requireInitiativeApiAccess } from "@/lib/access/guards";
 import { jsonError } from "@/lib/api";
@@ -8,7 +9,7 @@ import { createDocument } from "@/lib/documents/uploadDocument";
 // Document Import & Approved Context (directive item 2/4) — "Add Documents"
 // from inside a specific initiative. Always initiative_only; never shared
 // with a sibling initiative in the same Project.
-export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
+async function POSTHandler(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const authGuard = await requireCurrentUserApi();
   if (!authGuard.ok) return authGuard.response;
@@ -35,3 +36,5 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   if (!result.ok) return jsonError(result.error, result.status);
   return NextResponse.json({ documentId: result.documentId });
 }
+
+export const POST = withApi(POSTHandler);

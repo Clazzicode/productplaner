@@ -1,3 +1,4 @@
+import { withApi } from "@/lib/observability";
 import { NextResponse } from "next/server";
 import { requireInitiativeApiAccess } from "@/lib/access/guards";
 import { jsonError, zodMessage } from "@/lib/api";
@@ -6,7 +7,7 @@ import { establishAuthContext } from "@/lib/db";
 import { ApprovedBaselineImpactError, IntakeInvalidError, recalculatePlan } from "@/lib/generation/engine";
 import { generateSchema } from "@/lib/validation/schemas";
 
-export async function POST(
+async function POSTHandler(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
@@ -43,3 +44,5 @@ export async function POST(
     return jsonError(err instanceof Error ? err.message : "Generation failed.", 500);
   }
 }
+
+export const POST = withApi(POSTHandler);

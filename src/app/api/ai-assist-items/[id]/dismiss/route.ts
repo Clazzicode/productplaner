@@ -1,3 +1,4 @@
+import { withApi } from "@/lib/observability";
 import { NextResponse } from "next/server";
 import { jsonError, zodMessage } from "@/lib/api";
 import { requireCurrentUserApi } from "@/lib/auth/session";
@@ -7,7 +8,7 @@ import { requireAiAssistItemAccess } from "@/lib/ai/assist/itemAccess";
 
 // POST /api/ai-assist-items/[id]/dismiss (Section 4 §5/§22) — only ever sets
 // status/dismissedByUserId/dismissedAt/dismissReason. Touches nothing else.
-export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
+async function POSTHandler(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const authGuard = await requireCurrentUserApi();
   if (!authGuard.ok) return authGuard.response;
@@ -38,3 +39,5 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   });
   return NextResponse.json({ item: updated });
 }
+
+export const POST = withApi(POSTHandler);

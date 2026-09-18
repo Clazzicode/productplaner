@@ -1,5 +1,6 @@
 import { createHash } from "crypto";
 import { db } from "@/lib/db";
+import { moneyNumber } from "@/lib/projectContext";
 
 // Roadmap versioning foundation (docs section: "Regeneration Rules" / "Meaningful
 // Changes"). One stable hash over exactly the inputs the product spec calls
@@ -111,9 +112,9 @@ export async function computeRoadmapInputsFingerprint(initiativeId: string): Pro
     buildFingerprintPayload({
       methodology: initiative.methodology,
       targetLaunchDateOverride: initiative.targetLaunchDateOverride,
-      budgetOverride: initiative.budgetOverride,
-      averageHourlyRateOverride: initiative.averageHourlyRateOverride,
-      project: initiative.project,
+      budgetOverride: moneyNumber(initiative.budgetOverride),
+      averageHourlyRateOverride: moneyNumber(initiative.averageHourlyRateOverride),
+      project: { ...initiative.project, budget: moneyNumber(initiative.project.budget), averageHourlyRate: moneyNumber(initiative.project.averageHourlyRate) },
       capabilities,
       dependencyEdges,
     }),

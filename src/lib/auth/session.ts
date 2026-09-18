@@ -56,9 +56,9 @@ async function resolveActiveMembership(authUserId: string, homeOrganizationId: s
   });
   if (home) return home;
 
-  // No membership row at all (shouldn't happen once backfilled) — fail safe
-  // to the home org with the lowest permission role, never an elevated one.
-  return { organizationId: homeOrganizationId, role: "member" as const };
+  // A home organization is not proof of membership. Revocation must deny
+  // access even when the application connection can bypass RLS.
+  return null;
 }
 
 function deriveAccessLevel(role: string): string {
@@ -100,6 +100,7 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
   if (!user || user.status !== "active") return null;
 
   const membership = await resolveActiveMembership(authUser.id, user.homeOrganizationId);
+  if (!membership || !["owner", "admin", "member"].includes(membership.role)) return null;
 
   return {
     ...user,

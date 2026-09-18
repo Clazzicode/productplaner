@@ -1,3 +1,4 @@
+import { withApi } from "@/lib/observability";
 import { NextResponse } from "next/server";
 import { requireDocumentApiAccess } from "@/lib/access/documentAccess";
 import { jsonError } from "@/lib/api";
@@ -19,7 +20,7 @@ import { extractDocumentChunks, type DocumentChunk } from "@/lib/documents/extra
 // failure never re-uploads, it just re-POSTs here against the same stored
 // fileBytes. Extraction is skipped if it already succeeded on a prior
 // attempt (extractedChunksJson already set) — only the AI step re-runs.
-export async function POST(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+async function POSTHandler(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const authGuard = await requireCurrentUserApi();
   if (!authGuard.ok) return authGuard.response;
@@ -206,3 +207,5 @@ function safeScalarOrName(fieldKey: string, valueJson: string): string {
   }
   return valueJson;
 }
+
+export const POST = withApi(POSTHandler);

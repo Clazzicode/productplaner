@@ -1,3 +1,4 @@
+import { withApi } from "@/lib/observability";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireContextItemApiAccess } from "@/lib/access/documentAccess";
@@ -15,7 +16,7 @@ const resolveConflictSchema = z.object({ chosenValue: z.string().trim().min(1) }
 // Decision -> Update Approved Context" path (item 25), never a silent
 // overwrite. Crystallizing + approving both happen here, plus rejecting the
 // linked conflicting item (if any) since the user just picked a side.
-export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
+async function POSTHandler(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const authGuard = await requireCurrentUserApi();
   if (!authGuard.ok) return authGuard.response;
@@ -54,3 +55,5 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
   return NextResponse.json({ ok: true });
 }
+
+export const POST = withApi(POSTHandler);

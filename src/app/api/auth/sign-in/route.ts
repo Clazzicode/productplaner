@@ -1,3 +1,4 @@
+import { withApi } from "@/lib/observability";
 import { NextResponse } from "next/server";
 import { isAuthRetryableFetchError } from "@supabase/supabase-js";
 import { z } from "zod";
@@ -12,7 +13,7 @@ const signInSchema = z.object({
   password: z.string().min(1, "Enter your password."),
 });
 
-export async function POST(request: Request) {
+async function POSTHandler(request: Request) {
   const parsed = signInSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return jsonError(zodMessage(parsed.error), 422);
 
@@ -55,3 +56,5 @@ export async function POST(request: Request) {
 
   return NextResponse.json({ ok: true });
 }
+
+export const POST = withApi(POSTHandler);

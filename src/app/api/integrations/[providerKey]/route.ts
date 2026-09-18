@@ -1,7 +1,10 @@
+import { withApi } from "@/lib/observability";
 import { NextResponse } from "next/server";
 import { jsonError, zodMessage } from "@/lib/api";
 import { requireCurrentUserApi } from "@/lib/auth/session";
-import { establishAuthContext } from "@/lib/db";
+import { db, establishAuthContext } from "@/lib/db";
+import { requireOrganizationRole } from "@/lib/access/organizationRole";
+import { requireInitiativeApiAccess } from "@/lib/access/guards";
 import { ensureProvidersSeeded } from "@/lib/sync/integrationSeed";
 import {
   connectDemo,
@@ -11,7 +14,7 @@ import {
 } from "@/lib/sync/integrationStub";
 import { integrationActionSchema } from "@/lib/validation/schemas";
 
-export async function POST(
+async function POSTHandler(
   request: Request,
   { params }: { params: Promise<{ providerKey: string }> },
 ) {
@@ -23,6 +26,23 @@ export async function POST(
   if (!authGuard.ok) return authGuard.response;
   const user = authGuard.user;
   establishAuthContext(user.authUserId);
+  const roleGuard = requireOrganizationRole(user, ["owner", "admin"]);
+  if (!roleGuard.ok) return roleGuard.response;
+  if (parsed.data.initiativeId) {
+    const access = await requireInitiativeApiAccess(user, parsed.data.initiativeId, "edit");
+    if (!access.ok) return access.response;
+  }
+  if (parsed.data.connectionId) {
+    const connection = await db.integrationConnection.findFirst({
+      where: { id: parsed.data.connectionId, organizationId: user.organizationId, provider: { key: providerKey } },
+      select: { initiativeId: true },
+    });
+    if (!connection) return jsonError("Connection not found.", 404);
+    if (connection.initiativeId) {
+      const access = await requireInitiativeApiAccess(user, connection.initiativeId, "edit");
+      if (!access.ok) return access.response;
+    }
+  }
   await ensureProvidersSeeded();
   const body = parsed.data;
 
@@ -63,3 +83,5 @@ export async function POST(
     return jsonError(err instanceof Error ? err.message : "Integration action failed.", 400);
   }
 }
+
+export const POST = withApi(POSTHandler);

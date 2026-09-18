@@ -17,6 +17,7 @@ datasource db {
 
 model Organization {
   id                      String                   @id @default(cuid())
+  createdByAuthUserId      String?                  @default(dbgenerated("auth.uid()")) @db.Uuid
   name                    String
   // Step [AUTH] (docs/V2-MULTI-TENANT-AUTH.md). "solo" = auto-created personal
   // workspace behind a solo signup; "team" = everything else, including every
@@ -28,7 +29,7 @@ model Organization {
   // budget (env PLATFORM_AI_MONTHLY_BUDGET_USD), and only if that platform
   // budget is actually configured — never a flat 4% reservation with no
   // platform cap set. See src/lib/ai/budget.ts's resolveOrganizationAiBudget().
-  aiMonthlyBudgetUsd      Float?
+  aiMonthlyBudgetUsd      Decimal? @db.Decimal(20, 8)
   ownerUserId             String?
   owner                   User?                    @relation("OrganizationOwner", fields: [ownerUserId], references: [id], onDelete: SetNull)
   // Renamed relation (was `users`) now that User.organizationId -> homeOrganizationId:
@@ -51,6 +52,8 @@ model Organization {
   aiRequestLocks          AiRequestLock[]
   aiJobs                  AiJob[]
   aiAssistItems           AiAssistItem[]
+  auditEvents             AuditEvent[]
+  planApprovals           PlanApproval[]
   createdAt               DateTime                 @default(now())
 }
 
@@ -226,8 +229,8 @@ model Project {
   name                 String
   description          String       @default("")
   goal                 String       @default("")
-  budget               Float? // optional available budget (Planning & Cost Logic §24)
-  averageHourlyRate    Float?       @default(85) // §17/§31 prototype assumption, user-overridable
+  budget               Decimal? @db.Decimal(20, 4)
+  averageHourlyRate    Decimal? @default(85) @db.Decimal(20, 4)
   targetLaunchDate     DateTime? // "target / projected go-live"
   teamCompositionJson  String       @default("{}") // serialized team info, matching this schema's JSON-in-String convention
   constraintsJson      String       @default("[]")
@@ -249,6 +252,7 @@ model Project {
   // (last edited). Bumped fire-and-forget whenever Project Home loads for an
   // authorized member — never awaited, never blocks the page.
   lastOpenedAt         DateTime?
+  @@index([organizationId, updatedAt])
 }
 
 // Net-new — referenced throughout Project Home / initiative workflows but
@@ -477,8 +481,8 @@ model Initiative {
   // unless the initiative overrides them." Superseded the old direct
   // budget/averageHourlyRate/targetLaunchDate columns (moved onto Project).
   targetLaunchDateOverride  DateTime?
-  budgetOverride            Float?
-  averageHourlyRateOverride Float?
+  budgetOverride            Decimal? @db.Decimal(20, 4)
+  averageHourlyRateOverride Decimal? @db.Decimal(20, 4)
   intakeAnswerSet           IntakeAnswerSet?
   prototype                 Prototype?
   syncConnections           SyncConnection[]
@@ -499,6 +503,7 @@ model Initiative {
   updatedAt                 DateTime                 @updatedAt
 
   @@index([projectId])
+  @@index([organizationId, projectId])
 }
 
 model IntakeAnswerSet {
@@ -615,9 +620,44 @@ model RoadmapVersion {
   approvedByUserId String?
   approvedByUser   User?      @relation(fields: [approvedByUserId], references: [id], onDelete: SetNull)
   createdAt        DateTime   @default(now())
+  authoredByUserId  String?
+  approvals        PlanApproval[]
 
   @@unique([initiativeId, versionNumber])
   @@index([initiativeId, createdAt])
+}
+
+model PlanApproval {
+  id             String @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  initiativeId   String
+  projectId      String?
+  planVersionId  String @unique
+  planVersion    RoadmapVersion @relation(fields: [planVersionId], references: [id], onDelete: Restrict)
+  status         String @default("approved")
+  approvedBy     String?
+  approvedAt     DateTime @default(now())
+  metadata       Json @default("{}")
+
+  @@index([organizationId, initiativeId, approvedAt])
+}
+
+model AuditEvent {
+  id             String @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  actorUserId    String?
+  projectId      String?
+  entityType     String
+  entityId       String
+  action         String
+  metadata       Json @default("{}")
+  requestId      String?
+  createdAt      DateTime @default(now())
+
+  @@index([organizationId, createdAt])
+  @@index([entityType, entityId, createdAt])
 }
 
 // One row per strict waterfall layer type. Locking is coarse-grained: the whole
@@ -921,7 +961,7 @@ model AiUsageEvent {
   // rates (a technical fact, not an invented business rule — directive §28)
   // — never recomputed retroactively, so a historical event's cost stays
   // accurate even if rates change later.
-  estimatedCostUsd Float         @default(0)
+  estimatedCostUsd Decimal       @default(0) @db.Decimal(20, 8)
   errorMessage     String?
   createdAt        DateTime      @default(now())
 

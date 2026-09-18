@@ -1,3 +1,4 @@
+import { withApi } from "@/lib/observability";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { jsonError, zodMessage } from "@/lib/api";
@@ -8,7 +9,7 @@ import { establishAuthContext } from "@/lib/db";
 const previewSchema = z.object({ permission: z.enum(["owner", "edit", "view"]).nullable() });
 
 /** Before/after preview, no mutation (docs/V2-RESOURCE-ACCESS.md §9). */
-export async function POST(
+async function POSTHandler(
   request: Request,
   { params }: { params: Promise<{ grantId: string }> },
 ) {
@@ -26,3 +27,5 @@ export async function POST(
   if (!result.ok) return jsonError("Grant not found.", 404);
   return NextResponse.json(result.data);
 }
+
+export const POST = withApi(POSTHandler);

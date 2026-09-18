@@ -44,7 +44,7 @@ export function resolveDefaultOrgSharePercent(): number {
  * otherwise. */
 export async function resolveOrganizationAiBudgetUsd(organizationId: string): Promise<number | null> {
   const org = await db.organization.findUnique({ where: { id: organizationId }, select: { aiMonthlyBudgetUsd: true } });
-  if (org?.aiMonthlyBudgetUsd != null) return org.aiMonthlyBudgetUsd;
+  if (org?.aiMonthlyBudgetUsd != null) return Number(org.aiMonthlyBudgetUsd);
   const platformBudget = getPlatformAiMonthlyBudgetUsd();
   return platformBudget != null ? platformBudget * (resolveDefaultOrgSharePercent() / 100) : null;
 }
@@ -55,7 +55,7 @@ export async function getOrganizationAiSpendThisMonthUsd(organizationId: string)
     where: { organizationId, createdAt: { gte: since } },
     _sum: { estimatedCostUsd: true },
   });
-  return result._sum.estimatedCostUsd ?? 0;
+  return Number(result._sum.estimatedCostUsd ?? 0);
 }
 
 export type AiUsageWarningLevel = "70" | "80" | "90" | "100" | null;

@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import localFont from "next/font/local";
 import AppShell from "@/components/shell/AppShell";
 import { CoachMarkProvider } from "@/components/coachmarks/CoachMarkProvider";
 import { listAuthorizedInitiativeIds } from "@/lib/access/initiativeAccess";
@@ -7,14 +7,18 @@ import { getCurrentUser } from "@/lib/auth/session";
 import { db, establishAuthContext } from "@/lib/db";
 import "./globals.css";
 
-const geistSans = Geist({
+const geistSans = localFont({
+  src: "./fonts/geist-latin.woff2",
   variable: "--font-geist-sans",
-  subsets: ["latin"],
+  display: "swap",
+  weight: "100 900",
 });
 
-const geistMono = Geist_Mono({
+const geistMono = localFont({
+  src: "./fonts/geist-mono-latin.woff2",
   variable: "--font-geist-mono",
-  subsets: ["latin"],
+  display: "swap",
+  weight: "100 900",
 });
 
 // The shell reads the demo user + initiative list on every request — keep the

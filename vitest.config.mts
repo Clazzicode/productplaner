@@ -5,10 +5,11 @@ export default defineConfig({
   test: {
     environment: "node",
     include: ["src/**/*.test.ts"],
+    exclude: process.env.RUN_LIVE_DB_TESTS === "true" ? [] : ["**/*.integration.test.ts"],
   },
   resolve: {
     alias: {
-      "@": path.resolve(__dirname, "src"),
+      "@": path.resolve(import.meta.dirname, "src"),
     },
   },
 });

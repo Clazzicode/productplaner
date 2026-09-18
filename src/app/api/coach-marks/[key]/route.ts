@@ -1,10 +1,11 @@
+import { withApi } from "@/lib/observability";
 import { NextResponse } from "next/server";
 import { jsonError } from "@/lib/api";
 import { requireCurrentUserApi } from "@/lib/auth/session";
 import { db, establishAuthContext } from "@/lib/db";
 import { COACH_MARK_KEYS } from "@/lib/coachMarks/keys";
 
-export async function POST(_request: Request, { params }: { params: Promise<{ key: string }> }) {
+async function POSTHandler(_request: Request, { params }: { params: Promise<{ key: string }> }) {
   const { key } = await params;
   if (!COACH_MARK_KEYS.includes(key as never)) return jsonError("Unknown coach mark key.", 422);
 
@@ -19,3 +20,5 @@ export async function POST(_request: Request, { params }: { params: Promise<{ ke
   });
   return NextResponse.json({ ok: true });
 }
+
+export const POST = withApi(POSTHandler);

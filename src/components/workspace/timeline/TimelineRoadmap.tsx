@@ -31,11 +31,9 @@ export default function TimelineRoadmap(props: { initiativeId: string; data: Cli
   const [selectedFeatureId, setSelectedFeatureId] = useState<string | null>(null);
 
   const today = useMemo(() => new Date(), []);
-  const axisStart = data.axisStart ? new Date(data.axisStart) : null;
-  const axisEnd = data.axisEnd ? new Date(data.axisEnd) : null;
   const axis = useMemo(
-    () => buildTimeAxis({ axisStart, axisEnd, zoom, today }),
-    [axisStart?.getTime(), axisEnd?.getTime(), zoom, today],
+    () => buildTimeAxis({ axisStart: data.axisStart ? new Date(data.axisStart) : null, axisEnd: data.axisEnd ? new Date(data.axisEnd) : null, zoom, today }),
+    [data.axisStart, data.axisEnd, zoom, today],
   );
   const todayLeft = todayOffset(axis, today);
 

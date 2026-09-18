@@ -1,3 +1,4 @@
+import { withApi } from "@/lib/observability";
 import { NextResponse } from "next/server";
 import { isAuthRetryableFetchError } from "@supabase/supabase-js";
 import { z } from "zod";
@@ -13,7 +14,7 @@ const signUpSchema = z.object({
   password: z.string().min(8, "Password must be at least 8 characters."),
 });
 
-export async function POST(request: Request) {
+async function POSTHandler(request: Request) {
   const parsed = signUpSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return jsonError(zodMessage(parsed.error), 422);
   const { username, password } = parsed.data;
@@ -75,3 +76,5 @@ export async function POST(request: Request) {
 
   return NextResponse.json({ ok: true });
 }
+
+export const POST = withApi(POSTHandler);

@@ -9,6 +9,7 @@ import { NextResponse, type NextRequest } from "next/server";
  * response before it reaches getCurrentUser().
  */
 export async function updateSupabaseSession(request: NextRequest) {
+  if (["/api/health", "/api/ready"].includes(request.nextUrl.pathname)) return NextResponse.next();
   let response = NextResponse.next({ request });
 
   const supabase = createServerClient(
