@@ -6,7 +6,7 @@ Date: 2026-09-18
 
 The production-foundation milestone is implemented in the `v2-redesign` working tree. The existing planning engine and user workflows remain in place. The two protected planning-engine files, `documentUnderstanding.ts` and `analyzeIntake.ts`, were not modified.
 
-## Completed controls
+## Completed
 
 - Authentication now fails closed when a user has no active organization membership.
 - Organization roles are enforced as owner, admin, and member. Approval, integration administration, project administration, and user administration use the appropriate organization role.
@@ -56,4 +56,65 @@ Commit `5aab3e9` is pushed to `v2-redesign`; its Vercel preview reached `READY`,
 - Establish separate staging and production Supabase/Vercel environments before production traffic.
 - Introduce a centrally managed feature-flag service when user-visible rollouts begin. The existing environment flag only contains demo integrations.
 
-The next product milestone can be Jira Export MVP after that staging gate passes. The current code deliberately contains Jira as a local demo path only.
+The next product milestone can be Jira Export MVP because P0 and critical P1 controls are verified. The current code deliberately contains Jira as a local demo path only.
+
+## P0 Status
+
+- **Authentication:** Complete. Session identity comes from Supabase Auth and maps to an active internal user and organization membership. Missing or invalid membership fails closed.
+- **Tenant isolation:** Complete. Application guards and PostgreSQL RLS independently reject cross-organization access, including known exact IDs.
+- **Object authorization:** Complete for the route inventory. Shared role and initiative/object guards cover projects, initiatives, capabilities, artifacts, releases, sprints, AI targets, grants and integration connections.
+
+## P1 Status
+
+- **Transaction safety:** Complete for the identified critical planning operations; rollback behavior is tested.
+- **Versioning:** Complete foundation using the current `Prototype` plus durable immutable `RoadmapVersion` snapshots.
+- **Baselines and approvals:** Complete with immutable `PlanApproval` records tied to approved versions.
+- **Audit events:** Complete for core planning changes, regeneration, locking and approval.
+- **Database hardening:** Complete for the identified integrity/security scope, including decimal money, JSONB history metadata, tenant-parent triggers, constraints and targeted indexes.
+- **Quality gates:** Complete and passing.
+- **CI:** Complete; the pull-request workflow has passed on GitHub.
+
+## Deferred
+
+- Live Jira integration, by requirement.
+- Version restore/diff UI; the stored history supports it later.
+- Organization deletion; no deletion workflow existed, so this milestone did not introduce one. Any future endpoint must be owner-only.
+- External operational controls listed under Remaining production risks.
+
+## Jira Readiness
+
+P0 and critical P1 controls are verified, so the codebase is structurally ready to begin a separately scoped Jira Export MVP. The current Jira implementations remain development-only stubs.
+
+## Files Changed
+
+- **Authentication and authorization:** `src/lib/auth/session.ts`, `src/lib/access/**`, and tenant-facing API routes under `src/app/api/**`.
+- **Transactions, history and audit:** `src/lib/db.ts`, `src/lib/audit.ts`, `src/lib/generation/{engine,locking,mutation,versioning}.ts` and planning mutation routes.
+- **Database:** `prisma/schema.prisma` and the five migrations listed below.
+- **Jira containment:** `src/lib/sync/{demoPolicy,integrationStub,jiraStub}.ts` and the Jira sync route.
+- **Observability:** `src/lib/observability.ts`, `src/lib/api.ts`, all API route wrappers, `/api/health` and `/api/ready`.
+- **Quality and CI:** `package.json`, `package-lock.json`, `.npmrc`, `.nvmrc`, `vitest.config.mts`, `.github/workflows/ci.yml`, and focused security tests.
+- **Documentation:** the assessment, dependency remediation, operational readiness, compliance matrix and this report under `docs/`.
+
+## Migrations
+
+1. `20260918130000_harden_membership_boundary`
+2. `20260918131000_approval_audit_history`
+3. `20260918132000_monetary_precision`
+4. `20260918133000_parent_consistency`
+5. `20260918134000_restrict_rls_helpers`
+
+## Test Results
+
+- Live Supabase suite: 66 files and 545 tests passed.
+- Focused security suite: 8 files and 75 tests passed.
+- Typecheck: passed.
+- ESLint with zero warnings: passed.
+- Prisma schema and migration status: valid and current.
+- Deterministic offline install dry run: passed.
+- Next.js 16.3.5 production build: passed.
+- GitHub Actions pull-request quality gate: passed.
+- Vercel preview: `READY`.
+
+## Recommended Next Milestone
+
+Jira Export MVP may begin because P0 and critical P1 controls are verified. Track the remaining external P2 operational controls in parallel and complete them before production traffic.
