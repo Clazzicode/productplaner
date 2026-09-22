@@ -1,12 +1,22 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { randomUUID } from "node:crypto";
+import { checkRateLimit, rateLimitPolicyFor } from "@/lib/rateLimit";
 
 const context = new AsyncLocalStorage<{ requestId: string }>();
 export function currentRequestId() { return context.getStore()?.requestId; }
 
 /** Allowlisted fields only: no headers, bodies, tokens, URLs or error messages. */
 export function serverLog(event: string, fields: { status?: number; durationMs?: number; errorType?: string } = {}) {
-  console.log(JSON.stringify({ timestamp: new Date().toISOString(), event, requestId: currentRequestId(), ...fields }));
+  const payload = JSON.stringify({
+    timestamp: new Date().toISOString(),
+    level: (fields.status ?? 0) >= 500 ? "error" : "info",
+    event,
+    requestId: currentRequestId(),
+    environment: process.env.VERCEL_ENV ?? process.env.NODE_ENV ?? "unknown",
+    ...fields,
+  });
+  if ((fields.status ?? 0) >= 500) console.error(payload);
+  else console.log(payload);
 }
 
 export function withApi<T extends unknown[]>(handler: (...args: T) => Promise<Response>) {
@@ -18,6 +28,26 @@ export function withApi<T extends unknown[]>(handler: (...args: T) => Promise<Re
         const origin = request.headers.get("origin");
         if (origin && origin !== new URL(request.url).origin) {
           return Response.json({ error: "Cross-origin mutation rejected." }, { status: 403 });
+        }
+        const policy = rateLimitPolicyFor(request);
+        if (policy) {
+          const result = await checkRateLimit(request, policy);
+          if (!result.allowed) {
+            serverLog("api.rate_limited", { status: 429 });
+            return Response.json(
+              { error: "Too many requests. Please wait and try again.", requestId: currentRequestId() },
+              {
+                status: 429,
+                headers: {
+                  "x-request-id": currentRequestId()!,
+                  "cache-control": "no-store",
+                  "retry-after": String(result.retryAfterSeconds),
+                  "x-ratelimit-limit": String(policy.limit),
+                  "x-ratelimit-remaining": String(result.remaining),
+                },
+              },
+            );
+          }
         }
       }
       const response = await handler(...args);
