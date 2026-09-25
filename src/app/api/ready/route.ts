@@ -14,6 +14,7 @@ async function GETHandler() {
     const rows = await rawDb.$queryRaw<{ safe: boolean }[]>`
       SELECT NOT (rolsuper OR rolbypassrls) AND current_user = 'app_rw'
         AND to_regclass('public."PlanApproval"') IS NOT NULL
+        AND to_regprocedure('app_private.check_rate_limit(text,text,integer,integer)') IS NOT NULL
         AND to_regclass('public."AuditEvent"') IS NOT NULL AS safe
       FROM pg_roles WHERE rolname = current_user`;
     if (!rows[0]?.safe) throw new Error("Database not ready");
@@ -29,4 +30,4 @@ async function GETHandler() {
   }
 }
 
-export const GET = withApi(GETHandler);
+export const GET = withApi(GETHandler, { diagnostic: true });

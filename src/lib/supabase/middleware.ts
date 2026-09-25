@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { environmentIsolation } from "@/lib/environment";
 
 /**
  * Standard @supabase/ssr Next.js App Router session-refresh recipe. Must run
@@ -10,6 +11,11 @@ import { NextResponse, type NextRequest } from "next/server";
  */
 export async function updateSupabaseSession(request: NextRequest) {
   if (["/api/health", "/api/ready"].includes(request.nextUrl.pathname)) return NextResponse.next();
+  if (!environmentIsolation().isolated) {
+    return NextResponse.json({ error: "This environment is not ready." }, {
+      status: 503, headers: { "cache-control": "no-store" },
+    });
+  }
   let response = NextResponse.next({ request });
 
   const supabase = createServerClient(
