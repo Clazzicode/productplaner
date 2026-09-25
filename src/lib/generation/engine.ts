@@ -1,5 +1,6 @@
+import { randomUUID } from "crypto";
 import type { Prisma, PrismaClient } from "@prisma/client";
-import { db } from "@/lib/db";
+import { db, withTransaction } from "@/lib/db";
 import { buildPlan, packContinuousFlow, packSprints } from "./buildPlan";
 import { EPIC_NAME_SUFFIXES, PHASE_NAMES, RELEASE_NAMES } from "./constants";
 import {
@@ -10,8 +11,11 @@ import {
   type NarrativeContext,
 } from "./decompose";
 import { computeEffectiveCapacity } from "./cost";
+import { computeRoadmapInputsFingerprint } from "./fingerprint";
 import { METHODOLOGY_PROFILES, resolveMethodology } from "./methodology";
 import { validateIntake } from "./validateIntake";
+import { archiveWorkingVersion, ensureApprovedVersionArchived } from "./versioning";
+import { auditInitiative } from "@/lib/audit";
 import {
   LAYER_SEQUENCE,
   type CapabilityInput,
@@ -123,7 +127,7 @@ const traceFor = {
   }),
   feature: (cap: { name: string; isMvp: boolean }) => ({
     keys: "q4",
-    note: `From capability "${cap.name}" — marked ${cap.isMvp ? "required for MVP" : "post-MVP"} in intake (Q4).`,
+    note: `From feature "${cap.name}" — marked ${cap.isMvp ? "required for MVP" : "post-MVP"} in intake (Q4).`,
   }),
   epic: (cap: { name: string; effortSize: string }) => ({
     keys: "q1,q4,q6",
@@ -140,9 +144,38 @@ const traceFor = {
 };
 
 // ---------- tree creation helpers (shared by generate + regenerate) ----------
+//
+// These build plain row objects with client-generated ids instead of
+// awaiting one `create()` per row: a hosted-Postgres round trip per
+// feature/epic/story/AC made drag-and-drop moves and edits noticeably slow
+// once a plan had more than a handful of features. Rows accumulate into a
+// `TreeBatch` and are flushed with one `createMany` per layer type — parent
+// rows must land before children because `parentId` is a real FK, so
+// `flushTreeBatch` writes features, then epics, then stories, then ACs, in
+// that order.
 
-async function createStoryTree(
-  tx: Db,
+type ArtifactLayerRow = Prisma.ArtifactLayerCreateManyInput;
+
+interface TreeBatch {
+  features: ArtifactLayerRow[];
+  epics: ArtifactLayerRow[];
+  stories: ArtifactLayerRow[];
+  acs: ArtifactLayerRow[];
+}
+
+function newTreeBatch(): TreeBatch {
+  return { features: [], epics: [], stories: [], acs: [] };
+}
+
+async function flushTreeBatch(tx: Db, batch: TreeBatch): Promise<void> {
+  if (batch.features.length > 0) await tx.artifactLayer.createMany({ data: batch.features });
+  if (batch.epics.length > 0) await tx.artifactLayer.createMany({ data: batch.epics });
+  if (batch.stories.length > 0) await tx.artifactLayer.createMany({ data: batch.stories });
+  if (batch.acs.length > 0) await tx.artifactLayer.createMany({ data: batch.acs });
+}
+
+function addStoryTree(
+  batch: TreeBatch,
   args: {
     prototypeId: string;
     parentEpicId: string;
@@ -151,50 +184,49 @@ async function createStoryTree(
     cap: CapabilityInput;
     sprintIdByNumber: Map<number, string>;
   },
-): Promise<void> {
+): void {
   const { prototypeId, parentEpicId, story, order, cap, sprintIdByNumber } = args;
   const trace = traceFor.story(cap);
-  const storyRow = await tx.artifactLayer.create({
-    data: {
-      prototypeId,
-      type: "story",
-      parentId: parentEpicId,
-      order,
-      title: story.title,
-      body: story.body,
-      points: story.points,
-      contentJson: JSON.stringify({
-        persona: story.persona,
-        want: story.want,
-        benefit: story.benefit,
-      }),
-      sourceCapabilityId: cap.id,
-      traceAnswerKeys: trace.keys,
-      traceNote: trace.note,
-      sprintId: sprintIdByNumber.get(story.sprintNumber) ?? null,
-    },
+  const storyId = randomUUID();
+  batch.stories.push({
+    id: storyId,
+    prototypeId,
+    type: "story",
+    parentId: parentEpicId,
+    order,
+    title: story.title,
+    body: story.body,
+    points: story.points,
+    contentJson: JSON.stringify({
+      persona: story.persona,
+      want: story.want,
+      benefit: story.benefit,
+    }),
+    sourceCapabilityId: cap.id,
+    traceAnswerKeys: trace.keys,
+    traceNote: trace.note,
+    sprintId: sprintIdByNumber.get(story.sprintNumber) ?? null,
   });
   const acTrace = traceFor.ac();
   for (const [ai, ac] of story.acs.entries()) {
-    await tx.artifactLayer.create({
-      data: {
-        prototypeId,
-        type: "acceptance_criterion",
-        parentId: storyRow.id,
-        order: ai,
-        title: ac.title,
-        body: ac.body,
-        contentJson: JSON.stringify({ kind: ac.kind }),
-        sourceCapabilityId: cap.id,
-        traceAnswerKeys: acTrace.keys,
-        traceNote: acTrace.note,
-      },
+    batch.acs.push({
+      id: randomUUID(),
+      prototypeId,
+      type: "acceptance_criterion",
+      parentId: storyId,
+      order: ai,
+      title: ac.title,
+      body: ac.body,
+      contentJson: JSON.stringify({ kind: ac.kind }),
+      sourceCapabilityId: cap.id,
+      traceAnswerKeys: acTrace.keys,
+      traceNote: acTrace.note,
     });
   }
 }
 
-async function createEpicTree(
-  tx: Db,
+function addEpicTree(
+  batch: TreeBatch,
   args: {
     prototypeId: string;
     parentFeatureId: string;
@@ -204,27 +236,27 @@ async function createEpicTree(
     cap: CapabilityInput;
     sprintIdByNumber: Map<number, string>;
   },
-): Promise<void> {
+): void {
   const { prototypeId, parentFeatureId, epic, epicIndex, epicCount, cap, sprintIdByNumber } = args;
   const trace = traceFor.epic(cap);
-  const epicRow = await tx.artifactLayer.create({
-    data: {
-      prototypeId,
-      type: "epic",
-      parentId: parentFeatureId,
-      order: epicIndex,
-      title: epic.title,
-      body: epic.body,
-      contentJson: JSON.stringify({ epicIndex, epicCount }),
-      sourceCapabilityId: cap.id,
-      traceAnswerKeys: trace.keys,
-      traceNote: trace.note,
-    },
+  const epicId = randomUUID();
+  batch.epics.push({
+    id: epicId,
+    prototypeId,
+    type: "epic",
+    parentId: parentFeatureId,
+    order: epicIndex,
+    title: epic.title,
+    body: epic.body,
+    contentJson: JSON.stringify({ epicIndex, epicCount }),
+    sourceCapabilityId: cap.id,
+    traceAnswerKeys: trace.keys,
+    traceNote: trace.note,
   });
   for (const [si, story] of epic.stories.entries()) {
-    await createStoryTree(tx, {
+    addStoryTree(batch, {
       prototypeId,
-      parentEpicId: epicRow.id,
+      parentEpicId: epicId,
       story,
       order: si,
       cap,
@@ -233,8 +265,8 @@ async function createEpicTree(
   }
 }
 
-async function createFeatureTree(
-  tx: Db,
+function addFeatureTree(
+  batch: TreeBatch,
   args: {
     prototypeId: string;
     parentPhaseId: string;
@@ -244,27 +276,27 @@ async function createFeatureTree(
     cap: CapabilityInput;
     sprintIdByNumber: Map<number, string>;
   },
-): Promise<void> {
+): void {
   const { prototypeId, parentPhaseId, phaseNumber, feature, order, cap, sprintIdByNumber } = args;
   const trace = traceFor.feature(cap);
-  const featureRow = await tx.artifactLayer.create({
-    data: {
-      prototypeId,
-      type: "feature",
-      parentId: parentPhaseId,
-      order,
-      title: feature.title,
-      body: feature.body,
-      contentJson: JSON.stringify({ phaseNumber }),
-      sourceCapabilityId: cap.id,
-      traceAnswerKeys: trace.keys,
-      traceNote: trace.note,
-    },
+  const featureId = randomUUID();
+  batch.features.push({
+    id: featureId,
+    prototypeId,
+    type: "feature",
+    parentId: parentPhaseId,
+    order,
+    title: feature.title,
+    body: feature.body,
+    contentJson: JSON.stringify({ phaseNumber }),
+    sourceCapabilityId: cap.id,
+    traceAnswerKeys: trace.keys,
+    traceNote: trace.note,
   });
   for (const [ei, epic] of feature.epics.entries()) {
-    await createEpicTree(tx, {
+    addEpicTree(batch, {
       prototypeId,
-      parentFeatureId: featureRow.id,
+      parentFeatureId: featureId,
       epic,
       epicIndex: ei,
       epicCount: feature.epics.length,
@@ -277,9 +309,14 @@ async function createFeatureTree(
 // ---------- full generation (FR-08/FR-09) ----------
 
 export async function generatePrototype(initiativeId: string): Promise<{ prototypeId: string }> {
-  const [intake, initiativeRow] = await Promise.all([
+  return withTransaction(() => generatePrototypeInternal(initiativeId), { timeout: 120_000 });
+}
+
+async function generatePrototypeInternal(initiativeId: string): Promise<{ prototypeId: string }> {
+  const [intake, initiativeRow, inputsFingerprintAtGeneration] = await Promise.all([
     loadIntakeInput(initiativeId),
     db.initiative.findUniqueOrThrow({ where: { id: initiativeId }, select: { methodology: true } }),
+    computeRoadmapInputsFingerprint(initiativeId),
   ]);
   const methodology = resolveMethodology(initiativeRow.methodology);
   const validation = validateIntake(intake);
@@ -288,47 +325,50 @@ export async function generatePrototype(initiativeId: string): Promise<{ prototy
   const plan = buildPlan(intake, methodology);
   const capById = new Map(intake.capabilities.map((c) => [c.id, c]));
 
-  const prototypeId = await db.$transaction(
+  const prototypeId = await withTransaction(
     async (tx) => {
-      // Idempotent: regenerating from intake replaces any prior prototype.
+      // Roadmap versioning foundation: an approved prototype's content is
+      // about to be destroyed by the deleteMany below — preserve it as
+      // history first. Normally a no-op (POST .../approve-plan already
+      // recorded this version eagerly at approval time via
+      // recordApprovedRoadmapVersion); this only self-heals a pre-existing
+      // approved prototype that predates this feature, or a rare crash
+      // between that route's two awaited calls. Reaching this point with an
+      // approved existing prototype always means the caller already passed
+      // recalculatePlan's ApprovedBaselineImpactError guard (confirmApprovedImpact:
+      // true) — generatePrototype itself doesn't need its own confirm flag.
+      const existing = await tx.prototype.findUnique({
+        where: { initiativeId },
+        select: { id: true, approvedAt: true, approvedBaselineJson: true },
+      });
+      if (existing?.approvedAt && existing.approvedBaselineJson) {
+        await ensureApprovedVersionArchived(tx, {
+          initiativeId,
+          approvedBaselineJson: existing.approvedBaselineJson,
+          approvedAt: existing.approvedAt,
+        });
+      }
+      if (existing) await archiveWorkingVersion(existing.id);
+      // Replace working rows only after preserving a complete checkpoint.
       await tx.prototype.deleteMany({ where: { initiativeId } });
-      const proto = await tx.prototype.create({ data: { initiativeId } });
+      const proto = await tx.prototype.create({ data: { initiativeId, inputsFingerprintAtGeneration } });
 
-      for (const [i, layerType] of LAYER_SEQUENCE.entries()) {
-        await tx.layerLock.create({
-          data: { prototypeId: proto.id, layerType, sequence: i + 1 },
-        });
-      }
+      await tx.layerLock.createMany({
+        data: LAYER_SEQUENCE.map((layerType, i) => ({
+          prototypeId: proto.id,
+          layerType,
+          sequence: i + 1,
+        })),
+      });
 
-      const releaseIdByPhase = new Map<number, string>();
-      for (const rel of plan.releases) {
-        const row = await tx.release.create({
-          data: {
-            prototypeId: proto.id,
-            name: rel.name,
-            phaseNumber: rel.phaseNumber,
-            targetDate: rel.targetDate,
-            order: rel.order,
-          },
-        });
-        releaseIdByPhase.set(rel.phaseNumber, row.id);
-      }
-
+      // Guided-activation restructure: generation no longer auto-creates
+      // Release/Sprint rows (plan.releases/plan.sprints go unused here) —
+      // those are now a separate, explicit, user-confirmed step (see the
+      // manual creation routes and resolveLifecycleState.ts). `buildPlan()`
+      // still computes them internally purely to derive realistic phase
+      // start/end dates (phase.startDate/endDate above), which stay useful
+      // even before any release/sprint is manually created.
       const sprintIdByNumber = new Map<number, string>();
-      for (const sprint of plan.sprints) {
-        const row = await tx.sprint.create({
-          data: {
-            prototypeId: proto.id,
-            sprintNumber: sprint.sprintNumber,
-            phaseNumber: sprint.phaseNumber,
-            startDate: sprint.startDate,
-            endDate: sprint.endDate,
-            capacityPoints: sprint.capacityPoints,
-            releaseId: releaseIdByPhase.get(sprint.phaseNumber) ?? null,
-          },
-        });
-        sprintIdByNumber.set(sprint.sprintNumber, row.id);
-      }
 
       const rootTrace = traceFor.roadmap();
       const root = await tx.artifactLayer.create({
@@ -343,31 +383,36 @@ export async function generatePrototype(initiativeId: string): Promise<{ prototy
         },
       });
 
-      for (const [pi, phase] of plan.phases.entries()) {
+      const phaseRows = plan.phases.map((phase, pi) => {
         const phaseTrace = traceFor.phase(phase.phaseNumber);
-        const phaseRow = await tx.artifactLayer.create({
-          data: {
-            prototypeId: proto.id,
-            type: "roadmap_phase",
-            parentId: root.id,
-            order: pi,
-            title: phase.name,
-            body: `${phase.features.length} ${phase.features.length === 1 ? "capability" : "capabilities"}, sequenced by dependencies and business value.`,
-            contentJson: JSON.stringify({
-              phaseNumber: phase.phaseNumber,
-              startDate: phase.startDate.toISOString(),
-              endDate: phase.endDate.toISOString(),
-              capabilityIds: phase.capabilityIds,
-            }),
-            traceAnswerKeys: phaseTrace.keys,
-            traceNote: phaseTrace.note,
-          },
-        });
+        return {
+          id: randomUUID(),
+          prototypeId: proto.id,
+          type: "roadmap_phase",
+          parentId: root.id,
+          order: pi,
+          title: phase.name,
+          body: `${phase.features.length} ${phase.features.length === 1 ? "feature" : "features"}, sequenced by dependencies and business value.`,
+          contentJson: JSON.stringify({
+            phaseNumber: phase.phaseNumber,
+            startDate: phase.startDate.toISOString(),
+            endDate: phase.endDate.toISOString(),
+            capabilityIds: phase.capabilityIds,
+          }),
+          traceAnswerKeys: phaseTrace.keys,
+          traceNote: phaseTrace.note,
+        };
+      });
+      if (phaseRows.length > 0) await tx.artifactLayer.createMany({ data: phaseRows });
+
+      const batch = newTreeBatch();
+      for (const [pi, phase] of plan.phases.entries()) {
+        const parentPhaseId = phaseRows[pi].id;
         for (const [fi, feature] of phase.features.entries()) {
           const cap = capById.get(feature.capabilityId)!;
-          await createFeatureTree(tx, {
+          addFeatureTree(batch, {
             prototypeId: proto.id,
-            parentPhaseId: phaseRow.id,
+            parentPhaseId,
             phaseNumber: phase.phaseNumber,
             feature,
             order: fi,
@@ -376,6 +421,7 @@ export async function generatePrototype(initiativeId: string): Promise<{ prototy
           });
         }
       }
+      await flushTreeBatch(tx, batch);
 
       await tx.initiative.update({
         where: { id: initiativeId },
@@ -385,6 +431,7 @@ export async function generatePrototype(initiativeId: string): Promise<{ prototy
         where: { initiativeId },
         data: { status: "generated", validatedAt: new Date() },
       });
+      await auditInitiative(initiativeId, "plan.generated", { prototypeId: proto.id });
       return proto.id;
     },
     { timeout: 120_000 },
@@ -421,6 +468,11 @@ export async function regenerateBelow(
   prototypeId: string,
   editedLayer: LayerType,
 ): Promise<RegenStats> {
+  return withTransaction(() => regenerateBelowInternal(prototypeId, editedLayer), { timeout: 120_000 });
+}
+
+async function regenerateBelowInternal(prototypeId: string, editedLayer: LayerType): Promise<RegenStats> {
+  await archiveWorkingVersion(prototypeId);
   const proto = await db.prototype.findUniqueOrThrow({
     where: { id: prototypeId },
     select: { initiativeId: true, initiative: { select: { methodology: true } } },
@@ -431,8 +483,21 @@ export async function regenerateBelow(
   const capById = new Map(intake.capabilities.map((c) => [c.id, c]));
   const stats: RegenStats = { features: 0, epics: 0, stories: 0, acs: 0, sprints: 0 };
 
-  await db.$transaction(
+  await withTransaction(
     async (tx) => {
+      // Reconciliation snapshot (guided-activation restructure): a manual
+      // Sprint's story links point at specific ArtifactLayer story rows,
+      // which this function deletes-and-recreates-with-new-ids for whichever
+      // layer is edited — the manual Sprint row itself survives (repackSprints
+      // only touches origin:"auto" rows), but can silently lose its story
+      // links in the process. Compared against the same query after repack
+      // runs, below, to flag (never silently drop) any manual Sprint whose
+      // linked-story count went down.
+      const manualSprintsBefore = await tx.sprint.findMany({
+        where: { prototypeId, origin: "manual" },
+        select: { id: true, _count: { select: { stories: true } } },
+      });
+
       if (editedLayer === "roadmap") {
         // Rebuild features (and everything beneath) under the surviving phases.
         await tx.artifactLayer.deleteMany({ where: { prototypeId, type: "feature" } });
@@ -440,6 +505,7 @@ export async function regenerateBelow(
           where: { prototypeId, type: "roadmap_phase" },
           orderBy: { order: "asc" },
         });
+        const batch = newTreeBatch();
         for (const phaseRow of phases) {
           const content = parseJson(phaseRow.contentJson);
           const capIds = (content.capabilityIds as string[] | undefined) ?? [];
@@ -448,7 +514,7 @@ export async function regenerateBelow(
             .filter((c): c is CapabilityInput => Boolean(c));
           for (const [fi, cap] of caps.entries()) {
             const feature = { ...decomposeForRegen(cap, ctx) };
-            await createFeatureTree(tx, {
+            addFeatureTree(batch, {
               prototypeId,
               parentPhaseId: phaseRow.id,
               phaseNumber: (content.phaseNumber as number | undefined) ?? 1,
@@ -465,12 +531,14 @@ export async function regenerateBelow(
             }
           }
         }
+        await flushTreeBatch(tx, batch);
       } else if (editedLayer === "feature_hierarchy") {
         await tx.artifactLayer.deleteMany({ where: { prototypeId, type: "epic" } });
         const features = await tx.artifactLayer.findMany({
           where: { prototypeId, type: "feature" },
           orderBy: { order: "asc" },
         });
+        const batch = newTreeBatch();
         for (const f of features) {
           const cap = f.sourceCapabilityId ? capById.get(f.sourceCapabilityId) : undefined;
           if (!cap) continue;
@@ -487,7 +555,7 @@ export async function regenerateBelow(
                 ctx,
               }),
             };
-            await createEpicTree(tx, {
+            addEpicTree(batch, {
               prototypeId,
               parentFeatureId: f.id,
               epic,
@@ -501,6 +569,7 @@ export async function regenerateBelow(
             stats.acs += epic.stories.reduce((n, s) => n + s.acs.length, 0);
           }
         }
+        await flushTreeBatch(tx, batch);
       } else if (editedLayer === "epics") {
         await tx.artifactLayer.deleteMany({ where: { prototypeId, type: "story" } });
         const epics = await tx.artifactLayer.findMany({
@@ -508,6 +577,7 @@ export async function regenerateBelow(
           orderBy: { order: "asc" },
           include: { parent: { select: { title: true } } },
         });
+        const batch = newTreeBatch();
         for (const e of epics) {
           const cap = e.sourceCapabilityId ? capById.get(e.sourceCapabilityId) : undefined;
           if (!cap) continue;
@@ -525,7 +595,7 @@ export async function regenerateBelow(
             ctx,
           });
           for (const [si, story] of stories.entries()) {
-            await createStoryTree(tx, {
+            addStoryTree(batch, {
               prototypeId,
               parentEpicId: e.id,
               story,
@@ -537,6 +607,7 @@ export async function regenerateBelow(
           stats.stories += stories.length;
           stats.acs += stories.reduce((n, s) => n + s.acs.length, 0);
         }
+        await flushTreeBatch(tx, batch);
       } else if (editedLayer === "stories") {
         await tx.artifactLayer.deleteMany({
           where: { prototypeId, type: "acceptance_criterion" },
@@ -546,6 +617,7 @@ export async function regenerateBelow(
           orderBy: { order: "asc" },
         });
         const acTrace = traceFor.ac();
+        const acRows: ArtifactLayerRow[] = [];
         for (const s of stories) {
           const content = parseJson(s.contentJson);
           const acs = buildACsForStory({
@@ -554,27 +626,44 @@ export async function regenerateBelow(
             benefit: (content.benefit as string | undefined) ?? ctx.outcomeShort,
           });
           for (const [ai, ac] of acs.entries()) {
-            await tx.artifactLayer.create({
-              data: {
-                prototypeId,
-                type: "acceptance_criterion",
-                parentId: s.id,
-                order: ai,
-                title: ac.title,
-                body: ac.body,
-                contentJson: JSON.stringify({ kind: ac.kind }),
-                sourceCapabilityId: s.sourceCapabilityId,
-                traceAnswerKeys: acTrace.keys,
-                traceNote: acTrace.note,
-              },
+            acRows.push({
+              id: randomUUID(),
+              prototypeId,
+              type: "acceptance_criterion",
+              parentId: s.id,
+              order: ai,
+              title: ac.title,
+              body: ac.body,
+              contentJson: JSON.stringify({ kind: ac.kind }),
+              sourceCapabilityId: s.sourceCapabilityId,
+              traceAnswerKeys: acTrace.keys,
+              traceNote: acTrace.note,
             });
           }
           stats.acs += acs.length;
         }
+        if (acRows.length > 0) await tx.artifactLayer.createMany({ data: acRows });
       }
       // acceptance_criteria is the leaf — nothing beneath except the agile layers.
 
       stats.sprints = await repackSprints(tx, prototypeId, intake, methodology);
+
+      if (manualSprintsBefore.length > 0) {
+        const beforeCounts = new Map(manualSprintsBefore.map((s) => [s.id, s._count.stories]));
+        const manualSprintsAfter = await tx.sprint.findMany({
+          where: { prototypeId, origin: "manual" },
+          select: { id: true, _count: { select: { stories: true } } },
+        });
+        const regressedIds = manualSprintsAfter
+          .filter((s) => s._count.stories < (beforeCounts.get(s.id) ?? 0))
+          .map((s) => s.id);
+        if (regressedIds.length > 0) {
+          await tx.sprint.updateMany({
+            where: { id: { in: regressedIds } },
+            data: { status: "needs_reconciliation" },
+          });
+        }
+      }
 
       // Downstream waterfall locks reset — must be reviewed and re-locked in order.
       const idx = LAYER_SEQUENCE.indexOf(editedLayer);
@@ -586,6 +675,8 @@ export async function regenerateBelow(
     { timeout: 120_000 },
   );
 
+  await db.prototype.update({ where: { id: prototypeId }, data: { approvedAt: null, approvedBaselineJson: null } });
+  await auditInitiative(proto.initiativeId, "plan.regenerated", { prototypeId, editedLayer });
   return stats;
 }
 
@@ -594,7 +685,7 @@ function decomposeForRegen(cap: CapabilityInput, ctx: NarrativeContext): Planned
   return {
     capabilityId: cap.id,
     title: cap.name,
-    body: cap.description.trim().length > 0 ? cap.description.trim() : `Delivers the "${cap.name}" capability.`,
+    body: cap.description.trim().length > 0 ? cap.description.trim() : `Delivers the "${cap.name}" feature.`,
     isMvp: cap.isMvp,
     epics: seeds.map((seed) => ({
       title: seed.title,
@@ -612,12 +703,24 @@ function decomposeForRegen(cap: CapabilityInput, ctx: NarrativeContext): Planned
 // ---------- agile-layer recompute (sprints, releases) ----------
 
 /**
- * Rebuilds sprints and releases from the CURRENT story rows in strict
- * roadmap order. Manual sprint moves are reset — the agile layer is always
- * recomputed when the waterfall foundation moves. Kanban (`sprintMode:
- * "continuous_flow"`) creates no `Sprint` rows at all — every story's
- * `sprintId` stays null, and `Release` dates come from cumulative-throughput
- * math instead of discrete sprint spans.
+ * Rebuilds AUTO-origin sprints and releases from the CURRENT story rows in
+ * strict roadmap order. Kanban (`sprintMode: "continuous_flow"`) creates no
+ * `Sprint` rows at all — every auto-pool story's `sprintId` stays null, and
+ * `Release` dates come from cumulative-throughput math instead of discrete
+ * sprint spans.
+ *
+ * Guided-activation restructure: this only ever touches `origin:"auto"`
+ * Release/Sprint rows — any `origin:"manual"` row (created through the
+ * explicit Create Release / Plan Sprint flow) is left completely alone, and
+ * every phase a manual Release already claims is excluded from the auto
+ * packing pool entirely (its stories' `sprintId` is never touched here — see
+ * the manual sprint-creation route for how those get assigned). Auto
+ * sprintNumber/release-order values are offset past the current max manual
+ * value to guarantee no unique-constraint collision; this can make auto
+ * sprint numbers not perfectly chronological relative to manual ones when a
+ * manually-claimed phase sits earlier in roadmap order than an auto one —
+ * documented trade-off, not a bug, given the alternative is a full
+ * renumbering pass across both origins on every repack.
  */
 export async function repackSprints(
   tx: Db,
@@ -626,8 +729,24 @@ export async function repackSprints(
   methodology: Methodology = "hybrid",
 ): Promise<number> {
   const profile = METHODOLOGY_PROFILES[resolveMethodology(methodology)];
-  await tx.sprint.deleteMany({ where: { prototypeId } }); // SetNull clears story.sprintId
-  await tx.release.deleteMany({ where: { prototypeId } });
+
+  const manualReleases = await tx.release.findMany({
+    where: { prototypeId, origin: "manual" },
+    select: { phaseNumber: true, order: true },
+  });
+  const manualSprints = await tx.sprint.findMany({
+    where: { prototypeId, origin: "manual" },
+    select: { sprintNumber: true },
+  });
+  const claimedPhaseNumbers = new Set(manualReleases.map((r) => r.phaseNumber));
+  const releaseOrderOffset =
+    manualReleases.length > 0 ? Math.max(...manualReleases.map((r) => r.order)) : 0;
+  const sprintNumberOffset =
+    manualSprints.length > 0 ? Math.max(...manualSprints.map((s) => s.sprintNumber)) : 0;
+
+  // SetNull clears story.sprintId for auto sprints only — manual rows untouched.
+  await tx.sprint.deleteMany({ where: { prototypeId, origin: "auto" } });
+  await tx.release.deleteMany({ where: { prototypeId, origin: "auto" } });
 
   const rows = await tx.artifactLayer.findMany({
     where: { prototypeId, type: { in: ["roadmap_phase", "feature", "epic", "story"] } },
@@ -647,9 +766,12 @@ export async function repackSprints(
     .filter((r) => r.type === "roadmap_phase")
     .sort((a, b) => a.order - b.order);
 
+  // Manually-claimed phases are excluded here — their stories never enter
+  // the auto pool, so their sprintId is never touched below.
   const ordered: { rowId: string; shim: { points: number; sprintNumber: number }; phaseNumber: number }[] = [];
   for (const phase of phaseRows) {
     const phaseNumber = (parseJson(phase.contentJson).phaseNumber as number | undefined) ?? 1;
+    if (claimedPhaseNumbers.has(phaseNumber)) continue;
     for (const feature of childrenOf(phase.id, "feature")) {
       for (const epic of childrenOf(feature.id, "epic")) {
         for (const story of childrenOf(epic.id, "story")) {
@@ -673,23 +795,27 @@ export async function repackSprints(
       sprintLengthWeeks: intake.sprintLengthWeeks,
       startDate: intake.startDate,
     });
-    // Every story's sprintId is already null here — the `sprint.deleteMany`
-    // above SetNulls it, and Kanban never assigns one — so there's nothing
-    // further to update on the story rows themselves.
+    // Every auto-pool story's sprintId is already null here — the
+    // `sprint.deleteMany` above SetNulls it, and Kanban never assigns one —
+    // so there's nothing further to update on the story rows themselves.
     const phasesPresent = [...new Set(ordered.map((o) => o.phaseNumber))].sort((a, b) => a - b);
-    for (const [i, phaseNumber] of phasesPresent.entries()) {
-      const targetDate = flow.releaseDateByPhase.get(phaseNumber);
-      if (!targetDate) continue;
-      await tx.release.create({
-        data: {
+    const releaseRows = phasesPresent
+      .map((phaseNumber, i) => {
+        const targetDate = flow.releaseDateByPhase.get(phaseNumber);
+        if (!targetDate) return null;
+        return {
+          id: randomUUID(),
           prototypeId,
           name: RELEASE_NAMES[phaseNumber] ?? `Release ${i + 1}`,
           phaseNumber,
           targetDate,
-          order: i + 1,
-        },
-      });
-    }
+          order: i + 1 + releaseOrderOffset,
+          origin: "auto",
+        };
+      })
+      .filter((r): r is NonNullable<typeof r> => r != null);
+    if (releaseRows.length > 0) await tx.release.createMany({ data: releaseRows });
+
     for (const phase of phaseRows) {
       const content = parseJson(phase.contentJson);
       const phaseNumber = (content.phaseNumber as number | undefined) ?? 1;
@@ -707,7 +833,7 @@ export async function repackSprints(
         });
       }
     }
-    return 0; // zero Sprint rows for Kanban
+    return 0; // zero auto Sprint rows for Kanban
   }
 
   const sprints = packSprints({
@@ -717,48 +843,58 @@ export async function repackSprints(
     startDate: intake.startDate,
   });
 
-  // Releases: one per phase present, cut at that phase's sprints.
-  const releaseIdByPhase = new Map<number, string>();
+  // Releases: one per (non-claimed) phase present, cut at that phase's sprints.
   const phasesPresent = [...new Set(sprints.map((s) => s.phaseNumber))].sort((a, b) => a - b);
-  for (const [i, phaseNumber] of phasesPresent.entries()) {
+  const releaseRows = phasesPresent.map((phaseNumber, i) => {
     const phaseSprints = sprints.filter((s) => s.phaseNumber === phaseNumber);
-    const row = await tx.release.create({
-      data: {
-        prototypeId,
-        name: RELEASE_NAMES[phaseNumber] ?? `Release ${i + 1}`,
-        phaseNumber,
-        targetDate: phaseSprints[phaseSprints.length - 1].endDate,
-        order: i + 1,
-      },
-    });
-    releaseIdByPhase.set(phaseNumber, row.id);
-  }
+    return {
+      id: randomUUID(),
+      prototypeId,
+      name: RELEASE_NAMES[phaseNumber] ?? `Release ${i + 1}`,
+      phaseNumber,
+      targetDate: phaseSprints[phaseSprints.length - 1].endDate,
+      order: i + 1 + releaseOrderOffset,
+      origin: "auto",
+    };
+  });
+  if (releaseRows.length > 0) await tx.release.createMany({ data: releaseRows });
+  const releaseIdByPhase = new Map(releaseRows.map((r) => [r.phaseNumber, r.id]));
 
-  const sprintIdByNumber = new Map<number, string>();
-  for (const sprint of sprints) {
-    const row = await tx.sprint.create({
-      data: {
-        prototypeId,
-        sprintNumber: sprint.sprintNumber,
-        phaseNumber: sprint.phaseNumber,
-        startDate: sprint.startDate,
-        endDate: sprint.endDate,
-        capacityPoints: sprint.capacityPoints,
-        releaseId: releaseIdByPhase.get(sprint.phaseNumber) ?? null,
-      },
-    });
-    sprintIdByNumber.set(sprint.sprintNumber, row.id);
-  }
+  // sprintIdByOriginalNumber is keyed by packSprints()'s own 1..N numbering
+  // (which `ordered`'s shim.sprintNumber references) — kept separate from the
+  // OFFSET value persisted to the `sprintNumber` column below, so the offset
+  // never breaks the story->sprint id lookup.
+  const sprintIdByOriginalNumber = new Map(sprints.map((s) => [s.sprintNumber, randomUUID()]));
+  const sprintRows = sprints.map((sprint) => ({
+    id: sprintIdByOriginalNumber.get(sprint.sprintNumber)!,
+    prototypeId,
+    sprintNumber: sprint.sprintNumber + sprintNumberOffset,
+    phaseNumber: sprint.phaseNumber,
+    startDate: sprint.startDate,
+    endDate: sprint.endDate,
+    capacityPoints: sprint.capacityPoints,
+    origin: "auto",
+    releaseId: releaseIdByPhase.get(sprint.phaseNumber) ?? null,
+  }));
+  if (sprintRows.length > 0) await tx.sprint.createMany({ data: sprintRows });
 
+  // Group by resolved sprintId so each distinct sprint needs one updateMany
+  // instead of one update per story row. Only ever touches auto-pool rows
+  // (claimed-phase stories were excluded from `ordered` above).
+  const rowIdsBySprintId = new Map<string | null, string[]>();
   for (const o of ordered) {
-    await tx.artifactLayer.update({
-      where: { id: o.rowId },
-      data: { sprintId: sprintIdByNumber.get(o.shim.sprintNumber) ?? null },
-    });
+    const sprintId = sprintIdByOriginalNumber.get(o.shim.sprintNumber) ?? null;
+    const list = rowIdsBySprintId.get(sprintId) ?? [];
+    list.push(o.rowId);
+    rowIdsBySprintId.set(sprintId, list);
+  }
+  for (const [sprintId, rowIds] of rowIdsBySprintId) {
+    await tx.artifactLayer.updateMany({ where: { id: { in: rowIds } }, data: { sprintId } });
   }
 
   // Refresh phase date ranges from the repacked sprints (display data only —
   // sprint-layer changes never restructure locked waterfall rows, FR-18).
+  // Naturally a no-op for claimed phases: phaseSprints is empty for them.
   for (const phase of phaseRows) {
     const content = parseJson(phase.contentJson);
     const phaseNumber = (content.phaseNumber as number | undefined) ?? 1;
@@ -793,6 +929,18 @@ export type RecalculateDetail =
   | "full_fallback_no_locks";
 
 export class RecalculateBlockedError extends Error {}
+
+/**
+ * Versioning foundation (directive §17/§25): thrown instead of silently
+ * regenerating when the prototype has an approved baseline
+ * (Prototype.approvedAt, set by snapshotApprovedBaseline — see
+ * src/app/api/initiatives/[id]/approve-plan/route.ts for how a plan becomes
+ * approved now that the full FR-11/12/13 lock ceremony stays disabled) and
+ * the caller hasn't explicitly confirmed the impact. The route/UI must show
+ * what would change and let the user confirm before retrying with
+ * `confirmApprovedImpact: true` — never a silent overwrite of approved work.
+ */
+export class ApprovedBaselineImpactError extends Error {}
 
 export interface RecalculateResult {
   prototypeId: string;
@@ -852,8 +1000,26 @@ export function capabilitySetDrifted(
 export async function recalculatePlan(
   initiativeId: string,
   mode: RecalculateMode,
+  options: { confirmApprovedImpact?: boolean } = {},
+): Promise<RecalculateResult> {
+  return withTransaction(() => recalculatePlanInternal(initiativeId, mode, options), { timeout: 120_000 });
+}
+
+async function recalculatePlanInternal(
+  initiativeId: string,
+  mode: RecalculateMode,
+  options: { confirmApprovedImpact?: boolean },
 ): Promise<RecalculateResult> {
   if (mode === "full") {
+    if (!options.confirmApprovedImpact) {
+      const existing = await db.prototype.findUnique({ where: { initiativeId }, select: { approvedAt: true } });
+      if (existing?.approvedAt) {
+        throw new ApprovedBaselineImpactError(
+          `This initiative has an approved baseline (approved ${existing.approvedAt.toLocaleDateString()}). ` +
+            "Full regenerate replaces the entire plan. Confirm to proceed anyway.",
+        );
+      }
+    }
     // generatePrototype never touches Capability rows — clear any Timeline
     // drag-and-drop phase overrides here so "Full regenerate" actually
     // discards them, matching what its confirm-modal copy promises
@@ -886,6 +1052,16 @@ export async function recalculatePlan(
     initiative.prototype.layerLocks.map((l) => ({ layerType: l.layerType, state: l.state })),
   );
 
+  // repack_only is deliberately exempt — it only recomputes the always-
+  // flexible agile layer (sprints), never the waterfall structure an
+  // approved baseline actually protects.
+  if (branch.kind !== "repack_only" && initiative.prototype.approvedAt && !options.confirmApprovedImpact) {
+    throw new ApprovedBaselineImpactError(
+      `This initiative has an approved baseline (approved ${initiative.prototype.approvedAt.toLocaleDateString()}). ` +
+        "This recalculation would rebuild part of the approved plan. Confirm to proceed anyway.",
+    );
+  }
+
   if (branch.kind === "full_fallback_no_locks") {
     const { prototypeId: id } = await generatePrototype(initiativeId);
     return { prototypeId: id, mode: "respect_locks", detail: "full_fallback_no_locks" };
@@ -896,7 +1072,7 @@ export async function recalculatePlan(
     // guard as the assumptions/move-sprint routes.
     await assertAgileLayerEditable(initiativeId);
     const intake = await loadIntakeInput(initiativeId);
-    const sprints = await db.$transaction(
+    const sprints = await withTransaction(
       (tx) => repackSprints(tx, prototypeId, intake, methodology),
       { timeout: 120_000 },
     );

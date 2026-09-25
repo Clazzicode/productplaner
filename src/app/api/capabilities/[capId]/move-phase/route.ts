@@ -1,6 +1,10 @@
+import { withApi } from "@/lib/observability";
 import { NextResponse } from "next/server";
+import { auditInitiative } from "@/lib/audit";
+import { requireInitiativeApiAccess } from "@/lib/access/guards";
 import { jsonError, zodMessage } from "@/lib/api";
-import { db } from "@/lib/db";
+import { requireCurrentUserApi } from "@/lib/auth/session";
+import { db, establishAuthContext, withTransaction } from "@/lib/db";
 import { partitionPhases } from "@/lib/generation/buildPlan";
 import { PHASE_NAMES } from "@/lib/generation/constants";
 import { loadIntakeInput, regenerateBelow } from "@/lib/generation/engine";
@@ -40,7 +44,7 @@ async function loadPhaseOf(prototypeId: string): Promise<Map<string, number>> {
  * `regenerateBelow(prototypeId, "roadmap")` to rebuild features/epics/
  * stories/ACs under the new membership — no bespoke re-parenting logic.
  */
-export async function POST(
+async function POSTHandler(
   request: Request,
   { params }: { params: Promise<{ capId: string }> },
 ) {
@@ -48,6 +52,12 @@ export async function POST(
   const parsed = movePhaseSchema.safeParse(await request.json());
   if (!parsed.success) return jsonError(zodMessage(parsed.error), 422);
   const { targetPhase } = parsed.data;
+
+  const authGuard = await requireCurrentUserApi();
+  if (!authGuard.ok) return authGuard.response;
+  establishAuthContext(authGuard.user.authUserId);
+
+  return withTransaction(async () => {
 
   const capability = await db.capability.findUnique({
     where: { id: capId },
@@ -61,8 +71,12 @@ export async function POST(
       },
     },
   });
-  if (!capability) return jsonError("Capability not found.", 404);
+  if (!capability) return jsonError("Feature not found.", 404);
   const initiative = capability.intakeAnswerSet.initiative;
+
+  const guard = await requireInitiativeApiAccess(authGuard.user, initiative.id, "edit");
+  if (!guard.ok) return guard.response;
+
   if (!initiative.prototype) {
     return jsonError("Generate a plan before using the Timeline view.", 404);
   }
@@ -95,9 +109,8 @@ export async function POST(
     });
   }
 
-  // Step 1: persist the override on its own — commits immediately, so the
-  // next read (loadIntakeInput) sees it. Must NOT be nested inside the
-  // transaction below, which uses a separate connection than `db`.
+  // All reads and writes below share the enclosing transaction, including
+  // intake loading and downstream regeneration. A failure rolls back all.
   await db.capability.update({
     where: { id: capId },
     data: { manualPhaseOverride: targetPhase },
@@ -110,7 +123,7 @@ export async function POST(
   // Step 3: rewrite every roadmap_phase row's stored membership, creating a
   // phase row if the target phase never existed yet (regenerateBelow only
   // iterates existing rows, it doesn't create them).
-  await db.$transaction(
+  await withTransaction(
     async (tx) => {
       const existingRows = await tx.artifactLayer.findMany({
         where: { prototypeId, type: "roadmap_phase" },
@@ -144,10 +157,10 @@ export async function POST(
               parentId: root.id,
               order: n - 1,
               title: PHASE_NAMES[n] ?? `Phase ${n}`,
-              body: `${capabilityIds.length} ${capabilityIds.length === 1 ? "capability" : "capabilities"}, sequenced by dependencies and business value.`,
+              body: `${capabilityIds.length} ${capabilityIds.length === 1 ? "feature" : "features"}, sequenced by dependencies and business value.`,
               contentJson,
               traceAnswerKeys: "q3,q4",
-              traceNote: "Created when a capability was dragged into this phase on the Timeline view.",
+              traceNote: "Created when a feature was dragged into this phase on the Timeline view.",
             },
           });
         }
@@ -158,6 +171,7 @@ export async function POST(
 
   // Step 4: rebuild features/epics/stories/ACs under the new membership.
   const regenerated = await regenerateBelow(prototypeId, "roadmap");
+  await auditInitiative(initiative.id, "capability.moved", { capabilityId: capId, previousPhase: beforePhaseOf.get(capId) ?? null, targetPhase });
 
   // Cascade/warning reporting.
   const afterPhaseOf = await loadPhaseOf(prototypeId);
@@ -199,4 +213,7 @@ export async function POST(
     warnings,
     regenerated,
   });
+  }, { timeout: 120_000 });
 }
+
+export const POST = withApi(POSTHandler);

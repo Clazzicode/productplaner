@@ -1,26 +1,47 @@
+import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
+import { DashboardLayout } from "@/components/layout/PageLayouts";
+import Accordion, { type AccordionSection } from "@/components/ui/Accordion";
+import { Badge, healthBadgeVariant } from "@/components/ui/Badge";
 import CapacityCostPanel from "@/components/dashboard/CapacityCostPanel";
 import ConnectedToolsWidget, { type ToolStatusView } from "@/components/dashboard/ConnectedToolsWidget";
 import DashboardHeader from "@/components/dashboard/DashboardHeader";
 import DecisionsRequiredPanel, { type DecisionItem } from "@/components/dashboard/DecisionsRequiredPanel";
-import PlanHealthChain, { type ChainLevel } from "@/components/dashboard/PlanHealthChain";
 import RecentActivity, { type ActivityItem } from "@/components/dashboard/RecentActivity";
 import RoadmapTimeline, { type TimelinePhase } from "@/components/dashboard/RoadmapTimeline";
+import RoleRoadmapPanel from "@/components/dashboard/roleRoadmap/RoleRoadmapPanel";
 import SprintReleaseStatus, {
   type ReleaseSummaryView,
   type SprintSummaryView,
 } from "@/components/dashboard/SprintReleaseStatus";
 import SummaryCards from "@/components/dashboard/SummaryCards";
 import UpcomingActions, { type UpcomingAction } from "@/components/dashboard/UpcomingActions";
-import { db } from "@/lib/db";
+import { requireInitiativeView } from "@/lib/access/guards";
+import { requireCurrentUser } from "@/lib/auth/session";
+import { resolveLifecycleState, STAGE_LABEL, STAGE_PROGRESS_PERCENT } from "@/lib/lifecycle/resolveLifecycleState";
+import { db, establishAuthContext } from "@/lib/db";
 import { PHASE_NAMES } from "@/lib/generation/constants";
 import { computeCapacityForecast } from "@/lib/generation/capacityForecast";
 import { buildCostModel } from "@/lib/generation/cost";
+import { findCycle } from "@/lib/generation/dependencyGraph";
 import { loadIntakeInput } from "@/lib/generation/engine";
-import { costHealth, scheduleHealth, type HealthStatus } from "@/lib/generation/health";
+import { costHealth, HEALTH_LABELS, scheduleHealth, type HealthStatus } from "@/lib/generation/health";
 import { profileFor } from "@/lib/generation/methodology";
-import { LAYER_LABELS, LAYER_SEQUENCE, type LayerType } from "@/lib/generation/types";
+import { LAYER_LABELS, type LayerType } from "@/lib/generation/types";
 import { validateIntake } from "@/lib/generation/validateIntake";
+import { resolveWorkingRole } from "@/lib/onboarding/resolveWorkingRole";
+import { resolveInitiativeEconomics } from "@/lib/projectContext";
+import { getResolvedStatus } from "@/lib/roadmapStatus/service";
+import { readOnboardingStateServer } from "@/lib/onboarding/tempStateServer";
+import { deriveRoleRoadmapView, type RoleRoadmapCapability, type RoleRoadmapInput } from "@/lib/roadmap/roleRoadmapView";
+
+const parseContentJson = (raw: string): Record<string, unknown> => {
+  try {
+    return JSON.parse(raw) as Record<string, unknown>;
+  } catch {
+    return {};
+  }
+};
 
 export const dynamic = "force-dynamic";
 
@@ -30,6 +51,9 @@ export default async function DashboardPage({
   params: Promise<{ initiativeId: string }>;
 }) {
   const { initiativeId } = await params;
+  const user = await requireCurrentUser();
+  establishAuthContext(user.authUserId);
+  await requireInitiativeView(user, initiativeId);
   const initiative = await db.initiative.findUnique({
     where: { id: initiativeId },
     include: {
@@ -44,6 +68,7 @@ export default async function DashboardPage({
       prototype: { include: { layerLocks: true } },
       syncConnections: true,
       integrationConnections: { include: { provider: { select: { name: true } } } },
+      project: { select: { budget: true, averageHourlyRate: true, targetLaunchDate: true } },
     },
   });
   if (!initiative || !initiative.intakeAnswerSet) notFound();
@@ -54,7 +79,7 @@ export default async function DashboardPage({
   const capabilities = intakeRow.capabilities;
   const profile = profileFor(initiative.methodology);
 
-  const [sprints, releases, stories, grouped] = await Promise.all([
+  const [sprints, releases, stories, grouped, phaseArtifacts, onboarding] = await Promise.all([
     db.sprint.findMany({
       where: { prototypeId: prototype.id },
       orderBy: { sprintNumber: "asc" },
@@ -67,34 +92,64 @@ export default async function DashboardPage({
     }),
     db.artifactLayer.findMany({
       where: { prototypeId: prototype.id, type: "story" },
-      select: { points: true, sourceCapabilityId: true, sprint: { select: { phaseNumber: true } } },
+      select: {
+        points: true,
+        sourceCapabilityId: true,
+        sprint: { select: { phaseNumber: true, sprintNumber: true } },
+      },
     }),
     db.artifactLayer.groupBy({
       by: ["type"],
       where: { prototypeId: prototype.id },
       _count: { _all: true },
     }),
+    // Real phase titles (methodology-aware — e.g. "Now"/"Next"/"Later N" for
+    // agile_scrum) for the role roadmap panel below, since PHASE_NAMES[n] alone
+    // (used by the existing `phases`/TimelinePhase computation a few lines down)
+    // mislabels agile_scrum initiatives. Same pattern as workspace/roadmap/page.tsx.
+    db.artifactLayer.findMany({
+      where: { prototypeId: prototype.id, type: "roadmap_phase" },
+      select: { title: true, contentJson: true },
+    }),
+    readOnboardingStateServer(),
   ]);
   const count = (t: string) => grouped.find((g) => g.type === t)?._count._all ?? 0;
+  const workingRole = resolveWorkingRole(user.workingRole, onboarding.workingRole);
+  const phaseTitleByNumber = new Map<number, string>();
+  for (const p of phaseArtifacts) {
+    const content = parseContentJson(p.contentJson);
+    const phaseNumber = typeof content.phaseNumber === "number" ? content.phaseNumber : null;
+    if (phaseNumber != null) phaseTitleByNumber.set(phaseNumber, p.title);
+  }
 
   const intakeInput = await loadIntakeInput(initiativeId);
   const warnings = validateIntake(intakeInput).warnings;
   const forecast = computeCapacityForecast(sprints);
   const totalPlannedPoints = stories.reduce((n, s) => n + (s.points ?? 1), 0);
+  const economics = resolveInitiativeEconomics(initiative, initiative.project);
+  const initiativeStatus = await getResolvedStatus(user.organizationId, "initiative", initiativeId);
   const model = buildCostModel({
     capacity: intakeInput,
-    averageHourlyRate: initiative.averageHourlyRate,
-    budget: initiative.budget,
+    averageHourlyRate: economics.averageHourlyRate,
+    budget: economics.budget,
     totalSprints: sprints.length,
     totalPlannedPoints,
   });
 
-  // ---------- plan completion ----------
+  // ---------- plan progress ----------
+  // The waterfall layer-lock ceremony (Roadmap/Features/Epics/Stories/
+  // Acceptance Criteria) that used to drive "plan completion" here has been
+  // removed platform-wide — `locks` stays only for the Recent Activity feed
+  // below, which shows any pre-existing "X locked" history truthfully rather
+  // than erasing it, but nothing can ever add to it again. Progress is now
+  // read from the same lifecycle resolver every other screen uses.
   const locks = prototype.layerLocks;
-  const isLocked = (t: LayerType) => locks.find((l) => l.layerType === t)?.state === "locked";
-  const lockedCount = LAYER_SEQUENCE.filter(isLocked).length;
-  const activeLayer = LAYER_SEQUENCE.find((t) => !isLocked(t)) ?? null;
-  const completionPercent = Math.round((lockedCount / LAYER_SEQUENCE.length) * 100);
+  const lifecycleResolution = resolveLifecycleState({
+    initiative: { id: initiative.id, status: initiative.status },
+    manualReleaseCount: releases.filter((r) => r.origin === "manual").length,
+    manualSprintCount: sprints.filter((s) => s.origin === "manual").length,
+  });
+  const completionPercent = STAGE_PROGRESS_PERCENT[lifecycleResolution.stage];
 
   // ---------- overall schedule / cost health ----------
   const overAllocated = forecast.filter((f) => f.status === "over-allocated");
@@ -116,6 +171,13 @@ export default async function DashboardPage({
   for (const s of stories) {
     if (s.sourceCapabilityId && s.sprint) capPhase.set(s.sourceCapabilityId, s.sprint.phaseNumber);
   }
+  const capSprintNumbers = new Map<string, Set<number>>();
+  for (const s of stories) {
+    if (!s.sourceCapabilityId || !s.sprint) continue;
+    const set = capSprintNumbers.get(s.sourceCapabilityId) ?? new Set<number>();
+    set.add(s.sprint.sprintNumber);
+    capSprintNumbers.set(s.sourceCapabilityId, set);
+  }
   const phases: TimelinePhase[] = [1, 2, 3]
     .map((n) => ({
       name: PHASE_NAMES[n],
@@ -133,18 +195,57 @@ export default async function DashboardPage({
     }))
     .filter((p) => p.items.length > 0 || p.name === PHASE_NAMES[1]);
 
-  // ---------- plan-health chain ----------
+  // ---------- plan stage grouping (drives the dashboard accordion below) ----------
   const ws = (slug: string) => `/initiatives/${initiativeId}/workspace/${slug}`;
   const oversizedStories = stories.filter((s) => (s.points ?? 1) >= 13).length;
-  const chain: ChainLevel[] = [
-    { label: "Roadmap", href: ws("roadmap"), total: count("roadmap_phase"), locked: isLocked("roadmap"), warnings: 0 },
-    { label: "Features", href: ws("features"), total: count("feature"), locked: isLocked("feature_hierarchy"), warnings: warnings.filter((w) => w.code === "capability_too_broad").length },
-    { label: "Epics", href: ws("epics"), total: count("epic"), locked: isLocked("epics"), warnings: 0 },
-    { label: "Stories", href: ws("epics"), total: count("story"), locked: isLocked("stories"), warnings: oversizedStories },
-    { label: "Acceptance criteria", href: ws("epics"), total: count("acceptance_criterion"), locked: isLocked("acceptance_criteria"), warnings: 0 },
-    { label: "Sprints", href: ws("sprints"), total: sprints.length, locked: null, warnings: overAllocated.length },
-    { label: "Releases", href: ws("sprints"), total: releases.length, locked: null, warnings: 0 },
-  ];
+  const broadCapabilityWarnings = warnings.filter((w) => w.code === "capability_too_broad").length;
+
+  // ---------- role-differentiated roadmap panel ----------
+  // Same underlying capabilities/cost/dependency data as the "Roadmap & Features"
+  // section above, reshaped per Working Role by deriveRoleRoadmapView — never a
+  // second data path, never a change to the generation engine.
+  const overAllocatedSprintNumbers = new Set(overAllocated.map((f) => f.sprintNumber));
+  const sprintStartDatesByPhase = new Map<number, Date[]>();
+  for (const s of sprints) {
+    const arr = sprintStartDatesByPhase.get(s.phaseNumber) ?? [];
+    arr.push(s.startDate);
+    sprintStartDatesByPhase.set(s.phaseNumber, arr);
+  }
+  const roleRoadmapPhases: RoleRoadmapInput["phases"] = [1, 2, 3].map((n) => ({
+    phaseNumber: n,
+    name: phaseTitleByNumber.get(n) || PHASE_NAMES[n],
+    sprintStartDates: sprintStartDatesByPhase.get(n) ?? [],
+    capabilities: capabilities
+      .filter((c) => (capPhase.get(c.id) ?? (c.isMvp ? 1 : 3)) === n)
+      .map(
+        (c): RoleRoadmapCapability => ({
+          id: c.id,
+          name: c.name,
+          isMvp: c.isMvp,
+          businessValue: c.businessValue as RoleRoadmapCapability["businessValue"],
+          riskLevel: c.riskLevel as RoleRoadmapCapability["riskLevel"],
+          revenueImpactScore: c.revenueImpactScore,
+          estimatedCost: (pointsByCapability.get(c.id) ?? 0) * model.costPerStoryPoint,
+          dependsOnNames: c.dependsOnEdges.map((e) => e.toCapability.name),
+          inOverAllocatedSprint: [...(capSprintNumbers.get(c.id) ?? [])].some((sn) =>
+            overAllocatedSprintNumbers.has(sn),
+          ),
+        }),
+      ),
+  }));
+  const roleRoadmapView = deriveRoleRoadmapView(workingRole, {
+    phases: roleRoadmapPhases,
+    cost: {
+      estimatedInitiativeCost: model.estimatedInitiativeCost,
+      budgetVariance: model.budgetVariance,
+      costHealth: overallCost,
+    },
+    scheduleHealth: overallSchedule,
+    hasDependencyCycle: findCycle(intakeInput.capabilities).length > 0,
+    oversizedStoryCount: oversizedStories,
+    tooBroadCapabilityCount: broadCapabilityWarnings,
+    milestones: releases.map((r) => ({ name: r.name, targetDate: r.targetDate, phaseNumber: r.phaseNumber })),
+  });
 
   // ---------- sprint / release summaries ----------
   const today = new Date();
@@ -178,15 +279,6 @@ export default async function DashboardPage({
 
   // ---------- decisions required ----------
   const decisions: DecisionItem[] = [];
-  if (activeLayer) {
-    decisions.push({
-      title: `${LAYER_LABELS[activeLayer]} is ready to review and lock`,
-      impact: "Downstream layers can't lock until this one does (strict waterfall sequence).",
-      action: `Review the generated ${LAYER_LABELS[activeLayer].toLowerCase()} and lock the layer.`,
-      href: activeLayer === "roadmap" ? ws("roadmap") : activeLayer === "feature_hierarchy" ? ws("features") : ws("epics"),
-      severity: "info",
-    });
-  }
   for (const f of overAllocated) {
     decisions.push({
       title: `Sprint ${f.sprintNumber} exceeds capacity by ${Math.round(f.plannedPoints - f.capacityPoints)} points`,
@@ -217,8 +309,8 @@ export default async function DashboardPage({
   for (const w of warnings.filter((w) => w.code === "capability_too_broad")) {
     decisions.push({
       title: w.message.split(".")[0],
-      impact: "Broad capabilities produce coarse estimates and risky sprints.",
-      action: "Split the capability in the intake before re-generating.",
+      impact: "Broad features produce coarse estimates and risky sprints.",
+      action: "Split the feature in the intake before re-generating.",
       href: `/initiatives/${initiativeId}/intake`,
       severity: "warning",
     });
@@ -234,10 +326,10 @@ export default async function DashboardPage({
     ...(prototype.approvedAt ? [{ when: prototype.approvedAt, label: "Baseline approved" }] : []),
     ...initiative.syncConnections
       .filter((c) => c.lastSyncedAt)
-      .map((c) => ({ when: c.lastSyncedAt!, label: "Jira demo sync completed" })),
+      .map((c) => ({ when: c.lastSyncedAt!, label: "Jira sync completed" })),
     ...initiative.integrationConnections
       .filter((c) => c.lastSyncAt)
-      .map((c) => ({ when: c.lastSyncAt!, label: `${c.provider.name} demo sync completed` })),
+      .map((c) => ({ when: c.lastSyncAt!, label: `${c.provider.name} sync completed` })),
   ]
     .sort((a, b) => b.when.getTime() - a.when.getTime())
     .slice(0, 7);
@@ -245,18 +337,15 @@ export default async function DashboardPage({
   const now: UpcomingAction[] = [];
   const next: UpcomingAction[] = [];
   const later: UpcomingAction[] = [];
-  if (activeLayer) {
-    now.push({
-      label: `Review & lock ${LAYER_LABELS[activeLayer]}`,
-      href: activeLayer === "roadmap" ? ws("roadmap") : activeLayer === "feature_hierarchy" ? ws("features") : ws("epics"),
-    });
+  if (lifecycleResolution.stage !== "active_execution") {
+    now.push({ label: lifecycleResolution.nextAction.label, href: lifecycleResolution.nextAction.href });
   }
   if (overAllocated.length > 0) {
     next.push({ label: `Rebalance sprint ${overAllocated[0].sprintNumber}`, href: ws("sprints") });
   }
   next.push({ label: "Review capacity & cost assumptions", href: ws("capacity") });
   later.push({ label: "Generate executive presentation", href: ws("executive") });
-  later.push({ label: "Run a demo integration sync", href: "/integrations" });
+  later.push({ label: "Run an integration sync", href: "/integrations" });
 
   // ---------- connected tools ----------
   const tools: ToolStatusView[] = initiative.integrationConnections.map((c) => ({
@@ -265,23 +354,131 @@ export default async function DashboardPage({
   }));
   const legacyJira = initiative.syncConnections.find((c) => c.tool === "jira");
   if (tools.length === 0 && legacyJira?.status === "connected") {
-    tools.push({ name: "Jira (workspace demo)", status: legacyJira.lastSyncedAt ? "sync_complete" : "demo_connected" });
+    tools.push({ name: "Jira", status: legacyJira.lastSyncedAt ? "sync_complete" : "demo_connected" });
   }
 
+  // ---------- dashboard accordion: everything past the top summary lives here,
+  // collapsed by default except "delivery" — used to instead default to
+  // whichever waterfall layer was next in line to lock, but there's no more
+  // layer-by-layer review step to point at (the removed lock ceremony), so
+  // this just opens the section most likely to need attention day to day. ----------
+  const isContinuousFlow = profile.sprintMode === "continuous_flow";
+  const defaultOpenIds = ["delivery"];
+
+  const sections: AccordionSection[] = [
+    {
+      id: "roadmap",
+      title: "Roadmap & Features",
+      meta: (
+        <>
+          {broadCapabilityWarnings > 0 && (
+            <Badge variant="amber">
+              {broadCapabilityWarnings} warning{broadCapabilityWarnings > 1 ? "s" : ""}
+            </Badge>
+          )}
+        </>
+      ),
+      content: <RoadmapTimeline initiativeId={initiativeId} phases={phases} />,
+    },
+    {
+      id: "backlog",
+      title: "Epics, Stories & Acceptance Criteria",
+      meta: (
+        <>
+          {oversizedStories > 0 && (
+            <Badge variant="amber">
+              {oversizedStories} warning{oversizedStories > 1 ? "s" : ""}
+            </Badge>
+          )}
+        </>
+      ),
+      content: (
+        <div>
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-sm font-semibold text-neutral-800">Backlog summary</p>
+            <Link href={ws("epics")} className="text-xs font-medium text-indigo-600 hover:underline">
+              Open backlog →
+            </Link>
+          </div>
+          <div className="mt-3 grid grid-cols-3 gap-3 text-center">
+            <div className="rounded-xl border border-neutral-200 bg-white p-3">
+              <p className="text-xl font-bold">{count("epic")}</p>
+              <p className="text-xs text-neutral-500">Epics</p>
+            </div>
+            <div className="rounded-xl border border-neutral-200 bg-white p-3">
+              <p className="text-xl font-bold">{count("story")}</p>
+              <p className="text-xs text-neutral-500">Stories</p>
+            </div>
+            <div className="rounded-xl border border-neutral-200 bg-white p-3">
+              <p className="text-xl font-bold">{count("acceptance_criterion")}</p>
+              <p className="text-xs text-neutral-500">Acceptance criteria</p>
+            </div>
+          </div>
+          {oversizedStories > 0 && (
+            <p className="mt-3 text-xs text-amber-700">
+              {oversizedStories} {oversizedStories === 1 ? "story exceeds" : "stories exceed"} the
+              recommended size (13 points) and should be split.
+            </p>
+          )}
+        </div>
+      ),
+    },
+    {
+      id: "delivery",
+      title: isContinuousFlow ? "Flow & Releases" : "Sprints & Releases",
+      meta: overAllocated.length > 0 && (
+        <Badge variant="amber">
+          {overAllocated.length} warning{overAllocated.length > 1 ? "s" : ""}
+        </Badge>
+      ),
+      content: (
+        <SprintReleaseStatus
+          initiativeId={initiativeId}
+          currentSprint={currentSprint}
+          releases={releaseViews}
+          mode={isContinuousFlow ? "continuous_flow" : "sprints"}
+        />
+      ),
+    },
+    {
+      id: "capacity",
+      title: "Capacity & Cost",
+      meta: overallCost && <Badge variant={healthBadgeVariant(overallCost)}>{HEALTH_LABELS[overallCost]}</Badge>,
+      content: <CapacityCostPanel initiativeId={initiativeId} teamSize={intakeRow.teamSize} model={model} />,
+    },
+    {
+      id: "tools",
+      title: "Connected Tools",
+      meta: (
+        <Badge variant="neutral">
+          {tools.length} connected
+        </Badge>
+      ),
+      content: <ConnectedToolsWidget tools={tools} />,
+    },
+    {
+      id: "activity",
+      title: "Recent Activity",
+      content: <RecentActivity items={activity} />,
+    },
+  ];
+
   return (
-    <div className="mx-auto max-w-7xl px-6 py-8">
+    <DashboardLayout>
       <DashboardHeader
         initiativeId={initiativeId}
         name={initiative.name}
         description={initiative.description}
         methodology={initiative.methodology}
         releaseTarget={
-          initiative.targetLaunchDate?.toLocaleDateString() ??
+          economics.targetLaunchDate?.toLocaleDateString() ??
           releases[releases.length - 1]?.targetDate.toLocaleDateString() ??
           null
         }
         updatedAt={initiative.updatedAt}
         baselineApprovedAt={prototype.approvedAt}
+        status={initiativeStatus}
+        isOrgAdmin={user.accessLevel === "org_admin"}
       />
 
       <div className="mt-6 grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
@@ -289,12 +486,11 @@ export default async function DashboardPage({
           <SummaryCards
             completion={{
               percent: completionPercent,
-              lockedCount,
-              totalLayers: LAYER_SEQUENCE.length,
-              activeLayer: activeLayer ? LAYER_LABELS[activeLayer] : null,
-              nextAction: activeLayer
-                ? `Review & lock ${LAYER_LABELS[activeLayer]}`
-                : "All layers locked — baseline stored",
+              stageLabel: STAGE_LABEL[lifecycleResolution.stage],
+              nextAction:
+                lifecycleResolution.stage === "active_execution"
+                  ? "Fully active"
+                  : lifecycleResolution.nextAction.label,
             }}
             scope={{
               total: capabilities.length,
@@ -320,28 +516,15 @@ export default async function DashboardPage({
               health: overallCost,
             }}
           />
-          <div className="grid gap-4 lg:grid-cols-2">
-            <PlanHealthChain levels={chain} />
-            <CapacityCostPanel initiativeId={initiativeId} teamSize={intakeRow.teamSize} model={model} />
-          </div>
-          <RoadmapTimeline initiativeId={initiativeId} phases={phases} />
-          <div className="grid gap-4 lg:grid-cols-2">
-            <SprintReleaseStatus
-              initiativeId={initiativeId}
-              currentSprint={currentSprint}
-              releases={releaseViews}
-              mode={profile.sprintMode === "continuous_flow" ? "continuous_flow" : "sprints"}
-            />
-            <ConnectedToolsWidget tools={tools} />
-          </div>
+          <RoleRoadmapPanel view={roleRoadmapView} />
+          <Accordion sections={sections} defaultOpenIds={defaultOpenIds} />
         </div>
 
         <aside className="min-w-0 space-y-4">
           <UpcomingActions now={now} next={next} later={later} />
           <DecisionsRequiredPanel items={decisions} />
-          <RecentActivity items={activity} />
         </aside>
       </div>
-    </div>
+    </DashboardLayout>
   );
 }

@@ -1,69 +1,66 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/clientApi";
-
-const SEQUENCE = [
-  "roadmap",
-  "feature_hierarchy",
-  "epics",
-  "stories",
-  "acceptance_criteria",
-] as const;
-
-const LABELS: Record<string, string> = {
-  roadmap: "Roadmap",
-  feature_hierarchy: "Features",
-  epics: "Epics",
-  stories: "Stories",
-  acceptance_criteria: "Acceptance Criteria",
-};
-
-export interface RefreshLockView {
-  layerType: string;
-  state: string;
-}
-
-type Action = "full" | "respect_locks";
+import { ButtonLoader } from "@/components/ui/loading";
 
 /**
- * The "living plan" recalculate action: two separate, mutually exclusive
- * buttons (never a single ambiguous "Recalculate") — reuses LockBar's
- * confirm-modal idiom.
+ * The "living plan" recalculate action — one button, always a full
+ * regenerate from current intake answers.
+ *
+ * Guided-activation restructure: this used to be two mutually-exclusive
+ * buttons ("Recalculate — respect my locks" vs. "Full regenerate"), because
+ * the engine had two real regeneration strategies depending on which
+ * waterfall layers were locked. The waterfall lock ceremony has been removed
+ * platform-wide — nothing can ever lock a layer again — so
+ * `determineRespectLocksBranch` (src/lib/generation/engine.ts) always
+ * resolves to its "nothing is locked" branch now, which is already
+ * byte-for-byte the same regeneration `mode: "full"` performs. Two buttons
+ * that always do the same thing is worse than one honest one, so this
+ * collapses to a single "Regenerate" action instead of quietly leaving a
+ * dead choice in the UI. `manualReleaseCount`/`manualSprintCount` still
+ * matter here: they only change what the confirm copy discloses, not which
+ * mode is sent.
  */
-export default function RefreshBar(props: { initiativeId: string; locks: RefreshLockView[] }) {
+export default function RefreshBar(props: {
+  initiativeId: string;
+  manualReleaseCount?: number;
+  manualSprintCount?: number;
+}) {
   const router = useRouter();
-  const [confirm, setConfirm] = useState<Action | null>(null);
+  const [confirm, setConfirm] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Versioning foundation (directive §17/§25): a second, distinct confirm
+  // step — the engine refuses to touch an approved baseline silently, so a
+  // 409 with this flag means "the user already confirmed the normal
+  // regenerate warning, but this plan is also approved" — never auto-retried,
+  // always its own explicit click.
+  const [approvedImpactMessage, setApprovedImpactMessage] = useState<string | null>(null);
 
-  const lockedTypes = SEQUENCE.filter(
-    (t) => props.locks.find((l) => l.layerType === t)?.state === "locked",
-  );
-  const allLocked = lockedTypes.length === SEQUENCE.length;
-  const noneLocked = lockedTypes.length === 0;
-  const lastLockedLabel = !noneLocked ? LABELS[lockedTypes[lockedTypes.length - 1]] : null;
+  const hasManualData = (props.manualReleaseCount ?? 0) > 0 || (props.manualSprintCount ?? 0) > 0;
 
-  const respectLocksCopy = noneLocked
-    ? "Nothing is locked yet, so this has the same effect as Full regenerate — it rebuilds the whole plan from your current intake answers."
-    : allLocked
-      ? "All waterfall layers are locked, so only the sprint & release plan recomputes from your current capacity, budget, and rate — nothing above changes."
-      : `${lastLockedLabel} and everything above stay exactly as-is. Everything below regenerates from your current intake data, including sprints and releases. Note: adding, removing, or reclassifying capabilities since your last generation won't be reflected here — use Full regenerate for that.`;
-
-  const run = async (action: Action) => {
+  const run = async (confirmApprovedImpact?: boolean) => {
     setBusy(true);
     setError(null);
-    const res = await apiFetch(`/api/initiatives/${props.initiativeId}/recalculate`, {
-      method: "POST",
-      body: { mode: action },
-    });
+    const res = await apiFetch<{ requiresApprovedImpactConfirmation?: boolean }>(
+      `/api/initiatives/${props.initiativeId}/recalculate`,
+      { method: "POST", body: { mode: "full", confirmApprovedImpact } },
+    );
     setBusy(false);
-    setConfirm(null);
     if (!res.ok) {
-      setError(res.error ?? "Recalculate failed.");
+      if (res.data?.requiresApprovedImpactConfirmation) {
+        setConfirm(false);
+        setApprovedImpactMessage(res.error ?? "This would affect an approved baseline.");
+        return;
+      }
+      setConfirm(false);
+      setError(res.error ?? "Regenerate failed.");
       return;
     }
+    setConfirm(false);
+    setApprovedImpactMessage(null);
     router.refresh();
   };
 
@@ -73,62 +70,75 @@ export default function RefreshBar(props: { initiativeId: string; locks: Refresh
         Living plan
       </span>
       <button
-        onClick={() => setConfirm("respect_locks")}
-        disabled={busy}
-        className="rounded-full border border-indigo-300 bg-indigo-50 px-3 py-1 text-xs font-medium text-indigo-700 transition hover:bg-indigo-100 disabled:opacity-50"
-      >
-        Recalculate — respect my locks
-      </button>
-      <button
-        onClick={() => setConfirm("full")}
+        onClick={() => setConfirm(true)}
         disabled={busy}
         className="rounded-full border border-amber-300 bg-amber-50 px-3 py-1 text-xs font-medium text-amber-800 transition hover:bg-amber-100 disabled:opacity-50"
       >
-        Full regenerate
+        Regenerate
       </button>
       {error && <p className="w-full text-xs font-medium text-red-600">{error}</p>}
 
       {confirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
           <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
-            {confirm === "full" ? (
-              <>
-                <h3 className="text-lg font-semibold">Full regenerate?</h3>
-                <p className="mt-2 text-sm text-neutral-600">
-                  This rebuilds the entire plan from your current intake answers. You will lose:{" "}
-                  <strong>every lock state</strong> (everything unlocks), the{" "}
-                  <strong>approved baseline</strong> snapshot, any{" "}
-                  <strong>inline edits</strong> you&apos;ve made directly to roadmap/feature/epic/
-                  story/acceptance-criteria text, and any{" "}
-                  <strong>Jira/Integration sync stamps</strong> on individual items, and any{" "}
-                  <strong>manual phase drags</strong> made on the Timeline view. This cannot be
-                  undone.
-                </p>
-              </>
-            ) : (
-              <>
-                <h3 className="text-lg font-semibold">Recalculate, respecting locks?</h3>
-                <p className="mt-2 text-sm text-neutral-600">{respectLocksCopy}</p>
-              </>
-            )}
+            <h3 className="text-lg font-semibold">Regenerate the plan?</h3>
+            <p className="mt-2 text-sm text-neutral-600">
+              This rebuilds the entire plan from your current intake answers. You will lose any{" "}
+              <strong>inline edits</strong> you&apos;ve made directly to roadmap/feature/epic/
+              story/acceptance-criteria text, any <strong>Jira/Integration sync stamps</strong> on
+              individual items, any <strong>manual phase drags</strong> made on the Timeline view
+              {hasManualData && (
+                <>
+                  , and{" "}
+                  <strong>
+                    {props.manualReleaseCount ?? 0} manually created release
+                    {(props.manualReleaseCount ?? 0) === 1 ? "" : "s"} and{" "}
+                    {props.manualSprintCount ?? 0} sprint{(props.manualSprintCount ?? 0) === 1 ? "" : "s"}
+                  </strong>
+                </>
+              )}
+              . This cannot be undone.
+            </p>
             <div className="mt-5 flex justify-end gap-3">
               <button
-                onClick={() => setConfirm(null)}
+                onClick={() => setConfirm(false)}
                 className="rounded-lg border border-neutral-300 px-4 py-2 text-sm font-medium hover:bg-neutral-50"
               >
                 Cancel
               </button>
-              <button
-                onClick={() => run(confirm)}
-                disabled={busy}
-                className={`rounded-lg px-4 py-2 text-sm font-semibold text-white disabled:opacity-50 ${
-                  confirm === "full"
-                    ? "bg-amber-600 hover:bg-amber-700"
-                    : "bg-indigo-600 hover:bg-indigo-700"
-                }`}
+              <ButtonLoader
+                onClick={() => void run()}
+                loading={busy}
+                loadingLabel="Regenerating"
+                className="!bg-amber-600 hover:!bg-amber-700 disabled:hover:!bg-amber-600"
               >
-                {busy ? "Working…" : confirm === "full" ? "Full regenerate" : "Recalculate"}
+                Regenerate
+              </ButtonLoader>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {approvedImpactMessage && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+            <h3 className="text-lg font-semibold text-amber-900">This plan has an approved baseline</h3>
+            <p className="mt-2 text-sm text-neutral-600">{approvedImpactMessage}</p>
+            <div className="mt-5 flex justify-end gap-3">
+              <button
+                onClick={() => setApprovedImpactMessage(null)}
+                className="rounded-lg border border-neutral-300 px-4 py-2 text-sm font-medium hover:bg-neutral-50"
+              >
+                Cancel
               </button>
+              <ButtonLoader
+                onClick={() => void run(true)}
+                loading={busy}
+                loadingLabel="Regenerating"
+                className="!bg-red-600 hover:!bg-red-700 disabled:hover:!bg-red-600"
+              >
+                Regenerate anyway
+              </ButtonLoader>
             </div>
           </div>
         </div>

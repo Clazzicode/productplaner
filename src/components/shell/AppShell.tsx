@@ -3,11 +3,12 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
-import { DemoModeProvider } from "@/components/demo/DemoModeContext";
-import DemoModeToggle from "@/components/demo/DemoModeToggle";
-import StartOverButton from "@/components/demo/StartOverButton";
+import AccountMenu from "@/components/auth/AccountMenu";
+import AiUsageBanner from "@/components/ai/AiUsageBanner";
+import { isBareRoute } from "./bareMode";
 import LeftNav, { type NavInitiative } from "./LeftNav";
 import MobileNavDrawer from "./MobileNavDrawer";
+import TopHeader from "./TopHeader";
 
 /**
  * Persistent app chrome (left nav + top bar). Rendered from the root layout;
@@ -21,8 +22,8 @@ import MobileNavDrawer from "./MobileNavDrawer";
 export default function AppShell(props: {
   hasProfile: boolean;
   userName: string;
+  accessLevel: string;
   initiatives: NavInitiative[];
-  demoModeEnabled: boolean;
   children: React.ReactNode;
 }) {
   const pathname = usePathname() ?? "";
@@ -38,19 +39,21 @@ export default function AppShell(props: {
     setDrawerOpen(false);
   }
 
-  const bare =
-    !props.hasProfile ||
-    pathname === "/" ||
-    pathname.startsWith("/welcome") ||
-    pathname.endsWith("/executive/print");
-
-  if (bare) {
-    return <DemoModeProvider initialEnabled={props.demoModeEnabled}>{props.children}</DemoModeProvider>;
-  }
-
   const urlMatch = pathname.match(/^\/initiatives\/([^/]+)/);
   const currentId = urlMatch?.[1] ?? "";
-  const currentName = props.initiatives.find((i) => i.id === currentId)?.name ?? "Guided Planning";
+  const routeInitiative = props.initiatives.find((i) => i.id === currentId);
+  const currentInitiative =
+    routeInitiative ??
+    props.initiatives.find((i) => i.status === "generated") ??
+    props.initiatives[0];
+
+  const bare = isBareRoute(pathname, props.hasProfile, routeInitiative);
+
+  if (bare) {
+    return props.children;
+  }
+
+  const currentName = currentInitiative?.name ?? "Guided Planning";
 
   const switchInitiative = (id: string) => {
     const target = props.initiatives.find((i) => i.id === id);
@@ -61,84 +64,80 @@ export default function AppShell(props: {
   };
 
   const switcherAndNew = (
-    <div className="flex items-center gap-3">
-      {props.initiatives.length > 0 && (
-        <select
-          value={props.initiatives.some((i) => i.id === currentId) ? currentId : ""}
-          onChange={(e) => switchInitiative(e.target.value)}
-          className="max-w-64 rounded-lg border border-neutral-300 bg-white px-3 py-1.5 text-sm font-medium focus:border-indigo-500 focus:outline-none"
+    <div className="flex min-w-0 items-end gap-3">
+      {currentInitiative?.project && (
+        <Link
+          href={`/projects/${currentInitiative.project.id}`}
+          className="hidden min-w-52 rounded-lg border border-[#d4def1] bg-white px-3 py-2 text-sm font-semibold text-text-primary shadow-sm xl:block"
         >
-          <option value="" disabled>
-            Switch initiative…
-          </option>
-          {props.initiatives.map((i) => (
-            <option key={i.id} value={i.id}>
-              {i.name}
-              {i.status !== "generated" ? " (intake)" : ""}
-            </option>
-          ))}
-        </select>
+          <span className="mb-1 block text-[10px] font-medium text-text-muted">Project</span>
+          <span className="block max-w-56 truncate">▣ &nbsp;{currentInitiative.project.name}</span>
+        </Link>
+      )}
+      {props.initiatives.length > 0 && (
+        <label className="min-w-0 xl:min-w-80">
+          <span className="mb-1 block text-[10px] font-medium text-text-muted">Initiative</span>
+          <select
+            value={currentInitiative?.id ?? ""}
+            onChange={(e) => switchInitiative(e.target.value)}
+            className="w-full max-w-96 rounded-lg border border-[#d4def1] bg-white px-3 py-2 text-sm font-semibold text-text-primary shadow-sm focus:border-indigo-500 focus:outline-none"
+          >
+            <option value="" disabled>Switch initiative…</option>
+            {props.initiatives.map((i) => (
+              <option key={i.id} value={i.id}>
+                {i.name}{i.status !== "generated" ? " (intake)" : ""}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+      {currentInitiative && (
+        <Link
+          href="/integrations"
+          className="hidden h-[38px] items-center gap-2 rounded-lg border border-[#d4def1] bg-white px-3 text-sm font-semibold text-text-primary shadow-sm md:flex"
+        >
+          <span className="text-[#315cff]">◆</span>
+          {currentInitiative.syncConnections[0]?.status === "connected" ? (
+            <><span className="h-2 w-2 rounded-full bg-emerald-500" /> Connected to Jira</>
+          ) : "Connect Jira"}
+        </Link>
       )}
       <Link
         href="/initiatives/new"
-        className="rounded-lg bg-indigo-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-indigo-700"
+        className="hidden h-[38px] items-center rounded-lg bg-accent px-3 text-sm font-semibold text-white shadow-sm hover:bg-accent-hover 2xl:flex"
       >
-        + New
+        + New initiative
       </Link>
     </div>
   );
 
-  const accountActions = (
-    <div className="flex items-center gap-3">
-      <DemoModeToggle />
-      <StartOverButton />
-      <span className="hidden items-center gap-2 text-sm text-neutral-500 sm:flex">
-        <span className="flex h-7 w-7 items-center justify-center rounded-full bg-indigo-100 text-xs font-semibold text-indigo-700">
-          {props.userName.slice(0, 1).toUpperCase()}
-        </span>
-        {props.userName}
-      </span>
-    </div>
-  );
-
   return (
-    <DemoModeProvider initialEnabled={props.demoModeEnabled}>
-      <div className="flex min-h-screen">
-        <div className="hidden lg:contents">
-          <LeftNav initiatives={props.initiatives} />
-        </div>
-        <MobileNavDrawer
-          open={drawerOpen}
-          onClose={() => setDrawerOpen(false)}
-          initiatives={props.initiatives}
-          topContent={switcherAndNew}
-          bottomContent={accountActions}
-        />
-        <div className="flex min-w-0 flex-1 flex-col">
-          <header className="no-print hidden items-center justify-between gap-4 border-b border-neutral-200 bg-white px-6 py-3 lg:flex">
-            {switcherAndNew}
-            {accountActions}
-          </header>
-          <header className="no-print flex items-center gap-3 border-b border-neutral-200 bg-white px-4 py-3 lg:hidden">
-            <button
-              onClick={() => setDrawerOpen(true)}
-              aria-label="Open menu"
-              className="shrink-0 rounded-lg p-1.5 text-neutral-600 hover:bg-neutral-100"
-            >
-              <span className="block h-0.5 w-5 bg-current" />
-              <span className="mt-1 block h-0.5 w-5 bg-current" />
-              <span className="mt-1 block h-0.5 w-5 bg-current" />
-            </button>
-            <span className="min-w-0 flex-1 truncate text-sm font-semibold text-neutral-800">
-              {currentName}
-            </span>
-            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-indigo-100 text-xs font-semibold text-indigo-700">
-              {props.userName.slice(0, 1).toUpperCase()}
-            </span>
-          </header>
-          <main className="min-w-0 flex-1">{props.children}</main>
-        </div>
+    <div className="flex min-h-screen bg-surface">
+      <div className="hidden lg:contents">
+        <LeftNav initiatives={props.initiatives} />
       </div>
-    </DemoModeProvider>
+      <MobileNavDrawer
+        open={drawerOpen}
+        onClose={() => setDrawerOpen(false)}
+        initiatives={props.initiatives}
+        topContent={switcherAndNew}
+        bottomContent={<AccountMenu userName={props.userName} accessLevel={props.accessLevel} dropUp />}
+      />
+      <div className="flex min-w-0 flex-1 flex-col">
+        <TopHeader
+          switcherAndNew={switcherAndNew}
+          accountActions={<AccountMenu userName={props.userName} accessLevel={props.accessLevel} />}
+          currentName={currentName}
+          userName={props.userName}
+          onOpenMenu={() => setDrawerOpen(true)}
+        />
+        <main className="min-w-0 flex-1 bg-[radial-gradient(circle_at_82%_0%,#edf1ff_0,transparent_30%)]">
+          <div className="px-6 pt-4">
+            <AiUsageBanner />
+          </div>
+          {props.children}
+        </main>
+      </div>
+    </div>
   );
 }

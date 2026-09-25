@@ -2,7 +2,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import EditableArtifact from "@/components/workspace/EditableArtifact";
 import TraceBadge from "@/components/workspace/TraceBadge";
-import { db } from "@/lib/db";
+import { requireCurrentUser } from "@/lib/auth/session";
+import { db, establishAuthContext } from "@/lib/db";
 import { traceEntriesFor } from "@/lib/trace";
 import { loadCostContext, loadWorkspace } from "@/lib/workspace";
 
@@ -14,6 +15,8 @@ export default async function StoryPage({
   params: Promise<{ initiativeId: string; storyId: string }>;
 }) {
   const { initiativeId, storyId } = await params;
+  const user = await requireCurrentUser();
+  establishAuthContext(user.authUserId);
   const ws = await loadWorkspace(initiativeId);
   if (!ws) notFound();
 
@@ -27,8 +30,6 @@ export default async function StoryPage({
   });
   if (!story || story.type !== "story" || story.prototypeId !== ws.prototype.id) notFound();
 
-  const storiesLocked = ws.isLocked("stories");
-  const acLocked = ws.isLocked("acceptance_criteria");
   const cap = story.sourceCapabilityId ? ws.capViewById.get(story.sourceCapabilityId) : null;
   const cost = await loadCostContext(initiativeId, ws.prototype.id);
   const storyCost = (story.points ?? 1) * cost.model.costPerStoryPoint;
@@ -52,7 +53,6 @@ export default async function StoryPage({
             title={story.title}
             body={story.body}
             points={story.points}
-            locked={storiesLocked}
             titleClassName="text-lg font-bold"
           />
         </div>
@@ -86,7 +86,7 @@ export default async function StoryPage({
         )}
         {cap?.riskLevel && (cap.riskLevel === "high" || cap.riskLevel === "critical") && (
           <span className="rounded-full bg-red-100 px-2.5 py-1 font-medium text-red-800">
-            {cap.riskLevel} risk capability
+            {cap.riskLevel} risk feature
           </span>
         )}
         {story.sprint && (
@@ -96,13 +96,13 @@ export default async function StoryPage({
         )}
         {cap && (
           <span className="rounded-full bg-neutral-100 px-2.5 py-1">
-            From capability: {cap.name}
+            From feature: {cap.name}
           </span>
         )}
       </div>
 
       <h3 className="mt-8 text-sm font-semibold uppercase tracking-wide text-indigo-600">
-        Acceptance criteria — waterfall layer 5
+        Acceptance criteria
       </h3>
       <div className="mt-3 space-y-3">
         {story.children.map((ac) => (
@@ -113,7 +113,6 @@ export default async function StoryPage({
                   artifactId={ac.id}
                   title={ac.title}
                   body={ac.body}
-                  locked={acLocked}
                   titleClassName="text-sm font-semibold"
                 />
               </div>

@@ -1,11 +1,15 @@
 import { notFound } from "next/navigation";
-import ExplainCallout from "@/components/demo/ExplainCallout";
 import { Badge, healthBadgeVariant } from "@/components/ui/Badge";
 import AssumptionsEditor from "@/components/workspace/AssumptionsEditor";
-import { db } from "@/lib/db";
+import PlanningWeightsEditor from "@/components/workspace/PlanningWeightsEditor";
+import { getResolvedAccess } from "@/lib/access/initiativeAccess";
+import { requireCurrentUser } from "@/lib/auth/session";
+import { db, establishAuthContext } from "@/lib/db";
 import { computeCapacityForecast } from "@/lib/generation/capacityForecast";
 import { PROTOTYPE_DISCLAIMER } from "@/lib/generation/constants";
 import { costHealth, HEALTH_LABELS, scheduleHealth } from "@/lib/generation/health";
+import { canEditPlanningWeights } from "@/lib/planningWeights/permissions";
+import { getWeightConfigurationView } from "@/lib/planningWeights/planningWeights";
 import { loadCostContext, loadWorkspace } from "@/lib/workspace";
 
 export const dynamic = "force-dynamic";
@@ -18,10 +22,12 @@ export default async function CapacityPage({
   params: Promise<{ initiativeId: string }>;
 }) {
   const { initiativeId } = await params;
+  const user = await requireCurrentUser();
+  establishAuthContext(user.authUserId);
   const ws = await loadWorkspace(initiativeId);
   if (!ws) notFound();
 
-  const [sprints, cost, intakeRow] = await Promise.all([
+  const [sprints, cost, intakeRow, qualifyingProfile, resolvedAccess, weightSets] = await Promise.all([
     db.sprint.findMany({
       where: { prototypeId: ws.prototype.id },
       orderBy: { sprintNumber: "asc" },
@@ -29,9 +35,21 @@ export default async function CapacityPage({
     }),
     loadCostContext(initiativeId, ws.prototype.id),
     db.intakeAnswerSet.findUniqueOrThrow({ where: { initiativeId } }),
+    db.initiative
+      .findUnique({ where: { id: initiativeId }, select: { qualifyingProfile: { select: { experienceLevel: true } } } })
+      .then((i) => i?.qualifyingProfile ?? null),
+    getResolvedAccess(user, initiativeId),
+    getWeightConfigurationView(initiativeId),
   ]);
   const forecast = computeCapacityForecast(sprints);
   const model = cost.model;
+  const initiativePermission = resolvedAccess === "not_found" ? "none" : resolvedAccess.level;
+  const canEditWeights = canEditPlanningWeights({
+    actorStatus: user.status,
+    accessLevel: user.accessLevel,
+    initiativePermission,
+    initiativeExperienceLevel: qualifyingProfile?.experienceLevel ?? null,
+  });
 
   const totalPlanned = forecast.reduce((n, f) => n + f.plannedPoints, 0);
   const totalCapacity = forecast.reduce((n, f) => n + f.capacityPoints, 0);
@@ -49,10 +67,6 @@ export default async function CapacityPage({
           ? `Capacity = ${intakeRow.teamSize ?? "?"} people × ${intakeRow.hoursPerSprintPerMember} hrs × ${intakeRow.utilizationRatePercent}% utilization − ${intakeRow.capacityBufferPercent}% buffer ÷ ${intakeRow.hoursPerStoryPoint} hrs/point = ${model.sprintPointCapacity} points/sprint.`
           : `Capacity = ${intakeRow.teamSize ?? "?"} people × ${intakeRow.velocityPerPersonPerSprint} pts/person/sprint × ${100 - intakeRow.capacityBufferPercent}%.`}
       </p>
-      <ExplainCallout>
-        One capacity number drives both halves of the hybrid model — the waterfall phase timeline
-        and the sprint packing — and the same hours convert into every dollar figure below.
-      </ExplainCallout>
 
       <div className="mt-6 grid gap-3 sm:grid-cols-3">
         <StatCard label="Total planned" value={`${totalPlanned} pts`} />
@@ -103,6 +117,12 @@ export default async function CapacityPage({
           }}
         />
       </div>
+
+      {canEditWeights && (
+        <div className="mt-8">
+          <PlanningWeightsEditor initiativeId={initiativeId} sets={weightSets} />
+        </div>
+      )}
 
       <h3 className="mt-8 text-sm font-semibold uppercase tracking-wide text-indigo-600">
         Sprint-by-sprint forecast

@@ -1,13 +1,22 @@
 import { format } from "date-fns";
-import { db } from "@/lib/db";
+import { requireCurrentUser } from "@/lib/auth/session";
+import { db, establishAuthContext } from "@/lib/db";
 import { DEFAULT_ASSUMPTIONS, PROTOTYPE_DISCLAIMER } from "@/lib/generation/constants";
 import { costHealth, HEALTH_LABELS } from "@/lib/generation/health";
-import { LAYER_LABELS, LAYER_SEQUENCE } from "@/lib/generation/types";
+import { resolveLifecycleState, STAGE_LABEL } from "@/lib/lifecycle/resolveLifecycleState";
 import { loadCostContext } from "@/lib/workspace";
 
 // FR-19: assembled from live data on every render — no snapshot, no manual
 // rebuild. Server component shared by the on-screen and print routes.
+//
+// Rendered as JSX (<ExecutiveReport .../>) from two page wrappers — that's
+// its own separate async-component render as far as RLS auth context is
+// concerned (same reason a layout can't establish context for its child
+// page — see src/lib/db.ts), so it resolves the user and establishes context
+// itself rather than trusting its caller to have done so.
 export default async function ExecutiveReport({ initiativeId }: { initiativeId: string }) {
+  const user = await requireCurrentUser();
+  establishAuthContext(user.authUserId);
   const initiative = await db.initiative.findUniqueOrThrow({
     where: { id: initiativeId },
     include: {
@@ -19,7 +28,7 @@ export default async function ExecutiveReport({ initiativeId }: { initiativeId: 
           },
         },
       },
-      prototype: { include: { layerLocks: true } },
+      prototype: { select: { id: true, approvedAt: true } },
       syncConnections: true,
     },
   });
@@ -46,7 +55,11 @@ export default async function ExecutiveReport({ initiativeId }: { initiativeId: 
     0,
   );
   const totalCapacity = sprints.reduce((n, s) => n + s.capacityPoints, 0);
-  const lockedCount = prototype.layerLocks.filter((l) => l.state === "locked").length;
+  const planStage = resolveLifecycleState({
+    initiative: { id: initiative.id, status: initiative.status },
+    manualReleaseCount: releases.filter((r) => r.origin === "manual").length,
+    manualSprintCount: sprints.filter((s) => s.origin === "manual").length,
+  }).stage;
   const jira = initiative.syncConnections.find((c) => c.tool === "jira");
   const { model } = await loadCostContext(initiativeId, prototype.id);
   const money = (n: number) => `$${Math.round(n).toLocaleString()}`;
@@ -93,7 +106,7 @@ export default async function ExecutiveReport({ initiativeId }: { initiativeId: 
       {/* Scope */}
       <Section title="Scope">
         <p className="text-sm text-neutral-600">
-          <strong>{intake.capabilities.filter((c) => c.isMvp).length}</strong> capabilities in
+          <strong>{intake.capabilities.filter((c) => c.isMvp).length}</strong> features in
           the MVP, <strong>{intake.capabilities.filter((c) => !c.isMvp).length}</strong>{" "}
           sequenced after — {storyCount} sprint-ready stories in total.
         </p>
@@ -197,26 +210,18 @@ export default async function ExecutiveReport({ initiativeId }: { initiativeId: 
       <Section title="Plan status">
         <ul className="space-y-1 text-sm text-neutral-600">
           <li>
-            Waterfall layers locked: <strong>{lockedCount} of {LAYER_SEQUENCE.length}</strong>{" "}
-            ({LAYER_SEQUENCE.filter(
-              (t) => prototype.layerLocks.find((l) => l.layerType === t)?.state === "locked",
-            )
-              .map((t) => LAYER_LABELS[t])
-              .join(", ") || "none yet"})
+            Progress: <strong>{STAGE_LABEL[planStage]}</strong>
           </li>
-          <li>
-            Approved baseline:{" "}
-            <strong>
-              {prototype.approvedAt
-                ? `stored ${format(prototype.approvedAt, "MMM d, yyyy")}`
-                : "not yet approved"}
-            </strong>
-          </li>
+          {prototype.approvedAt && (
+            <li>
+              Approved baseline: <strong>stored {format(prototype.approvedAt, "MMM d, yyyy")}</strong>
+            </li>
+          )}
           <li>
             Execution tool:{" "}
             <strong>
               {jira?.status === "connected"
-                ? `Jira connected (demo)${jira.lastSyncedAt ? `, last synced ${format(jira.lastSyncedAt, "MMM d, h:mm a")}` : ""}`
+                ? `Jira connected${jira.lastSyncedAt ? `, last synced ${format(jira.lastSyncedAt, "MMM d, h:mm a")}` : ""}`
                 : "not connected"}
             </strong>
           </li>

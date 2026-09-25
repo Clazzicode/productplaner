@@ -1,42 +1,63 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import IntakeWizard from "@/components/intake/IntakeWizard";
-import { db } from "@/lib/db";
+import { FocusedLayout } from "@/components/layout/PageLayouts";
+import PlanningQuestionnaire from "@/components/questionnaire/PlanningQuestionnaire";
+import WorkspaceBreadcrumb from "@/components/workspace/WorkspaceBreadcrumb";
+import { requireInitiativeView } from "@/lib/access/guards";
+import { requireCurrentUser } from "@/lib/auth/session";
+import { db, establishAuthContext } from "@/lib/db";
+import { depthFromExperience } from "@/lib/questionnaire/roleGuidance";
+import { readOnboardingStateServer } from "@/lib/onboarding/tempStateServer";
+import { resolveInitiativeEconomics } from "@/lib/projectContext";
 
 export const dynamic = "force-dynamic";
 
+/** Gated at View, not Edit: this page also serves the "view intake answers"
+ * link reachable from every workspace page, which a View-only user should be
+ * able to open. The actual write path (POST /api/initiatives/[id]/intake) is
+ * separately gated at Edit — that's the real enforcement boundary for
+ * mutating answers, not this page render. */
 export default async function IntakePage({
   params,
 }: {
   params: Promise<{ initiativeId: string }>;
 }) {
   const { initiativeId } = await params;
-  const initiative = await db.initiative.findUnique({
-    where: { id: initiativeId },
-    include: {
-      qualifyingProfile: true,
-      intakeAnswerSet: {
-        include: {
-          capabilities: { orderBy: { order: "asc" }, include: { dependsOnEdges: true } },
+  const user = await requireCurrentUser();
+  establishAuthContext(user.authUserId);
+  await requireInitiativeView(user, initiativeId);
+  const [initiative, onboarding] = await Promise.all([
+    db.initiative.findUnique({
+      where: { id: initiativeId },
+      include: {
+        qualifyingProfile: true,
+        intakeAnswerSet: {
+          include: {
+            capabilities: { orderBy: { order: "asc" }, include: { dependsOnEdges: true } },
+          },
         },
+        project: { select: { budget: true, averageHourlyRate: true, targetLaunchDate: true } },
       },
-    },
-  });
+    }),
+    readOnboardingStateServer(),
+  ]);
   if (!initiative || !initiative.intakeAnswerSet) notFound();
   const intake = initiative.intakeAnswerSet;
   const alreadyGenerated = intake.status === "generated";
+  const economics = resolveInitiativeEconomics(initiative, initiative.project);
 
-  const verbose =
-    ["first_time", "some_experience"].includes(initiative.qualifyingProfile?.experienceLevel ?? "") ||
-    ["business_analyst", "founder_first_timer", "project_manager"].includes(
-      initiative.qualifyingProfile?.role ?? "",
-    );
+  // Guidance depth now comes from experienceLevel alone — QualifyingProfile.role no
+  // longer participates (it's a legacy placeholder value, see
+  // src/lib/questionnaire/legacyQualifyingDefaults.ts and docs/V2-QUESTIONNAIRE-MAP.md §6).
+  const verbose = depthFromExperience(initiative.qualifyingProfile?.experienceLevel);
 
   return (
-    <main className="mx-auto min-h-screen max-w-2xl px-6 py-12">
-      <Link href="/home" className="text-sm text-neutral-500 hover:text-neutral-800">
-        ← Back to initiatives
-      </Link>
+    <FocusedLayout>
+      <WorkspaceBreadcrumb
+        initiativeId={initiative.id}
+        initiativeName={initiative.name}
+        trailOverride="Guided Intake"
+      />
       <h1 className="mt-4 text-2xl font-bold">{initiative.name}</h1>
       {alreadyGenerated ? (
         <p className="mt-1 mb-8 text-sm text-neutral-500">
@@ -52,29 +73,42 @@ export default async function IntakePage({
         </p>
       ) : (
         <p className="mt-1 mb-8 text-sm text-neutral-500">
-          Guided intake — eight questions, one at a time. Your working prototype is generated
-          from these answers, and you can come back and edit them any time.
+          A planning system progressively building an understanding of your initiative — six
+          sections, and you can come back and edit any of them any time.
         </p>
       )}
-      <IntakeWizard
+      <PlanningQuestionnaire
         initiativeId={initiative.id}
-        initiativeName={initiative.name}
+        projectId={initiative.projectId}
+        experienceLevel={initiative.qualifyingProfile?.experienceLevel ?? null}
+        workingRole={onboarding.workingRole ?? null}
         verbose={verbose}
         alreadyGenerated={alreadyGenerated}
-        intake={{
+        initialStep={1}
+        productDirection={{
+          name: initiative.name,
           problemStatement: intake.problemStatement,
           targetCustomer: intake.targetCustomer,
+        }}
+        success={{
           outcomeStatement: intake.outcomeStatement,
           outcomeMetric: intake.outcomeMetric,
-          teamSize: intake.teamSize,
+          targetLaunchDate: economics.targetLaunchDate
+            ? economics.targetLaunchDate.toISOString().slice(0, 10)
+            : "",
+          budget: economics.budget != null ? String(economics.budget) : "",
+        }}
+        delivery={{
+          teamSize: intake.teamSize ?? "",
           sprintLengthWeeks: intake.sprintLengthWeeks,
-          velocityPerPersonPerSprint: intake.velocityPerPersonPerSprint,
-          capacityBufferPercent: intake.capacityBufferPercent,
           hoursPerSprintPerMember: intake.hoursPerSprintPerMember,
           utilizationRatePercent: intake.utilizationRatePercent,
+          capacityBufferPercent: intake.capacityBufferPercent,
           hoursPerStoryPoint: intake.hoursPerStoryPoint,
-          historicalVelocityPoints: intake.historicalVelocityPoints,
+          historicalVelocityPoints: intake.historicalVelocityPoints ?? "",
+          averageHourlyRate: economics.averageHourlyRate != null ? String(economics.averageHourlyRate) : "",
         }}
+        currentMethodology={initiative.methodology}
         capabilities={intake.capabilities.map((c) => ({
           id: c.id,
           name: c.name,
@@ -91,6 +125,6 @@ export default async function IntakePage({
           dependsOn: c.dependsOnEdges.map((e) => e.toCapabilityId),
         }))}
       />
-    </main>
+    </FocusedLayout>
   );
 }

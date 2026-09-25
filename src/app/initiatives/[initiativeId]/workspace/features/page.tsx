@@ -1,9 +1,15 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Badge, riskBadgeVariant } from "@/components/ui/Badge";
+import CoachMark from "@/components/coachmarks/CoachMark";
+import AiAssistPanel from "@/components/ai/AiAssistPanel";
 import EditableArtifact from "@/components/workspace/EditableArtifact";
+import ExplainBadge from "@/components/workspace/ExplainBadge";
 import TraceBadge from "@/components/workspace/TraceBadge";
-import { db } from "@/lib/db";
+import { requireCurrentUser } from "@/lib/auth/session";
+import { db, establishAuthContext } from "@/lib/db";
+import type { RiskLevel } from "@/lib/generation/types";
+import { riskLevelGuidance } from "@/lib/questionnaire/valueRiskGuidance";
 import { traceEntriesFor } from "@/lib/trace";
 import { loadCostContext, loadWorkspace } from "@/lib/workspace";
 
@@ -15,9 +21,10 @@ export default async function FeaturesPage({
   params: Promise<{ initiativeId: string }>;
 }) {
   const { initiativeId } = await params;
+  const user = await requireCurrentUser();
+  establishAuthContext(user.authUserId);
   const ws = await loadWorkspace(initiativeId);
   if (!ws) notFound();
-  const locked = ws.isLocked("feature_hierarchy");
   const cost = await loadCostContext(initiativeId, ws.prototype.id);
 
   const phases = await db.artifactLayer.findMany({
@@ -36,8 +43,9 @@ export default async function FeaturesPage({
     <div>
       <h2 className="text-xl font-bold">Feature hierarchy</h2>
       <p className="mt-1 text-sm text-neutral-500">
-        One feature per intake capability, grouped by roadmap phase. Waterfall layer 2 of 5.
+        Each feature from intake appears once here, grouped by roadmap phase.
       </p>
+      <CoachMark coachMarkKey="planning_workspace" className="mt-4" />
 
       <div className="mt-6 space-y-6">
         {phases.map((phase) => (
@@ -58,7 +66,6 @@ export default async function FeaturesPage({
                           artifactId={feature.id}
                           title={feature.title}
                           body={feature.body}
-                          locked={locked}
                         />
                       </div>
                       <TraceBadge
@@ -79,13 +86,22 @@ export default async function FeaturesPage({
                         </span>
                       )}
                       {cap?.riskLevel && (
-                        <Badge variant={riskBadgeVariant(cap.riskLevel)}>risk {cap.riskLevel}</Badge>
+                        <Badge
+                          variant={riskBadgeVariant(cap.riskLevel)}
+                          title={riskLevelGuidance(cap.riskLevel as RiskLevel, false)}
+                        >
+                          risk {cap.riskLevel}
+                        </Badge>
                       )}
                       {feature.sourceCapabilityId &&
                         cost.priorityByCapability.has(feature.sourceCapabilityId) && (
-                          <span title="§5 priority score: value ×0.45 + MVP importance ×0.25 + dependency importance ×0.15 + risk reduction ×0.15">
-                            Priority{" "}
-                            {cost.priorityByCapability.get(feature.sourceCapabilityId)!.toFixed(2)}
+                          <span className="inline-flex items-center gap-1">
+                            Priority {cost.priorityByCapability.get(feature.sourceCapabilityId)!.toFixed(2)}
+                            {cost.priorityExplanationByCapability.has(feature.sourceCapabilityId) && (
+                              <ExplainBadge
+                                explanation={cost.priorityExplanationByCapability.get(feature.sourceCapabilityId)!}
+                              />
+                            )}
                           </span>
                         )}
                       {feature.sourceCapabilityId &&
@@ -115,6 +131,11 @@ export default async function FeaturesPage({
             </div>
           </section>
         ))}
+      </div>
+
+      {/* Secondary to the feature hierarchy above (Section 4). */}
+      <div className="mt-8 max-w-xl">
+        <AiAssistPanel initiativeId={initiativeId} scope="features" />
       </div>
     </div>
   );

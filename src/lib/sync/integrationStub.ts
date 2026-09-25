@@ -4,6 +4,7 @@
 // Jira-only jiraStub.ts used by the workspace JiraSyncPanel.
 
 import { db } from "@/lib/db";
+import { assertDemoIntegrationsEnabled } from "./demoPolicy";
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -27,11 +28,12 @@ async function providerByKey(providerKey: string) {
 
 /** Connect or reconfigure a demo connection. Configured = has a project key. */
 export async function connectDemo(args: ConnectArgs) {
+  assertDemoIntegrationsEnabled();
   const provider = await providerByKey(args.providerKey);
   const configured = Boolean(args.projectKey?.trim() || provider.category !== "execution");
   const status = configured ? "demo_connected" : "needs_configuration";
   const data = {
-    connectionName: `${provider.name} (demo)`,
+    connectionName: provider.name,
     status,
     mode: "demo",
     workspaceName: args.workspaceName ?? null,
@@ -41,7 +43,8 @@ export async function connectDemo(args: ConnectArgs) {
     configuredByUserId: args.configuredByUserId,
     configuredAt: new Date(),
     isEnabled: true,
-    settingsJson: JSON.stringify(args.settings ?? {}),
+    // Only boolean demo switches are accepted; never persist credentials.
+    settingsJson: JSON.stringify(Object.fromEntries(Object.entries(args.settings ?? {}).filter(([key, value]) => /^(generate_demo_keys|create_demo_issue_refs)$/.test(key) && typeof value === "boolean"))),
   };
   // findFirst + update/create instead of upsert: the compound unique includes
   // a nullable initiativeId, which Postgres/Prisma can't match on NULL.
@@ -66,6 +69,7 @@ export async function connectDemo(args: ConnectArgs) {
 }
 
 export async function disconnectDemo(connectionId: string) {
+  assertDemoIntegrationsEnabled();
   return db.integrationConnection.update({
     where: { id: connectionId },
     data: { status: "available", isEnabled: false },
@@ -73,6 +77,7 @@ export async function disconnectDemo(connectionId: string) {
 }
 
 export async function reconnectDemo(connectionId: string) {
+  assertDemoIntegrationsEnabled();
   const conn = await db.integrationConnection.findUniqueOrThrow({
     where: { id: connectionId },
     include: { provider: true },
@@ -93,15 +98,16 @@ export async function runDemoSync(connectionId: string): Promise<{
   itemsProcessed: number;
   message: string;
 }> {
+  assertDemoIntegrationsEnabled();
   const conn = await db.integrationConnection.findUniqueOrThrow({
     where: { id: connectionId },
     include: { provider: true },
   });
   if (!conn.isEnabled || conn.status === "available") {
-    throw new Error("Connect the demo integration before syncing.");
+    throw new Error("Connect the integration before syncing.");
   }
   if (conn.provider.category === "execution" && !conn.projectKey) {
-    throw new Error("Configure a project key before running a demo sync.");
+    throw new Error("Configure a project key before running a sync.");
   }
   const startedAt = new Date();
   await sleep(700); // believable latency, still zero network
@@ -140,30 +146,30 @@ export async function runDemoSync(connectionId: string): Promise<{
       await db.artifactLayer.update({ where: { id: t.id }, data: { externalRef: `${prefix}-${n}` } });
     }
     itemsProcessed = targets.length;
-    message = `${targets.length} items synced to ${conn.provider.name} demo project ${prefix}`;
+    message = `${targets.length} items synced to ${conn.provider.name} project ${prefix}`;
   } else if (conn.provider.category === "roadmap") {
     syncType = "push_roadmap";
     itemsProcessed = await db.artifactLayer.count({
       where: { prototypeId, type: { in: ["roadmap_phase", "feature"] } },
     });
-    message = `${itemsProcessed} roadmap items pushed to ${conn.provider.name} (demo)`;
+    message = `${itemsProcessed} roadmap items pushed to ${conn.provider.name}`;
   } else if (conn.provider.category === "documentation") {
     syncType = "publish_pages";
     itemsProcessed =
       1 + (await db.release.count({ where: { prototypeId } }));
-    message = `${itemsProcessed} linked planning pages generated in ${conn.provider.name} (demo)`;
+    message = `${itemsProcessed} linked planning pages generated in ${conn.provider.name}`;
   } else if (conn.provider.category === "communication") {
     syncType = "post_digest";
     itemsProcessed = 1;
-    message = `Plan digest posted to ${conn.provider.name} (demo)`;
+    message = `Plan digest posted to ${conn.provider.name}`;
   } else if (conn.provider.category === "design") {
     syncType = "link_designs";
     itemsProcessed = await db.artifactLayer.count({ where: { prototypeId, type: "feature" } });
-    message = `${itemsProcessed} design placeholders linked in ${conn.provider.name} (demo)`;
+    message = `${itemsProcessed} design placeholders linked in ${conn.provider.name}`;
   } else {
     syncType = "link_repos";
     itemsProcessed = await db.artifactLayer.count({ where: { prototypeId, type: "story" } });
-    message = `${itemsProcessed} demo issue references prepared for ${conn.provider.name}`;
+    message = `${itemsProcessed} issue references prepared for ${conn.provider.name}`;
   }
 
   const success = prototypeId != null;
