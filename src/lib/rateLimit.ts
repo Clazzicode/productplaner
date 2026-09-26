@@ -15,6 +15,8 @@ export interface RateLimitResult {
 const AUTH_POLICIES: Record<string, RateLimitPolicy> = {
   "/api/auth/sign-in": { key: "auth.sign_in", limit: 10, windowSeconds: 600 },
   "/api/auth/sign-up": { key: "auth.sign_up", limit: 5, windowSeconds: 3600 },
+  "/api/auth/forgot-password": { key: "auth.recovery", limit: 5, windowSeconds: 3600 },
+  "/api/auth/reset-password": { key: "auth.password_update", limit: 5, windowSeconds: 3600 },
 };
 
 /**

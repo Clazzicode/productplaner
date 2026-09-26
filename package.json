@@ -27,6 +27,9 @@
     "zod": "^4.4.3"
   },
   "overrides": {
+    "@prisma/config": {
+      "deepmerge-ts": "8.0.0"
+    },
     "officeparser": {
       "pdfjs-dist": "6.3.289"
     }
