@@ -23,7 +23,7 @@ export default function PlanHealthSummary(props: { primary: PrimaryInitiativeDet
         <div className="mt-3">
           <div className="flex items-center justify-between">
             <Badge variant={healthTokenVariant(p.scheduleHealth)}>{HEALTH_LABELS[p.scheduleHealth]}</Badge>
-            <span className="text-xs text-neutral-500">{p.completionPercent}% complete</span>
+            <span className="text-xs text-neutral-500">{p.completionPercent}% planning setup</span>
           </div>
           <ProgressBar percent={p.completionPercent} className="mt-2" />
           <p className="mt-2 text-xs text-neutral-500">{p.stageLabel}</p>

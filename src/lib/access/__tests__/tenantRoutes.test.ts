@@ -19,6 +19,8 @@ import { PATCH as artifactEdit } from "@/app/api/artifacts/[artifactId]/route";
 import { POST as capabilityMove } from "@/app/api/capabilities/[capId]/move-phase/route";
 import { POST as regenerate } from "@/app/api/initiatives/[id]/generate/route";
 import { POST as approve } from "@/app/api/initiatives/[id]/approve-plan/route";
+import { GET as requestsGet, POST as requestsSave } from "@/app/api/initiatives/[id]/requests/route";
+import { GET as backlogGet, POST as backlogSave } from "@/app/api/initiatives/[id]/backlog/route";
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -32,6 +34,21 @@ beforeEach(() => {
 const request = (method: string, body?: unknown) => new Request("https://app.test/api/test", { method, ...(body ? { body: JSON.stringify(body), headers: { "content-type": "application/json" } } : {}) });
 
 describe("cross-organization API authorization independent of RLS", () => {
+  it("cannot read or write another organization's PO requests", async () => {
+    expect((await requestsGet(request("GET"), { params: Promise.resolve({ id: "init-b" }) })).status).toBe(404);
+    expect((await requestsSave(request("POST", {}), { params: Promise.resolve({ id: "init-b" }) })).status).toBe(404);
+    expect(mocks.write).not.toHaveBeenCalled();
+  });
+  it("cannot read or write another organization's feature backlog", async () => {
+    expect((await backlogGet(request("GET"), { params: Promise.resolve({ id: "init-b" }) })).status).toBe(404);
+    expect((await backlogSave(request("POST", {}), { params: Promise.resolve({ id: "init-b" }) })).status).toBe(404);
+    expect(mocks.write).not.toHaveBeenCalled();
+  });
+  it("rejects signed-out access to the request workflow", async () => {
+    mocks.auth.mockResolvedValue({ ok: false, response: Response.json({ error: "Sign in" }, { status: 401 }) });
+    expect((await requestsGet(request("GET"), { params: Promise.resolve({ id: "init-a" }) })).status).toBe(401);
+    expect((await requestsSave(request("POST", {}), { params: Promise.resolve({ id: "init-a" }) })).status).toBe(401);
+  });
   it("cannot read another organization's project", async () => {
     expect((await projectGet(request("GET"), { params: Promise.resolve({ id: "project-b" }) })).status).toBe(404);
   });

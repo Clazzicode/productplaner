@@ -41,7 +41,7 @@ export interface AiCapabilityConfig {
 /** AiJob.status vocabulary (directive §18-21's internal-stage table). Never
  * shown to the user directly — src/lib/ai/activityCopy.ts maps each value to
  * plain-language copy. ANALYZE_INTAKE/DOCUMENT_UNDERSTANDING (single
- * synchronous Anthropic calls) only ever pass through
+ * synchronous OpenAI calls) only ever pass through
  * queued -> extracting_information -> completed/failed for real; the AI
  * Assist actions (src/lib/ai/actions/*, Section 4) are the first to use the
  * richer loading_context -> checking_gaps -> building_recommendation ->

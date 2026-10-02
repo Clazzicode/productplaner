@@ -1,3 +1,4 @@
+vi.mock("@/lib/audit", () => ({ auditInitiative: vi.fn() }));
 import { describe, expect, it, vi, beforeEach } from "vitest";
 
 const initiative = { findUnique: vi.fn() };
@@ -7,6 +8,7 @@ const initiativeAccess = { create: vi.fn(), findUnique: vi.fn(), count: vi.fn(),
 
 vi.mock("@/lib/db", () => ({
   db: { initiative, user, team, initiativeAccess },
+  withTransaction: (fn: () => Promise<unknown>) => fn(),
 }));
 
 const { grantDirectAccess, grantTeamAccess, changeGrantPermission, revokeGrant } = await import("../mutations");

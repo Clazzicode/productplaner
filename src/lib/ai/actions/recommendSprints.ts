@@ -1,4 +1,4 @@
-import type Anthropic from "@anthropic-ai/sdk";
+import type { AiTool } from "@/lib/ai/providerTypes";
 import { db } from "@/lib/db";
 import { resolveMethodology } from "@/lib/generation/methodology";
 import { recommendSprintsResultSchema } from "@/lib/validation/schemas";
@@ -18,7 +18,7 @@ import type { AiAssistItem } from "@prisma/client";
 
 const TOOL_NAME = "submit_sprint_recommendation";
 
-const SPRINT_RECOMMENDATION_TOOL: Anthropic.Tool = {
+const SPRINT_RECOMMENDATION_TOOL: AiTool = {
   name: TOOL_NAME,
   description: "Submit one sprint structure recommendation, using only the capacity figures given.",
   input_schema: {

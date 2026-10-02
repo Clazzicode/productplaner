@@ -8,7 +8,7 @@ import { mapAssistActionError } from "@/lib/ai/assist/routeErrors";
 
 // AI Assist trigger — RECOMMEND_SPRINTS (Section 4). Never invents team
 // capacity/velocity — runRecommendSprints throws InsufficientContextError
-// (mapped to 422) before any Anthropic call if team size isn't entered yet.
+// (mapped to 422) before any OpenAI call if team size isn't entered yet.
 async function POSTHandler(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const authGuard = await requireCurrentUserApi();

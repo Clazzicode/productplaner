@@ -1,8 +1,8 @@
-import type Anthropic from "@anthropic-ai/sdk";
+import type { AiTool, AiMessage, AiTextBlock } from "@/lib/ai/providerTypes";
 import type { ZodType } from "zod";
 import type { AiAssistItem } from "@prisma/client";
 import { withTransaction } from "@/lib/db";
-import { AI_MODEL, getAnthropicClient } from "@/lib/ai/client";
+import { AI_MODEL, createAiResponse } from "@/lib/ai/client";
 import { assertAiActionAllowed, recordAiUsage } from "@/lib/ai/usage";
 import { setAiJobStatus, setAiJobContextAudit } from "@/lib/ai/job";
 import { AiResponseValidationError, ContextBudgetExceededError } from "@/lib/ai/errors";
@@ -16,7 +16,7 @@ import { resolveReuseDecision, type ReuseDecision } from "./reuse";
 // is a thin wrapper around this: check reuse (database/artifact reuse is
 // checked FIRST and is what actually avoids a call — Section 5's caching
 // below is a secondary efficiency measure layered on top, never a
-// substitute) -> assemble bounded, budgeted context -> call Anthropic
+// substitute) -> assemble bounded, budgeted context -> call OpenAI
 // (cached stable system prompt, tool-use, 3-attempt retry on malformed
 // output, same as analyzeIntake.ts) -> validate -> save one AiAssistItem row
 // per proposed draft, status "proposed". Never writes to any table this
@@ -55,7 +55,7 @@ export interface RunAssistActionParams<T> {
    * candidates don't share one fixed targetId). */
   reuseScope: { targetType: string; targetId?: string | null };
   freshFingerprint: string;
-  tool: Anthropic.Tool;
+  tool: AiTool;
   toolName: string;
   /** Stable, code-level system prompt ONLY — PLATFORM_SYSTEM_PROMPT +
    * GLOBAL_PRODUCT_PLANNING_RULES + methodology guidance + any
@@ -95,7 +95,7 @@ export async function runAssistAction<T>(params: RunAssistActionParams<T>): Prom
     freshFingerprint: params.freshFingerprint,
   });
 
-  // "reuse" and "flag_stale" both skip the Anthropic call — the only
+  // "reuse" and "flag_stale" both skip the OpenAI call — the only
   // difference is what the caller shows the user (an up-to-date result vs.
   // a "this may need an update" prompt). Never a silent regeneration either
   // way (Section 4 §4). Section 5 §22: this is logged as its own
@@ -172,7 +172,7 @@ export async function runAssistAction<T>(params: RunAssistActionParams<T>): Prom
     // content, at normal (not elevated) instruction authority — exactly
     // where analyzeIntake.ts/documentUnderstanding.ts already put their
     // task content.
-    const system: Anthropic.TextBlockParam[] = [
+    const system: AiTextBlock[] = [
       { type: "text", text: params.system, cache_control: { type: "ephemeral" } },
     ];
 
@@ -181,12 +181,12 @@ export async function runAssistAction<T>(params: RunAssistActionParams<T>): Prom
     // loosened; only a strictly-validated response is ever saved.
     const MAX_ATTEMPTS = 3;
     let parsed: T | undefined;
-    let response: Anthropic.Message | undefined;
+    let response: AiMessage | undefined;
     let lastError: unknown;
 
     for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
       try {
-        response = await getAnthropicClient().messages.create({
+        response = await createAiResponse({
           model: AI_MODEL,
           max_tokens: capability.maxOutputTokens,
           system,
@@ -204,7 +204,7 @@ export async function runAssistAction<T>(params: RunAssistActionParams<T>): Prom
           action,
           model: AI_MODEL,
           success: false,
-          errorMessage: err instanceof Error ? err.message : "Anthropic API request failed.",
+          errorMessage: err instanceof Error ? err.message : "OpenAI API request failed.",
         });
         throw err;
       }

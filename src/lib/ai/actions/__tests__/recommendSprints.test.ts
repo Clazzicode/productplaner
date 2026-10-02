@@ -13,8 +13,8 @@ vi.mock("@/lib/ai/usage", () => ({
 
 const messagesCreate = vi.fn();
 vi.mock("@/lib/ai/client", () => ({
-  AI_MODEL: "claude-test",
-  getAnthropicClient: () => ({ messages: { create: messagesCreate } }),
+  AI_MODEL: "openai-test",
+  createAiResponse: messagesCreate,
 }));
 
 const { runRecommendSprints } = await import("../recommendSprints");
@@ -25,7 +25,7 @@ beforeEach(() => {
 });
 
 describe("runRecommendSprints — never invents capacity/velocity", () => {
-  it("throws InsufficientContextError and makes NO Anthropic call when team size is missing", async () => {
+  it("throws InsufficientContextError and makes NO OpenAI call when team size is missing", async () => {
     initiativeFindUniqueOrThrow.mockResolvedValueOnce({
       projectId: "proj-1",
       methodology: "hybrid",
@@ -41,7 +41,7 @@ describe("runRecommendSprints — never invents capacity/velocity", () => {
     expect(messagesCreate).not.toHaveBeenCalled();
   });
 
-  it("throws InsufficientContextError with no Anthropic call when no sprints exist yet", async () => {
+  it("throws InsufficientContextError with no OpenAI call when no sprints exist yet", async () => {
     initiativeFindUniqueOrThrow.mockResolvedValueOnce({
       projectId: "proj-1",
       methodology: "hybrid",

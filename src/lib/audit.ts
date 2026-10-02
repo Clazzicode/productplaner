@@ -2,6 +2,14 @@ import type { Prisma } from "@prisma/client";
 import { currentAuthUserId, db } from "@/lib/db";
 import { currentRequestId } from "@/lib/observability";
 
+/** Application-authorized organization action; compose with its mutation transaction. */
+export async function auditOrganization(input: {
+  organizationId: string; actorUserId: string; projectId?: string;
+  entityType: string; entityId: string; action: string; metadata?: Prisma.InputJsonObject;
+}) {
+  return db.auditEvent.create({ data: { ...input, requestId: currentRequestId() } });
+}
+
 /** Call inside the business transaction; never pass request bodies or secrets. */
 export async function auditInitiative(
   initiativeId: string,

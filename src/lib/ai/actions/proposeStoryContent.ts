@@ -1,4 +1,4 @@
-import type Anthropic from "@anthropic-ai/sdk";
+import type { AiTool } from "@/lib/ai/providerTypes";
 import { db } from "@/lib/db";
 import { resolveMethodology } from "@/lib/generation/methodology";
 import { proposeStoryContentResultSchema } from "@/lib/validation/schemas";
@@ -21,7 +21,7 @@ import type { AiAssistItem } from "@prisma/client";
 
 const TOOL_NAME = "submit_story_content";
 
-const STORY_CONTENT_TOOL: Anthropic.Tool = {
+const STORY_CONTENT_TOOL: AiTool = {
   name: TOOL_NAME,
   description: "Submit improved epic/story/acceptance-criterion wording for this feature.",
   input_schema: {

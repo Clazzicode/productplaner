@@ -1,63 +1,47 @@
-// Published per-model token pricing — a technical/infrastructure fact, not
-// an invented business rule (directive §28 distinguishes these: PM/PO/PM
-// scoring methodology must never be fabricated, but Anthropic's own
-// published API rates are a real, citable number). Defaults reflect the
-// standard Sonnet-tier rate ($3/$15 per million input/output tokens), which
-// has held across multiple Sonnet generations — override via env if
-// Anthropic's published rate for the configured model differs; confirm
-// against https://www.anthropic.com/pricing before relying on this for real
-// billing, since a rate change here isn't automatic.
-
-const DEFAULT_INPUT_PER_MILLION = 3;
-const DEFAULT_OUTPUT_PER_MILLION = 15;
-// Section 5 §20/§21 — Anthropic's published prompt-caching rates: a cache
-// write (5-minute ephemeral TTL, what src/lib/ai/assist/runAction.ts uses)
-// costs 1.25x the base input rate; a cache read costs 0.1x the base input
-// rate. Both scale with inputPricePerMillionTokens() below rather than being
-// separate flat defaults, so an input-rate override stays consistent with
-// its cache rates automatically — confirm against
-// https://www.anthropic.com/pricing before relying on this for real billing.
-const CACHE_WRITE_MULTIPLIER = 1.25;
-const CACHE_READ_MULTIPLIER = 0.1;
-
-function envFloat(name: string, fallback: number): number {
+// OpenAI Standard short-context rates, verified 2026-09-26:
+// https://developers.openai.com/api/docs/pricing
+// Historical usage rows keep their recorded cost and are never repriced.
+const RATES: Record<string, { input: number; output: number }> = {
+  "gpt-6-sol": { input: 2, output: 10 },
+  "gpt-6-astra": { input: 10, output: 50 },
+  "gpt-6-luna": { input: 0.1, output: 0.5 },
+};
+function configuredRate(name: string): number | undefined {
   const raw = process.env[name];
-  if (!raw) return fallback;
-  const n = Number(raw);
-  return Number.isFinite(n) && n >= 0 ? n : fallback;
+  if (!raw?.trim()) return undefined;
+  const value = Number(raw);
+  if (!Number.isFinite(value) || value < 0) throw new Error(`Invalid ${name}.`);
+  return value;
 }
-
-export function inputPricePerMillionTokens(): number {
-  return envFloat("ANTHROPIC_INPUT_PRICE_PER_MILLION_USD", DEFAULT_INPUT_PER_MILLION);
+function rate(kind: "input" | "output"): number {
+  const override = configuredRate(`OPENAI_${kind.toUpperCase()}_PRICE_PER_MILLION_USD`);
+  if (override !== undefined) return override;
+  const model = process.env.OPENAI_MODEL?.trim() || "gpt-6-sol";
+  const defaults = RATES[model];
+  if (!defaults) throw new Error("Configure OpenAI input/output/cache prices for this model before enabling AI.");
+  return defaults[kind];
 }
-
-export function outputPricePerMillionTokens(): number {
-  return envFloat("ANTHROPIC_OUTPUT_PRICE_PER_MILLION_USD", DEFAULT_OUTPUT_PER_MILLION);
-}
-
+export function inputPricePerMillionTokens(): number { return rate("input"); }
+export function outputPricePerMillionTokens(): number { return rate("output"); }
 export function cacheWritePricePerMillionTokens(): number {
-  return envFloat("ANTHROPIC_CACHE_WRITE_PRICE_PER_MILLION_USD", inputPricePerMillionTokens() * CACHE_WRITE_MULTIPLIER);
+  return configuredRate("OPENAI_CACHE_WRITE_PRICE_PER_MILLION_USD") ?? defaultCacheRate(1.25);
 }
-
 export function cacheReadPricePerMillionTokens(): number {
-  return envFloat("ANTHROPIC_CACHE_READ_PRICE_PER_MILLION_USD", inputPricePerMillionTokens() * CACHE_READ_MULTIPLIER);
+  return configuredRate("OPENAI_CACHE_READ_PRICE_PER_MILLION_USD") ?? defaultCacheRate(0.1);
 }
-
-/** Estimated cost in USD for one completed AI call — computed once at
- * record-time (src/lib/ai/usage.ts's recordAiUsage) and never recomputed
- * retroactively, so a historical event's cost stays accurate even if the
- * configured rate changes later. cacheCreationInputTokens/cacheReadInputTokens
- * default to 0, so every pre-Section-5 call site keeps working unchanged. */
-export function estimateCostUsd(
-  inputTokens: number,
-  outputTokens: number,
-  cacheCreationInputTokens = 0,
-  cacheReadInputTokens = 0,
-): number {
-  const cost =
-    (inputTokens / 1_000_000) * inputPricePerMillionTokens() +
-    (outputTokens / 1_000_000) * outputPricePerMillionTokens() +
-    (cacheCreationInputTokens / 1_000_000) * cacheWritePricePerMillionTokens() +
-    (cacheReadInputTokens / 1_000_000) * cacheReadPricePerMillionTokens();
-  return Math.round(cost * 1_000_000) / 1_000_000; // 6 decimal places — fractions of a cent are real at this scale
+function defaultCacheRate(multiplier: number): number {
+  if (!RATES[process.env.OPENAI_MODEL?.trim() || "gpt-6-sol"]) {
+    throw new Error("Configure OpenAI input/output/cache prices for this model before enabling AI.");
+  }
+  return rate("input") * multiplier;
+}
+export function assertAiPricingConfigured(): void {
+  inputPricePerMillionTokens(); outputPricePerMillionTokens();
+  cacheWritePricePerMillionTokens(); cacheReadPricePerMillionTokens();
+}
+export function estimateCostUsd(inputTokens: number, outputTokens: number, cacheCreationInputTokens = 0, cacheReadInputTokens = 0): number {
+  if (inputTokens + outputTokens + cacheCreationInputTokens + cacheReadInputTokens === 0) return 0;
+  const cost = inputTokens * inputPricePerMillionTokens() + outputTokens * outputPricePerMillionTokens()
+    + cacheCreationInputTokens * cacheWritePricePerMillionTokens() + cacheReadInputTokens * cacheReadPricePerMillionTokens();
+  return Math.round(cost) / 1_000_000;
 }

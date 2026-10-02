@@ -1,4 +1,4 @@
-import type Anthropic from "@anthropic-ai/sdk";
+import type { AiTool } from "@/lib/ai/providerTypes";
 import { db } from "@/lib/db";
 import { resolveMethodology } from "@/lib/generation/methodology";
 import { recommendReleasesResultSchema } from "@/lib/validation/schemas";
@@ -19,7 +19,7 @@ import type { AiAssistItem } from "@prisma/client";
 
 const TOOL_NAME = "submit_release_recommendation";
 
-const RELEASE_RECOMMENDATION_TOOL: Anthropic.Tool = {
+const RELEASE_RECOMMENDATION_TOOL: AiTool = {
   name: TOOL_NAME,
   description: "Submit one release grouping recommendation.",
   input_schema: {

@@ -104,4 +104,24 @@ describe.sequential("migration replay and real PostgreSQL RLS", () => {
     })).rejects.toThrow();
     expect((await pg.query(`SELECT id FROM "LayerLock" WHERE id='lock-a'`)).rows).toEqual([]);
   });
+  it("isolates PO requests and prevents moving them between initiatives", async () => {
+    await asUser(authA, () => pg.exec(`INSERT INTO "PlanningRequest" (id,"initiativeId",data,"updatedAt") VALUES ('request-a','init-a','{}',now())`));
+    expect((await asUser(authB, () => pg.query(`SELECT id FROM "PlanningRequest" WHERE id='request-a'`))).rows).toEqual([]);
+    expect((await asUser(authB, () => pg.query(`UPDATE "PlanningRequest" SET data='{"title":"attack"}' WHERE id='request-a' RETURNING id`))).rows).toEqual([]);
+    await expect(asUser(authA, () => pg.exec(`INSERT INTO "PlanningRequest" (id,"initiativeId",data,"updatedAt") VALUES ('request-bad','init-b','{}',now())`))).rejects.toThrow();
+    await expect(asUser(authA, () => pg.exec(`UPDATE "PlanningRequest" SET "initiativeId"='init-b' WHERE id='request-a'`))).rejects.toThrow();
+  });
+  it("does not expose PO requests directly to the browser Data API", async () => {
+    await pg.exec("BEGIN; SET LOCAL ROLE authenticated");
+    try { await expect(pg.exec('SELECT * FROM "PlanningRequest"')).rejects.toThrow(); }
+    finally { await pg.exec("ROLLBACK"); }
+  });
+  it("keeps backlog metadata tenant-scoped and enforces one PO key per initiative", async () => {
+    await pg.exec(`INSERT INTO "IntakeAnswerSet" (id,"initiativeId","updatedAt") VALUES ('intake-a','init-a',now()),('intake-b','init-b',now());
+      INSERT INTO "Capability" (id,"intakeAnswerSetId",name,"isMvp","effortSize","businessValue","backlogKey") VALUES ('cap-a','intake-a','A',false,'m','medium','PO-01');`);
+    expect((await asUser(authB, () => pg.query(`SELECT id FROM "Capability" WHERE id='cap-a'`))).rows).toEqual([]);
+    expect((await asUser(authB, () => pg.query(`UPDATE "Capability" SET "backlogLane"='now' WHERE id='cap-a' RETURNING id`))).rows).toEqual([]);
+    await expect(asUser(authA, () => pg.exec(`INSERT INTO "Capability" (id,"intakeAnswerSetId",name,"isMvp","effortSize","businessValue","backlogKey") VALUES ('cap-a-duplicate','intake-a','Duplicate',false,'m','medium','PO-01')`))).rejects.toThrow();
+  });
+
 });

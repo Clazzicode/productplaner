@@ -23,7 +23,7 @@ export interface NavigationItemProps {
 
 const ICONS: Record<string, string> = {
   Dashboard: "⌂", Projects: "□", Initiatives: "◎", Roadmap: "◇",
-  "Planning Workspace": "▦", "Sprints & Releases": "▤", "Capacity & Cost": "▥",
+  "Planning Workspace": "▦", "Requests & Priorities": "▧", "Sprints & Releases": "▤", "Capacity & Cost": "▥",
   "Risks & Blockers": "△", Decisions: "▣", Reports: "▥",
   "Teams & Stakeholders": "♙", Integrations: "↗", Activity: "⌁",
 };

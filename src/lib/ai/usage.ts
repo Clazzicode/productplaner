@@ -154,7 +154,7 @@ export async function recordAiUsage(data: {
   aiAssistItemId?: string | null;
   action: AiActionKey;
   success: boolean;
-  // Section 5 §22 — "generation" (a real Anthropic call happened) vs
+  // Section 5 §22 — "generation" (a real OpenAI call happened) vs
   // "reuse" (the fingerprint reuse gate served an existing artifact, no
   // call made). Defaults to "generation" so every pre-Section-5 call site
   // keeps working unchanged.

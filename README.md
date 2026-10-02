@@ -34,6 +34,10 @@ prototype assumption (§31), never presented as authoritative.
 
 ## Run it
 
+AI assistance uses the OpenAI Responses API with a server-side project key.
+See [OpenAI setup and activation checks](docs/OPENAI-SETUP.md). The deterministic
+planning engine still runs without an AI provider.
+
 ```bash
 npm install
 npx prisma migrate dev   # applies the schema to your Postgres database (see .env)

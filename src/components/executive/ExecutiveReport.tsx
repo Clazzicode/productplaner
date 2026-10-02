@@ -108,7 +108,7 @@ export default async function ExecutiveReport({ initiativeId }: { initiativeId: 
         <p className="text-sm text-neutral-600">
           <strong>{intake.capabilities.filter((c) => c.isMvp).length}</strong> features in
           the MVP, <strong>{intake.capabilities.filter((c) => !c.isMvp).length}</strong>{" "}
-          sequenced after — {storyCount} sprint-ready stories in total.
+          sequenced after — {storyCount} planned stories in total. Sprint readiness requires PO review.
         </p>
         <ul className="mt-3 grid gap-1.5 text-sm sm:grid-cols-2">
           {intake.capabilities.map((c) => (

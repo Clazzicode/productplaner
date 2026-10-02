@@ -1,4 +1,4 @@
-import type Anthropic from "@anthropic-ai/sdk";
+import type { AiTool } from "@/lib/ai/providerTypes";
 import { db } from "@/lib/db";
 import { resolveTargetLaunchDate } from "@/lib/projectContext";
 import { recommendInitiativeStatus, recommendProjectStatus } from "@/lib/roadmapStatus/recommend";
@@ -21,7 +21,7 @@ import type { AiAssistItem } from "@prisma/client";
 
 const TOOL_NAME = "submit_status_explanation";
 
-const STATUS_EXPLANATION_TOOL: Anthropic.Tool = {
+const STATUS_EXPLANATION_TOOL: AiTool = {
   name: TOOL_NAME,
   description: "Submit a plain-language explanation of an already-computed status recommendation.",
   input_schema: {

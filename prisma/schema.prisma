@@ -453,6 +453,7 @@ model QualifyingProfile {
 }
 
 model Initiative {
+  planningRequests          PlanningRequest[]
   id                        String                   @id @default(cuid())
   // Kept denormalized (not inferred via projectId -> Project.organizationId)
   // deliberately: every existing RLS policy and resolveInitiativeAccess/
@@ -530,6 +531,11 @@ model IntakeAnswerSet {
 }
 
 model Capability {
+  backlogLane             String                 @default("unscheduled")
+  backlogStatus           String                 @default("planned")
+  backlogRevision         Int                    @default(1)
+  backlogKey              String?
+  sourceRequests          PlanningRequest[]
   id                      String                 @id @default(cuid())
   intakeAnswerSetId       String
   intakeAnswerSet         IntakeAnswerSet        @relation(fields: [intakeAnswerSetId], references: [id], onDelete: Cascade)
@@ -553,6 +559,7 @@ model Capability {
   createdAt               DateTime               @default(now())
 
   @@index([intakeAnswerSetId])
+  @@unique([intakeAnswerSetId, backlogKey])
 }
 
 model CapabilityDependency {
@@ -1129,4 +1136,19 @@ model IntakeAiAnalysis {
   createdAt              DateTime   @default(now())
 
   @@index([initiativeId, createdAt])
+}
+
+// PO request workflow: data is validated as structured JSON by requestSchema.
+model PlanningRequest {
+  id String @id @default(cuid())
+  initiativeId String
+  initiative Initiative @relation(fields: [initiativeId], references: [id], onDelete: Cascade)
+  data Json
+  revision Int @default(1)
+  capabilityId String?
+  capability Capability? @relation(fields: [capabilityId], references: [id], onDelete: SetNull)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([initiativeId, updatedAt])
+  @@index([capabilityId])
 }

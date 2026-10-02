@@ -1,4 +1,5 @@
 import { AsyncLocalStorage } from "node:async_hooks";
+import { BusinessError } from "@/lib/businessError";
 import { randomUUID } from "node:crypto";
 import { checkRateLimit, rateLimitPolicyFor } from "@/lib/rateLimit";
 import { assertEnvironmentIsolation, EnvironmentIsolationError } from "@/lib/environment";
@@ -59,9 +60,9 @@ export function withApi<T extends unknown[]>(handler: (...args: T) => Promise<Re
       return response;
     } catch (error) {
       const code = typeof error === "object" && error !== null && "code" in error ? error.code : null;
-      const status = error instanceof EnvironmentIsolationError ? 503 : code === "P2034" ? 409 : error instanceof SyntaxError ? 400 : 500;
+      const status = error instanceof BusinessError ? error.status : error instanceof EnvironmentIsolationError ? 503 : code === "P2034" || code === "P2002" ? 409 : error instanceof SyntaxError ? 400 : 500;
       serverLog("api.failed", { status, durationMs: Date.now() - started, errorType: error instanceof Error ? error.name : "UnknownError" });
-      return Response.json({ error: status === 409 ? "The plan changed concurrently. Refresh and try again." : status === 400 ? "Invalid request." : "Request failed.", requestId: currentRequestId() }, {
+      return Response.json({ error: error instanceof BusinessError ? error.message : status === 409 ? "The plan changed concurrently. Refresh and try again." : status === 400 ? "Invalid request." : "Request failed.", requestId: currentRequestId() }, {
         status, headers: { "x-request-id": currentRequestId()!, "cache-control": "no-store" },
       });
     }

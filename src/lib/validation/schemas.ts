@@ -301,7 +301,7 @@ export const createSprintSchema = z.object({
   endDate: z.coerce.date(),
   capacityPoints: z.number().min(0.1).max(10_000),
   storyIds: z.array(z.string()).default([]),
-});
+}).refine(value => value.endDate >= value.startDate, { message: "Sprint end date must be on or after its start date." });
 
 export const integrationActionSchema = z.object({
   action: z.enum(["connect", "configure", "sync", "disconnect", "reconnect"]),
