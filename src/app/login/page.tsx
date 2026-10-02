@@ -10,7 +10,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
         <p className="text-xs font-semibold uppercase tracking-widest text-indigo-600">
           Guided Product Planning Platform
         </p>
-        <h1 className="mt-2 text-3xl font-bold">Sign in</h1>
+        <h1 className="mt-2 text-3xl font-bold">Your Guided Planning account</h1>
         <p className="mt-3 text-neutral-500">
           Sign in to your workspace, or create an account to get your own personal workspace.
         </p>

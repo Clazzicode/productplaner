@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { usernameSchema, usernameToPlaceholderEmail } from "../username";
+import { normalizeUsername, usernameSchema, usernameToPlaceholderEmail } from "../username";
 
 describe("usernameSchema", () => {
   it("accepts letters, numbers, dots, underscores, and hyphens", () => {
@@ -23,6 +23,12 @@ describe("usernameSchema", () => {
     const result = usernameSchema.safeParse("  jsmith  ");
     expect(result.success).toBe(true);
     if (result.success) expect(result.data).toBe("jsmith");
+  });
+});
+
+describe("normalizeUsername", () => {
+  it("treats casing and surrounding whitespace as the same username", () => {
+    expect(normalizeUsername("  Avery  ")).toBe("avery");
   });
 });
 

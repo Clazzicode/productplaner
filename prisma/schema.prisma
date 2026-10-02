@@ -78,6 +78,10 @@ model User {
   memberships            OrganizationMember[]
   name                   String
   email                  String               @unique
+  // User-facing sign-in name. Authentication still belongs to Supabase Auth;
+  // normalized provides case-insensitive uniqueness without changing display.
+  username               String?
+  usernameNormalized     String?              @unique
   // Step 8B (docs/V2-USERS-TEAMS.md). String + default, matching this schema's
   // existing convention (e.g. Initiative.status) rather than a native enum.
   // Default "org_admin" is deliberate: today there is exactly one User per
@@ -121,6 +125,17 @@ model User {
   aiAssistItemsApplied    AiAssistItem[] @relation("AiAssistItemAppliedBy")
   aiAssistItemsDismissed  AiAssistItem[] @relation("AiAssistItemDismissedBy")
   createdAt              DateTime             @default(now())
+}
+
+// Server-only username -> Supabase Auth identity registry. This allows a user
+// to sign in with a username without exposing tenant User rows before auth.
+model AuthUsername {
+  id         String   @id @default(cuid())
+  authUserId String   @unique @db.Uuid
+  username   String
+  normalized String   @unique
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 }
 
 // Step [AUTH] (docs/V2-MULTI-TENANT-AUTH.md). Real multi-org membership: one

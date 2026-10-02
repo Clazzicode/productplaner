@@ -1,10 +1,6 @@
 import { z } from "zod";
 
-/**
- * Legacy sign-in compatibility only. Existing prototype accounts retain their
- * auth IDs and workspaces. New registrations must use verified real email;
- * never use this mapping to create or pre-confirm a new customer account.
- */
+/** Usernames are case-insensitive credentials; their original case is display-only. */
 
 export const USERNAME_REGEX = /^[a-zA-Z0-9._-]{3,30}$/;
 
@@ -15,8 +11,12 @@ export const usernameSchema = z
 
 const PLACEHOLDER_EMAIL_DOMAIN = "local.invalid";
 
+export function normalizeUsername(username: string): string {
+  return username.trim().toLowerCase();
+}
+
 /** Lowercased so "JohnDoe" and "johndoe" resolve to the same account,
  * matching how usernames are typically treated as case-insensitive. */
 export function usernameToPlaceholderEmail(username: string): string {
-  return `${username.trim().toLowerCase()}@${PLACEHOLDER_EMAIL_DOMAIN}`;
+  return `${normalizeUsername(username)}@${PLACEHOLDER_EMAIL_DOMAIN}`;
 }

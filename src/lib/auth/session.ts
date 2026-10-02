@@ -160,7 +160,13 @@ export async function getActiveProfile() {
  * row with role "owner" — the "solo user gets a workspace behind the scenes"
  * behavior, done as a single atomic transaction.
  */
-export async function provisionSoloWorkspace(params: { authUserId: string; name: string; email: string }) {
+export async function provisionSoloWorkspace(params: {
+  authUserId: string;
+  name: string;
+  email: string;
+  username?: string;
+  usernameNormalized?: string;
+}) {
   return withTransaction(async (tx) => {
     const org = await tx.organization.create({
       data: { name: `${params.name}'s Workspace`, workspaceType: "solo" },
@@ -171,6 +177,8 @@ export async function provisionSoloWorkspace(params: { authUserId: string; name:
         homeOrganizationId: org.id,
         name: params.name,
         email: params.email,
+        username: params.username,
+        usernameNormalized: params.usernameNormalized,
         accessLevel: "org_admin",
       },
     });

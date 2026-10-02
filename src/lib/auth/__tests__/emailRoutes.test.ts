@@ -2,11 +2,21 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   signUp: vi.fn(), signIn: vi.fn(), resetEmail: vi.fn(), updateUser: vi.fn(), getUser: vi.fn(),
   exchange: vi.fn(), signOut: vi.fn(), provision: vi.fn(), clear: vi.fn(), rate: vi.fn(),
+  usernameLookup: vi.fn(), usernameInsert: vi.fn(), adminGetUser: vi.fn(), adminDeleteUser: vi.fn(),
 }));
-vi.mock("@/lib/supabase/server", () => ({ createSupabaseServerClient: async () => ({ auth: {
+vi.mock("@/lib/supabase/server", () => ({
+  createSupabaseServerClient: async () => ({ auth: {
   signUp: mocks.signUp, signInWithPassword: mocks.signIn, resetPasswordForEmail: mocks.resetEmail,
   updateUser: mocks.updateUser, getUser: mocks.getUser, exchangeCodeForSession: mocks.exchange, signOut: mocks.signOut,
-} }) }));
+  } }),
+  createSupabaseServiceClient: () => ({
+    from: () => ({
+      select: () => ({ eq: () => ({ maybeSingle: mocks.usernameLookup }) }),
+      insert: mocks.usernameInsert,
+    }),
+    auth: { admin: { getUserById: mocks.adminGetUser, deleteUser: mocks.adminDeleteUser } },
+  }),
+}));
 vi.mock("@/lib/auth/provision", () => ({ ensureAuthenticatedWorkspace: mocks.provision }));
 vi.mock("@/lib/auth/session", () => ({ clearActiveOrganizationCookie: mocks.clear }));
 vi.mock("@/lib/onboarding/tempStateServer", () => ({ clearOnboardingStateServer: mocks.clear }));
@@ -18,7 +28,7 @@ import { POST as signIn } from "@/app/api/auth/sign-in/route";
 import { POST as forgot } from "@/app/api/auth/forgot-password/route";
 import { POST as reset } from "@/app/api/auth/reset-password/route";
 import { GET as callback } from "@/app/auth/callback/route";
-const user = { id: "verified-auth-id", email: "customer@example.com", email_confirmed_at: "2026-09-25T00:00:00Z" };
+const user = { id: "verified-auth-id", email: "customer@example.com", email_confirmed_at: "2026-09-25T00:00:00Z", identities: [{ id: "email-identity" }] };
 const request = (path: string, body: unknown, origin = "https://planning.example") => new Request(`https://planning.example${path}`, {
   method: "POST", headers: { "content-type": "application/json", origin }, body: JSON.stringify(body),
 });
@@ -36,40 +46,53 @@ beforeEach(() => {
   mocks.getUser.mockResolvedValue({ data: { user }, error: null });
   mocks.updateUser.mockResolvedValue({ error: null });
   mocks.signOut.mockResolvedValue({ error: null });
+  mocks.usernameLookup.mockResolvedValue({ data: null, error: null });
+  mocks.usernameInsert.mockResolvedValue({ error: null });
+  mocks.adminGetUser.mockResolvedValue({ data: { user }, error: null });
+  mocks.adminDeleteUser.mockResolvedValue({ data: {}, error: null });
 });
 afterEach(() => { vi.unstubAllEnvs(); vi.restoreAllMocks(); });
 
 describe("customer email authentication", () => {
   it("uses public sign-up and does not provision an unconfirmed account", async () => {
-    const response = await signUp(request("/api/auth/sign-up", { email: " Customer@Example.com ", name: "Avery", password: "strong-password" }));
+    const response = await signUp(request("/api/auth/sign-up", { username: "Avery", email: " Customer@Example.com ", name: "Avery", password: "strong-password" }));
     expect(response.status).toBe(200);
     expect(await response.json()).toMatchObject({ confirmationRequired: true });
-    expect(mocks.signUp).toHaveBeenCalledWith({ email: "customer@example.com", password: "strong-password", options: { data: { name: "Avery" }, emailRedirectTo: "https://planning.example/auth/callback" } });
+    expect(mocks.signUp).toHaveBeenCalledWith({ email: "customer@example.com", password: "strong-password", options: { data: { name: "Avery", username: "Avery" }, emailRedirectTo: "https://planning.example/auth/callback" } });
+    expect(mocks.usernameInsert).toHaveBeenCalledWith(expect.objectContaining({ authUserId: user.id, username: "Avery", normalized: "avery" }));
     expect(mocks.provision).not.toHaveBeenCalled();
   });
-  it.each([{ username: "old-user" }, { email: "new-user@local.invalid" }])("rejects new placeholder accounts: %j", async (identity) => {
-    expect((await signUp(request("/api/auth/sign-up", { ...identity, name: "Name", password: "password123" }))).status).toBe(422);
+  it.each([{ email: "new-user@local.invalid" }, { email: "not-an-email" }])("rejects invalid signup email: %j", async (identity) => {
+    expect((await signUp(request("/api/auth/sign-up", { username: "new-user", ...identity, name: "Name", password: "password123" }))).status).toBe(422);
     expect(mocks.signUp).not.toHaveBeenCalled();
   });
   it("does not reveal a duplicate email", async () => {
-    const input = { email: user.email, name: "Name", password: "password123" };
+    const input = { username: "new-user", email: user.email, name: "Name", password: "password123" };
     const first = await (await signUp(request("/api/auth/sign-up", input))).json();
     mocks.signUp.mockResolvedValue({ data: {}, error: { code: "user_already_exists", status: 422 } });
     expect(await (await signUp(request("/api/auth/sign-up", input))).json()).toEqual(first);
   });
+  it("rejects a username already reserved by another account", async () => {
+    mocks.usernameLookup.mockResolvedValue({ data: { authUserId: "another-user" }, error: null });
+    const response = await signUp(request("/api/auth/sign-up", { username: "Avery", email: user.email, name: "Name", password: "password123" }));
+    expect(response.status).toBe(409);
+    expect(mocks.signUp).not.toHaveBeenCalled();
+  });
   it("signs in with email and provisions only the provider-verified identity", async () => {
-    const response = await signIn(request("/api/auth/sign-in", { email: user.email, password: "password123", userId: "forged" }));
+    const response = await signIn(request("/api/auth/sign-in", { identifier: user.email, password: "password123", userId: "forged" }));
     expect(response.status).toBe(200);
     expect(mocks.provision).toHaveBeenCalledWith(user);
     expect(mocks.signIn).toHaveBeenCalledWith({ email: user.email, password: "password123" });
   });
   it("retains sign-in for existing username accounts", async () => {
-    expect((await signIn(request("/api/auth/sign-in", { username: "old-user", password: "password123" }))).status).toBe(200);
-    expect(mocks.signIn).toHaveBeenCalledWith({ email: "old-user@local.invalid", password: "password123" });
+    mocks.usernameLookup.mockResolvedValue({ data: { authUserId: user.id }, error: null });
+    expect((await signIn(request("/api/auth/sign-in", { identifier: "Avery", password: "password123" }))).status).toBe(200);
+    expect(mocks.adminGetUser).toHaveBeenCalledWith(user.id);
+    expect(mocks.signIn).toHaveBeenCalledWith({ email: user.email, password: "password123" });
   });
   it("rejects an unconfirmed session without creating a workspace", async () => {
     mocks.signIn.mockResolvedValue({ data: { user: { ...user, email_confirmed_at: null } }, error: null });
-    expect((await signIn(request("/api/auth/sign-in", { email: user.email, password: "password123" }))).status).toBe(401);
+    expect((await signIn(request("/api/auth/sign-in", { identifier: user.email, password: "password123" }))).status).toBe(401);
     expect(mocks.signOut).toHaveBeenCalled();
     expect(mocks.provision).not.toHaveBeenCalled();
   });
