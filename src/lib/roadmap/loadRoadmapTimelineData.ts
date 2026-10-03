@@ -132,7 +132,6 @@ export async function loadRoadmapTimelineData(
   const sprintByNumber = new Map(sprintRows.map((s) => [s.sprintNumber, s]));
   const sprintById = new Map(sprintRows.map((s) => [s.id, s]));
   const releaseByPhase = new Map(releaseRows.map((r) => [r.phaseNumber, r]));
-  const isContinuousFlow = profile.sprintMode === "continuous_flow";
   const today = new Date();
 
   const phases: TimelinePhaseGroup[] = [];
@@ -164,7 +163,7 @@ export async function loadRoadmapTimelineData(
       ].sort((a, b) => a - b);
       const spannedSprints = sprintNumbers.map((n) => sprintByNumber.get(n)!).filter(Boolean);
 
-      const schedule = deriveFeatureSchedule({ spannedSprints, phaseRange, isContinuousFlow });
+      const schedule = deriveFeatureSchedule({ spannedSprints, phaseRange });
       const spannedCapacity = spannedSprints.reduce((n, s) => n + s.capacityPoints, 0);
       const anyOverAllocated = sprintNumbers.some((n) => forecastByNumber.get(n)?.status === "over-allocated");
       const health =

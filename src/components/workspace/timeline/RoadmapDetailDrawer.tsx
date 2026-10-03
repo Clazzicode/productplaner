@@ -10,7 +10,7 @@ import { TIMELINE_HEALTH_LABELS } from "@/lib/roadmap/timelineDerivation";
 
 const SCHEDULE_SOURCE_LABEL: Record<ClientTimelineFeature["scheduleSource"], string> = {
   sprints: "From its Stories' Sprint dates",
-  phase_range: "From this phase's throughput-packed range (Kanban)",
+  phase_range: "From the generated phase estimate",
   unscheduled: "Not yet schedulable",
 };
 
