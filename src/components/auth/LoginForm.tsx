@@ -18,6 +18,7 @@ export default function LoginForm({ linkError = false }: { linkError?: boolean }
   const [name, setName] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
 
   const switchMode = (next: Mode) => {
     setMode(next);
@@ -28,6 +29,7 @@ export default function LoginForm({ linkError = false }: { linkError?: boolean }
     setName("");
     setPassword("");
     setConfirmPassword("");
+    setShowPassword(false);
   };
   const submit = async () => {
     if (mode === "sign-up" && password !== confirmPassword) {
@@ -78,6 +80,12 @@ export default function LoginForm({ linkError = false }: { linkError?: boolean }
         <p className="mb-5 mt-1 text-sm text-neutral-500">
           {mode === "sign-up" ? "Choose a username and use a real email for confirmation and recovery." : mode === "forgot-password" ? "We will send a secure reset link to your email." : "Sign in with your username or email address."}
         </p>
+        {error && <div role="alert" className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">{error}</div>}
+        {message && <div role="status" className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
+          <p className="font-semibold">Account created</p>
+          <p className="mt-1">{message}</p>
+          <p className="mt-1">You cannot sign in until you open that confirmation link.</p>
+        </div>}
         {mode === "sign-up" && <>
           <label className="mb-3 block text-sm font-medium">Username
             <Input value={username} onChange={(e) => setUsername(e.target.value)} autoComplete="username" minLength={3} maxLength={30} pattern="[A-Za-z0-9._-]+" required disabled={busy} className="mt-1.5" />
@@ -93,8 +101,14 @@ export default function LoginForm({ linkError = false }: { linkError?: boolean }
             className="mt-1.5" autoComplete={mode === "sign-in" ? "username" : "email"} autoFocus={mode === "sign-in"} required disabled={busy} />
         </label>
         {mode !== "forgot-password" && <label className="mt-3 block text-sm font-medium text-text-primary">Password
-          <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="mt-1.5"
-            autoComplete={mode === "sign-in" ? "current-password" : "new-password"} minLength={mode === "sign-up" ? 8 : 1} maxLength={128} required disabled={busy} />
+          <span className="relative mt-1.5 block">
+            <Input type={showPassword ? "text" : "password"} value={password} onChange={(e) => setPassword(e.target.value)} className="pr-16"
+              autoComplete={mode === "sign-in" ? "current-password" : "new-password"} minLength={mode === "sign-up" ? 8 : 1} maxLength={128} required disabled={busy} />
+            <button type="button" onClick={() => setShowPassword((visible) => !visible)} disabled={busy}
+              className="absolute inset-y-0 right-0 px-3 text-xs font-semibold text-accent hover:underline">
+              {showPassword ? "Hide" : "Show"}
+            </button>
+          </span>
           {mode === "sign-up" && <span className="mt-1 block text-xs font-normal text-neutral-500">Use at least 8 characters. Commonly leaked passwords are rejected.</span>}
         </label>}
         {mode === "sign-up" && <label className="mt-3 block text-sm font-medium text-text-primary">Confirm password
@@ -108,8 +122,6 @@ export default function LoginForm({ linkError = false }: { linkError?: boolean }
         {mode === "sign-in" && <button type="button" onClick={() => switchMode("forgot-password")} disabled={busy} className="mt-4 w-full text-sm text-accent hover:underline">Forgot your password?</button>}
         {mode === "forgot-password" && <button type="button" onClick={() => switchMode("sign-in")} disabled={busy} className="mt-4 w-full text-sm text-accent hover:underline">Back to sign in</button>}
       </form>
-      {error && <p role="alert" className="mt-4 text-sm text-red-600">{error}</p>}
-      {message && <p role="status" className="mt-4 text-sm text-text-primary">{message}</p>}
     </div>
   );
 }

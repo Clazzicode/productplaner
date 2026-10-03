@@ -90,6 +90,16 @@ describe("customer email authentication", () => {
     expect(mocks.adminGetUser).toHaveBeenCalledWith(user.id);
     expect(mocks.signIn).toHaveBeenCalledWith({ email: user.email, password: "password123" });
   });
+  it.each([
+    ["email_not_confirmed", 403, "Confirm your email before signing in."],
+    ["invalid_credentials", 401, "The username/email or password is incorrect."],
+  ])("returns an actionable %s sign-in error", async (code, status, message) => {
+    mocks.signIn.mockResolvedValue({ data: {}, error: { code, status: 400 } });
+    const response = await signIn(request("/api/auth/sign-in", { identifier: user.email, password: "password123" }));
+    expect(response.status).toBe(status);
+    expect(await response.json()).toMatchObject({ error: expect.stringContaining(message) });
+    expect(mocks.provision).not.toHaveBeenCalled();
+  });
   it("rejects an unconfirmed session without creating a workspace", async () => {
     mocks.signIn.mockResolvedValue({ data: { user: { ...user, email_confirmed_at: null } }, error: null });
     expect((await signIn(request("/api/auth/sign-in", { identifier: user.email, password: "password123" }))).status).toBe(401);

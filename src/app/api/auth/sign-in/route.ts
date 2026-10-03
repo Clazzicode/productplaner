@@ -53,7 +53,13 @@ async function POSTHandler(request: Request) {
   });
   if (error) {
     if (isAuthRetryableFetchError(error)) return jsonError("Sign-in unavailable.", 503);
-    return jsonError("Could not sign in. Check your credentials and confirm your email if needed.", 401);
+    if (error.code === "email_not_confirmed") {
+      return jsonError("Confirm your email before signing in. Check your inbox and spam folder for the confirmation link.", 403);
+    }
+    if (error.code === "invalid_credentials") {
+      return jsonError("The username/email or password is incorrect.", 401);
+    }
+    return jsonError("Could not sign in. Please try again or reset your password.", 401);
   }
   if (!data.user?.email_confirmed_at) {
     await supabase.auth.signOut({ scope: "local" });
