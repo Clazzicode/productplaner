@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { emptyRequest, priorityScore, requestSchema, type RequestInput, type RequestRecord } from "@/lib/requests/model";
+import { emptyRequest, priorityScore, requestSchema, toRequestInput, type RequestInput, type RequestRecord } from "@/lib/requests/model";
 import RequestEditor, { type RequestTab } from "./RequestEditor";
 
 const tabs: { id: RequestTab; label: string }[] = [{ id: "intake", label: "1 · Capture request" }, { id: "requirements", label: "2 · Clarify requirements" }, { id: "priority", label: "6 · Prioritize" }];
@@ -17,13 +17,8 @@ export default function RequestWorkspace({ initiativeId, initialRequests, canEdi
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [dirty, setDirty] = useState(false);
-  // Strip display metadata before validating strict input.
-  const inputOf = (row: RequestRecord): RequestInput => {
-    const { id: _id, revision: _revision, capabilityId: _capabilityId, updatedAt: _updatedAt, ...input } = row;
-    return input;
-  };
   const open = (row: RequestRecord | null) => {
-    setSelected(row); setDraft(row ? inputOf(row) : emptyRequest()); setDirty(false); setError(""); setMessage("");
+    setSelected(row); setDraft(row ? toRequestInput(row) : emptyRequest()); setDirty(false); setError(""); setMessage("");
   };
   async function submit(promote = false) {
     setError(""); setMessage("");
@@ -34,7 +29,7 @@ export default function RequestWorkspace({ initiativeId, initialRequests, canEdi
       let row: RequestRecord;
       if (demo) {
         if (promote && draft.status !== "approved") throw new Error("Approve the request first.");
-        if (!promote && selected?.status === "approved" && draft.status === "approved" && JSON.stringify(inputOf(selected)) !== JSON.stringify(draft)) throw new Error("Reopen this request for clarification before editing an approved decision.");
+        if (!promote && selected?.status === "approved" && draft.status === "approved" && JSON.stringify(toRequestInput(selected)) !== JSON.stringify(draft)) throw new Error("Reopen this request for clarification before editing an approved decision.");
         row = { ...parsed.data, id: selected?.id ?? crypto.randomUUID(), revision: (selected?.revision ?? 0) + 1,
           capabilityId: promote ? "demo-feature" : selected?.capabilityId ?? null, updatedAt: new Date().toISOString() };
       } else {

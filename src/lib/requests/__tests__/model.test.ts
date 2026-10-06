@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, afterEach } from "vitest";
-import { emptyRequest, priorityScore, requestSchema, requirementGaps } from "../model";
+import { emptyRequest, priorityScore, requestSchema, requirementGaps, toRequestInput } from "../model";
 import { demoRequests, poDemoEnabled } from "../demo";
 
 afterEach(() => vi.unstubAllEnvs());
@@ -13,10 +13,10 @@ describe("PO intake, requirements and priority", () => {
   });
   it("requires an answer and owner for each clarification", () => {
     const sample = demoRequests()[0];
-    const input = { ...demoRequests()[1], id: undefined, revision: undefined, capabilityId: undefined, updatedAt: undefined,
+    const input = { ...demoRequests()[1],
       title: sample.title, requestor: sample.requestor, problem: sample.problem, requestedChange: sample.requestedChange,
-      outcome: sample.outcome, questions: sample.questions, status: "ready" };
-    const { id: _id, revision: _revision, capabilityId: _capabilityId, updatedAt: _updatedAt, ...request } = input;
+      outcome: sample.outcome, questions: sample.questions, status: "ready" as const };
+    const request = toRequestInput(input);
     expect(requestSchema.safeParse(request).success).toBe(false);
     expect(requestSchema.safeParse({ ...request, questions: [{ ...sample.questions[0], answer: "Ten saved views" }] }).success).toBe(true);
     expect(requestSchema.safeParse({ ...request, questions: [{ ...sample.questions[0], owner: "", answer: "Ten" }] }).success).toBe(false);
