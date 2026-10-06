@@ -30,6 +30,8 @@
     "zod": "^4.4.3"
   },
   "overrides": {
+    "sharp": "0.35.5",
+    "source-map-js": "1.2.2",
     "@prisma/config": {
       "deepmerge-ts": "8.0.0"
     },
