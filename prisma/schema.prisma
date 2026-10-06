@@ -486,6 +486,10 @@ model Initiative {
   name                      String
   description               String                   @default("")
   methodology               String                   @default("hybrid")
+  // Product Owner release rhythm. This is initiative-level planning context,
+  // while Release.targetDate remains the date for one concrete release.
+  releaseCadence            String                   @default("") // weekly | biweekly | every_three_weeks | monthly | quarterly | custom
+  customReleaseCadence      String                   @default("")
   status                    String                   @default("draft") // draft | intake_in_progress | generated
   // How this initiative's intake began — persisted (was only ephemeral
   // client state in ProductDirectionBootstrap before this). guided | import |

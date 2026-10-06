@@ -19,7 +19,8 @@ export default function RequestWorkspace({ initiativeId, initialRequests, canEdi
   const [dirty, setDirty] = useState(false);
   // Strip display metadata before validating strict input.
   const inputOf = (row: RequestRecord): RequestInput => {
-    return { title: row.title, kind: row.kind, requestor: row.requestor, problem: row.problem, requestedChange: row.requestedChange, outcome: row.outcome, businessRules: row.businessRules, dependencies: row.dependencies, questions: row.questions, status: row.status, priority: row.priority };
+    const { id: _id, revision: _revision, capabilityId: _capabilityId, updatedAt: _updatedAt, ...input } = row;
+    return input;
   };
   const open = (row: RequestRecord | null) => {
     setSelected(row); setDraft(row ? inputOf(row) : emptyRequest()); setDirty(false); setError(""); setMessage("");
@@ -49,7 +50,7 @@ export default function RequestWorkspace({ initiativeId, initialRequests, canEdi
     } catch (err) { setError(err instanceof Error ? err.message : "Unable to save."); }
     finally { setBusy(false); }
   }
-  const visible = requests.filter(r => `${r.title} ${r.requestor}`.toLowerCase().includes(search.toLowerCase()) && (filter === "all" || r.priority.decision === filter))
+  const visible = requests.filter(r => `${r.title} ${r.requestor} ${r.kind} ${r.source} ${r.sourceReference}`.toLowerCase().includes(search.toLowerCase()) && (filter === "all" || r.priority.decision === filter))
     .sort((a, b) => priorityScore(b.priority) - priorityScore(a.priority) || a.title.localeCompare(b.title));
   return <div className="space-y-6 text-slate-900">
     {demo && <div className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950"><strong>Local PO demo · sample data.</strong> Changes last until you reload this page. This demo does not save to your database or call AI/Jira. The signed-in workspace uses the real saved workflow.</div>}
@@ -59,11 +60,11 @@ export default function RequestWorkspace({ initiativeId, initialRequests, canEdi
     <div className="grid items-start gap-6 lg:grid-cols-[340px_minmax(0,1fr)]">
       <aside className="space-y-4 rounded-2xl border border-slate-200 bg-white p-5">
         <div className="flex items-center justify-between"><h2 className="text-lg font-semibold">Request backlog</h2><button className="rounded-lg bg-indigo-600 px-3 py-2 text-sm text-white disabled:opacity-40" disabled={!canEdit || busy || dirty} onClick={() => { open(null); setTab("intake"); }}>New request</button></div>
-        <label className="block text-sm">Search requests<input className="mt-1 block w-full rounded-lg border border-slate-300 p-2" value={search} onChange={e => setSearch(e.target.value)} placeholder="Title or requestor" /></label>
+        <label className="block text-sm">Search requests<input className="mt-1 block w-full rounded-lg border border-slate-300 p-2" value={search} onChange={e => setSearch(e.target.value)} placeholder="Title, requestor, type, or source" /></label>
         <label className="block text-sm">Priority decision<select className="mt-1 block w-full rounded-lg border border-slate-300 bg-white p-2" value={filter} onChange={e => setFilter(e.target.value)}><option value="all">All decisions</option><option value="untriaged">Not decided</option><option value="now">Now</option><option value="next">Next</option><option value="later">Later</option></select></label>
         <p className="text-xs text-slate-500">Ordered by calculated score. The recorded PO decision can override the ranking.</p>
         <div className="space-y-2">{visible.map(row => <button key={row.id} disabled={busy || dirty} onClick={() => open(row)} className={`block w-full rounded-xl border p-3 text-left disabled:opacity-60 ${selected?.id === row.id ? "border-indigo-500 bg-indigo-50" : "border-slate-200 hover:bg-slate-50"}`}>
-          <span className="block font-semibold">{row.title}</span><span className="mt-1 block text-xs text-slate-500">{row.requestor} · {row.status}</span>
+          <span className="block font-semibold">{row.title}</span><span className="mt-1 block text-xs capitalize text-slate-500">{row.kind.replaceAll("_", " ")} · {row.source} · {row.status}</span>
           <span className="mt-2 flex justify-between text-sm"><span className="capitalize text-indigo-700">{row.priority.decision === "untriaged" ? "Not decided" : row.priority.decision}</span><strong>{priorityScore(row.priority)} / 100</strong></span>
         </button>)}{visible.length === 0 && <p className="py-4 text-sm text-slate-500">No requests match. Capture a request to get started.</p>}</div>
       </aside>

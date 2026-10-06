@@ -2,9 +2,10 @@
 
 import { useState } from "react";
 
-export type RoadmapView = "timeline" | "milestones" | "connections";
+export type RoadmapView = "planning" | "timeline" | "milestones" | "connections";
 
 const VIEWS: { value: RoadmapView; label: string }[] = [
+  { value: "planning", label: "Now / Next / Later" },
   { value: "timeline", label: "Timeline" },
   { value: "milestones", label: "Milestones" },
   { value: "connections", label: "Connections" },
@@ -19,10 +20,11 @@ const VIEWS: { value: RoadmapView; label: string }[] = [
  */
 export default function RoadmapViewSwitcher(props: {
   timeline: React.ReactNode;
+  planning: React.ReactNode;
   milestones: React.ReactNode;
   connections: React.ReactNode;
 }) {
-  const [view, setView] = useState<RoadmapView>("timeline");
+  const [view, setView] = useState<RoadmapView>("planning");
 
   return (
     <div>
@@ -40,6 +42,7 @@ export default function RoadmapViewSwitcher(props: {
         ))}
       </div>
       <div className="mt-4">
+        {view === "planning" && props.planning}
         {view === "timeline" && props.timeline}
         {view === "milestones" && props.milestones}
         {view === "connections" && props.connections}

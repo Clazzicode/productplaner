@@ -7,7 +7,10 @@ vi.mock("@/lib/db", () => ({
     try { return await fn(); } catch (e) { state.writes = before; throw e; }
   },
   db: {
-    initiative: { findUniqueOrThrow: async () => ({ methodology: "waterfall", prototype: { approvedAt: state.approved ? new Date() : null } }) },
+    initiative: {
+      findUniqueOrThrow: async () => ({ methodology: "waterfall", prototype: { approvedAt: state.approved ? new Date() : null } }),
+      update: async () => { state.writes.push("cadence"); },
+    },
     prototype: { findUnique: async () => ({ id: "proto", releases: state.duplicate ? [{ phaseNumber: 1, origin: "manual" }] : [] }), update: async () => { state.writes.push("approval-cleared"); } },
     release: {
       findFirst: async () => ({ id: "release", prototypeId: "proto", phaseNumber: 1, origin: "manual" }),
@@ -32,7 +35,7 @@ vi.mock("@/lib/audit", () => ({ auditInitiative: async () => {
 } }));
 import { createManualRelease, createManualSprint } from "../manualScheduling";
 
-const release = { phaseNumber: 1, targetDate: new Date("2026-11-01") };
+const release = { cadence: "monthly" as const, customCadence: "", targetDate: new Date("2026-11-01") };
 const sprint = { startDate: new Date("2026-10-05"), endDate: new Date("2026-10-16"), capacityPoints: 10, storyIds: ["story"] };
 beforeEach(() => Object.assign(state, { approved: false, duplicate: false, storyUnavailable: false, claimCount: 1, writes: [], auditFails: false }));
 describe("manual scheduling integrity", () => {

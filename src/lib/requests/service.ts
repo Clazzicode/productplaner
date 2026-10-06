@@ -53,12 +53,16 @@ export async function promoteRequest(initiativeId: string, requestId: string, re
     const intake = await db.intakeAnswerSet.findUnique({ where: { initiativeId } });
     if (!intake) throw new BusinessError("Complete the initiative's guided intake first.");
     const max = await db.capability.aggregate({ where: { intakeAnswerSetId: intake.id }, _max: { order: true } });
+    const bugContext = data.kind === "bug" || data.kind === "defect"
+      ? `\n\nBug severity: ${data.bug.severity}\nAffected area: ${data.bug.affectedArea}\nObserved: ${data.bug.observedBehavior}\nExpected: ${data.bug.expectedBehavior}\nEnvironment: ${data.bug.environment || "Not specified"}`
+      : "";
     const capability = await db.capability.create({ data: {
       intakeAnswerSetId: intake.id, name: data.title,
-      description: `${data.requestedChange}\n\nProblem: ${data.problem}\nExpected outcome: ${data.outcome}\nBusiness rules: ${data.businessRules}\nDependencies to review: ${data.dependencies}`,
+      description: `${data.requestedChange}\n\nProblem: ${data.problem}\nExpected outcome: ${data.outcome}\nBusiness value: ${data.businessValueNarrative}\nBusiness rules: ${data.businessRules}\nDependencies to review: ${data.dependencies}\nSource: ${data.source}${data.sourceReference ? ` (${data.sourceReference})` : ""}${bugContext}`,
       isMvp: false, effortSize: ["xs", "s", "m", "l", "xl"][data.priority.effort - 1],
       businessValue: ["very_low", "low", "medium", "high", "critical"][data.priority.businessValue - 1],
       riskLevel: ["low", "low", "medium", "high", "critical"][data.priority.risk - 1],
+      backlogLane: data.priority.decision === "untriaged" ? "unscheduled" : data.priority.decision,
       order: (max._max.order ?? -1) + 1,
     } });
     const updated = await db.planningRequest.update({ where: { id: row.id, initiativeId, revision }, data: { capabilityId: capability.id, revision: { increment: 1 } } });

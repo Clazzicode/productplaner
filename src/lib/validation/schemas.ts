@@ -291,9 +291,11 @@ export const movePhaseSchema = z.object({
 // Guided-activation restructure: manual Create Release / Plan Sprint flows
 // (src/app/api/initiatives/[id]/releases, src/app/api/releases/[releaseId]/sprints).
 export const createReleaseSchema = z.object({
-  phaseNumber: z.number().int().min(1),
-  name: z.string().trim().min(1).max(120).optional(),
+  cadence: z.enum(["weekly", "biweekly", "every_three_weeks", "monthly", "quarterly", "custom"]),
+  customCadence: z.string().trim().max(120).default(""),
   targetDate: z.coerce.date(),
+}).refine((value) => value.cadence !== "custom" || value.customCadence.length > 0, {
+  path: ["customCadence"], message: "Describe the custom release cadence.",
 });
 
 export const createSprintSchema = z.object({

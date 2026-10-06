@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { blockPosition, buildTimeAxis, PX_PER_DAY, todayOffset } from "../timelineScale";
+import { blockPosition, buildTimeAxis, markerOffset, PX_PER_DAY, todayOffset } from "../timelineScale";
 
 // Local-time constructors throughout (not ISO date-only strings, which parse
 // as UTC) — date-fns' startOfMonth/endOfMonth operate in local time, matching
@@ -85,5 +85,13 @@ describe("todayOffset", () => {
 
   it("returns a positive offset when today falls inside the axis", () => {
     expect(todayOffset(axis, d(2026, 2, 1))).toBeGreaterThan(0);
+  });
+});
+
+describe("release marker offset", () => {
+  const axis = buildTimeAxis({ axisStart: d(2026, 1, 1), axisEnd: d(2026, 3, 31), zoom: "year", today: d(2026, 1, 1) });
+  it("places target releases on the same date scale and excludes dates outside it", () => {
+    expect(markerOffset(axis, d(2026, 2, 1))).toBeGreaterThan(0);
+    expect(markerOffset(axis, d(2027, 1, 1))).toBeNull();
   });
 });

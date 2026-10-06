@@ -2,7 +2,6 @@ import { db } from "@/lib/db";
 import { BusinessError } from "@/lib/businessError";
 import { assertAgileLayerEditable, AgileLayerLockedError } from "./engine";
 import { withPlanningMutation } from "./mutation";
-import { RELEASE_NAMES } from "./constants";
 
 async function assertEditable(id: string) {
   try { await assertAgileLayerEditable(id); }
@@ -12,25 +11,35 @@ async function assertEditable(id: string) {
   }
 }
 
-export async function createManualRelease(initiativeId: string, input: { phaseNumber: number; name?: string; targetDate: Date }) {
+export async function createManualRelease(initiativeId: string, input: {
+  cadence: "weekly" | "biweekly" | "every_three_weeks" | "monthly" | "quarterly" | "custom";
+  customCadence: string;
+  targetDate: Date;
+}) {
   return withPlanningMutation(initiativeId, "release.created", async () => {
     await assertEditable(initiativeId);
     const prototype = await db.prototype.findUnique({ where: { initiativeId }, include: { releases: true } });
     if (!prototype) throw new BusinessError("Generate a plan before creating a release.");
     const manual = prototype.releases.filter(r => r.origin === "manual");
-    if (manual.some(r => r.phaseNumber === input.phaseNumber)) throw new BusinessError("This phase already has a release.");
-    const phases = await db.artifactLayer.findMany({ where: { prototypeId: prototype.id, type: "roadmap_phase" }, select: { contentJson: true } });
-    if (!phases.some(p => { try { return JSON.parse(p.contentJson).phaseNumber === input.phaseNumber; } catch { return false; } })) {
-      throw new BusinessError("That roadmap phase doesn't exist.", 422);
-    }
+    const phases = await db.artifactLayer.findMany({ where: { prototypeId: prototype.id, type: "roadmap_phase" }, orderBy: { order: "asc" }, select: { contentJson: true } });
+    const occupied = new Set(manual.map((release) => release.phaseNumber));
+    const phaseNumber = phases.map((phase, index) => {
+      try { return (JSON.parse(phase.contentJson) as { phaseNumber?: number }).phaseNumber ?? index + 1; }
+      catch { return index + 1; }
+    }).find((candidate) => !occupied.has(candidate));
+    if (phaseNumber == null) throw new BusinessError("Every roadmap group already has a release. Adjust the roadmap before adding another release.", 422);
     if (manual.length === 0) {
       await db.sprint.deleteMany({ where: { prototypeId: prototype.id, origin: "auto" } });
       await db.release.deleteMany({ where: { prototypeId: prototype.id, origin: "auto" } });
     }
     const order = await db.release.aggregate({ where: { prototypeId: prototype.id }, _max: { order: true } });
-    return db.release.create({ data: { prototypeId: prototype.id, phaseNumber: input.phaseNumber,
-      name: input.name?.trim() || RELEASE_NAMES[input.phaseNumber] || `Release ${input.phaseNumber}`,
-      targetDate: input.targetDate, order: (order._max.order ?? 0) + 1, origin: "manual" } });
+    const nextOrder = (order._max.order ?? 0) + 1;
+    await db.initiative.update({ where: { id: initiativeId }, data: {
+      releaseCadence: input.cadence,
+      customReleaseCadence: input.cadence === "custom" ? input.customCadence.trim() : "",
+    } });
+    return db.release.create({ data: { prototypeId: prototype.id, phaseNumber,
+      name: `Release ${nextOrder}`, targetDate: input.targetDate, order: nextOrder, origin: "manual" } });
   }, true);
 }
 

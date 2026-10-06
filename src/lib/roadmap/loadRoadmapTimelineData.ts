@@ -8,7 +8,6 @@
 
 import { db } from "@/lib/db";
 import { computeCapacityForecast } from "@/lib/generation/capacityForecast";
-import { profileFor } from "@/lib/generation/methodology";
 import { deriveFeatureHealth, deriveFeatureSchedule, type TimelineHealth } from "./timelineDerivation";
 
 const parseJson = (raw: string): Record<string, unknown> => {
@@ -53,29 +52,18 @@ export interface RoadmapTimelineData {
   unavailableReason: string | null;
   phases: TimelinePhaseGroup[];
   unscheduled: TimelineFeature[];
+  releases: { id: string; label: string; targetDate: Date; cadence: string }[];
   axisStart: Date | null;
   axisEnd: Date | null;
 }
-
-const UNAVAILABLE_AGILE: RoadmapTimelineData = {
-  available: false,
-  unavailableReason:
-    "Timeline isn't available for Agile/Scrum — its phases are a continuously re-ranked backlog, not fixed categories a Feature can be scheduled against.",
-  phases: [],
-  unscheduled: [],
-  axisStart: null,
-  axisEnd: null,
-};
 
 export async function loadRoadmapTimelineData(
   initiativeId: string,
   prototypeId: string,
   methodology: string,
 ): Promise<RoadmapTimelineData> {
-  const profile = profileFor(methodology);
-  if (profile.roadmapMode === "continuous_backlog") return UNAVAILABLE_AGILE;
-
-  const [phaseRows, sprintRows, releaseRows, capabilities] = await Promise.all([
+  void methodology;
+  const [phaseRows, sprintRows, releaseRows, capabilities, initiative] = await Promise.all([
     db.artifactLayer.findMany({
       where: { prototypeId, type: "roadmap_phase" },
       orderBy: { order: "asc" },
@@ -115,6 +103,7 @@ export async function loadRoadmapTimelineData(
         dependsOnEdges: { select: { toCapabilityId: true, toCapability: { select: { name: true } } } },
       },
     }),
+    db.initiative.findUnique({ where: { id: initiativeId }, select: { releaseCadence: true, customReleaseCadence: true } }),
   ]);
 
   const capById = new Map(capabilities.map((c) => [c.id, c]));
@@ -138,6 +127,11 @@ export async function loadRoadmapTimelineData(
   const unscheduled: TimelineFeature[] = [];
   let axisStart: Date | null = null;
   let axisEnd: Date | null = null;
+
+  for (const release of releaseRows) {
+    if (!axisStart || release.targetDate < axisStart) axisStart = release.targetDate;
+    if (!axisEnd || release.targetDate > axisEnd) axisEnd = release.targetDate;
+  }
 
   for (const phaseRow of phaseRows) {
     const content = parseJson(phaseRow.contentJson);
@@ -217,7 +211,14 @@ export async function loadRoadmapTimelineData(
     phases.push({ phaseNumber, name: phaseRow.title, features });
   }
 
-  return { available: true, unavailableReason: null, phases, unscheduled, axisStart, axisEnd };
+  const cadence = initiative?.releaseCadence === "custom"
+    ? initiative.customReleaseCadence || "Custom cadence"
+    : initiative?.releaseCadence ?? "";
+  return {
+    available: true, unavailableReason: null, phases, unscheduled,
+    releases: releaseRows.map((release) => ({ id: release.id, label: release.name, targetDate: release.targetDate, cadence })),
+    axisStart, axisEnd,
+  };
 }
 
 // ---------- client-safe serialization (Dates -> ISO strings across the RSC boundary) ----------
@@ -239,6 +240,7 @@ export interface ClientRoadmapTimelineData {
   unavailableReason: string | null;
   phases: ClientTimelinePhaseGroup[];
   unscheduled: ClientTimelineFeature[];
+  releases: { id: string; label: string; targetDate: string; cadence: string }[];
   axisStart: string | null;
   axisEnd: string | null;
 }
@@ -256,6 +258,7 @@ export function serializeTimelineData(data: RoadmapTimelineData): ClientRoadmapT
     unavailableReason: data.unavailableReason,
     phases: data.phases.map((p) => ({ ...p, features: p.features.map(serializeFeature) })),
     unscheduled: data.unscheduled.map(serializeFeature),
+    releases: data.releases.map((release) => ({ ...release, targetDate: release.targetDate.toISOString() })),
     axisStart: data.axisStart ? data.axisStart.toISOString() : null,
     axisEnd: data.axisEnd ? data.axisEnd.toISOString() : null,
   };

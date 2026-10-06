@@ -182,6 +182,10 @@ export default async function SprintsPage({
     isKanban && ws.intakeView.sprintLengthWeeks > 0
       ? Math.round((cost.model.sprintPointCapacity / ws.intakeView.sprintLengthWeeks) * 10) / 10
       : 0;
+  const cadenceLabels: Record<string, string> = {
+    weekly: "Weekly", biweekly: "Every two weeks", every_three_weeks: "Every three weeks",
+    monthly: "Monthly", quarterly: "Quarterly", custom: ws.initiative.customReleaseCadence || "Custom cadence",
+  };
 
   return (
     <div>
@@ -222,6 +226,7 @@ export default async function SprintsPage({
                 : `Sprint${rel.sprints.length === 1 ? "" : "s"} ${rel.sprints.map((s) => s.sprintNumber).join(", ") || "none yet"}`}{" "}
               · ships {format(rel.targetDate, "MMM d, yyyy")}
             </p>
+            {ws.initiative.releaseCadence && <p className="mt-0.5 text-xs text-emerald-700">Cadence: {cadenceLabels[ws.initiative.releaseCadence] ?? ws.initiative.releaseCadence}</p>}
             {!isKanban && rel.origin === "manual" && !agileFrozen && (
               <div className="mt-2">
                 <CreateSprintForm
@@ -243,7 +248,8 @@ export default async function SprintsPage({
           require has been removed platform-wide. */}
       {!isKanban && !agileFrozen && (
         <div className="mt-4">
-          <CreateReleaseForm initiativeId={initiativeId} availablePhases={availablePhases} />
+          <CreateReleaseForm initiativeId={initiativeId} availablePhases={availablePhases}
+            currentCadence={ws.initiative.releaseCadence} currentCustomCadence={ws.initiative.customReleaseCadence} />
         </div>
       )}
 

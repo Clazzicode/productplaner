@@ -27,7 +27,12 @@ vi.mock("@/lib/generation/mutation", () => ({ withPlanningMutation: async (_id: 
 } }));
 import { saveRequest, promoteRequest } from "../service";
 import { emptyRequest } from "../model";
-const input = () => ({ ...emptyRequest(), title: "Saved maps", requestor: "PO" });
+const input = () => ({ ...emptyRequest(), title: "Saved maps", requestor: "PO",
+  userAffected: "Returning map users", businessValueNarrative: "Reduces repeated setup time",
+  businessRules: "Views belong to their creator", inScope: "Save and restore a view", outOfScope: "Sharing views",
+  assumptions: "Users are signed in", dependencies: "Authentication", risks: "Stale saved filters",
+  stakeholders: "Product Owner and map users", supportingMaterials: "Customer notes", definitionOfSuccess: "A saved view restores in one click",
+});
 beforeEach(() => { state.rows = []; state.auditFails = false; state.events = []; state.features = []; state.planApproved = false; });
 describe("saved PO workflow", () => {
   it("persists a request and its business audit together", async () => {

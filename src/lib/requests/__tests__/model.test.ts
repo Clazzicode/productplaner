@@ -8,14 +8,18 @@ describe("PO intake, requirements and priority", () => {
     const input = { ...emptyRequest(), title: "Saved maps", requestor: "PO" };
     expect(requestSchema.safeParse(input).success).toBe(true);
     expect(requestSchema.safeParse({ ...input, status: "ready" }).success).toBe(false);
-    expect(requirementGaps(input)).toHaveLength(3);
+    expect(requirementGaps(input)).toContain("Describe the problem being solved.");
+    expect(requirementGaps(input).length).toBeGreaterThan(3);
   });
   it("requires an answer and owner for each clarification", () => {
     const sample = demoRequests()[0];
-    const input = { ...emptyRequest(), title: sample.title, requestor: sample.requestor, problem: sample.problem, requestedChange: sample.requestedChange, outcome: sample.outcome, questions: sample.questions, status: "ready" };
-    expect(requestSchema.safeParse(input).success).toBe(false);
-    expect(requestSchema.safeParse({ ...input, questions: [{ ...sample.questions[0], answer: "Ten saved views" }] }).success).toBe(true);
-    expect(requestSchema.safeParse({ ...input, questions: [{ ...sample.questions[0], owner: "", answer: "Ten" }] }).success).toBe(false);
+    const input = { ...demoRequests()[1], id: undefined, revision: undefined, capabilityId: undefined, updatedAt: undefined,
+      title: sample.title, requestor: sample.requestor, problem: sample.problem, requestedChange: sample.requestedChange,
+      outcome: sample.outcome, questions: sample.questions, status: "ready" };
+    const { id: _id, revision: _revision, capabilityId: _capabilityId, updatedAt: _updatedAt, ...request } = input;
+    expect(requestSchema.safeParse(request).success).toBe(false);
+    expect(requestSchema.safeParse({ ...request, questions: [{ ...sample.questions[0], answer: "Ten saved views" }] }).success).toBe(true);
+    expect(requestSchema.safeParse({ ...request, questions: [{ ...sample.questions[0], owner: "", answer: "Ten" }] }).success).toBe(false);
   });
   it("requires an explicit reason for overriding or accepting the score", () => {
     const input = { ...emptyRequest(), title: "Request", requestor: "PO" };
@@ -34,6 +38,21 @@ describe("PO intake, requirements and priority", () => {
     const input = { ...emptyRequest(), title: "Request", requestor: "PO" };
     expect(requestSchema.safeParse({ ...input, organizationId: "other-org" }).success).toBe(false);
     expect(requestSchema.safeParse({ ...input, priority: { ...input.priority, urgency: 20 } }).success).toBe(false);
+  });
+  it("keeps imported bugs traceable and requires the core bug details", () => {
+    const base = { ...emptyRequest(), title: "Checkout fails", requestor: "Support", kind: "bug" as const,
+      source: "jira" as const, sourceReference: "PAY-42" };
+    expect(requestSchema.safeParse(base).success).toBe(false);
+    const complete = { ...base, bug: { ...base.bug, affectedArea: "Checkout", observedBehavior: "Payment returns 500", expectedBehavior: "Payment succeeds" } };
+    expect(requestSchema.safeParse(complete).success).toBe(true);
+    expect(requestSchema.safeParse({ ...complete, sourceReference: "" }).success).toBe(false);
+  });
+  it("stores MoSCoW separately from roadmap placement", () => {
+    const input = { ...emptyRequest(), title: "Request", requestor: "PO",
+      priority: { ...emptyRequest().priority, moscow: "must" as const, decision: "later" as const, reason: "Required, but blocked by a dependency" } };
+    const parsed = requestSchema.parse(input);
+    expect(parsed.priority.moscow).toBe("must");
+    expect(parsed.priority.decision).toBe("later");
   });
   it("cannot enable the sample demo in production even with the flag", () => {
     vi.stubEnv("PO_DEMO_ENABLED", "true"); vi.stubEnv("NODE_ENV", "production");
