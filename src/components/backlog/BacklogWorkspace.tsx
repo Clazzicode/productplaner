@@ -9,8 +9,8 @@ import {
 
 type View = "features" | "backlog" | "roadmap";
 
-export default function BacklogWorkspace({ initiativeId, initialFeatures, owners, canEdit, demo = false }: {
-  initiativeId: string; initialFeatures: FeatureRecord[]; owners: FeatureOwnerOption[]; canEdit: boolean; demo?: boolean;
+export default function BacklogWorkspace({ initiativeId, initialFeatures, owners = [], canEdit, demo = false }: {
+  initiativeId: string; initialFeatures: FeatureRecord[]; owners?: FeatureOwnerOption[]; canEdit: boolean; demo?: boolean;
 }) {
   const [features, setFeatures] = useState(initialFeatures);
   const [view, setView] = useState<View>("features");
