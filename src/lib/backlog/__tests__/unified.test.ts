@@ -66,7 +66,7 @@ vi.mock("@/lib/generation/mutation", () => ({
 import { bulkTriageBacklog, listUnifiedBacklog } from "../unified";
 
 beforeEach(() => {
-  const request = { ...emptyRequest(), title: "Critical map defect", kind: "bug" as const, source: "manual" as const,
+  const request = { ...emptyRequest(), title: "Critical map defect", requestor: "Tiana", kind: "bug" as const, source: "manual" as const,
     problem: "Map fails", requestedChange: "Repair map", outcome: "Map works",
     bug: { ...emptyRequest().bug, affectedArea: "Map", observedBehavior: "Fails", expectedBehavior: "Works" },
     priority: { ...emptyRequest().priority, businessValue: 5, urgency: 5, decision: "now" as const, reason: "Critical customer impact" } };
@@ -80,10 +80,10 @@ beforeEach(() => {
 describe("unified backlog", () => {
   it("uses one authoritative record for each request, feature and story and orders by priority", async () => {
     const items = await listUnifiedBacklog("init-a");
-    expect(items.map(item => `${item.recordType}:${item.id}`)).toEqual(["request:request-a", "feature:feature-a", "story:story-a"]);
+    expect(items.map(item => `${item.recordType}:${item.id}`)).toEqual(["feature:feature-a", "story:story-a", "request:request-a"]);
     expect(new Set(items.map(item => `${item.recordType}:${item.id}`)).size).toBe(3);
-    expect(items[0]).toMatchObject({ workType: "bug", priorityScore: 75, roadmapLane: "now" });
-    expect(items[2]).toMatchObject({ workType: "story", sourceFeatureId: "feature-a", owner: { id: "owner-a" } });
+    expect(items.find(item => item.id === "request-a")).toMatchObject({ workType: "bug", priorityScore: 75, roadmapLane: "now" });
+    expect(items.find(item => item.id === "story-a")).toMatchObject({ workType: "story", sourceFeatureId: "feature-a", owner: { id: "owner-a" } });
   });
 
   it("archives mixed backlog items atomically without deleting their source records", async () => {
