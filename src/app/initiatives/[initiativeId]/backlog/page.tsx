@@ -4,7 +4,8 @@ import { requireCurrentUser } from "@/lib/auth/session";
 import { requireInitiativeView } from "@/lib/access/guards";
 import { db, establishAuthContext } from "@/lib/db";
 import { featureRecord } from "@/lib/backlog/model";
-import { listFeatures } from "@/lib/backlog/service";\nimport { listUnifiedBacklog } from "@/lib/backlog/unified";
+import { listFeatures } from "@/lib/backlog/service";
+import { listUnifiedBacklog } from "@/lib/backlog/unified";
 import BacklogWorkspace from "@/components/backlog/BacklogWorkspace";
 import { ContainedLayout } from "@/components/layout/PageLayouts";
 
@@ -20,7 +21,9 @@ export default async function BacklogPage({ params }: { params: Promise<{ initia
     db.user.findMany({
       where: { status: "active", memberships: { some: { organizationId: initiative.organizationId, status: "active" } } },
       select: { id: true, name: true, email: true }, orderBy: [{ name: "asc" }, { id: "asc" }],
-    }),\n    listUnifiedBacklog(initiativeId),\n  ]);
+    }),
+    listUnifiedBacklog(initiativeId),
+  ]);
   return <ContainedLayout>
     <div className="mb-6 space-y-2"><Link href={`/initiatives/${initiativeId}/requests`} className="text-sm text-indigo-700">{initiative.name} / Requests & priorities</Link>
       <h1 className="text-3xl font-bold">Product feature backlog</h1>
