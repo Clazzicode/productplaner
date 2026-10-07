@@ -737,7 +737,7 @@ model ArtifactLayer {
   sprint             Sprint?         @relation(fields: [sprintId], references: [id], onDelete: SetNull)
   externalRef        String? // fake Jira key once "synced" (stub)
   sourceType         String          @default("generated") // generated | manual | jira | ai | split
-  readinessStatus    String          @default("needs_refinement") // needs_refinement | ready_for_refinement | sprint_ready | blocked | split
+  readinessStatus    String          @default("needs_refinement") // needs_refinement | ready_for_refinement | sprint_ready | blocked | split\n  backlogRevision    Int             @default(1)\n  archivedAt         DateTime?
   dedupeKey          String?
   approvedAt         DateTime? // acceptance criteria only
   approvedByUserId   String?
@@ -746,7 +746,7 @@ model ArtifactLayer {
   createdAt          DateTime        @default(now())
   updatedAt          DateTime        @updatedAt
 
-  @@index([prototypeId, type])
+  @@index([prototypeId, type])\n  @@index([prototypeId, archivedAt])
   @@index([parentId])
   @@unique([prototypeId, type, dedupeKey])
   @@unique([prototypeId, type, externalRef])
@@ -1241,7 +1241,7 @@ model PlanningRequest {
   capability Capability? @relation(fields: [capabilityId], references: [id], onDelete: SetNull)
   dedupeKey String?
   sourceRecordId String?
-  sourceRecord RequestSourceRecord? @relation(fields: [sourceRecordId], references: [id], onDelete: SetNull)
+  sourceRecord RequestSourceRecord? @relation(fields: [sourceRecordId], references: [id], onDelete: SetNull)\n  archivedAt DateTime?
   revisions RequestRevision[]
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
