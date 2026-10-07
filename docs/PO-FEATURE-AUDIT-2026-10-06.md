@@ -85,13 +85,15 @@ Feature 3 should be strengthened alongside Features 11–18 because those workfl
 | Production build | PASS — Next.js 16.3.8 |
 | Production dependency audit | PASS — 0 known vulnerabilities |
 | GitHub quality-gate check on audited revision | PASS |
-| Vercel preview check on audited revision | PASS |
+| Vercel deployment check on audited revision | PASS |
+| Deployed production `/api/ready` | PASS — database and environment isolation ready |
+| Preview `/api/ready` | EXPECTED BLOCK — Preview still points to production Supabase and the isolation guard returns 503 |
 
 ## Publication status
 
 The audited work is committed and pushed, but it is **not merged into `master`**. GitHub PR #2 is open, draft, cleanly mergeable, and points to the audited revision. The branch is 11 commits ahead of the current local `origin/master` reference. Passing PR and preview checks prove that this branch builds; they do not make these features part of the production default branch.
 
-The OpenAI implementation and server-side key are configured, using `gpt-6-luna` for continuous use. AI behavior is therefore part of the real product path rather than a demo stub. A monitored deployed journey is still required as acceptance evidence for Features 2, 8, 9 and 10; this verifies output quality, persistence and approval behavior rather than provider setup.
+The OpenAI implementation and server-side key are configured, using `gpt-6-luna` for continuous use. AI behavior is therefore part of the real product path rather than a demo stub. The deployed production readiness endpoint returns `ready`; Preview correctly fails closed until it receives a separate Supabase project. A monitored deployed journey is still required as acceptance evidence for Features 2, 8, 9 and 10; this verifies output quality, persistence and approval behavior rather than provider setup.
 
 ## Primary evidence
 

@@ -8,6 +8,7 @@
 - The guard accepts standard Supabase project URLs, direct database hosts, and project-qualified Supavisor pooler usernames. Custom database proxies/domains require an explicit reviewed extension; unknown connections fail closed in non-production hosted environments. `PRODUCTION_SUPABASE_PROJECT_REF` may add a production project reference; it cannot remove protection for the original production project.
 - This guard does not provision staging. Configure Preview variables against a separate database before expecting preview pages to work. Build success alone is not proof of isolation.
 - Keep `DATABASE_URL`, `DIRECT_URL`, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, and `SUPABASE_SECRET_KEY` scoped separately for Production and Preview.
+- **Verified October 7, 2026:** the protected Production `/api/ready` response is `ready` with database and environment-isolation checks passing. The protected Preview response is intentionally `503 unavailable` because its Preview-scoped variables still target production Supabase. Provisioning a separate Preview database remains required.
 
 ## Rate limits
 
