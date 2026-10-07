@@ -17,7 +17,9 @@ async function handler(request: Request, { params }: { params: Promise<{ id: str
   const parsed = backlogCommand.safeParse(await request.json());
   if (!parsed.success) return jsonError(zodMessage(parsed.error), 422);
   const command = parsed.data;
-  if (command.action === "save") return Response.json({ feature: featureRecord(await saveFeature(id, command.data, command.existing)) });
+  if (command.action === "save") {
+    return Response.json({ feature: featureRecord(await saveFeature(id, command.data, command.existing, { reason: command.reason })) });
+  }
   return Response.json({ features: (await reorderFeatures(id, command.items)).map(featureRecord) });
 }
 export const GET = withApi(handler);

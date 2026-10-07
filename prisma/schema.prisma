@@ -112,7 +112,7 @@ model User {
   initiatives            Initiative[]
   createdProjects        Project[]
   decisionsDecided       Decision[]
-  risksOwned             Risk[]
+  risksOwned             Risk[]\n  ownedCapabilities      Capability[]          @relation("CapabilityOwner")
   documentsUploaded      Document[]
   contextItemsApproved   ContextItem[] @relation("ContextItemApprovedBy")
   roadmapStatusesUpdated RoadmapStatus[]
@@ -566,7 +566,7 @@ model Capability {
   backlogStatus           String                 @default("planned")
   backlogRevision         Int                    @default(1)
   backlogKey              String?
-  sourceRequests          PlanningRequest[]
+  sourceRequests          PlanningRequest[]\n  ownerUserId             String?\n  owner                   User?                  @relation("CapabilityOwner", fields: [ownerUserId], references: [id], onDelete: SetNull)
   id                      String                 @id @default(cuid())
   intakeAnswerSetId       String
   intakeAnswerSet         IntakeAnswerSet        @relation(fields: [intakeAnswerSetId], references: [id], onDelete: Cascade)
