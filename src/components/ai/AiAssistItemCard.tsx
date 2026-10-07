@@ -53,7 +53,7 @@ export default function AiAssistItemCard(props: { item: AiAssistItemDTO; onChang
   const [editedText, setEditedText] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [needsConfirm, setNeedsConfirm] = useState(false);
+  const [confirmReason, setConfirmReason] = useState<string | null>(null);
 
   const assumptions = parseJsonArray(item.assumptionsJson);
   const sources = parseJsonArray(item.sourcesJson);
@@ -80,9 +80,9 @@ export default function AiAssistItemCard(props: { item: AiAssistItemDTO; onChang
     });
     setBusy(false);
     if (!result.ok) {
-      const data = result.data as { requiresApprovedImpactConfirmation?: boolean } | undefined;
+      const data = result.data as { requiresApprovedImpactConfirmation?: boolean; reason?: string } | undefined;
       if (data?.requiresApprovedImpactConfirmation) {
-        setNeedsConfirm(true);
+        setConfirmReason(data.reason ?? "approved_baseline");
         return;
       }
       setError(result.error ?? "Could not apply this suggestion.");
@@ -195,9 +195,11 @@ export default function AiAssistItemCard(props: { item: AiAssistItemDTO; onChang
         </div>
       )}
 
-      {needsConfirm && (
+      {confirmReason && (
         <div className="mt-3 rounded-lg border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900">
-          <p>This initiative has an approved baseline. Applying this will change approved work.</p>
+          <p>{confirmReason === "approved_request"
+            ? "This request is approved. Applying this suggestion will reopen it for clarification."
+            : "This initiative has an approved baseline. Applying this will change approved work."}</p>
           <div className="mt-2 flex gap-2">
             <button
               type="button"
@@ -205,14 +207,14 @@ export default function AiAssistItemCard(props: { item: AiAssistItemDTO; onChang
               onClick={() => apply(true)}
               className="rounded-full bg-amber-600 px-3 py-1 text-[11px] font-medium text-white hover:bg-amber-700 disabled:opacity-50"
             >
-              Apply anyway
+              {confirmReason === "approved_request" ? "Reopen and apply" : "Apply anyway"}
             </button>
             <button
               type="button"
-              onClick={() => setNeedsConfirm(false)}
+              onClick={() => setConfirmReason(null)}
               className="rounded-full border border-amber-300 px-3 py-1 text-[11px] font-medium text-amber-800 hover:bg-amber-100"
             >
-              Keep current plan
+              Keep current version
             </button>
           </div>
         </div>

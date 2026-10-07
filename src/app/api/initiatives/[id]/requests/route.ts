@@ -8,7 +8,7 @@ import { requestSchema } from "@/lib/requests/model";
 import { requestRecord, saveRequest, promoteRequest } from "@/lib/requests/service";
 
 const command = z.discriminatedUnion("action", [
-  z.object({ action: z.literal("save"), data: requestSchema, existing: z.object({ id: z.string().min(1), revision: z.number().int().positive() }).optional() }).strict(),
+  z.object({ action: z.literal("save"), data: requestSchema, existing: z.object({ id: z.string().min(1), revision: z.number().int().positive() }).optional(), changeReason: z.string().trim().max(500).optional() }).strict(),
   z.object({ action: z.literal("promote"), id: z.string().min(1), revision: z.number().int().positive() }).strict(),
 ]);
 
@@ -26,7 +26,7 @@ async function handler(request: Request, { params }: { params: Promise<{ id: str
   const parsed = command.safeParse(await request.json());
   if (!parsed.success) return jsonError(zodMessage(parsed.error), 422);
   const value = parsed.data;
-  const row = value.action === "save" ? await saveRequest(id, value.data, value.existing, { actorUserId: auth.user.id }) : await promoteRequest(id, value.id, value.revision);
+  const row = value.action === "save" ? await saveRequest(id, value.data, value.existing, { actorUserId: auth.user.id, changeReason: value.changeReason }) : await promoteRequest(id, value.id, value.revision, auth.user.id);
   return Response.json({ request: row });
 }
 export const GET = withApi(handler);

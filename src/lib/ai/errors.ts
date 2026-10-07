@@ -34,7 +34,7 @@ export class InsufficientContextError extends Error {}
 export class AiAssistApplyBlockedError extends Error {
   constructor(
     message: string,
-    public reason: "approved_baseline" | "locked_layer",
+    public reason: "approved_baseline" | "locked_layer" | "approved_request",
   ) {
     super(message);
   }

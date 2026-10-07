@@ -1,9 +1,15 @@
 import type { AiAssistItem, Prisma } from "@prisma/client";
 import { proposeStoryContentResultSchema, proposeDependencyCandidateSchema, refinementFindingProposalSchema } from "@/lib/validation/schemas";
+import { requirementReviewFindingSchema } from "@/lib/requests/reviewModel";
 
 /** Client edits are untrusted even when the original AI suggestion was valid. */
 export async function validateApplyTargets(tx: Prisma.TransactionClient, item: AiAssistItem, content: unknown) {
-  if (item.actionKey === "PROPOSE_STORY_CONTENT") {
+  if (item.actionKey === "REVIEW_REQUIREMENTS") {
+    const finding = requirementReviewFindingSchema.parse(content);
+    if (!await tx.planningRequest.findFirst({ where: { id: finding.requestId, initiativeId: item.initiativeId ?? "" }, select: { id: true } })) {
+      throw new Error("Requirement suggestion target is outside its initiative.");
+    }
+  } else if (item.actionKey === "PROPOSE_STORY_CONTENT") {
     if (item.targetType === "story_refinement_finding") {
       const parsed = refinementFindingProposalSchema.parse(content);
       if (parsed.storyArtifactLayerId !== item.targetId || !await tx.artifactLayer.findFirst({

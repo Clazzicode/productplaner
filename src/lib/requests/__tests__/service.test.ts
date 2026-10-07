@@ -1,12 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-const state = vi.hoisted(() => ({ rows: [] as Record<string, unknown>[], sources: [] as Record<string, unknown>[], auditFails: false, events: [] as string[], features: [] as Record<string, unknown>[], planApproved: false }));
+const state = vi.hoisted(() => ({ rows: [] as Record<string, unknown>[], sources: [] as Record<string, unknown>[], revisions: [] as Record<string, unknown>[], revisionFails: false, auditFails: false, events: [] as string[], features: [] as Record<string, unknown>[], planApproved: false }));
 vi.mock("@/lib/db", () => ({
   withTransaction: async (fn: () => Promise<unknown>) => {
-    const before = structuredClone(state.rows); const features = structuredClone(state.features); const sources = structuredClone(state.sources);
-    try { return await fn(); } catch (e) { state.rows = before; state.features = features; state.sources = sources; throw e; }
+    const before = structuredClone(state.rows); const features = structuredClone(state.features); const sources = structuredClone(state.sources); const revisions = structuredClone(state.revisions);
+    try { return await fn(); } catch (e) { state.rows = before; state.features = features; state.sources = sources; state.revisions = revisions; throw e; }
   },
   db: {
-    initiative: { findUnique: async () => ({ organizationId: "org-a", projectId: "project-a" }) },
+    initiative: { findUnique: async () => ({ organizationId: "org-a", projectId: "project-a" }), findUniqueOrThrow: async () => ({ organizationId: "org-a", projectId: "project-a" }) },
+    requestRevision: { create: async ({ data }: { data: Record<string, unknown> }) => { if (state.revisionFails) throw new Error("revision unavailable"); const row = { id: `revision-${state.revisions.length + 1}`, ...data }; state.revisions.push(row); return row; } },
     requestSourceRecord: { create: async ({ data }: { data: Record<string, unknown> }) => { const row = { id: `source-${state.sources.length + 1}`, ...data }; state.sources.push(row); return row; } },
     prototype: { findUnique: async () => ({ approvedAt: state.planApproved ? new Date() : null }) },
     intakeAnswerSet: { findUnique: async () => ({ id: "intake-a" }) },
@@ -19,7 +20,8 @@ vi.mock("@/lib/db", () => ({
       const row = { id: "request-1", ...data, revision: 1, capabilityId: data.capabilityId ?? null, sourceRecordId: data.sourceRecordId ?? null, updatedAt: new Date() }; state.rows.push(row); return row;
     },
     update: async ({ where, data }: { where: { id: string }; data: { data: unknown } }) => {
-      const row = state.rows.find(r => r.id === where.id)!; Object.assign(row, data, { revision: Number(row.revision) + 1 }); return row;
+      const index = state.rows.findIndex(r => r.id === where.id); const current = state.rows[index];
+      const row = { ...current, ...data, revision: Number(current.revision) + 1 }; state.rows[index] = row; return row;
     },
   } },
 }));
@@ -37,13 +39,17 @@ const input = () => ({ ...emptyRequest(), title: "Saved maps", requestor: "PO",
   assumptions: "Users are signed in", dependencies: "Authentication", risks: "Stale saved filters",
   stakeholders: "Product Owner and map users", supportingMaterials: "Customer notes", definitionOfSuccess: "A saved view restores in one click",
 });
-beforeEach(() => { state.rows = []; state.sources = []; state.auditFails = false; state.events = []; state.features = []; state.planApproved = false; });
+beforeEach(() => { state.rows = []; state.sources = []; state.revisions = []; state.revisionFails = false; state.auditFails = false; state.events = []; state.features = []; state.planApproved = false; });
 describe("saved PO workflow", () => {
   it("persists a request and its business audit together", async () => {
     const first = await saveRequest("init-a", input());
     expect(first.revision).toBe(1); expect(state.events).toEqual(["request.created"]);
     const second = await saveRequest("init-a", { ...input(), problem: "Users lose filters" }, { id: first.id, revision: 1 });
     expect(second.revision).toBe(2); expect(state.events).toEqual(["request.created", "request.updated"]);
+    expect(state.revisions).toMatchObject([
+      { fromRevision: 0, toRevision: 1, reason: "Request created" },
+      { fromRevision: 1, toRevision: 2, reason: "Manual request update" },
+    ]);
   });
   it("does not find a request through a foreign initiative", async () => {
     await saveRequest("init-b", input());
@@ -66,7 +72,7 @@ describe("saved PO workflow", () => {
     state.auditFails = true;
     const meeting = { ...input(), source: "meeting" as const, sourceReference: "PO review", meetingNotes: "Keep this source only when the request commits." };
     await expect(saveRequest("init-a", meeting, undefined, { actorUserId: "user-a" })).rejects.toThrow("audit unavailable");
-    expect(state.rows).toEqual([]); expect(state.sources).toEqual([]);
+    expect(state.rows).toEqual([]); expect(state.sources).toEqual([]); expect(state.revisions).toEqual([]);
   });
   it("creates a traceable bug from a reviewed spreadsheet row", async () => {
     const bug = { ...input(), title: "Map crashes", kind: "bug" as const, source: "spreadsheet" as const,
@@ -97,6 +103,12 @@ describe("saved PO workflow", () => {
     await expect(saveRequest("init-a", input())).rejects.toThrow("audit unavailable");
     expect(state.rows).toEqual([]);
   });
+  it("rolls back the request when immutable requirement history cannot be written", async () => {
+    state.revisionFails = true;
+    await expect(saveRequest("init-a", input(), undefined, { actorUserId: "user-a" })).rejects.toThrow("revision unavailable");
+    expect(state.rows).toEqual([]);
+    expect(state.revisions).toEqual([]);
+  });
   it("requires reopening an approved request before changing its meaning", async () => {
     const approved = { ...input(), problem: "Lost filters", requestedChange: "Save view", outcome: "Restore in one click", status: "approved" as const,
       priority: { ...input().priority, decision: "now" as const, reason: "Repeated customer need" } };
@@ -111,6 +123,7 @@ describe("saved PO workflow", () => {
     const linked = await promoteRequest("init-a", "request-1", 1);
     expect(linked.capabilityId).toBe("feature-a");
     expect(state.features).toHaveLength(1);
+    expect(state.revisions.at(-1)).toMatchObject({ fromRevision: 1, toRevision: 2, reason: "Created planning feature from approved request" });
     await expect(promoteRequest("init-a", "request-1", 2)).rejects.toThrow("already has");
   });
   it("rejects promotion of an unapproved request", async () => {
@@ -130,7 +143,7 @@ describe("saved PO workflow", () => {
       priority: { ...input().priority, decision: "now" as const, reason: "Customer need" } };
     await saveRequest("init-a", data); state.auditFails = true;
     await expect(promoteRequest("init-a", "request-1", 1)).rejects.toThrow("audit unavailable");
-    expect(state.features).toEqual([]); expect(state.rows[0].capabilityId).toBeNull();
+    expect(state.features).toEqual([]); expect(state.rows[0].capabilityId).toBeNull(); expect(state.revisions).toHaveLength(1);
   });
 
 });

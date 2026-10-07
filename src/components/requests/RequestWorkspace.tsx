@@ -1,10 +1,12 @@
 "use client";
 import { useState } from "react";
 import { emptyRequest, priorityScore, requestSchema, toRequestInput, type RequestInput, type RequestRecord } from "@/lib/requests/model";
+import AiAssistItemCard, { type AiAssistItemDTO } from "@/components/ai/AiAssistItemCard";
 import RequestEditor, { type RequestTab } from "./RequestEditor";
 
 const tabs: { id: RequestTab; label: string }[] = [{ id: "intake", label: "1 · Capture request" }, { id: "requirements", label: "2 · Clarify requirements" }, { id: "priority", label: "6 · Prioritize" }];
 interface SpreadsheetPreviewRow { rowNumber: number; sheetName: string; raw: Record<string, string>; request: RequestInput; warnings: string[] }
+interface RequestRevisionDTO { id: string; fromRevision: number; toRevision: number; reason: string; changedBy: string; changedFields: string[]; sourceAiAssistItemId: string | null; createdAt: string }
 export default function RequestWorkspace({ initiativeId, initialRequests, canEdit, demo = false }: {
   initiativeId: string; initialRequests: RequestRecord[]; canEdit: boolean; demo?: boolean;
 }) {
@@ -20,9 +22,49 @@ export default function RequestWorkspace({ initiativeId, initialRequests, canEdi
   const [dirty, setDirty] = useState(false);
   const [spreadsheet, setSpreadsheet] = useState<{ documentId: string; rows: SpreadsheetPreviewRow[] } | null>(null);
   const [selectedRows, setSelectedRows] = useState<Set<number>>(new Set());
+  const [reviewItems, setReviewItems] = useState<AiAssistItemDTO[]>([]);
+  const [history, setHistory] = useState<RequestRevisionDTO[]>([]);
+  async function loadRequirementData(requestId: string) {
+    if (demo) return;
+    const [reviewResponse, historyResponse] = await Promise.all([
+      fetch(`/api/initiatives/${initiativeId}/requests/${requestId}/review`),
+      fetch(`/api/initiatives/${initiativeId}/requests/${requestId}/history`),
+    ]);
+    const [reviewBody, historyBody] = await Promise.all([reviewResponse.json(), historyResponse.json()]);
+    if (!reviewResponse.ok) throw new Error(reviewBody.error ?? "Unable to load the requirement review.");
+    if (!historyResponse.ok) throw new Error(historyBody.error ?? "Unable to load requirement history.");
+    setReviewItems(reviewBody.items);
+    setHistory(historyBody.revisions);
+  }
   const open = (row: RequestRecord | null) => {
     setSelected(row); setDraft(row ? toRequestInput(row) : emptyRequest()); setDirty(false); setError(""); setMessage("");
+    setReviewItems([]); setHistory([]);
+    if (row && !demo) void loadRequirementData(row.id).catch((reason) => setError(reason instanceof Error ? reason.message : "Unable to load requirement details."));
   };
+  async function refreshSelected(requestId: string) {
+    const response = await fetch(`/api/initiatives/${initiativeId}/requests`);
+    const body = await response.json();
+    if (!response.ok) throw new Error(body.error ?? "Unable to refresh requests.");
+    const nextRequests = body.requests as RequestRecord[];
+    setRequests(nextRequests);
+    const nextSelected = nextRequests.find((row) => row.id === requestId) ?? null;
+    setSelected(nextSelected);
+    if (nextSelected) setDraft(toRequestInput(nextSelected));
+    setDirty(false);
+    await loadRequirementData(requestId);
+  }
+  async function reviewRequirements() {
+    if (!selected || demo || dirty) return;
+    setBusy(true); setError(""); setMessage("");
+    try {
+      const response = await fetch(`/api/initiatives/${initiativeId}/requests/${selected.id}/review`, { method: "POST" });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error ?? "Unable to review requirements.");
+      await loadRequirementData(selected.id);
+      setMessage(body.decision === "reuse" ? "The current requirement review is still valid." : body.decision === "flag_stale" ? "The previous review is out of date. Dismiss it before generating a replacement." : "ChatGPT review complete. Apply, edit, or dismiss each suggestion individually.");
+    } catch (reason) { setError(reason instanceof Error ? reason.message : "Unable to review requirements."); }
+    finally { setBusy(false); }
+  }
   async function submit(promote = false) {
     setError(""); setMessage("");
     const parsed = requestSchema.safeParse(draft);
@@ -113,6 +155,17 @@ export default function RequestWorkspace({ initiativeId, initialRequests, canEdi
             </div>
           </fieldset>
         </form>
+        {tab === "requirements" && selected && !demo && <div className="mt-6 space-y-5 border-t border-slate-200 pt-6">
+          <section className="rounded-xl border border-indigo-200 bg-indigo-50/50 p-4">
+            <div className="flex flex-wrap items-start justify-between gap-3"><div><h3 className="font-semibold text-slate-950">ChatGPT requirements review</h3><p className="mt-1 text-sm text-slate-600">Find focused follow-up questions, contradictions, missing business rules, risks, dependencies, and likely engineering questions. Nothing changes until you apply an individual suggestion.</p></div>
+              {canEdit && <button type="button" disabled={busy || dirty} onClick={() => void reviewRequirements()} className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-40">{busy ? "Reviewing…" : "Review with ChatGPT"}</button>}</div>
+            {dirty && <p className="mt-2 text-xs text-amber-700">Save or discard your edits before requesting a review.</p>}
+          </section>
+          {reviewItems.length > 0 && <section className="space-y-3"><h3 className="font-semibold">Review suggestions</h3>{reviewItems.map((item) => <AiAssistItemCard key={item.id} item={item} onChanged={() => { void refreshSelected(selected.id).catch((reason) => setError(reason instanceof Error ? reason.message : "Unable to refresh the request.")); }} />)}</section>}
+          <section className="rounded-xl border border-slate-200 p-4"><h3 className="font-semibold">Requirement history</h3><p className="mt-1 text-sm text-slate-500">Every saved version and applied ChatGPT suggestion is retained.</p>
+            <div className="mt-3 space-y-3">{history.map((revision) => <div key={revision.id} className="rounded-lg bg-slate-50 p-3 text-sm"><div className="flex flex-wrap justify-between gap-2"><strong>Revision {revision.toRevision}</strong><span className="text-slate-500">{new Date(revision.createdAt).toLocaleString()}</span></div><p className="mt-1">{revision.reason}</p><p className="mt-1 text-xs text-slate-500">By {revision.changedBy}{revision.sourceAiAssistItemId ? " · Approved ChatGPT suggestion" : ""}</p>{revision.changedFields.length > 0 && <p className="mt-1 text-xs text-slate-600">Changed: {revision.changedFields.map((field) => field.replaceAll(/([A-Z])/g, " $1").toLowerCase()).join(", ")}</p>}</div>)}{history.length === 0 && <p className="text-sm text-slate-500">No saved requirement versions yet.</p>}</div>
+          </section>
+        </div>}
         {!canEdit && <p className="mt-4 text-sm text-slate-500">You have view-only access to this initiative.</p>}
         {selected?.capabilityId && <p className="mt-4 rounded-lg bg-emerald-50 p-3 text-sm text-emerald-900">Linked to a planning feature. Further request edits do not automatically change that feature.</p>}
         {error && <p role="alert" className="mt-4 rounded-lg bg-red-50 p-3 text-sm text-red-800">{error}</p>}

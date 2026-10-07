@@ -89,6 +89,11 @@ export const AI_ASSIST_ACTION_COPY: Record<AiActionKey, AssistActionCopy> = {
     explanation:
       "Reviews your problem statement, target customer, and approved features for risks worth tracking. Nothing is added to your risk list until you review and apply a suggestion.",
   },
+  REVIEW_REQUIREMENTS: {
+    title: "Review request requirements",
+    explanation:
+      "Reviews one saved request for follow-up questions, contradictions, missing business rules, risks, dependencies, and likely engineering questions. Nothing changes until you apply an individual suggestion.",
+  },
   RECOMMEND_RELEASES: {
     title: "Recommend release grouping",
     explanation:

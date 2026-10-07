@@ -161,6 +161,20 @@ const AI_CAPABILITIES: AiCapabilityConfig[] = [
     outputType: "status_explanation",
     reusable: true,
   },
+  {
+    action: "REVIEW_REQUIREMENTS",
+    enabled: true,
+    maxOutputTokens: 3072,
+    userMonthlyLimit: 50,
+    organizationMonthlyLimit: 500,
+    description:
+      "Reviews one planning request for missing information, contradictions, business rules, risks, dependencies, and focused engineering questions. Every proposal requires explicit approval or dismissal.",
+    maxContextTokens: 5000,
+    requiredContextLayers: ["task"],
+    optionalContextLayers: ["initiative", "project"],
+    outputType: "requirement_review",
+    reusable: true,
+  },
 ];
 
 function toDbCreateData(c: AiCapabilityConfig) {

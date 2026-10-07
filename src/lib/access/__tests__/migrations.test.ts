@@ -135,6 +135,20 @@ describe.sequential("migration replay and real PostgreSQL RLS", () => {
     await expect(asUser(authA, () => pg.exec(`INSERT INTO "PlanningRequest" (id,"initiativeId",data,"updatedAt") VALUES ('request-bad','init-b','{}',now())`))).rejects.toThrow();
     await expect(asUser(authA, () => pg.exec(`UPDATE "PlanningRequest" SET "initiativeId"='init-b' WHERE id='request-a'`))).rejects.toThrow();
   });
+  it("isolates immutable requirement history and validates its tenant parent", async () => {
+    await asUser(authA, () => pg.exec(`
+      INSERT INTO "RequestRevision" (id,"organizationId","requestId","fromRevision","toRevision","nextData",reason,"changedByUserId")
+      VALUES ('request-revision-a','org-a','request-a',0,1,'{}','Request created','user-org-a')
+    `));
+    expect((await asUser(authB, () => pg.query(`SELECT id FROM "RequestRevision" WHERE id='request-revision-a'`))).rows).toEqual([]);
+    expect((await asUser(authA, () => pg.query(`UPDATE "RequestRevision" SET reason='Forged' WHERE id='request-revision-a' RETURNING id`))).rows).toEqual([]);
+    expect((await asUser(authA, () => pg.query(`DELETE FROM "RequestRevision" WHERE id='request-revision-a' RETURNING id`))).rows).toEqual([]);
+    expect((await asUser(authA, () => pg.query<{ reason: string }>(`SELECT reason FROM "RequestRevision" WHERE id='request-revision-a'`))).rows[0].reason).toBe("Request created");
+    await expect(asUser(authA, () => pg.exec(`
+      INSERT INTO "RequestRevision" (id,"organizationId","requestId","fromRevision","toRevision","nextData",reason)
+      VALUES ('request-revision-bad','org-b','request-a',1,2,'{}','Wrong tenant')
+    `))).rejects.toThrow();
+  });
   it("does not expose PO requests directly to the browser Data API", async () => {
     await pg.exec("BEGIN; SET LOCAL ROLE authenticated");
     try { await expect(pg.exec('SELECT * FROM "PlanningRequest"')).rejects.toThrow(); }

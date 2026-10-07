@@ -127,8 +127,8 @@ describe("applyAiAssistItem — dispatch completeness", () => {
 });
 
 describe("isApplicableThroughDispatcher", () => {
-  it("is true for the 4 dispatcher-handled actions", () => {
-    for (const key of ["PROPOSE_FEATURES", "PROPOSE_STORY_CONTENT", "PROPOSE_DEPENDENCIES", "PROPOSE_RISKS"]) {
+  it("is true for every dispatcher-handled action", () => {
+    for (const key of ["PROPOSE_FEATURES", "PROPOSE_STORY_CONTENT", "PROPOSE_DEPENDENCIES", "PROPOSE_RISKS", "REVIEW_REQUIREMENTS"]) {
       expect(isApplicableThroughDispatcher(key)).toBe(true);
     }
   });

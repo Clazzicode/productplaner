@@ -20,7 +20,8 @@ export type AiActionKey =
   | "PROPOSE_RISKS"
   | "RECOMMEND_RELEASES"
   | "RECOMMEND_SPRINTS"
-  | "RECOMMEND_STATUS";
+  | "RECOMMEND_STATUS"
+  | "REVIEW_REQUIREMENTS";
 
 export interface AiCapabilityConfig {
   action: AiActionKey;

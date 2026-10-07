@@ -54,6 +54,7 @@ model Organization {
   aiAssistItems           AiAssistItem[]
   refinementFindings      RefinementFinding[]
   requestSourceRecords    RequestSourceRecord[]
+  requestRevisions        RequestRevision[]
   auditEvents             AuditEvent[]
   planApprovals           PlanApproval[]
   createdAt               DateTime                 @default(now())
@@ -129,6 +130,7 @@ model User {
   refinementFindingsOwned RefinementFinding[] @relation("RefinementFindingOwner")
   refinementFindingsCreated RefinementFinding[] @relation("RefinementFindingCreatedBy")
   requestSourceRecordsCreated RequestSourceRecord[] @relation("RequestSourceRecordCreatedBy")
+  requestRevisionsCreated RequestRevision[] @relation("RequestRevisionChangedBy")
   createdAt              DateTime             @default(now())
 }
 
@@ -1194,6 +1196,7 @@ model AiAssistItem {
 
   usageEvents AiUsageEvent[]
   refinementFinding RefinementFinding?
+  requestRevision RequestRevision?
 
   @@index([initiativeId, actionKey, targetType, targetId, status])
   @@index([projectId, actionKey, status])
@@ -1236,12 +1239,35 @@ model PlanningRequest {
   dedupeKey String?
   sourceRecordId String?
   sourceRecord RequestSourceRecord? @relation(fields: [sourceRecordId], references: [id], onDelete: SetNull)
+  revisions RequestRevision[]
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   @@index([initiativeId, updatedAt])
   @@index([capabilityId])
   @@unique([initiativeId, dedupeKey])
   @@index([sourceRecordId])
+}
+
+model RequestRevision {
+  id String @id @default(cuid())
+  organizationId String
+  organization Organization @relation(fields: [organizationId], references: [id])
+  requestId String
+  request PlanningRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  fromRevision Int
+  toRevision Int
+  previousData Json?
+  nextData Json
+  reason String
+  changedByUserId String?
+  changedByUser User? @relation("RequestRevisionChangedBy", fields: [changedByUserId], references: [id], onDelete: SetNull)
+  sourceAiAssistItemId String? @unique
+  sourceAiAssistItem AiAssistItem? @relation(fields: [sourceAiAssistItemId], references: [id], onDelete: SetNull)
+  createdAt DateTime @default(now())
+
+  @@unique([requestId, toRevision])
+  @@index([organizationId, createdAt])
+  @@index([changedByUserId])
 }
 
 // Immutable evidence behind an imported or meeting-sourced planning request.
