@@ -21,6 +21,7 @@ import { POST as regenerate } from "@/app/api/initiatives/[id]/generate/route";
 import { POST as approve } from "@/app/api/initiatives/[id]/approve-plan/route";
 import { GET as requestsGet, POST as requestsSave } from "@/app/api/initiatives/[id]/requests/route";
 import { GET as backlogGet, POST as backlogSave } from "@/app/api/initiatives/[id]/backlog/route";
+import { POST as storyCreate } from "@/app/api/initiatives/[id]/stories/route";
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -42,6 +43,17 @@ describe("cross-organization API authorization independent of RLS", () => {
   it("cannot read or write another organization's feature backlog", async () => {
     expect((await backlogGet(request("GET"), { params: Promise.resolve({ id: "init-b" }) })).status).toBe(404);
     expect((await backlogSave(request("POST", {}), { params: Promise.resolve({ id: "init-b" }) })).status).toBe(404);
+    expect(mocks.write).not.toHaveBeenCalled();
+  });
+  it("cannot create a story in another organization's initiative", async () => {
+    const response = await storyCreate(request("POST", {
+      epicId: "epic-b",
+      title: "Injected story",
+      body: "As an attacker, I want foreign access, so that I can change another tenant.",
+      points: 3,
+      sourceType: "manual",
+    }), { params: Promise.resolve({ id: "init-b" }) });
+    expect(response.status).toBe(404);
     expect(mocks.write).not.toHaveBeenCalled();
   });
   it("rejects signed-out access to the request workflow", async () => {

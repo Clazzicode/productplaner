@@ -79,6 +79,25 @@ describe.sequential("migration replay and real PostgreSQL RLS", () => {
     const result = await asUser(authA, () => pg.query(`UPDATE "ArtifactLayer" SET title='Hacked' WHERE id='artifact-b' RETURNING id`));
     expect(result.rows).toEqual([]);
   });
+  it("isolates acceptance-criteria history and enforces story-source invariants", async () => {
+    await asUser(authA, () => pg.exec(`
+      INSERT INTO "ArtifactLayer" (id,"prototypeId",type,"parentId","order",title,body,"sourceType","externalRef","dedupeKey","updatedAt")
+      VALUES ('story-a','proto-a','story','artifact-a',1,'Story','As a user, I want a result, so that I get value.','jira','GP-8','feature:artifact-a:title:story',now());
+      INSERT INTO "ArtifactLayer" (id,"prototypeId",type,"parentId","order",title,body,"sourceType","approvedAt","updatedAt")
+      VALUES ('criterion-a','proto-a','acceptance_criterion','story-a',0,'Works','Given context, when action, then outcome.','manual',now(),now());
+      INSERT INTO "ArtifactRevision" (id,"artifactId",version,title,body,reason)
+      VALUES ('revision-a','criterion-a',1,'Works','Given context, when action, then outcome.','Approved');
+    `));
+    expect((await asUser(authB, () => pg.query(`SELECT id FROM "ArtifactRevision" WHERE id='revision-a'`))).rows).toEqual([]);
+    await expect(asUser(authA, () => pg.exec(`
+      INSERT INTO "ArtifactLayer" (id,"prototypeId",type,"order",title,body,"sourceType","updatedAt")
+      VALUES ('bad-jira','proto-a','story',2,'Missing key','Body','jira',now())
+    `))).rejects.toThrow();
+    await expect(asUser(authA, () => pg.exec(`
+      INSERT INTO "ArtifactLayer" (id,"prototypeId",type,"order",title,body,"sourceType","externalRef","dedupeKey","updatedAt")
+      VALUES ('duplicate-story','proto-a','story',3,'Duplicate','Body','jira','GP-9','feature:artifact-a:title:story',now())
+    `))).rejects.toThrow();
+  });
   it("rolls back a planning mutation when a required downstream write fails", async () => {
     await expect(asUser(authA, async () => {
       await pg.exec(`UPDATE "ArtifactLayer" SET title='Moved' WHERE id='artifact-a'`);

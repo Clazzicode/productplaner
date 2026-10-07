@@ -12,6 +12,7 @@ export default function EditableArtifact(props: {
   body: string;
   points?: number | null;
   titleClassName?: string;
+  approved?: boolean;
 }) {
   const router = useRouter();
   const [editing, setEditing] = useState(false);
@@ -20,12 +21,14 @@ export default function EditableArtifact(props: {
   const [points, setPoints] = useState<number | null>(props.points ?? null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [changeReason, setChangeReason] = useState("");
 
   const save = async () => {
     setBusy(true);
     setError(null);
     const payload: Record<string, unknown> = { title, body };
     if (props.points !== undefined && points !== null) payload.points = points;
+    if (props.approved && (title !== props.title || body !== props.body)) payload.changeReason = changeReason;
     const res = await apiFetch(`/api/artifacts/${props.artifactId}`, {
       method: "PATCH",
       body: payload,
@@ -66,6 +69,7 @@ export default function EditableArtifact(props: {
             />
           </label>
         )}
+        {props.approved && <label className="mt-2 block text-xs font-medium text-neutral-600">Reason for changing approved criteria<input value={changeReason} onChange={e => setChangeReason(e.target.value)} className="mt-1 w-full rounded-lg border bg-white px-3 py-2 text-sm" /></label>}
         {error && <p className="mt-2 text-xs text-red-600">{error}</p>}
         <div className="mt-3 flex justify-end gap-2">
           <button
@@ -79,7 +83,7 @@ export default function EditableArtifact(props: {
           >
             Cancel
           </button>
-          <ButtonLoader onClick={save} loading={busy} loadingLabel="Saving" disabled={title.trim().length < 3}>
+          <ButtonLoader onClick={save} loading={busy} loadingLabel="Saving" disabled={title.trim().length < 3 || Boolean(props.approved && (title !== props.title || body !== props.body) && !changeReason.trim())}>
             Save
           </ButtonLoader>
         </div>

@@ -23,10 +23,16 @@ function buildStubTx() {
     capabilityDependency: { create: vi.fn().mockResolvedValue({ id: "dep-1" }) },
     artifactLayer: {
       findUniqueOrThrow: vi.fn().mockResolvedValue({ prototypeId: "proto-1", prototype: { approvedAt: null } }),
+      findFirstOrThrow: vi.fn().mockImplementation(({ where }: { where: { type: string } }) =>
+        Promise.resolve(where.type === "feature"
+          ? { prototypeId: "proto-1", sourceCapabilityId: "cap-1", prototype: { approvedAt: null } }
+          : { id: "existing-1" })),
+      findFirst: vi.fn().mockResolvedValue(null),
       update: vi.fn().mockResolvedValue({}),
       create: vi.fn().mockResolvedValue({ id: "new-1" }),
       count: vi.fn().mockResolvedValue(0),
     },
+    artifactRevision: { count: vi.fn().mockResolvedValue(0), create: vi.fn().mockResolvedValue({}) },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } as any;
 }

@@ -146,7 +146,7 @@ export async function runProposeStoryContent(params: RunProposeStoryContentParam
   const { initiativeId } = feature.prototype;
   const { projectId, methodology: methodologyRaw } = feature.prototype.initiative;
   const methodology = resolveMethodology(methodologyRaw);
-  const system = `${PLATFORM_SYSTEM_PROMPT}\n\n${GLOBAL_PRODUCT_PLANNING_RULES}\n\n${METHODOLOGY_AI_GUIDANCE[methodology]}\n\nYou propose epic/story/acceptance-criterion TEXT only — never a point estimate, sprint assignment, or ordering. Reference existingArtifactLayerId for a node you're rewording; use null only when proposing a genuinely new epic/story/AC. Propose clearer, more specific titles/wording — grounded in the feature's actual description, not generic phrasing. You may also propose a new story or acceptance criterion this feature is missing.`;
+  const system = `${PLATFORM_SYSTEM_PROMPT}\n\n${GLOBAL_PRODUCT_PLANNING_RULES}\n\n${METHODOLOGY_AI_GUIDANCE[methodology]}\n\nPrepare this feature for engineering refinement. Scan every story and acceptance criterion for missing information, unclear scope, dependencies, contradictions, and outcomes that cannot be tested. In why, explain the readiness gaps and list focused questions engineers are likely to ask. Propose epic/story/acceptance-criterion TEXT only — never a point estimate, sprint assignment, or ordering. Reference existingArtifactLayerId for a node you're rewording; use null only when proposing a genuinely new epic/story/AC. Ground every suggestion in the feature's actual description. The Product Owner must review, apply, edit, or dismiss the proposal.`;
 
   const tree: TreeNode[] = feature.children.map((epic) => ({
     id: epic.id,
@@ -197,11 +197,11 @@ ${formatTreeForPrompt(tree)}`,
       {
         targetType: "feature",
         targetId: featureArtifactLayerId,
-        title: `Suggested wording for "${feature.title}"`,
+        title: `Refinement findings for "${feature.title}"`,
         synopsis: parsed.why,
         informationUsed: parsed.informationUsed,
         why: parsed.why,
-        impact: "Applying updates title/description text only — sizing, sprint assignment, and ordering are never changed.",
+        impact: "Applying updates story or acceptance-criterion wording only. The Product Owner can dismiss the findings; sizing, sprint assignment, and ordering are never changed.",
         assumptions: parsed.assumptions ?? [],
         sources: parsed.sources ?? [],
         rulesApplied: ["Never touches points, sprint assignment, or ordering — text only."],

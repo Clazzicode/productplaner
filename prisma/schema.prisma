@@ -721,11 +721,34 @@ model ArtifactLayer {
   sprintId           String? // stories only
   sprint             Sprint?         @relation(fields: [sprintId], references: [id], onDelete: SetNull)
   externalRef        String? // fake Jira key once "synced" (stub)
+  sourceType         String          @default("generated") // generated | manual | jira | ai | split
+  readinessStatus    String          @default("needs_refinement") // needs_refinement | ready_for_refinement | sprint_ready | blocked | split
+  dedupeKey          String?
+  approvedAt         DateTime? // acceptance criteria only
+  approvedByUserId   String?
+  revisions          ArtifactRevision[]
   createdAt          DateTime        @default(now())
   updatedAt          DateTime        @updatedAt
 
   @@index([prototypeId, type])
   @@index([parentId])
+  @@unique([prototypeId, type, dedupeKey])
+  @@unique([prototypeId, type, externalRef])
+}
+
+model ArtifactRevision {
+  id          String        @id @default(cuid())
+  artifactId  String
+  artifact    ArtifactLayer @relation(fields: [artifactId], references: [id], onDelete: Cascade)
+  version     Int
+  title       String
+  body        String
+  reason      String        @default("")
+  actorUserId String?
+  createdAt   DateTime      @default(now())
+
+  @@unique([artifactId, version])
+  @@index([artifactId, createdAt])
 }
 
 // Guided-activation restructure (docs/V2-... lifecycle work): `origin`

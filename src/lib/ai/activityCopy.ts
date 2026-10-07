@@ -75,9 +75,9 @@ export const AI_ASSIST_ACTION_COPY: Record<AiActionKey, AssistActionCopy> = {
       "Looks at your approved features, problem statement, and target customer to suggest features you may be missing. Nothing is added to your plan until you review and apply a suggestion.",
   },
   PROPOSE_STORY_CONTENT: {
-    title: "Suggest better story wording",
+    title: "Prepare stories for refinement",
     explanation:
-      "Reviews this feature's current epics, stories, and acceptance criteria and suggests clearer wording. Sizing, sprint assignment, and ordering are never touched — only titles and descriptions, and only if you apply the suggestion.",
+      "Scans this feature's stories and acceptance criteria for missing information, unclear scope, dependencies, contradictions, and likely engineering questions. You can apply, edit, or dismiss every finding.",
   },
   PROPOSE_DEPENDENCIES: {
     title: "Check for missing dependencies",

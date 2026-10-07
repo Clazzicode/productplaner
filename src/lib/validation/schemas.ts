@@ -248,10 +248,43 @@ export const artifactPatchSchema = z
     title: z.string().trim().min(3).optional(),
     body: z.string().optional(),
     points: z.number().int().min(1).max(21).optional(),
+    readinessStatus: z.enum(["needs_refinement", "ready_for_refinement", "sprint_ready", "blocked"]).optional(),
+    changeReason: z.string().trim().max(500).optional(),
   })
-  .refine((v) => v.title !== undefined || v.body !== undefined || v.points !== undefined, {
+  .refine((v) => v.title !== undefined || v.body !== undefined || v.points !== undefined || v.readinessStatus !== undefined, {
     message: "Nothing to update.",
   });
+
+export const storyCreateSchema = z.object({
+  epicId: z.string().min(1),
+  title: z.string().trim().min(3).max(160),
+  body: z.string().trim().min(1).max(8000),
+  points: z.number().int().min(1).max(21).nullable().default(null),
+  sourceType: z.enum(["manual", "jira"]).default("manual"),
+  externalRef: z.string().trim().max(120).nullable().default(null),
+}).superRefine((value, ctx) => {
+  if (value.sourceType === "jira" && !value.externalRef) ctx.addIssue({ code: "custom", path: ["externalRef"], message: "Add the Jira story key." });
+});
+
+export const storySplitSchema = z.object({
+  stories: z.array(z.object({
+    title: z.string().trim().min(3).max(160),
+    body: z.string().trim().min(1).max(8000),
+    points: z.number().int().min(1).max(21).nullable().default(null),
+  })).min(2).max(5),
+});
+
+export const acceptanceCriterionCreateSchema = z.object({
+  title: z.string().trim().min(3).max(160),
+  body: z.string().trim().min(3).max(4000),
+  sourceType: z.enum(["manual", "ai"]).default("manual"),
+});
+
+export const acceptanceCriteriaReorderSchema = z.object({
+  orderedIds: z.array(z.string().min(1)).min(1).max(30).refine(ids => new Set(ids).size === ids.length, "Criterion ids must be unique."),
+});
+
+export const acceptanceCriterionApproveSchema = z.object({ comment: z.string().trim().max(500).default("") });
 
 export const moveSprintSchema = z.object({
   sprintNumber: z.number().int().min(1),
