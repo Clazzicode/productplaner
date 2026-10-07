@@ -95,12 +95,12 @@ export const requestSchema = z.object({
 });
 
 export type RequestInput = z.infer<typeof requestSchema>;
-export type RequestRecord = RequestInput & { id: string; revision: number; capabilityId: string | null; sourceRecordId?: string | null; updatedAt: string };
+export type RequestRecord = RequestInput & { id: string; revision: number; capabilityId: string | null; sourceRecordId?: string | null; archivedAt?: string | null; updatedAt: string };
 
 /** Remove database/display metadata before strict request validation. */
 export function toRequestInput(record: RequestRecord): RequestInput {
   const input: Record<string, unknown> = { ...record };
-  for (const key of ["id", "revision", "capabilityId", "sourceRecordId", "updatedAt"]) delete input[key];
+  for (const key of ["id", "revision", "capabilityId", "sourceRecordId", "archivedAt", "updatedAt"]) delete input[key];
   return input as RequestInput;
 }
 
