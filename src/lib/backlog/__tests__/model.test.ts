@@ -17,7 +17,13 @@ describe("PO feature backlog", () => {
     expect(records.some(record => record.backlogStatus === "done")).toBe(false);
   });
   it("rejects unsupported lane and status values", () => {
-    expect(featureSchema.safeParse({ name: "Feature", description: "", backlogLane: "soon", backlogStatus: "done" }).success).toBe(false);
-    expect(featureSchema.safeParse({ name: "Feature", description: "", backlogLane: "now", backlogStatus: "maybe" }).success).toBe(false);
+    expect(featureSchema.safeParse({ name: "Feature", description: "", backlogLane: "soon", backlogStatus: "done", ownerUserId: null, isMvp: true, businessValue: "high", riskLevel: "low", dependsOnIds: [] }).success).toBe(false);
+    expect(featureSchema.safeParse({ name: "Feature", description: "", backlogLane: "now", backlogStatus: "maybe", ownerUserId: null, isMvp: true, businessValue: "high", riskLevel: "low", dependsOnIds: [] }).success).toBe(false);
+  });
+  it("accepts the complete feature-management record and rejects duplicate dependencies", () => {
+    const record = { name: "Feature", description: "Purpose", backlogLane: "now", backlogStatus: "planned",
+      ownerUserId: null, isMvp: true, businessValue: "high", riskLevel: "medium", dependsOnIds: ["feature-a"] };
+    expect(featureSchema.safeParse(record).success).toBe(true);
+    expect(featureSchema.safeParse({ ...record, dependsOnIds: ["feature-a", "feature-a"] }).success).toBe(false);
   });
 });
