@@ -8,7 +8,7 @@ import { requestSchema, type RequestInput, type RequestRecord } from "./model";
 
 export function requestRecord(row: PlanningRequest): RequestRecord {
   return { ...requestSchema.parse(row.data), id: row.id, revision: row.revision,
-    capabilityId: row.capabilityId, sourceRecordId: row.sourceRecordId, updatedAt: row.updatedAt.toISOString() };
+    capabilityId: row.capabilityId, sourceRecordId: row.sourceRecordId, archivedAt: row.archivedAt?.toISOString() ?? null, updatedAt: row.updatedAt.toISOString() };
 }
 
 export function requestDedupeKey(data: Pick<RequestInput, "kind" | "title" | "problem" | "requestedChange">): string {
