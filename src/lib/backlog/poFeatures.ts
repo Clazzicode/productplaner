@@ -34,6 +34,6 @@ export function poFeatureRecords(): FeatureRecord[] {
     return { id: `po-feature-${number}`, backlogKey: `PO-${String(number).padStart(2, "0")}`, name, description,
       backlogLane: review || building ? "now" : [8, 9].includes(number) ? "next" : "later",
       backlogStatus: review ? "ready_for_review" : building ? "in_progress" : "planned",
-      backlogRevision: 1, order: index };
+      backlogRevision: 1, order: index, ownerUserId: null, owner: null, isMvp: number <= 10,\n      businessValue: "medium", riskLevel: "medium", dependsOnIds: [], sourceRequests: [] };
   });
 }
