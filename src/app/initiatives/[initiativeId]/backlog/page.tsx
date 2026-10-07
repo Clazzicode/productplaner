@@ -13,16 +13,20 @@ export default async function BacklogPage({ params }: { params: Promise<{ initia
   const user = await requireCurrentUser();
   establishAuthContext(user.authUserId);
   const access = await requireInitiativeView(user, initiativeId);
-  const [initiative, features] = await Promise.all([
-    db.initiative.findUnique({ where: { id: initiativeId }, select: { name: true } }),
-    listFeatures(initiativeId),
-  ]);
+  const initiative = await db.initiative.findUnique({ where: { id: initiativeId }, select: { name: true, organizationId: true } });
   if (!initiative) notFound();
+  const [features, owners] = await Promise.all([
+    listFeatures(initiativeId),
+    db.user.findMany({
+      where: { status: "active", memberships: { some: { organizationId: initiative.organizationId, status: "active" } } },
+      select: { id: true, name: true, email: true }, orderBy: [{ name: "asc" }, { id: "asc" }],
+    }),
+  ]);
   return <ContainedLayout>
     <div className="mb-6 space-y-2"><Link href={`/initiatives/${initiativeId}/requests`} className="text-sm text-indigo-700">{initiative.name} / Requests & priorities</Link>
       <h1 className="text-3xl font-bold">Product feature backlog</h1>
-      <p className="text-slate-500">Create features, maintain their order and status, and organize the roadmap into Now, Next, and Later.</p>
+      <p className="text-slate-500">Maintain each feature’s purpose, owner, MVP scope, value, risk, dependencies, lifecycle, and originating request.</p>
     </div>
-    <BacklogWorkspace initiativeId={initiativeId} initialFeatures={features.map(featureRecord)} canEdit={access.level === "edit" || access.level === "owner"} />
+    <BacklogWorkspace initiativeId={initiativeId} initialFeatures={features.map(featureRecord)} owners={owners} canEdit={access.level === "edit" || access.level === "owner"} />
   </ContainedLayout>;
 }
