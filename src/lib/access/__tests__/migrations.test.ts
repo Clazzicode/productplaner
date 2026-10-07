@@ -87,8 +87,13 @@ describe.sequential("migration replay and real PostgreSQL RLS", () => {
       VALUES ('criterion-a','proto-a','acceptance_criterion','story-a',0,'Works','Given context, when action, then outcome.','manual',now(),now());
       INSERT INTO "ArtifactRevision" (id,"artifactId",version,title,body,reason)
       VALUES ('revision-a','criterion-a',1,'Works','Given context, when action, then outcome.','Approved');
+      INSERT INTO "RefinementFinding" (id,"organizationId","initiativeId","storyId","sourceType",category,title,detail,"createdByUserId","updatedAt")
+      VALUES ('finding-a','org-a','init-a','story-a','manual','engineering_question','Clarify failure behavior','What happens when the provider is unavailable?','user-org-a',now());
     `));
     expect((await asUser(authB, () => pg.query(`SELECT id FROM "ArtifactRevision" WHERE id='revision-a'`))).rows).toEqual([]);
+    expect((await asUser(authB, () => pg.query(`SELECT id FROM "RefinementFinding" WHERE id='finding-a'`))).rows).toEqual([]);
+    await asUser(authB, () => pg.exec(`UPDATE "RefinementFinding" SET title='Hacked' WHERE id='finding-a'`));
+    expect((await pg.query<{ title: string }>(`SELECT title FROM "RefinementFinding" WHERE id='finding-a'`)).rows[0].title).toBe("Clarify failure behavior");
     await expect(asUser(authA, () => pg.exec(`
       INSERT INTO "ArtifactLayer" (id,"prototypeId",type,"order",title,body,"sourceType","updatedAt")
       VALUES ('bad-jira','proto-a','story',2,'Missing key','Body','jira',now())

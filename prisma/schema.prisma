@@ -52,6 +52,7 @@ model Organization {
   aiRequestLocks          AiRequestLock[]
   aiJobs                  AiJob[]
   aiAssistItems           AiAssistItem[]
+  refinementFindings      RefinementFinding[]
   auditEvents             AuditEvent[]
   planApprovals           PlanApproval[]
   createdAt               DateTime                 @default(now())
@@ -124,6 +125,8 @@ model User {
   aiAssistItemsGenerated  AiAssistItem[] @relation("AiAssistItemGeneratedBy")
   aiAssistItemsApplied    AiAssistItem[] @relation("AiAssistItemAppliedBy")
   aiAssistItemsDismissed  AiAssistItem[] @relation("AiAssistItemDismissedBy")
+  refinementFindingsOwned RefinementFinding[] @relation("RefinementFindingOwner")
+  refinementFindingsCreated RefinementFinding[] @relation("RefinementFindingCreatedBy")
   createdAt              DateTime             @default(now())
 }
 
@@ -519,6 +522,7 @@ model Initiative {
   contextItems              ContextItem[]
   roadmapVersions           RoadmapVersion[]
   aiAssistItems             AiAssistItem[]
+  refinementFindings        RefinementFinding[]
   createdAt                 DateTime                 @default(now())
   updatedAt                 DateTime                 @updatedAt
 
@@ -727,6 +731,7 @@ model ArtifactLayer {
   approvedAt         DateTime? // acceptance criteria only
   approvedByUserId   String?
   revisions          ArtifactRevision[]
+  refinementFindings RefinementFinding[]
   createdAt          DateTime        @default(now())
   updatedAt          DateTime        @updatedAt
 
@@ -749,6 +754,38 @@ model ArtifactRevision {
 
   @@unique([artifactId, version])
   @@index([artifactId, createdAt])
+}
+
+// A durable Product Owner refinement observation or engineering question.
+// AI findings reach this table only after explicit Apply; dismissed AI
+// suggestions remain AiAssistItem history and never create a finding.
+model RefinementFinding {
+  id                   String         @id @default(cuid())
+  organizationId       String
+  organization         Organization   @relation(fields: [organizationId], references: [id])
+  initiativeId         String
+  initiative           Initiative     @relation(fields: [initiativeId], references: [id], onDelete: Cascade)
+  storyId              String
+  story                 ArtifactLayer @relation(fields: [storyId], references: [id], onDelete: Cascade)
+  sourceType           String         @default("manual") // manual | ai | deterministic
+  category             String // missing_information | engineering_question | contradiction | dependency | scope | acceptance_criteria | blocker | other
+  title                String
+  detail               String         @default("")
+  status               String         @default("open") // open | resolved | dismissed
+  ownerUserId          String?
+  ownerUser            User?          @relation("RefinementFindingOwner", fields: [ownerUserId], references: [id], onDelete: SetNull)
+  resolution           String         @default("")
+  sourceAiAssistItemId String?         @unique
+  sourceAiAssistItem   AiAssistItem?   @relation(fields: [sourceAiAssistItemId], references: [id], onDelete: SetNull)
+  createdByUserId      String?
+  createdByUser        User?           @relation("RefinementFindingCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  resolvedAt           DateTime?
+  createdAt            DateTime        @default(now())
+  updatedAt            DateTime        @updatedAt
+
+  @@index([organizationId, initiativeId, status])
+  @@index([storyId, status])
+  @@index([ownerUserId, status])
 }
 
 // Guided-activation restructure (docs/V2-... lifecycle work): `origin`
@@ -937,10 +974,10 @@ model PlanningWeightOverride {
 }
 
 // ---------- AI Foundation (docs/V2-AI-FOUNDATION.md) ----------
-// Server-side only: every call uses the server ANTHROPIC_API_KEY env var,
+// Server-side only: every call uses the server OPENAI_API_KEY env var,
 // never a value exposed to the client. The intake-document-import feature
-// (src/lib/intakeImport) used to call Anthropic directly with a per-user key
-// (User.anthropicApiKeyEncrypted) — that field is gone; import is now the
+// previously used a different provider with a per-user key. That retired
+// field is gone; import is now the
 // DOCUMENT_UNDERSTANDING action below, routed through the same gateway as
 // every other AI call.
 
@@ -990,7 +1027,7 @@ model AiUsageEvent {
   aiAssistItemId   String?
   aiAssistItem     AiAssistItem? @relation(fields: [aiAssistItemId], references: [id], onDelete: SetNull)
   action           String // AiActionKey
-  // Section 5 §22: "generation" (a real Anthropic call happened) vs "reuse"
+  // Section 5 §22: "generation" (a real OpenAI call happened) vs "reuse"
   // (the fingerprint reuse gate served an existing artifact — inputTokens/
   // outputTokens/estimatedCostUsd are 0). Distinct from `success`, which is
   // only meaningful for a real "generation" attempt.
@@ -1002,8 +1039,8 @@ model AiUsageEvent {
   success          Boolean
   inputTokens      Int           @default(0)
   outputTokens     Int           @default(0)
-  // Section 5 §20/§21: Anthropic prompt-caching token counts, from the
-  // response's usage.cache_creation_input_tokens/cache_read_input_tokens.
+  // Section 5 §20/§21: provider-neutral prompt-caching token counts. The
+  // OpenAI adapter maps its usage fields into these durable ledger columns.
   cacheCreationInputTokens Int   @default(0)
   cacheReadInputTokens     Int   @default(0)
   // Computed at record-time from src/lib/ai/pricing.ts's published per-model
@@ -1051,7 +1088,7 @@ model AiRequestLock {
 // `status` is the directive's internal-stage vocabulary — never surfaced
 // to the user directly; src/lib/ai/activityCopy.ts maps each value to
 // plain-language copy shown in the UI. Today's actions are single
-// synchronous Anthropic calls, so only a handful of these values are ever
+// synchronous OpenAI calls, so only a handful of these values are ever
 // real in practice; the fuller set (checking_gaps/waiting_for_user/
 // building_recommendation/saving_artifact) is reserved for the richer
 // multi-stage pipelines Phase 4/5 add later — foundation-scoped, not
@@ -1150,6 +1187,7 @@ model AiAssistItem {
   updatedAt DateTime @updatedAt
 
   usageEvents AiUsageEvent[]
+  refinementFinding RefinementFinding?
 
   @@index([initiativeId, actionKey, targetType, targetId, status])
   @@index([projectId, actionKey, status])

@@ -3,6 +3,7 @@ import { applyFeatureProposal } from "./applyFeatureProposal";
 import { applyContentProposal } from "./applyContentProposal";
 import { applyDependencyObservation } from "./applyDependencyObservation";
 import { applyRiskObservation } from "./applyRiskObservation";
+import { applyRefinementFinding } from "./applyRefinementFinding";
 
 export { AiAssistApplyBlockedError, DependencyAlreadyExistsError } from "@/lib/ai/errors";
 
@@ -45,6 +46,9 @@ export async function applyAiAssistItem(
     }
     case "PROPOSE_STORY_CONTENT": {
       if (!item.targetId) throw new Error("Story content proposal has no target feature.");
+      if (item.targetType === "story_refinement_finding") {
+        return applyRefinementFinding(tx, item, content);
+      }
       return applyContentProposal(tx, item.targetId, content as never, confirmApprovedImpact);
     }
     case "PROPOSE_DEPENDENCIES":

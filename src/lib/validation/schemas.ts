@@ -431,11 +431,38 @@ const proposedEpicSchema = z.object({
   body: z.string().trim().min(1),
   stories: z.array(proposedStorySchema).max(10).default([]),
 });
+export const refinementFindingCategorySchema = z.enum([
+  "missing_information",
+  "engineering_question",
+  "contradiction",
+  "dependency",
+  "scope",
+  "acceptance_criteria",
+  "blocker",
+  "other",
+]);
+export const refinementFindingProposalSchema = z.object({
+  storyArtifactLayerId: z.string().min(1),
+  category: refinementFindingCategorySchema,
+  title: z.string().trim().min(3).max(160),
+  detail: z.string().trim().min(3).max(2000),
+});
 export const proposeStoryContentResultSchema = z.object({
   epics: z.array(proposedEpicSchema).max(6),
+  findings: z.array(refinementFindingProposalSchema).max(30).default([]),
   ...assistExplainFields,
 });
 export type ProposeStoryContentResult = z.infer<typeof proposeStoryContentResultSchema>;
+
+export const refinementFindingUpdateSchema = z.object({
+  status: z.enum(["open", "resolved", "dismissed"]).optional(),
+  ownerUserId: z.string().min(1).nullable().optional(),
+  resolution: z.string().trim().max(2000).optional(),
+}).superRefine((value, ctx) => {
+  if (value.status === "resolved" && !value.resolution) {
+    ctx.addIssue({ code: "custom", path: ["resolution"], message: "Add a resolution before marking this finding resolved." });
+  }
+});
 
 export const proposeDependencyCandidateSchema = z.object({
   fromCapabilityId: z.string().min(1),

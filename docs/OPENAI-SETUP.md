@@ -59,7 +59,13 @@ sizes before increasing input budgets. Concurrent requests and retries can
 exceed an application budget check, so configure provider spend limits too.
 Transport failures without reported usage cannot be fully costed locally.
 
-## Activation checks still requiring a funded key
+## Activation acceptance checks
+
+Configuration status updated October 7, 2026: the server-side OpenAI key is
+configured locally and the selected continuous-use model is `gpt-6-luna`.
+The Product Owner reports that the deployment key is also configured. The
+checks below now validate real product behavior; they are not provider setup
+steps and the AI features are not demo stubs.
 
 1. Run an authenticated intake analysis in staging and verify the saved model
    and nonzero estimated cost, without modifying approved planning artifacts.

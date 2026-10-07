@@ -9,6 +9,8 @@ import {
   recommendSprintsResultSchema,
   recommendStatusResultSchema,
   proposeStoryContentResultSchema,
+  refinementFindingProposalSchema,
+  refinementFindingUpdateSchema,
 } from "@/lib/validation/schemas";
 
 describe("roadmapInsightResultSchema", () => {
@@ -87,6 +89,22 @@ describe("proposeStoryContentResultSchema", () => {
   it("has no points/sprintId/date field anywhere in the shape", () => {
     const raw = JSON.stringify(proposeStoryContentResultSchema.shape.epics);
     expect(raw).not.toMatch(/points|sprintId/);
+  });
+
+  it("accepts story-scoped structured findings and defaults older responses to none", () => {
+    expect(refinementFindingProposalSchema.parse({
+      storyArtifactLayerId: "story-1",
+      category: "engineering_question",
+      title: "Clarify failure behavior",
+      detail: "What happens if the provider is unavailable?",
+    }).storyArtifactLayerId).toBe("story-1");
+    const parsed = proposeStoryContentResultSchema.parse({ epics: [], why: "No gaps.", informationUsed: "Current tree." });
+    expect(parsed.findings).toEqual([]);
+  });
+
+  it("requires a resolution before a finding can be resolved", () => {
+    expect(() => refinementFindingUpdateSchema.parse({ status: "resolved", resolution: "" })).toThrow();
+    expect(() => refinementFindingUpdateSchema.parse({ status: "resolved", resolution: "Confirmed retry behavior." })).not.toThrow();
   });
 });
 
