@@ -26,7 +26,7 @@ export default function BacklogWorkspace({ initiativeId, initialFeatures, owners
   ), [features, search, showArchived]);
 
   useEffect(() => {
-    if (!editing || editing === "new" || demo) { setHistory([]); return; }
+    if (!editing || editing === "new" || demo) return;
     let active = true;
     fetch(`/api/initiatives/${initiativeId}/backlog/${editing.id}/history`)
       .then(async response => {
@@ -96,11 +96,11 @@ export default function BacklogWorkspace({ initiativeId, initialFeatures, owners
     </div>
     {feature.sourceRequests.length ? <p className="mt-3 text-xs text-slate-500">Origin: {feature.sourceRequests.map(source => source.title).join(", ")}</p> : null}
     {feature.dependsOnIds.length ? <p className="mt-1 text-xs text-slate-500">Dependencies: {feature.dependsOnIds.length}</p> : null}
-    <div className="mt-4 flex items-center justify-between gap-2">{extra ?? <span className="text-xs font-medium text-slate-500">{laneLabels[feature.backlogLane]}</span>}{canEdit && <button className="text-sm font-semibold text-indigo-700" onClick={() => setEditing(feature)}>Edit</button>}</div>
+    <div className="mt-4 flex items-center justify-between gap-2">{extra ?? <span className="text-xs font-medium text-slate-500">{laneLabels[feature.backlogLane]}</span>}{canEdit && <button className="text-sm font-semibold text-indigo-700" onClick={() => { setHistory([]); setEditing(feature); }}>Edit</button>}</div>
   </article>;
 
   return <div className="space-y-5">
-    <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-slate-50 p-3"><div className="flex flex-wrap gap-2">{tab("features", "Features")}{tab("backlog", "Backlog")}{tab("roadmap", "Now / Next / Later")}</div>{canEdit && <button onClick={() => setEditing("new")} className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white">+ Add feature</button>}</div>
+    <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-slate-50 p-3"><div className="flex flex-wrap gap-2">{tab("features", "Features")}{tab("backlog", "Backlog")}{tab("roadmap", "Now / Next / Later")}</div>{canEdit && <button onClick={() => { setHistory([]); setEditing("new"); }} className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white">+ Add feature</button>}</div>
     <div className="flex flex-wrap items-center gap-4">
       <label className="min-w-64 flex-1"><span className="sr-only">Search features</span><input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search features or owners…" className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3" /></label>
       <label className="flex items-center gap-2 text-sm font-medium"><input type="checkbox" checked={showArchived} onChange={e => setShowArchived(e.target.checked)} /> Show archived</label>

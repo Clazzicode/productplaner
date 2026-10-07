@@ -3,7 +3,7 @@ import { db } from "@/lib/db";
 import { auditInitiative } from "@/lib/audit";
 import { BusinessError } from "@/lib/businessError";
 import { withPlanningMutation } from "@/lib/generation/mutation";
-import { featureRecord, featureSchema, type FeatureHistoryRecord, type FeatureInput, type FeatureRecord } from "./model";
+import { featureRecord, featureSchema, type FeatureHistoryRecord, type FeatureInput } from "./model";
 
 const featureInclude = {
   owner: { select: { id: true, name: true, email: true } },
