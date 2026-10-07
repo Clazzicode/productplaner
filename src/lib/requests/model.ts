@@ -31,6 +31,7 @@ export const requestSchema = z.object({
   kind: z.enum(requestKinds),
   source: z.enum(requestSources).default("manual"),
   sourceReference: z.string().trim().max(500).default(""),
+  meetingNotes: z.string().trim().max(20_000).default(""),
   documentUse: z.enum(["", "extract_requirements", "identify_bugs", "summarize", "create_backlog_items", "other"]).default(""),
   requestor: z.string().trim().min(1, "Add the requestor.").max(160),
   problem: narrative,
@@ -71,6 +72,9 @@ export const requestSchema = z.object({
   if (data.source === "document" && !data.documentUse) {
     ctx.addIssue({ code: "custom", path: ["documentUse"], message: "Choose how the uploaded document should be used." });
   }
+  if (data.source === "meeting" && !data.meetingNotes) {
+    ctx.addIssue({ code: "custom", path: ["meetingNotes"], message: "Add the meeting notes used to create this request." });
+  }
   if (isBug) {
     if (!data.bug.affectedArea) ctx.addIssue({ code: "custom", path: ["bug", "affectedArea"], message: "Add the affected area for this bug." });
     if (!data.bug.observedBehavior) ctx.addIssue({ code: "custom", path: ["bug", "observedBehavior"], message: "Describe the observed behavior." });
@@ -91,12 +95,12 @@ export const requestSchema = z.object({
 });
 
 export type RequestInput = z.infer<typeof requestSchema>;
-export type RequestRecord = RequestInput & { id: string; revision: number; capabilityId: string | null; updatedAt: string };
+export type RequestRecord = RequestInput & { id: string; revision: number; capabilityId: string | null; sourceRecordId?: string | null; updatedAt: string };
 
 /** Remove database/display metadata before strict request validation. */
 export function toRequestInput(record: RequestRecord): RequestInput {
   const input: Record<string, unknown> = { ...record };
-  for (const key of ["id", "revision", "capabilityId", "updatedAt"]) delete input[key];
+  for (const key of ["id", "revision", "capabilityId", "sourceRecordId", "updatedAt"]) delete input[key];
   return input as RequestInput;
 }
 
@@ -161,7 +165,7 @@ export function priorityExplanation(priority: RequestInput["priority"]): string 
 
 export function emptyRequest(): RequestInput {
   return {
-    title: "", requirementsVersion: 2, kind: "new_feature", source: "manual", sourceReference: "", documentUse: "", requestor: "",
+    title: "", requirementsVersion: 2, kind: "new_feature", source: "manual", sourceReference: "", meetingNotes: "", documentUse: "", requestor: "",
     problem: "", requestedChange: "", outcome: "", userAffected: "", businessValueNarrative: "", businessRules: "",
     inScope: "", outOfScope: "", assumptions: "", dependencies: "", risks: "", stakeholders: "",
     supportingMaterials: "", definitionOfSuccess: "", readiness: "needs_clarification",

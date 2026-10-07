@@ -29,7 +29,7 @@ async function GETHandler(_request: Request, { params }: { params: Promise<{ id:
   const items = await db.contextItem.findMany({
     where: { documentId: id },
     orderBy: { createdAt: "asc" },
-    include: { conflictWithItem: true },
+    include: { conflictWithItem: true, requestSourceRecords: { select: { id: true } } },
   });
 
   const { display } = await loadCurrentContextValues({
@@ -57,7 +57,7 @@ async function GETHandler(_request: Request, { params }: { params: Promise<{ id:
       processingError: document.processingError,
       createdAt: document.createdAt,
     },
-    items,
+    items: items.map(({ requestSourceRecords, ...item }) => ({ ...item, requestCreated: requestSourceRecords.length > 0 })),
     gaps,
     readiness,
   });

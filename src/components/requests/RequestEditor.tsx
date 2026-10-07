@@ -64,6 +64,11 @@ export default function RequestEditor({ value, onChange, tab }: {
           <option value="create_backlog_items">Propose backlog items</option><option value="other">Other</option>
         </select>
       </label>}
+      {value.source === "meeting" && <label className="block text-sm font-medium">Meeting notes used for this request
+        <textarea className={inputClass} rows={6} maxLength={20000} value={value.meetingNotes}
+          placeholder="Paste the original meeting notes. They are preserved as immutable source evidence when the request is saved."
+          onChange={(e) => onChange({ ...value, meetingNotes: e.target.value })} />
+      </label>}
       {field("problem", "What problem needs solving?", true)}
       {field("requestedChange", "What change is requested?", true)}
       {field("outcome", "Requested outcome", true)}

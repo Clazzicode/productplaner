@@ -53,6 +53,7 @@ model Organization {
   aiJobs                  AiJob[]
   aiAssistItems           AiAssistItem[]
   refinementFindings      RefinementFinding[]
+  requestSourceRecords    RequestSourceRecord[]
   auditEvents             AuditEvent[]
   planApprovals           PlanApproval[]
   createdAt               DateTime                 @default(now())
@@ -127,6 +128,7 @@ model User {
   aiAssistItemsDismissed  AiAssistItem[] @relation("AiAssistItemDismissedBy")
   refinementFindingsOwned RefinementFinding[] @relation("RefinementFindingOwner")
   refinementFindingsCreated RefinementFinding[] @relation("RefinementFindingCreatedBy")
+  requestSourceRecordsCreated RequestSourceRecord[] @relation("RequestSourceRecordCreatedBy")
   createdAt              DateTime             @default(now())
 }
 
@@ -261,6 +263,7 @@ model Project {
   risks                Risk[]
   documents            Document[]
   contextItems         ContextItem[]
+  requestSourceRecords RequestSourceRecord[]
   aiJobs               AiJob[]
   aiAssistItems        AiAssistItem[]
   aiUsageEvents        AiUsageEvent[]
@@ -355,6 +358,7 @@ model Document {
   supersedesDocument   Document?     @relation("DocumentSupersedes", fields: [supersedesDocumentId], references: [id])
   supersededBy         Document[]    @relation("DocumentSupersedes")
   contextItems         ContextItem[]
+  requestSourceRecords RequestSourceRecord[]
   createdAt            DateTime      @default(now())
   updatedAt            DateTime      @updatedAt
 
@@ -403,6 +407,7 @@ model ContextItem {
   approvedByUserId  String?
   approvedByUser    User?         @relation("ContextItemApprovedBy", fields: [approvedByUserId], references: [id], onDelete: SetNull)
   approvedAt        DateTime?
+  requestSourceRecords RequestSourceRecord[]
   createdAt         DateTime      @default(now())
   updatedAt         DateTime      @updatedAt
 
@@ -523,6 +528,7 @@ model Initiative {
   roadmapVersions           RoadmapVersion[]
   aiAssistItems             AiAssistItem[]
   refinementFindings        RefinementFinding[]
+  requestSourceRecords      RequestSourceRecord[]
   createdAt                 DateTime                 @default(now())
   updatedAt                 DateTime                 @updatedAt
 
@@ -1227,8 +1233,42 @@ model PlanningRequest {
   revision Int @default(1)
   capabilityId String?
   capability Capability? @relation(fields: [capabilityId], references: [id], onDelete: SetNull)
+  dedupeKey String?
+  sourceRecordId String?
+  sourceRecord RequestSourceRecord? @relation(fields: [sourceRecordId], references: [id], onDelete: SetNull)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   @@index([initiativeId, updatedAt])
   @@index([capabilityId])
+  @@unique([initiativeId, dedupeKey])
+  @@index([sourceRecordId])
+}
+
+// Immutable evidence behind an imported or meeting-sourced planning request.
+model RequestSourceRecord {
+  id String @id @default(cuid())
+  organizationId String
+  organization Organization @relation(fields: [organizationId], references: [id])
+  projectId String
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  initiativeId String
+  initiative Initiative @relation(fields: [initiativeId], references: [id], onDelete: Cascade)
+  type String // spreadsheet_row | document_finding | meeting_note
+  label String
+  rawContent String
+  locator String?
+  fingerprint String
+  documentId String?
+  document Document? @relation(fields: [documentId], references: [id])
+  contextItemId String?
+  contextItem ContextItem? @relation(fields: [contextItemId], references: [id])
+  createdByUserId String
+  createdByUser User @relation("RequestSourceRecordCreatedBy", fields: [createdByUserId], references: [id])
+  requests PlanningRequest[]
+  createdAt DateTime @default(now())
+
+  @@unique([initiativeId, fingerprint])
+  @@index([documentId])
+  @@index([contextItemId])
+  @@index([createdByUserId])
 }

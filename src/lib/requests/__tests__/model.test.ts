@@ -47,6 +47,11 @@ describe("PO intake, requirements and priority", () => {
     expect(requestSchema.safeParse(complete).success).toBe(true);
     expect(requestSchema.safeParse({ ...complete, sourceReference: "" }).success).toBe(false);
   });
+  it("requires the original notes for meeting-sourced requests", () => {
+    const base = { ...emptyRequest(), title: "Release cadence", requestor: "Tiana", source: "meeting" as const, sourceReference: "PO review" };
+    expect(requestSchema.safeParse(base).success).toBe(false);
+    expect(requestSchema.safeParse({ ...base, meetingNotes: "Use monthly releases and show them on the roadmap." }).success).toBe(true);
+  });
   it("stores MoSCoW separately from roadmap placement", () => {
     const input = { ...emptyRequest(), title: "Request", requestor: "PO",
       priority: { ...emptyRequest().priority, moscow: "must" as const, decision: "later" as const, reason: "Required, but blocked by a dependency" } };

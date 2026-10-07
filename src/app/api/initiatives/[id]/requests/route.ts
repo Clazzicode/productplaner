@@ -26,7 +26,7 @@ async function handler(request: Request, { params }: { params: Promise<{ id: str
   const parsed = command.safeParse(await request.json());
   if (!parsed.success) return jsonError(zodMessage(parsed.error), 422);
   const value = parsed.data;
-  const row = value.action === "save" ? await saveRequest(id, value.data, value.existing) : await promoteRequest(id, value.id, value.revision);
+  const row = value.action === "save" ? await saveRequest(id, value.data, value.existing, { actorUserId: auth.user.id }) : await promoteRequest(id, value.id, value.revision);
   return Response.json({ request: row });
 }
 export const GET = withApi(handler);

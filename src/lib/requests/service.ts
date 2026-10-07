@@ -1,4 +1,5 @@
 import type { PlanningRequest, Prisma } from "@prisma/client";
+import { createHash } from "node:crypto";
 import { db, withTransaction } from "@/lib/db";
 import { auditInitiative } from "@/lib/audit";
 import { BusinessError } from "@/lib/businessError";
@@ -7,10 +8,24 @@ import { requestSchema, type RequestInput, type RequestRecord } from "./model";
 
 export function requestRecord(row: PlanningRequest): RequestRecord {
   return { ...requestSchema.parse(row.data), id: row.id, revision: row.revision,
-    capabilityId: row.capabilityId, updatedAt: row.updatedAt.toISOString() };
+    capabilityId: row.capabilityId, sourceRecordId: row.sourceRecordId, updatedAt: row.updatedAt.toISOString() };
 }
 
-export async function saveRequest(initiativeId: string, input: RequestInput, existing?: { id: string; revision: number }) {
+export function requestDedupeKey(data: Pick<RequestInput, "kind" | "title" | "problem" | "requestedChange">): string {
+  const normalized = [data.kind, data.title, data.problem, data.requestedChange]
+    .map((value) => value.trim().toLowerCase().replace(/\s+/g, " ")).join("|");
+  return createHash("sha256").update(normalized).digest("hex");
+}
+
+export function sourceFingerprint(value: string): string {
+  return createHash("sha256").update(value.trim().replace(/\r\n/g, "\n")).digest("hex");
+}
+
+export async function saveRequest(initiativeId: string, input: RequestInput, existing?: { id: string; revision: number }, options?: {
+  actorUserId?: string;
+  linkedCapabilityId?: string;
+  source?: { type: "spreadsheet_row" | "document_finding"; label: string; rawContent: string; locator?: string; documentId?: string; contextItemId?: string };
+}) {
   const data = requestSchema.parse(input);
   return withTransaction(async () => {
     const previous = existing ? await db.planningRequest.findFirst({ where: { id: existing.id, initiativeId } }) : null;
@@ -18,6 +33,9 @@ export async function saveRequest(initiativeId: string, input: RequestInput, exi
     if (previous && previous.revision !== existing!.revision) throw new BusinessError("This request changed. Reload before saving your edits.");
     if (previous) {
       const old = requestSchema.parse(previous.data);
+      if (previous.sourceRecordId && (old.source !== data.source || old.sourceReference !== data.sourceReference || old.meetingNotes !== data.meetingNotes)) {
+        throw new BusinessError("The original source is immutable. Create a new request to use different source evidence.");
+      }
       // An approved request cannot silently retain approval after its meaning changes.
       const oldFields = { ...old, status: null };
       const newFields = { ...data, status: null };
@@ -25,10 +43,28 @@ export async function saveRequest(initiativeId: string, input: RequestInput, exi
         throw new BusinessError("Reopen this request for clarification before changing an approved decision.");
       }
     }
+    const dedupeKey = requestDedupeKey(data);
+    const duplicate = await db.planningRequest.findFirst({ where: { initiativeId, dedupeKey, ...(previous ? { id: { not: previous.id } } : {}) } });
+    if (duplicate) throw new BusinessError(`A matching request already exists: ${requestSchema.parse(duplicate.data).title}.`, 409);
+    let sourceRecordId = previous?.sourceRecordId ?? null;
+    if (!previous && (options?.source || data.source === "meeting")) {
+      if (!options?.actorUserId) throw new BusinessError("The source author is required.");
+      const initiative = await db.initiative.findUnique({ where: { id: initiativeId }, select: { organizationId: true, projectId: true } });
+      if (!initiative) throw new BusinessError("Initiative not found.", 404);
+      const source: { type: "spreadsheet_row" | "document_finding" | "meeting_note"; label: string; rawContent: string; locator?: string; documentId?: string; contextItemId?: string } =
+        options?.source ?? { type: "meeting_note", label: data.sourceReference, rawContent: data.meetingNotes };
+      const fingerprint = sourceFingerprint(`${source.type}|${source.documentId ?? ""}|${source.contextItemId ?? ""}|${source.locator ?? ""}|${source.rawContent}`);
+      const sourceRecord = await db.requestSourceRecord.create({ data: {
+        organizationId: initiative.organizationId, projectId: initiative.projectId, initiativeId,
+        type: source.type, label: source.label, rawContent: source.rawContent, locator: source.locator,
+        fingerprint, documentId: source.documentId, contextItemId: source.contextItemId, createdByUserId: options.actorUserId,
+      } });
+      sourceRecordId = sourceRecord.id;
+    }
     const row = previous
       ? await db.planningRequest.update({ where: { id: previous.id, initiativeId, revision: existing!.revision },
-          data: { data: data as Prisma.InputJsonObject, revision: { increment: 1 } } })
-      : await db.planningRequest.create({ data: { initiativeId, data: data as Prisma.InputJsonObject } });
+          data: { data: data as Prisma.InputJsonObject, dedupeKey, revision: { increment: 1 } } })
+      : await db.planningRequest.create({ data: { initiativeId, data: data as Prisma.InputJsonObject, dedupeKey, sourceRecordId, capabilityId: options?.linkedCapabilityId } });
     await auditInitiative(initiativeId, previous ? "request.updated" : "request.created", {
       requestId: row.id, revision: row.revision, status: data.status, decision: data.priority.decision,
       previousStatus: previous ? requestSchema.parse(previous.data).status : null,

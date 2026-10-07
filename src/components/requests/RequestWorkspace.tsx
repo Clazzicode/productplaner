@@ -4,6 +4,7 @@ import { emptyRequest, priorityScore, requestSchema, toRequestInput, type Reques
 import RequestEditor, { type RequestTab } from "./RequestEditor";
 
 const tabs: { id: RequestTab; label: string }[] = [{ id: "intake", label: "1 · Capture request" }, { id: "requirements", label: "2 · Clarify requirements" }, { id: "priority", label: "6 · Prioritize" }];
+interface SpreadsheetPreviewRow { rowNumber: number; sheetName: string; raw: Record<string, string>; request: RequestInput; warnings: string[] }
 export default function RequestWorkspace({ initiativeId, initialRequests, canEdit, demo = false }: {
   initiativeId: string; initialRequests: RequestRecord[]; canEdit: boolean; demo?: boolean;
 }) {
@@ -17,6 +18,8 @@ export default function RequestWorkspace({ initiativeId, initialRequests, canEdi
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [dirty, setDirty] = useState(false);
+  const [spreadsheet, setSpreadsheet] = useState<{ documentId: string; rows: SpreadsheetPreviewRow[] } | null>(null);
+  const [selectedRows, setSelectedRows] = useState<Set<number>>(new Set());
   const open = (row: RequestRecord | null) => {
     setSelected(row); setDraft(row ? toRequestInput(row) : emptyRequest()); setDirty(false); setError(""); setMessage("");
   };
@@ -45,6 +48,32 @@ export default function RequestWorkspace({ initiativeId, initialRequests, canEdi
     } catch (err) { setError(err instanceof Error ? err.message : "Unable to save."); }
     finally { setBusy(false); }
   }
+  async function previewSpreadsheet(file: File) {
+    setBusy(true); setError(""); setMessage("");
+    try {
+      const form = new FormData(); form.append("file", file);
+      const response = await fetch(`/api/initiatives/${initiativeId}/requests/spreadsheet`, { method: "POST", body: form });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error ?? "Unable to read that spreadsheet.");
+      const rows = body.rows as SpreadsheetPreviewRow[];
+      setSpreadsheet({ documentId: body.documentId, rows });
+      setSelectedRows(new Set(rows.map((row, index) => requestSchema.safeParse(row.request).success ? index : -1).filter((index) => index >= 0)));
+    } catch (err) { setError(err instanceof Error ? err.message : "Unable to read that spreadsheet."); }
+    finally { setBusy(false); }
+  }
+  async function importSpreadsheet() {
+    if (!spreadsheet || selectedRows.size === 0) return;
+    setBusy(true); setError("");
+    try {
+      const rows = spreadsheet.rows.filter((_, index) => selectedRows.has(index));
+      const response = await fetch(`/api/initiatives/${initiativeId}/requests/spreadsheet`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "import", documentId: spreadsheet.documentId, rows }) });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error ?? "Unable to import those rows.");
+      setRequests((items) => [...body.requests, ...items]); setSpreadsheet(null); setSelectedRows(new Set());
+      setMessage(`${body.requests.length} spreadsheet request${body.requests.length === 1 ? "" : "s"} imported with source traceability.`);
+    } catch (err) { setError(err instanceof Error ? err.message : "Unable to import those rows."); }
+    finally { setBusy(false); }
+  }
   const visible = requests.filter(r => `${r.title} ${r.requestor} ${r.kind} ${r.source} ${r.sourceReference}`.toLowerCase().includes(search.toLowerCase()) && (filter === "all" || r.priority.decision === filter))
     .sort((a, b) => priorityScore(b.priority) - priorityScore(a.priority) || a.title.localeCompare(b.title));
   return <div className="space-y-6 text-slate-900">
@@ -52,6 +81,14 @@ export default function RequestWorkspace({ initiativeId, initialRequests, canEdi
     <div className="grid gap-3 sm:grid-cols-3">{[
       ["Requests captured", requests.length], ["Open questions", requests.reduce((n, r) => n + r.questions.filter(q => !q.answer.trim()).length, 0)], ["PO decisions recorded", requests.filter(r => r.priority.decision !== "untriaged").length],
     ].map(([label, count]) => <div key={label} className="rounded-xl border border-slate-200 bg-white p-4"><p className="text-sm text-slate-500">{label}</p><p className="mt-1 text-2xl font-bold">{count}</p></div>)}</div>
+    {!demo && canEdit && <section className="rounded-2xl border border-slate-200 bg-white p-5">
+      <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="font-semibold">Import request spreadsheet</h2><p className="text-sm text-slate-500">Preview CSV, XLSX, or ODS rows before creating requests. The original file and each imported row are retained as source evidence.</p></div>
+        <label className="cursor-pointer rounded-lg border border-indigo-300 px-4 py-2 text-sm font-medium text-indigo-700">Choose spreadsheet<input type="file" accept=".csv,.xlsx,.ods" className="sr-only" disabled={busy} onChange={(event) => { const file = event.target.files?.[0]; if (file) void previewSpreadsheet(file); event.currentTarget.value = ""; }} /></label></div>
+      {spreadsheet && <div className="mt-4 space-y-3"><div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead><tr className="border-b"><th className="p-2">Import</th><th className="p-2">Row</th><th className="p-2">Title</th><th className="p-2">Type</th><th className="p-2">Review</th></tr></thead><tbody>{spreadsheet.rows.map((row, index) => {
+        const valid = requestSchema.safeParse(row.request).success;
+        return <tr key={`${row.sheetName}-${row.rowNumber}`} className="border-b align-top"><td className="p-2"><input type="checkbox" disabled={!valid} checked={selectedRows.has(index)} onChange={() => setSelectedRows((current) => { const next = new Set(current); if (next.has(index)) next.delete(index); else next.add(index); return next; })} aria-label={`Import row ${row.rowNumber}`} /></td><td className="p-2">{row.sheetName} · {row.rowNumber}</td><td className="p-2 font-medium">{row.request.title || "Missing title"}</td><td className="p-2 capitalize">{row.request.kind.replaceAll("_", " ")}</td><td className={`p-2 ${valid ? "text-amber-700" : "text-red-700"}`}>{valid ? row.warnings.join(", ") || "Ready" : "Fix required fields in the spreadsheet and upload again"}</td></tr>;
+      })}</tbody></table></div><div className="flex gap-3"><button type="button" disabled={busy || selectedRows.size === 0} onClick={() => void importSpreadsheet()} className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-40">{busy ? "Importing…" : `Import ${selectedRows.size} selected`}</button><button type="button" onClick={() => { setSpreadsheet(null); setSelectedRows(new Set()); }} className="rounded-lg border border-slate-300 px-4 py-2 text-sm">Cancel</button></div></div>}
+    </section>}
     <div className="grid items-start gap-6 lg:grid-cols-[340px_minmax(0,1fr)]">
       <aside className="space-y-4 rounded-2xl border border-slate-200 bg-white p-5">
         <div className="flex items-center justify-between"><h2 className="text-lg font-semibold">Request backlog</h2><button className="rounded-lg bg-indigo-600 px-3 py-2 text-sm text-white disabled:opacity-40" disabled={!canEdit || busy || dirty} onClick={() => { open(null); setTab("intake"); }}>New request</button></div>
