@@ -196,20 +196,6 @@ export default function StoryWorkflowControls({
               >
                 ↓
               </button>
-              {!criterion.approved && (
-                <button
-                  type="button"
-                  className="font-semibold text-emerald-700"
-                  onClick={() =>
-                    act(
-                      `/api/initiatives/${initiativeId}/criteria/${criterion.id}/approve`,
-                      { comment: "Approved during story review" },
-                    )
-                  }
-                >
-                  Approve
-                </button>
-              )}
             </span>
           </div>
         ))}
