@@ -89,6 +89,11 @@ export const AI_ASSIST_ACTION_COPY: Record<AiActionKey, AssistActionCopy> = {
     explanation:
       "Reviews your problem statement, target customer, and approved features for risks worth tracking. Nothing is added to your risk list until you review and apply a suggestion.",
   },
+  RECOMMEND_PRIORITY: {
+    title: "Suggest priority",
+    explanation:
+      "Reviews one backlog item and proposes explainable factors, MoSCoW necessity, and placement. It cannot change priority until an owner or administrator applies the suggestion.",
+  },
   REVIEW_REQUIREMENTS: {
     title: "Review request requirements",
     explanation:
