@@ -55,6 +55,7 @@ model Organization {
   refinementFindings      RefinementFinding[]
   requestSourceRecords    RequestSourceRecord[]
   requestRevisions        RequestRevision[]
+  priorityDecisions       PriorityDecision[]
   auditEvents             AuditEvent[]
   planApprovals           PlanApproval[]
   createdAt               DateTime                 @default(now())
@@ -132,6 +133,7 @@ model User {
   refinementFindingsCreated RefinementFinding[] @relation("RefinementFindingCreatedBy")
   requestSourceRecordsCreated RequestSourceRecord[] @relation("RequestSourceRecordCreatedBy")
   requestRevisionsCreated RequestRevision[] @relation("RequestRevisionChangedBy")
+  priorityDecisionsMade   PriorityDecision[] @relation("PriorityDecisionChangedBy")
   createdAt              DateTime             @default(now())
 }
 
@@ -532,6 +534,7 @@ model Initiative {
   aiAssistItems             AiAssistItem[]
   refinementFindings        RefinementFinding[]
   requestSourceRecords      RequestSourceRecord[]
+  priorityDecisions         PriorityDecision[]
   createdAt                 DateTime                 @default(now())
   updatedAt                 DateTime                 @updatedAt
 
@@ -1274,6 +1277,34 @@ model RequestRevision {
 
   @@unique([requestId, toRevision])
   @@index([organizationId, createdAt])
+  @@index([changedByUserId])
+}
+
+model PriorityDecision {
+  id                     String       @id @default(cuid())
+  organizationId         String
+  organization           Organization @relation(fields: [organizationId], references: [id])
+  initiativeId           String
+  initiative             Initiative   @relation(fields: [initiativeId], references: [id], onDelete: Cascade)
+  entityType             String // request | feature | story
+  entityId               String
+  revision               Int
+  score                  Int
+  dependencyAdjustedScore Int
+  moscow                 String
+  roadmapLane            String
+  reason                 String
+  source                 String       @default("manual") // manual | ai
+  factors                Json
+  changedByUserId        String
+  changedByUser          User         @relation("PriorityDecisionChangedBy", fields: [changedByUserId], references: [id])
+  recommendationItemId   String?
+  createdAt              DateTime     @default(now())
+
+  @@unique([entityType, entityId, revision])
+  @@index([initiativeId, createdAt])
+  @@index([organizationId, createdAt])
+  @@index([entityType, entityId, createdAt])
   @@index([changedByUserId])
 }
 
