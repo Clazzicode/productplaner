@@ -1,12 +1,12 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import EditableArtifact from "@/components/workspace/EditableArtifact";
+import AcceptanceCriterionEditor from "@/components/workspace/AcceptanceCriterionEditor";
 import StoryDetailsEditor from "@/components/workspace/StoryDetailsEditor";
 import StoryWorkflowControls from "@/components/workspace/StoryWorkflowControls";
 import TraceBadge from "@/components/workspace/TraceBadge";
 import { requireCurrentUser } from "@/lib/auth/session";
 import { db, establishAuthContext } from "@/lib/db";
-import { listStoryHistory, storyReadiness } from "@/lib/stories/service";
+import {\n  acceptanceCriterionAdequacy,\n  listAcceptanceCriterionHistory,\n  listStoryHistory,\n  storyReadiness,\n} from "@/lib/stories/service";
 import { traceEntriesFor } from "@/lib/trace";
 import { loadCostContext, loadWorkspace } from "@/lib/workspace";
 
@@ -44,14 +44,14 @@ export default async function StoryPage({ params }: {
     }),
     listStoryHistory(initiativeId, story.id),
   ]);
-  const cap = story.sourceCapabilityId ? ws.capViewById.get(story.sourceCapabilityId) : null;
+  const criterionHistoryEntries = await Promise.all(\n    story.children.map(async (criterion) => [\n      criterion.id,\n      await listAcceptanceCriterionHistory(initiativeId, criterion.id),\n    ] as const),\n  );\n  const criterionHistory = new Map(criterionHistoryEntries);\n  const activeCriteria = story.children.filter((criterion) => !criterion.archivedAt);\n  const cap = story.sourceCapabilityId ? ws.capViewById.get(story.sourceCapabilityId) : null;
   const storyCost = (story.points ?? 1) * cost.model.costPerStoryPoint;
   const readiness = storyReadiness({
     title: story.title,
     body: story.body,
     points: story.points,
     readinessStatus: story.readinessStatus,
-    criteria: story.children,
+    criteria: activeCriteria,
   });
   const archived = Boolean(story.archivedAt);
 
@@ -117,7 +117,7 @@ export default async function StoryPage({ params }: {
           storyId={story.id}
           backlogRevision={story.backlogRevision}
           readinessStatus={story.readinessStatus}
-          criteria={story.children.map((criterion) => ({
+          criteria={activeCriteria.map((criterion) => ({
             id: criterion.id,
             title: criterion.title,
             approved: Boolean(criterion.approvedAt),
@@ -138,19 +138,27 @@ export default async function StoryPage({ params }: {
                     <p className="mt-1 text-sm text-neutral-600">{criterion.body}</p>
                   </>
                 ) : (
-                  <EditableArtifact artifactId={criterion.id} title={criterion.title} body={criterion.body} titleClassName="text-sm font-semibold" approved={Boolean(criterion.approvedAt)} />
+                  <AcceptanceCriterionEditor
+                    initiativeId={initiativeId}
+                    criterion={{
+                      id: criterion.id,
+                      title: criterion.title,
+                      body: criterion.body,
+                      backlogRevision: criterion.backlogRevision,
+                      approved: Boolean(criterion.approvedAt),
+                      archived: Boolean(criterion.archivedAt),
+                    }}
+                    adequacyGaps={acceptanceCriterionAdequacy(criterion).gaps}
+                    history={criterionHistory.get(criterion.id) ?? []}
+                  />
                 )}
               </div>
-              <TraceBadge note={criterion.traceNote} entries={traceEntriesFor(criterion.traceAnswerKeys, ws.intakeView, cap)} />
+              <div className="flex shrink-0 items-center gap-2">
+                {criterion.archivedAt && <span className="rounded bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800">Archived</span>}
+                {criterion.approvedAt && <span className="rounded bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-800">Approved</span>}
+                <TraceBadge note={criterion.traceNote} entries={traceEntriesFor(criterion.traceAnswerKeys, ws.intakeView, cap)} />
+              </div>
             </div>
-            {criterion.revisions.length > 0 && (
-              <details className="mt-3 text-xs text-neutral-500">
-                <summary>Approval history ({criterion.revisions.length})</summary>
-                <ul className="mt-2 space-y-1">
-                  {criterion.revisions.map((revision) => <li key={revision.id}>Version {revision.version} · {revision.reason} · {revision.createdAt.toLocaleDateString()}</li>)}
-                </ul>
-              </details>
-            )}
           </div>
         ))}
       </div>
