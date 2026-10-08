@@ -26,19 +26,23 @@ export function storyReadiness(input: {
   body: string;
   points: number | null;
   readinessStatus: string;
-  criteria: { body: string }[];
+  criteria: { title?: string; body: string }[];
 }) {
   const gaps: string[] = [];
   if (!/^as an? .+, i want .+, so that .+/i.test(input.body)) gaps.push("Use a clear As a / I want / so that outcome.");
   if (input.points == null) gaps.push("Add a story-point estimate.");
   if (input.criteria.length < 2) gaps.push("Add at least two acceptance criteria.");
-  if (input.criteria.some((criterion) => {
-    const outcome = criterion.body.trim().toLocaleLowerCase();
-    const when = outcome.indexOf(" when ");
-    const then = outcome.indexOf(" then", when + 1);
-    return !outcome.startsWith("given ") || when < 0 || then < 0;
-  })) {
-    gaps.push("Write each criterion as a testable Given / When / Then outcome.");
+  if (input.criteria.some((criterion) =>
+    !acceptanceCriterionAdequacy({
+      title: criterion.title ?? "Acceptance criterion",
+      body: criterion.body,
+    }).adequate
+  )) {
+    gaps.push("Make each acceptance criterion specific, testable, and observable.");
+  }
+  const uniqueCriteria = new Set(input.criteria.map((criterion) => normalized(criterion.body)));
+  if (uniqueCriteria.size !== input.criteria.length) {
+    gaps.push("Remove duplicate acceptance criteria.");
   }
   if (input.readinessStatus === "blocked") gaps.push("Resolve the recorded blocker.");
   return { ready: gaps.length === 0, gaps };
