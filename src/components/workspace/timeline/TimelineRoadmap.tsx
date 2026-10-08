@@ -96,6 +96,7 @@ export default function TimelineRoadmap(props: { initiativeId: string; data: Cli
             <p className="text-xs text-indigo-700">{(cadenceLabels[data.releases[0].cadence] ?? data.releases[0].cadence) || "Not set"}</p></div>
           <div className="flex flex-wrap gap-2">{data.releases.map((release) => <span key={release.id} className="rounded-full bg-white px-3 py-1.5 text-xs font-medium text-indigo-800 ring-1 ring-indigo-100">
             {release.label} · {new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric", year: "numeric" }).format(new Date(release.targetDate))}
+            <span className="ml-1 text-indigo-600">· {release.featureCount} features · {release.defectCount} defects · {release.blockerCount} blockers · {release.qualityRisk} risk</span>
           </span>)}</div>
         </div>
       </section>}
