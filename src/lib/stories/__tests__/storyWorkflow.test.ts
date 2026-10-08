@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { storyReadiness } from "../service";
+import { acceptanceCriterionAdequacy, storyReadiness } from "../service";
 import {
   acceptanceCriteriaReorderSchema,
+  acceptanceCriterionApproveSchema,
   acceptanceCriterionCreateSchema,
+  acceptanceCriterionUpdateSchema,
   storyCreateSchema,
   storySplitSchema,
   storyUpdateSchema,
@@ -113,5 +115,79 @@ describe("story, acceptance criteria, and refinement workflow", () => {
     expect(
       acceptanceCriteriaReorderSchema.safeParse({ orderedIds: ["b", "a"] }).success,
     ).toBe(true);
+  });
+
+  it("requires an exact revision and reason for criterion changes and approval", () => {
+    expect(
+      acceptanceCriterionUpdateSchema.safeParse({
+        expectedRevision: 2,
+        body: "Given a saved view, when it opens, then the saved filters are visible.",
+        reason: "Clarified the observable result",
+      }).success,
+    ).toBe(true);
+    expect(
+      acceptanceCriterionUpdateSchema.safeParse({
+        expectedRevision: 2,
+        body: "Given a saved view, when it opens, then the saved filters are visible.",
+        reason: "",
+      }).success,
+    ).toBe(false);
+    expect(
+      acceptanceCriterionApproveSchema.safeParse({
+        expectedRevision: 2,
+        comment: "Reviewed with the Product Owner",
+      }).success,
+    ).toBe(true);
+    expect(
+      acceptanceCriterionApproveSchema.safeParse({ comment: "Approved" }).success,
+    ).toBe(false);
+  });
+
+  it("rejects vague criteria and accepts specific observable outcomes", () => {
+    expect(
+      acceptanceCriterionAdequacy({
+        title: "Save works",
+        body: "Given a view, when I save it, then it works correctly.",
+      }),
+    ).toEqual({
+      adequate: false,
+      gaps: ["Replace vague wording with an observable result."],
+    });
+    expect(
+      acceptanceCriterionAdequacy({
+        title: "Restore saved filters",
+        body: "Given a saved view, when I reopen it, then every saved filter is displayed.",
+      }),
+    ).toEqual({ adequate: true, gaps: [] });
+  });
+
+  it("blocks story readiness when criteria are vague or duplicated", () => {
+    const vague = storyReadiness({
+      title: "Save a view",
+      body: "As a planner, I want to save a view, so that I can resume work.",
+      points: 3,
+      readinessStatus: "ready_for_refinement",
+      criteria: [
+        { title: "First", body: "Given a view, when I save, then it works correctly." },
+        { title: "Second", body: "Given a view, when I reopen it, then it appears properly." },
+      ],
+    });
+    expect(vague.gaps).toContain(
+      "Make each acceptance criterion specific, testable, and observable.",
+    );
+
+    const duplicateBody =
+      "Given a saved view, when I reopen it, then every saved filter is displayed.";
+    const duplicated = storyReadiness({
+      title: "Save a view",
+      body: "As a planner, I want to save a view, so that I can resume work.",
+      points: 3,
+      readinessStatus: "ready_for_refinement",
+      criteria: [
+        { title: "Restore filters", body: duplicateBody },
+        { title: "Restore state", body: duplicateBody },
+      ],
+    });
+    expect(duplicated.gaps).toContain("Remove duplicate acceptance criteria.");
   });
 });
