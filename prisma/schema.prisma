@@ -573,6 +573,8 @@ model Capability {
   sourceRequests          PlanningRequest[]
   ownerUserId             String?
   owner                   User?                  @relation("CapabilityOwner", fields: [ownerUserId], references: [id], onDelete: SetNull)
+  releaseId               String?
+  release                 Release?               @relation("ReleaseFeatures", fields: [releaseId], references: [id], onDelete: SetNull)
   id                      String                 @id @default(cuid())
   intakeAnswerSetId       String
   intakeAnswerSet         IntakeAnswerSet        @relation(fields: [intakeAnswerSetId], references: [id], onDelete: Cascade)
@@ -596,6 +598,7 @@ model Capability {
   createdAt               DateTime               @default(now())
 
   @@index([intakeAnswerSetId])
+  @@index([releaseId])
   @@unique([intakeAnswerSetId, backlogKey])
 }
 
@@ -844,6 +847,7 @@ model Release {
   order       Int
   origin      String    @default("auto") // auto | manual — see Sprint.origin comment above
   sprints     Sprint[]
+  features    Capability[] @relation("ReleaseFeatures")
   createdAt   DateTime  @default(now())
 
   @@unique([prototypeId, order])
