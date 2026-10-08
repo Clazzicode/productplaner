@@ -56,7 +56,7 @@ async function storyContext(initiativeId: string, storyId: string) {
     where: { id: storyId, type: "story", prototype: { initiativeId } },
     include: {
       prototype: { select: { initiativeId: true } },
-      parent: { include: { parent: { select: { id: true, type: true } } } },
+      parent: { include: { parent: { select: { id: true, type: true, sourceCapabilityId: true } } } },
     },
   });
   if (!story || !story.parentId || story.parent?.parent?.type !== "feature") {
