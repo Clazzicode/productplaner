@@ -6,7 +6,12 @@ import StoryWorkflowControls from "@/components/workspace/StoryWorkflowControls"
 import TraceBadge from "@/components/workspace/TraceBadge";
 import { requireCurrentUser } from "@/lib/auth/session";
 import { db, establishAuthContext } from "@/lib/db";
-import {\n  acceptanceCriterionAdequacy,\n  listAcceptanceCriterionHistory,\n  listStoryHistory,\n  storyReadiness,\n} from "@/lib/stories/service";
+import {
+  acceptanceCriterionAdequacy,
+  listAcceptanceCriterionHistory,
+  listStoryHistory,
+  storyReadiness,
+} from "@/lib/stories/service";
 import { traceEntriesFor } from "@/lib/trace";
 import { loadCostContext, loadWorkspace } from "@/lib/workspace";
 
@@ -44,7 +49,15 @@ export default async function StoryPage({ params }: {
     }),
     listStoryHistory(initiativeId, story.id),
   ]);
-  const criterionHistoryEntries = await Promise.all(\n    story.children.map(async (criterion) => [\n      criterion.id,\n      await listAcceptanceCriterionHistory(initiativeId, criterion.id),\n    ] as const),\n  );\n  const criterionHistory = new Map(criterionHistoryEntries);\n  const activeCriteria = story.children.filter((criterion) => !criterion.archivedAt);\n  const cap = story.sourceCapabilityId ? ws.capViewById.get(story.sourceCapabilityId) : null;
+  const criterionHistoryEntries = await Promise.all(
+    story.children.map(async (criterion) => [
+      criterion.id,
+      await listAcceptanceCriterionHistory(initiativeId, criterion.id),
+    ] as const),
+  );
+  const criterionHistory = new Map(criterionHistoryEntries);
+  const activeCriteria = story.children.filter((criterion) => !criterion.archivedAt);
+  const cap = story.sourceCapabilityId ? ws.capViewById.get(story.sourceCapabilityId) : null;
   const storyCost = (story.points ?? 1) * cost.model.costPerStoryPoint;
   const readiness = storyReadiness({
     title: story.title,
