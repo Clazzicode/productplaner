@@ -7,6 +7,7 @@ import { withPlanningMutation } from "@/lib/generation/mutation";
 import { priorityScore, requestSchema } from "@/lib/requests/model";
 import { featureRecord } from "./model";
 import { listFeatures } from "./service";
+import { latestPriorityDecisionMap } from "@/lib/prioritization/service";
 
 export const backlogItemTypes = ["request", "feature", "story"] as const;
 export const bulkTriageCommand = z.object({
@@ -33,6 +34,10 @@ export type BacklogItemRecord = {
   readiness: string;
   priorityLabel: string;
   priorityScore: number | null;
+  dependencyAdjustedScore: number | null;
+  priorityReason: string;
+  priorityDecisionId: string | null;
+  prioritySource: "manual" | "ai" | "derived";
   roadmapLane: "now" | "next" | "later" | "unscheduled";
   archived: boolean;
   revision: number;
@@ -42,7 +47,7 @@ export type BacklogItemRecord = {
 const valueScores: Record<string, number> = { very_low: 20, low: 40, medium: 60, high: 80, critical: 100 };
 
 export async function listUnifiedBacklog(initiativeId: string): Promise<BacklogItemRecord[]> {
-  const [features, requests, stories] = await Promise.all([
+  const [features, requests, stories, priorityDecisions] = await Promise.all([
     listFeatures(initiativeId),
     db.planningRequest.findMany({ where: { initiativeId, capabilityId: null }, orderBy: [{ updatedAt: "desc" }, { id: "asc" }] }),
     db.artifactLayer.findMany({
@@ -50,6 +55,7 @@ export async function listUnifiedBacklog(initiativeId: string): Promise<BacklogI
       include: { sourceCapability: { include: { owner: { select: { id: true, name: true, email: true } } } } },
       orderBy: [{ order: "asc" }, { id: "asc" }],
     }),
+    latestPriorityDecisionMap(initiativeId),
   ]);
 
   const featureItems = features.map(row => {
@@ -96,8 +102,30 @@ export async function listUnifiedBacklog(initiativeId: string): Promise<BacklogI
     };
   });
 
-  return [...featureItems, ...requestItems, ...storyItems].sort((a, b) =>
-    Number(a.archived) - Number(b.archived) || (b.priorityScore ?? -1) - (a.priorityScore ?? -1) || a.title.localeCompare(b.title)
+  const resolved = [...featureItems, ...requestItems, ...storyItems].map(item => {
+    const decision = priorityDecisions.get(`${item.recordType}:${item.id}`);
+    return decision ? {
+      ...item,
+      priorityLabel: decision.moscow,
+      priorityScore: decision.score,
+      dependencyAdjustedScore: decision.dependencyAdjustedScore,
+      priorityReason: decision.reason,
+      priorityDecisionId: decision.id,
+      prioritySource: decision.source,
+      roadmapLane: decision.roadmapLane,
+    } : {
+      ...item,
+      dependencyAdjustedScore: item.priorityScore,
+      priorityReason: "",
+      priorityDecisionId: null,
+      prioritySource: "derived" as const,
+    };
+  });
+  return resolved.sort((a, b) =>
+    Number(a.archived) - Number(b.archived) ||
+    (b.dependencyAdjustedScore ?? -1) - (a.dependencyAdjustedScore ?? -1) ||
+    (b.priorityScore ?? -1) - (a.priorityScore ?? -1) ||
+    a.title.localeCompare(b.title)
   );
 }
 
