@@ -162,8 +162,29 @@ export async function applyContentProposal(
         storyId = created.id;
       }
 
-      let acOrder = await tx.artifactLayer.count({ where: { parentId: storyId } });
+      let acOrder = await tx.artifactLayer.count({
+        where: { parentId: storyId, type: "acceptance_criterion", archivedAt: null },
+      });
       for (const ac of story.acceptanceCriteria) {
+        const dedupeKey = `story:${storyId}:criterion:${normalized(ac.title)}:${normalized(ac.body)}`;
+        const duplicate = await tx.artifactLayer.findFirst({
+          where: {
+            parentId: storyId,
+            type: "acceptance_criterion",
+            dedupeKey,
+            archivedAt: null,
+            ...(ac.existingArtifactLayerId
+              ? { NOT: { id: ac.existingArtifactLayerId } }
+              : {}),
+          },
+          select: { id: true },
+        });
+        if (duplicate) {
+          throw new DependencyAlreadyExistsError(
+            `This acceptance criterion already exists for the story: "${ac.title}".`,
+          );
+        }
+
         if (ac.existingArtifactLayerId) {
           const current = await tx.artifactLayer.findFirstOrThrow({
             where: {
@@ -171,19 +192,48 @@ export async function applyContentProposal(
               prototypeId: feature.prototypeId,
               type: "acceptance_criterion",
               parentId: storyId,
+              archivedAt: null,
             },
           });
           const changed = current.title !== ac.title || current.body !== ac.body;
-          if (current.approvedAt && changed) {
-            const version = await tx.artifactRevision.count({ where: { artifactId: current.id } }) + 1;
-            await tx.artifactRevision.create({ data: { artifactId: current.id, version, title: current.title, body: current.body, reason: "Changed through an approved AI refinement proposal." } });
+          if (changed) {
+            const version = await tx.artifactRevision.count({
+              where: { artifactId: current.id },
+            }) + 1;
+            await tx.artifactRevision.create({
+              data: {
+                artifactId: current.id,
+                version,
+                title: current.title,
+                body: current.body,
+                reason: "Applied a reviewed AI acceptance-criterion suggestion.",
+                metadata: {
+                  title: current.title,
+                  body: current.body,
+                  storyId: current.parentId,
+                  sourceType: current.sourceType,
+                  order: current.order,
+                  approvedAt: current.approvedAt?.toISOString() ?? null,
+                  approvedByUserId: current.approvedByUserId,
+                  archivedAt: current.archivedAt?.toISOString() ?? null,
+                  revision: current.backlogRevision,
+                },
+              },
+            });
           }
           await tx.artifactLayer.update({
             where: { id: ac.existingArtifactLayerId },
             data: {
               title: ac.title,
               body: ac.body,
-              ...(changed ? { approvedAt: null, approvedByUserId: null } : {}),
+              dedupeKey,
+              ...(changed
+                ? {
+                    approvedAt: null,
+                    approvedByUserId: null,
+                    backlogRevision: { increment: 1 },
+                  }
+                : {}),
             },
           });
         } else {
@@ -197,6 +247,7 @@ export async function applyContentProposal(
               body: ac.body,
               traceNote: "AI-assisted addition — see the AI Assist panel for details.",
               sourceType: "ai",
+              dedupeKey,
               sourceCapabilityId: feature.sourceCapabilityId,
             },
           });
