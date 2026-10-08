@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import FeatureEditor, { type FeatureOwnerOption } from "./FeatureEditor";
+import PriorityEditor from "./PriorityEditor";
 import {
   businessValueLabels, laneLabels, riskLevelLabels, statusLabels,
   type FeatureHistoryRecord, type FeatureInput, type FeatureRecord,
@@ -11,9 +12,9 @@ import type { BacklogItemRecord } from "@/lib/backlog/unified";
 type View = "features" | "backlog" | "roadmap";
 const all = "all";
 
-export default function BacklogWorkspace({ initiativeId, initialFeatures, initialItems, owners = [], canEdit, demo = false }: {
+export default function BacklogWorkspace({ initiativeId, initialFeatures, initialItems, owners = [], canEdit, canPrioritize = false, demo = false }: {
   initiativeId: string; initialFeatures: FeatureRecord[]; initialItems?: BacklogItemRecord[];
-  owners?: FeatureOwnerOption[]; canEdit: boolean; demo?: boolean;
+  owners?: FeatureOwnerOption[]; canEdit: boolean; canPrioritize?: boolean; demo?: boolean;
 }) {
   const [features, setFeatures] = useState(initialFeatures);
   const [items, setItems] = useState(initialItems ?? []);
@@ -31,6 +32,7 @@ export default function BacklogWorkspace({ initiativeId, initialFeatures, initia
   const [bulkLane, setBulkLane] = useState<"now" | "next" | "later" | "unscheduled">("unscheduled");
   const [bulkReason, setBulkReason] = useState("");
   const [editing, setEditing] = useState<FeatureRecord | "new" | null>(null);
+  const [prioritizing, setPrioritizing] = useState<BacklogItemRecord | null>(null);
   const [history, setHistory] = useState<FeatureHistoryRecord[]>([]);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
@@ -140,7 +142,7 @@ export default function BacklogWorkspace({ initiativeId, initialFeatures, initia
     finally { setBusy(false); }
   }
 
-  const tab = (id: View, label: string) => <button onClick={() => { setView(id); setEditing(null); }} className={`rounded-lg px-4 py-2 text-sm font-semibold ${view === id ? "bg-indigo-600 text-white" : "bg-white text-slate-700"}`}>{label}</button>;
+  const tab = (id: View, label: string) => <button onClick={() => { setView(id); setEditing(null); setPrioritizing(null); }} className={`rounded-lg px-4 py-2 text-sm font-semibold ${view === id ? "bg-indigo-600 text-white" : "bg-white text-slate-700"}`}>{label}</button>;
   const badge = (feature: FeatureRecord) => {
     const colors = feature.backlogStatus === "in_progress" ? "bg-amber-100 text-amber-700" : feature.backlogStatus === "ready_for_review" ? "bg-emerald-100 text-emerald-700" : feature.backlogStatus === "archived" ? "bg-slate-200 text-slate-600" : "bg-slate-100 text-slate-700";
     return <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${colors}`}>{statusLabels[feature.backlogStatus]}</span>;
@@ -184,6 +186,7 @@ export default function BacklogWorkspace({ initiativeId, initialFeatures, initia
       <button disabled={busy || selected.length === 0} onClick={applyBulkTriage} className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-40">Apply to {selected.length} selected</button>
     </div>}
     {message && <p role="status" className="rounded-lg bg-slate-100 px-4 py-2 text-sm text-slate-700">{message}</p>}
+    {prioritizing && canPrioritize && <PriorityEditor initiativeId={initiativeId} item={prioritizing} onSaved={refreshItems} onClose={() => setPrioritizing(null)} />}
     {editing && <FeatureEditor key={editing === "new" ? "new" : `${editing.id}-${editing.backlogRevision}`} feature={editing === "new" ? null : editing}
       owners={owners} features={features} busy={busy} onSave={save} onCancel={() => setEditing(null)} />}
     {editing && editing !== "new" && <section className="rounded-xl border bg-white p-4">
@@ -199,7 +202,7 @@ export default function BacklogWorkspace({ initiativeId, initialFeatures, initia
           <td className="p-3"><p className="font-semibold">{item.key ? `${item.key} · ` : ""}{item.title}</p><p className="mt-1 max-w-md line-clamp-2 text-xs text-slate-500">{item.description}</p>{item.archived && <span className="mt-1 inline-block rounded bg-slate-200 px-2 py-0.5 text-xs">Archived</span>}</td>
           <td className="p-3 capitalize">{item.workType.replaceAll("_", " ")}<p className="text-xs text-slate-500">{item.source}</p></td>
           <td className="p-3">{item.owner?.name ?? "Unassigned"}</td><td className="p-3 capitalize">{item.readiness.replaceAll("_", " ")}<p className="text-xs text-slate-500">{item.status.replaceAll("_", " ")}</p></td>
-          <td className="p-3 capitalize">{item.priorityLabel.replaceAll("_", " ")}<p className="text-xs text-slate-500">{item.priorityScore == null ? "Not scored" : `${item.priorityScore} / 100`}</p></td>
+          <td className="p-3 capitalize">{item.priorityLabel.replaceAll("_", " ")}<p className="text-xs text-slate-500">{item.priorityScore == null ? "Not scored" : `${item.priorityScore} / 100`}</p>{item.dependencyAdjustedScore != null && item.dependencyAdjustedScore !== item.priorityScore && <p className="text-xs text-indigo-600">Dependency-adjusted: {item.dependencyAdjustedScore}</p>}{item.priorityReason && <p className="mt-1 max-w-48 text-xs normal-case text-slate-500">{item.priorityReason}</p>}{canPrioritize && !item.archived && <button onClick={() => { setPrioritizing(item); setEditing(null); }} className="mt-2 text-xs font-semibold text-indigo-700">Set priority</button>}</td>
           <td className="p-3">{laneLabels[item.roadmapLane]}</td>
           <td className="p-3">{featureIndex >= 0 && canEdit ? <div className="flex gap-1"><button disabled={busy || featureIndex === 0} aria-label={`Move ${item.title} up`} onClick={() => move(featureIndex, -1)} className="rounded border px-2 py-1 disabled:opacity-30">↑</button><button disabled={busy || featureIndex === features.length - 1} aria-label={`Move ${item.title} down`} onClick={() => move(featureIndex, 1)} className="rounded border px-2 py-1 disabled:opacity-30">↓</button></div> : "—"}</td>
         </tr>;
