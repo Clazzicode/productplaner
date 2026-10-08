@@ -5,6 +5,7 @@ import { jsonError, zodMessage } from "@/lib/api";
 import { requireCurrentUserApi } from "@/lib/auth/session";
 import { db, establishAuthContext, withTransaction } from "@/lib/db";
 import { isLastActiveOrgAdmin } from "@/lib/admin/safeguards";
+import { auditOrganization } from "@/lib/audit";
 
 const userPatchSchema = z
   .object({
@@ -95,6 +96,11 @@ async function PATCHHandler(
         data: { role: parsed.data.accessLevel === "org_admin" ? "admin" : "member" },
       });
     }
+    await auditOrganization({ organizationId: actor.organizationId, actorUserId: actor.id,
+      entityType: "user", entityId: userId, action: "user.permissions_updated", metadata: {
+        fields: Object.keys(parsed.data), previousAccessLevel: target.accessLevel, accessLevel: row.accessLevel,
+        previousStatus: target.status, status: row.status,
+      } });
     return row;
   });
   return NextResponse.json(updated);

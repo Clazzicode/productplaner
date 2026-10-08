@@ -1,6 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { createClient } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
+import { assertEnvironmentIsolation } from "@/lib/environment";
 
 /**
  * Server-side Supabase client bound to the current request's cookies, for use
@@ -10,6 +11,7 @@ import { cookies } from "next/headers";
  * getSession() only decodes the local cookie and can be spoofed.
  */
 export async function createSupabaseServerClient() {
+  assertEnvironmentIsolation();
   const cookieStore = await cookies();
 
   return createServerClient(
@@ -45,6 +47,7 @@ export async function createSupabaseServerClient() {
  * explicit and easy to audit.
  */
 export function createSupabaseServiceClient() {
+  assertEnvironmentIsolation();
   return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SECRET_KEY!, {
     auth: { autoRefreshToken: false, persistSession: false },
   });

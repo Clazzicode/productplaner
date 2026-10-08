@@ -1,14 +1,15 @@
-import type Anthropic from "@anthropic-ai/sdk";
+import type { AiTool, AiMessage } from "@/lib/ai/providerTypes";
 import { db, withTransaction } from "@/lib/db";
 import { loadIntakeInput } from "@/lib/generation/engine";
 import { resolveMethodology } from "@/lib/generation/methodology";
 import type { IntakeInput } from "@/lib/generation/types";
 import { analyzeIntakeResultSchema, type AnalyzeIntakeResult } from "@/lib/validation/schemas";
-import { AI_MODEL, getAnthropicClient } from "@/lib/ai/client";
+import { AI_MODEL, createAiResponse } from "@/lib/ai/client";
 import { GLOBAL_PRODUCT_PLANNING_RULES, METHODOLOGY_AI_GUIDANCE } from "@/lib/ai/methodologyRules";
 import { PLATFORM_SYSTEM_PROMPT } from "@/lib/ai/systemPrompt";
 import { assertAiActionAllowed, recordAiUsage } from "@/lib/ai/usage";
 import { completeAiJob, setAiJobStatus } from "@/lib/ai/job";
+import { estimateCostUsd } from "@/lib/ai/pricing";
 import { AiResponseValidationError } from "@/lib/ai/errors";
 
 // ANALYZE_INTAKE (req #9-#13, docs/V2-AI-FOUNDATION.md). Reads intake data
@@ -19,7 +20,7 @@ import { AiResponseValidationError } from "@/lib/ai/errors";
 
 const TOOL_NAME = "submit_intake_analysis";
 
-const ANALYZE_INTAKE_TOOL: Anthropic.Tool = {
+const ANALYZE_INTAKE_TOOL: AiTool = {
   name: TOOL_NAME,
   description: "Submit the structured analysis of this initiative's intake data.",
   input_schema: {
@@ -75,15 +76,8 @@ const ANALYZE_INTAKE_TOOL: Anthropic.Tool = {
       },
       rationale: { type: "string", description: "Why this analysis reached these conclusions, in plain language." },
     },
-    // Deliberately no top-level `required`: with this model, a `required`
-    // array listing every top-level property makes it stringify each
-    // field's true array/object value into the first property instead of
-    // emitting real JSON structure (reproduced consistently in testing —
-    // stop_reason is still "tool_use", so this fails silently unless the
-    // response is actually validated). Nested item-level `required` below
-    // is unaffected and kept, matching documentUnderstanding.ts's precedent
-    // (src/lib/ai/actions/documentUnderstanding.ts). Zod (analyzeIntakeResultSchema) remains the real
-    // completeness gate — a field the model omits still fails validation.
+    // Preserve the existing optional tool schema during provider migration.
+    // Zod remains the completeness gate: omitted mandatory results fail validation.
   },
 };
 
@@ -140,23 +134,16 @@ export async function runAnalyzeIntake(params: RunAnalyzeIntakeParams): Promise<
 
     const system = `${PLATFORM_SYSTEM_PROMPT}\n\n${GLOBAL_PRODUCT_PLANNING_RULES}\n\n${METHODOLOGY_AI_GUIDANCE[methodology]}`;
 
-    // This model occasionally (not deterministically) serializes its tool
-    // call as legacy text-based function-call XML instead of real JSON
-    // structure, while still reporting stop_reason "tool_use" — the request
-    // succeeds but the payload fails validation. Retrying is the correct
-    // response to that kind of stochastic formatting glitch (confirmed by
-    // direct testing that a clean retry reliably produces well-formed
-    // output); it never loosens validation itself (req #11) — every attempt
-    // is still strictly parsed, and only a validated response is ever saved.
+    // Preserve bounded retries and validate every attempt before saving.
     const MAX_ATTEMPTS = 3;
     let analysis: AnalyzeIntakeResult | undefined;
-    let response: Anthropic.Message | undefined;
+    let response: AiMessage | undefined;
     let lastError: unknown;
 
     await setAiJobStatus(jobId, "extracting_information");
     for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
       try {
-        response = await getAnthropicClient().messages.create({
+        response = await createAiResponse({
           model: AI_MODEL,
           max_tokens: capability.maxOutputTokens,
           system,
@@ -172,7 +159,7 @@ export async function runAnalyzeIntake(params: RunAnalyzeIntakeParams): Promise<
           aiJobId: jobId,
           action: "ANALYZE_INTAKE",
           success: false,
-          errorMessage: err instanceof Error ? err.message : "Anthropic API request failed.",
+          errorMessage: err instanceof Error ? err.message : "OpenAI API request failed.",
         });
         throw err;
       }
@@ -193,6 +180,9 @@ export async function runAnalyzeIntake(params: RunAnalyzeIntakeParams): Promise<
           success: false,
           inputTokens: response.usage.input_tokens,
           outputTokens: response.usage.output_tokens,
+          cacheCreationInputTokens: response.usage.cache_creation_input_tokens,
+          cacheReadInputTokens: response.usage.cache_read_input_tokens,
+          model: AI_MODEL,
           errorMessage: `Response failed validation (attempt ${attempt}/${MAX_ATTEMPTS}).`,
         });
       }
@@ -231,6 +221,13 @@ export async function runAnalyzeIntake(params: RunAnalyzeIntakeParams): Promise<
             success: true,
             inputTokens: response.usage.input_tokens,
             outputTokens: response.usage.output_tokens,
+            cacheCreationInputTokens: response.usage.cache_creation_input_tokens,
+            cacheReadInputTokens: response.usage.cache_read_input_tokens,
+            model: AI_MODEL,
+            estimatedCostUsd: estimateCostUsd(
+              response.usage.input_tokens, response.usage.output_tokens,
+              response.usage.cache_creation_input_tokens, response.usage.cache_read_input_tokens,
+            ),
           },
           select: { id: true },
         }),

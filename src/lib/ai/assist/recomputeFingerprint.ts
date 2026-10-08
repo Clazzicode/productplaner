@@ -9,6 +9,8 @@ import {
   computeSprintRecommendationFingerprint,
   computeStatusRecommendationFingerprint,
 } from "./fingerprint";
+import { computeRequirementReviewFingerprint } from "@/lib/ai/actions/reviewRequirements";
+import { computePriorityRecommendationFingerprint } from "@/lib/ai/actions/recommendPriority";
 
 // Live drift check for the AI Assist list route (Section 4 §4/§31) — called
 // on every load for each still-"proposed" item, so context changes surface
@@ -38,6 +40,16 @@ export async function recomputeFingerprintForItem(item: AiAssistItem): Promise<s
           return computeStatusRecommendationFingerprint(item.targetType, item.targetId);
         }
         return null;
+      case "RECOMMEND_PRIORITY": {
+        const entityType = item.targetType.startsWith("priority_") ? item.targetType.slice("priority_".length) : "";
+        return item.initiativeId && item.targetId && entityType
+          ? computePriorityRecommendationFingerprint(item.initiativeId, entityType, item.targetId)
+          : null;
+      }
+      case "REVIEW_REQUIREMENTS": {
+        const requestId = item.targetType === "request_requirement_review" ? item.targetId : item.targetId?.split(":")[0];
+        return requestId ? computeRequirementReviewFingerprint(requestId) : null;
+      }
       default:
         return null;
     }

@@ -2,6 +2,9 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import EditableArtifact from "@/components/workspace/EditableArtifact";
 import TraceBadge from "@/components/workspace/TraceBadge";
+import StoryCreateForm from "@/components/workspace/StoryCreateForm";
+import StorySuggestionButton from "@/components/workspace/StorySuggestionButton";
+import AiAssistPanel from "@/components/ai/AiAssistPanel";
 import { requireCurrentUser } from "@/lib/auth/session";
 import { db, establishAuthContext } from "@/lib/db";
 import { traceEntriesFor } from "@/lib/trace";
@@ -56,6 +59,7 @@ export default async function EpicsPage({
             <h3 className="text-sm font-semibold uppercase tracking-wide text-neutral-400">
               {feature.parent?.title} · <span className="text-indigo-600">{feature.title}</span>
             </h3>
+            <StorySuggestionButton initiativeId={initiativeId} featureId={feature.id} />
             <div className="mt-2 space-y-3">
               {feature.children.map((epic) => {
                 const cap = epic.sourceCapabilityId
@@ -108,6 +112,8 @@ export default async function EpicsPage({
                                 {story.externalRef}
                               </span>
                             )}
+                            <span className="rounded-full bg-indigo-50 px-2 py-0.5 font-medium capitalize text-indigo-700">{story.readinessStatus.replaceAll("_", " ")}</span>
+                            <span className="capitalize">{story.sourceType}</span>
                             <span className="rounded-full bg-neutral-100 px-2 py-0.5 font-medium">
                               {story.points ?? 1} pts · $
                               {Math.round(
@@ -127,6 +133,7 @@ export default async function EpicsPage({
                         </li>
                       ))}
                     </ul>
+                    <StoryCreateForm initiativeId={initiativeId} epicId={epic.id} />
                   </div>
                 );
               })}
@@ -134,6 +141,7 @@ export default async function EpicsPage({
           </section>
         ))}
       </div>
+      <div className="mt-8"><AiAssistPanel initiativeId={initiativeId} scope="features" /></div>
     </div>
   );
 }

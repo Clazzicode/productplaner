@@ -6,6 +6,8 @@ import { requireCurrentUser } from "@/lib/auth/session";
 import { db, establishAuthContext } from "@/lib/db";
 import { traceEntriesFor } from "@/lib/trace";
 import { loadCostContext, loadWorkspace } from "@/lib/workspace";
+import StoryWorkflowControls from "@/components/workspace/StoryWorkflowControls";
+import { storyReadiness } from "@/lib/stories/service";
 
 export const dynamic = "force-dynamic";
 
@@ -24,7 +26,7 @@ export default async function StoryPage({
     where: { id: storyId },
     include: {
       parent: { include: { parent: { select: { title: true } } } }, // epic → feature
-      children: { where: { type: "acceptance_criterion" }, orderBy: { order: "asc" } },
+      children: { where: { type: "acceptance_criterion" }, orderBy: { order: "asc" }, include: { revisions: { orderBy: { version: "desc" } } } },
       sprint: { select: { sprintNumber: true } },
     },
   });
@@ -33,6 +35,7 @@ export default async function StoryPage({
   const cap = story.sourceCapabilityId ? ws.capViewById.get(story.sourceCapabilityId) : null;
   const cost = await loadCostContext(initiativeId, ws.prototype.id);
   const storyCost = (story.points ?? 1) * cost.model.costPerStoryPoint;
+  const readiness = storyReadiness({ title: story.title, body: story.body, points: story.points, readinessStatus: story.readinessStatus, criteria: story.children });
 
   return (
     <div>
@@ -99,7 +102,13 @@ export default async function StoryPage({
             From feature: {cap.name}
           </span>
         )}
+        <span className={`rounded-full px-2.5 py-1 font-medium ${readiness.ready ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"}`}>{readiness.ready ? "Content complete" : `${readiness.gaps.length} readiness gaps`}</span>
+        <span className="rounded-full bg-neutral-100 px-2.5 py-1 font-medium capitalize">Source: {story.sourceType}</span>
       </div>
+
+      {!readiness.ready && <ul className="mt-3 list-disc rounded-lg bg-amber-50 p-4 pl-8 text-sm text-amber-900">{readiness.gaps.map(gap => <li key={gap}>{gap}</li>)}</ul>}
+
+      <StoryWorkflowControls initiativeId={initiativeId} storyId={story.id} readinessStatus={story.readinessStatus} criteria={story.children.map(ac => ({ id: ac.id, title: ac.title, approved: Boolean(ac.approvedAt) }))} />
 
       <h3 className="mt-8 text-sm font-semibold uppercase tracking-wide text-indigo-600">
         Acceptance criteria
@@ -114,6 +123,7 @@ export default async function StoryPage({
                   title={ac.title}
                   body={ac.body}
                   titleClassName="text-sm font-semibold"
+                  approved={Boolean(ac.approvedAt)}
                 />
               </div>
               <TraceBadge
@@ -121,6 +131,7 @@ export default async function StoryPage({
                 entries={traceEntriesFor(ac.traceAnswerKeys, ws.intakeView, cap)}
               />
             </div>
+            {ac.revisions.length > 0 && <details className="mt-3 text-xs text-neutral-500"><summary>Approval history ({ac.revisions.length})</summary><ul className="mt-2 space-y-1">{ac.revisions.map(revision => <li key={revision.id}>Version {revision.version} · {revision.reason} · {revision.createdAt.toLocaleDateString()}</li>)}</ul></details>}
           </div>
         ))}
       </div>

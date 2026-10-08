@@ -17,7 +17,7 @@ type Scope = "roadmap" | "features" | "sprints";
 
 const SCOPE_ACTIONS: Record<Scope, AiActionKey[]> = {
   roadmap: ["ROADMAP_INSIGHTS", "RECOMMEND_RELEASES", "RECOMMEND_STATUS"],
-  features: ["PROPOSE_FEATURES", "PROPOSE_DEPENDENCIES", "PROPOSE_RISKS"],
+  features: ["PROPOSE_FEATURES", "PROPOSE_STORY_CONTENT", "PROPOSE_DEPENDENCIES", "PROPOSE_RISKS"],
   sprints: ["RECOMMEND_SPRINTS"],
 };
 

@@ -1,10 +1,11 @@
+import { auditInitiative } from "@/lib/audit";
 // Step 8C access mutations + impact preview (docs/V2-RESOURCE-ACCESS.md §9,
 // §17). Every write here is what the three UI entry points (User/Team/
 // Initiative) all call through — no entry point talks to `db.initiativeAccess`
 // directly, so there is one place tenant isolation and the External View
 // ceiling are enforced.
 
-import { db } from "@/lib/db";
+import { db, withTransaction } from "@/lib/db";
 import { resolveInitiativeAccess, type PermissionLevel, type ResolvedAccess } from "./resolution";
 
 export type MutationError =
@@ -39,24 +40,27 @@ async function wouldExceedExternalCeiling(userId: string, permission: Permission
 export async function grantDirectAccess(
   target: GrantTarget & { userId: string },
 ): Promise<MutationResult<{ id: string }>> {
-  if (!(await assertSameOrgInitiative(target.initiativeId, target.organizationId))) {
-    return { ok: false, reason: "cross_tenant" };
-  }
-  const user = await db.user.findUnique({ where: { id: target.userId }, select: { homeOrganizationId: true } });
-  if (!user || user.homeOrganizationId !== target.organizationId) return { ok: false, reason: "cross_tenant" };
-  if (await wouldExceedExternalCeiling(target.userId, target.permission)) {
-    return { ok: false, reason: "external_above_view" };
-  }
+  return withTransaction(async () => {
+    if (!(await assertSameOrgInitiative(target.initiativeId, target.organizationId))) {
+      return { ok: false, reason: "cross_tenant" };
+    }
+    const user = await db.user.findUnique({ where: { id: target.userId }, select: { homeOrganizationId: true } });
+    if (!user || user.homeOrganizationId !== target.organizationId) return { ok: false, reason: "cross_tenant" };
+    if (await wouldExceedExternalCeiling(target.userId, target.permission)) {
+      return { ok: false, reason: "external_above_view" };
+    }
 
-  try {
-    const grant = await db.initiativeAccess.create({
-      data: { initiativeId: target.initiativeId, userId: target.userId, permission: target.permission },
-    });
-    return { ok: true, data: { id: grant.id } };
-  } catch (err) {
-    if (isUniqueViolation(err)) return { ok: false, reason: "duplicate_grant" };
-    throw err;
-  }
+    try {
+      const grant = await db.initiativeAccess.create({
+        data: { initiativeId: target.initiativeId, userId: target.userId, permission: target.permission },
+      });
+      await auditInitiative(target.initiativeId, "access.granted", { grantId: grant.id, permission: target.permission });
+      return { ok: true as const, data: { id: grant.id } };
+    } catch (err) {
+      if (isUniqueViolation(err)) return { ok: false, reason: "duplicate_grant" };
+      throw err;
+    }
+  });
 }
 
 /** Team grants are never capped at grant time — a team may be granted Edit
@@ -67,21 +71,24 @@ export async function grantDirectAccess(
 export async function grantTeamAccess(
   target: GrantTarget & { teamId: string },
 ): Promise<MutationResult<{ id: string }>> {
-  if (!(await assertSameOrgInitiative(target.initiativeId, target.organizationId))) {
-    return { ok: false, reason: "cross_tenant" };
-  }
-  const team = await db.team.findUnique({ where: { id: target.teamId }, select: { organizationId: true } });
-  if (!team || team.organizationId !== target.organizationId) return { ok: false, reason: "cross_tenant" };
+  return withTransaction(async () => {
+    if (!(await assertSameOrgInitiative(target.initiativeId, target.organizationId))) {
+      return { ok: false, reason: "cross_tenant" };
+    }
+    const team = await db.team.findUnique({ where: { id: target.teamId }, select: { organizationId: true } });
+    if (!team || team.organizationId !== target.organizationId) return { ok: false, reason: "cross_tenant" };
 
-  try {
-    const grant = await db.initiativeAccess.create({
-      data: { initiativeId: target.initiativeId, teamId: target.teamId, permission: target.permission },
-    });
-    return { ok: true, data: { id: grant.id } };
-  } catch (err) {
-    if (isUniqueViolation(err)) return { ok: false, reason: "duplicate_grant" };
-    throw err;
-  }
+    try {
+      const grant = await db.initiativeAccess.create({
+        data: { initiativeId: target.initiativeId, teamId: target.teamId, permission: target.permission },
+      });
+      await auditInitiative(target.initiativeId, "access.granted", { grantId: grant.id, permission: target.permission });
+      return { ok: true as const, data: { id: grant.id } };
+    } catch (err) {
+      if (isUniqueViolation(err)) return { ok: false, reason: "duplicate_grant" };
+      throw err;
+    }
+  });
 }
 
 export async function changeGrantPermission(
@@ -89,9 +96,10 @@ export async function changeGrantPermission(
   organizationId: string,
   permission: PermissionLevel,
 ): Promise<MutationResult<{ id: string }>> {
-  const grant = await db.initiativeAccess.findUnique({
-    where: { id: grantId },
-    include: { initiative: { select: { organizationId: true } }, user: { select: { memberType: true } } },
+  return withTransaction(async () => {
+    const grant = await db.initiativeAccess.findUnique({
+      where: { id: grantId },
+      include: { initiative: { select: { organizationId: true } }, user: { select: { memberType: true } } },
   });
   if (!grant || grant.initiative.organizationId !== organizationId) return { ok: false, reason: "cross_tenant" };
   if (grant.userId && permission !== "view" && grant.user?.memberType === "external") {
@@ -101,20 +109,25 @@ export async function changeGrantPermission(
     return { ok: false, reason: "last_owner" };
   }
   await db.initiativeAccess.update({ where: { id: grantId }, data: { permission } });
+  await auditInitiative(grant.initiativeId, "access.permission_changed", { grantId, permission });
   return { ok: true, data: { id: grantId } };
+  });
 }
 
 export async function revokeGrant(grantId: string, organizationId: string): Promise<MutationResult<{ id: string }>> {
-  const grant = await db.initiativeAccess.findUnique({
-    where: { id: grantId },
-    include: { initiative: { select: { organizationId: true } } },
+  return withTransaction(async () => {
+    const grant = await db.initiativeAccess.findUnique({
+      where: { id: grantId },
+      include: { initiative: { select: { organizationId: true } } },
   });
   if (!grant || grant.initiative.organizationId !== organizationId) return { ok: false, reason: "cross_tenant" };
   if (await isLastOwnerGrant(grantId, grant.initiativeId, grant.permission === "owner")) {
     return { ok: false, reason: "last_owner" };
   }
   await db.initiativeAccess.delete({ where: { id: grantId } });
+  await auditInitiative(grant.initiativeId, "access.revoked", { grantId });
   return { ok: true, data: { id: grantId } };
+  });
 }
 
 /**

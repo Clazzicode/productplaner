@@ -6,7 +6,7 @@ import type { ContextLayer, ContextTier } from "./types";
 // philosophy rather than adding a new dependency for a rough estimate.
 
 /** A documented approximation (~4 chars/token, a commonly-cited English-text
- * ratio for Claude models) — not a precise count. Good enough to make
+ * heuristic for budgeting) — not a precise count. Good enough to make
  * relative trimming decisions; never presented as an exact figure. */
 export function estimateTokens(text: string): number {
   return Math.ceil(text.length / 4);

@@ -17,15 +17,14 @@ export interface DerivedSchedule {
 
 /**
  * Feature dates = earliest start / latest end across the Sprints its Stories
- * actually landed in (§4/§9A). Falls back to the roadmap_phase's own cached
- * date range only for Kanban (`continuous_flow`, which never creates Sprint
- * rows), and never fabricates a date otherwise — a Feature with no scheduled
- * Stories is `"unscheduled"`.
+ * actually landed in (§4/§9A). Before sprint planning, falls back to the
+ * roadmap phase's generated date range so the roadmap can be reviewed in the
+ * intended workflow order (Roadmap before Sprint Planning). Once real Sprint
+ * assignments exist, those exact dates take precedence automatically.
  */
 export function deriveFeatureSchedule(args: {
   spannedSprints: { startDate: Date; endDate: Date }[];
   phaseRange: { start: Date; end: Date } | null;
-  isContinuousFlow: boolean;
 }): DerivedSchedule {
   if (args.spannedSprints.length > 0) {
     const start = args.spannedSprints.reduce(
@@ -38,7 +37,7 @@ export function deriveFeatureSchedule(args: {
     );
     return { start, end, source: "sprints" };
   }
-  if (args.isContinuousFlow && args.phaseRange) {
+  if (args.phaseRange) {
     return { start: args.phaseRange.start, end: args.phaseRange.end, source: "phase_range" };
   }
   return { start: null, end: null, source: "unscheduled" };

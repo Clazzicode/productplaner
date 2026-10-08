@@ -1,4 +1,4 @@
-import type Anthropic from "@anthropic-ai/sdk";
+import type { AiTool } from "@/lib/ai/providerTypes";
 import { db } from "@/lib/db";
 import { loadIntakeInput } from "@/lib/generation/engine";
 import { resolveMethodology } from "@/lib/generation/methodology";
@@ -17,7 +17,7 @@ import type { AiAssistItem } from "@prisma/client";
 
 const TOOL_NAME = "submit_roadmap_insight";
 
-const ROADMAP_INSIGHT_TOOL: Anthropic.Tool = {
+const ROADMAP_INSIGHT_TOOL: AiTool = {
   name: TOOL_NAME,
   description: "Submit one roadmap insight, or an empty synopsis if nothing notable stands out.",
   input_schema: {

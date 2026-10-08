@@ -32,6 +32,7 @@ interface ContextItemView {
   conflictWithItem: ContextItemView | null;
   conflictsWithExistingValueText: string | null;
   approvedValueText: string | null;
+  requestCreated: boolean;
 }
 
 interface DocumentView {
@@ -226,6 +227,12 @@ export default function DocumentReviewPanel(props: {
       await apiFetch(`/api/context-items/${id}/${action}`, { method: "POST", body: {} });
     }
     if (data) await loadReview(data.document.id);
+    notify();
+  };
+
+  const createRequest = async (itemId: string) => {
+    const res = await apiFetch(`/api/context-items/${itemId}/create-request`, { method: "POST", body: {} });
+    if (!res.ok) { setError(res.error ?? "Could not create a request from that finding."); return; }
     notify();
   };
 
@@ -542,9 +549,13 @@ export default function DocumentReviewPanel(props: {
           <h4 className="text-xs font-semibold uppercase tracking-wide text-emerald-700">Approved</h4>
           <ul className="mt-2 space-y-1">
             {approved.map((item) => (
-              <li key={item.id} className="flex items-center gap-2 text-sm text-text-secondary">
+              <li key={item.id} className="flex flex-wrap items-center gap-2 text-sm text-text-secondary">
                 <Badge variant={STATUS_VARIANT[item.status]}>✓</Badge>
                 {fieldLabel(item.fieldKey)} — {item.approvedValueText}
+                {props.initiativeId && <button type="button" disabled={item.requestCreated} onClick={() => void createRequest(item.id)}
+                  className="ml-auto rounded-lg border border-indigo-200 px-3 py-1.5 text-xs font-medium text-indigo-700 hover:bg-indigo-50 disabled:cursor-default disabled:border-emerald-200 disabled:text-emerald-700">
+                  {item.requestCreated ? "Request created" : "Create request"}
+                </button>}
               </li>
             ))}
           </ul>

@@ -1,4 +1,4 @@
-import type Anthropic from "@anthropic-ai/sdk";
+import type { AiTool } from "@/lib/ai/providerTypes";
 import { db } from "@/lib/db";
 import { loadIntakeInput } from "@/lib/generation/engine";
 import { resolveMethodology } from "@/lib/generation/methodology";
@@ -19,7 +19,7 @@ import type { AiAssistItem } from "@prisma/client";
 
 const TOOL_NAME = "submit_feature_candidates";
 
-const FEATURE_CANDIDATES_TOOL: Anthropic.Tool = {
+const FEATURE_CANDIDATES_TOOL: AiTool = {
   name: TOOL_NAME,
   description: "Submit candidate features the initiative may be missing.",
   input_schema: {

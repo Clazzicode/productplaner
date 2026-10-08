@@ -14,8 +14,8 @@ vi.mock("@/lib/ai/job", () => ({ setAiJobStatus, setAiJobContextAudit }));
 
 const messagesCreate = vi.fn();
 vi.mock("@/lib/ai/client", () => ({
-  AI_MODEL: "claude-test",
-  getAnthropicClient: () => ({ messages: { create: messagesCreate } }),
+  AI_MODEL: "openai-test",
+  createAiResponse: messagesCreate,
 }));
 
 const withTransaction = vi.fn();
@@ -71,7 +71,7 @@ beforeEach(() => {
 });
 
 describe("runAssistAction — reuse gate (existing, no meaningful change)", () => {
-  it("reuse: makes NO Anthropic call, returns the existing item, and logs a kind:'reuse' ledger row", async () => {
+  it("reuse: makes NO OpenAI call, returns the existing item, and logs a kind:'reuse' ledger row", async () => {
     resolveReuseDecision.mockResolvedValueOnce({
       decision: "reuse",
       existingItem: { id: "item-1", aiJobId: "job-old" },
@@ -98,7 +98,7 @@ describe("runAssistAction — reuse gate (existing, no meaningful change)", () =
     expect(call.outputTokens ?? 0).toBe(0);
   });
 
-  it("flag_stale: makes NO Anthropic call — never a silent regeneration — and also logs a kind:'reuse' row", async () => {
+  it("flag_stale: makes NO OpenAI call — never a silent regeneration — and also logs a kind:'reuse' row", async () => {
     resolveReuseDecision.mockResolvedValueOnce({
       decision: "flag_stale",
       existingItem: { id: "item-1", aiJobId: "job-old" },
@@ -112,7 +112,7 @@ describe("runAssistAction — reuse gate (existing, no meaningful change)", () =
     expect(recordAiUsage).toHaveBeenCalledWith(expect.objectContaining({ kind: "reuse", success: true }));
   });
 
-  it("generate_new: calls Anthropic and saves a draft row per candidate", async () => {
+  it("generate_new: calls OpenAI and saves a draft row per candidate", async () => {
     resolveReuseDecision.mockResolvedValueOnce({ decision: "generate_new", existingItem: null });
     assertAiActionAllowed.mockResolvedValueOnce({
       capability: { maxOutputTokens: 1024 },
@@ -175,7 +175,7 @@ describe("runAssistAction — reuse gate (existing, no meaningful change)", () =
     expect(setAiJobContextAudit).toHaveBeenCalledWith("job-1", FAKE_ASSEMBLED_CONTEXT.audit);
   });
 
-  it("on a thrown Anthropic error: creates ZERO AiAssistItem rows and records failure", async () => {
+  it("on a thrown OpenAI error: creates ZERO AiAssistItem rows and records failure", async () => {
     resolveReuseDecision.mockResolvedValueOnce({ decision: "generate_new", existingItem: null });
     const release = vi.fn();
     assertAiActionAllowed.mockResolvedValueOnce({ capability: { maxOutputTokens: 1024 }, release, jobId: "job-1" });

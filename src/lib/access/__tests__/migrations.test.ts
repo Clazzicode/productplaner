@@ -79,6 +79,30 @@ describe.sequential("migration replay and real PostgreSQL RLS", () => {
     const result = await asUser(authA, () => pg.query(`UPDATE "ArtifactLayer" SET title='Hacked' WHERE id='artifact-b' RETURNING id`));
     expect(result.rows).toEqual([]);
   });
+  it("isolates acceptance-criteria history and enforces story-source invariants", async () => {
+    await asUser(authA, () => pg.exec(`
+      INSERT INTO "ArtifactLayer" (id,"prototypeId",type,"parentId","order",title,body,"sourceType","externalRef","dedupeKey","updatedAt")
+      VALUES ('story-a','proto-a','story','artifact-a',1,'Story','As a user, I want a result, so that I get value.','jira','GP-8','feature:artifact-a:title:story',now());
+      INSERT INTO "ArtifactLayer" (id,"prototypeId",type,"parentId","order",title,body,"sourceType","approvedAt","updatedAt")
+      VALUES ('criterion-a','proto-a','acceptance_criterion','story-a',0,'Works','Given context, when action, then outcome.','manual',now(),now());
+      INSERT INTO "ArtifactRevision" (id,"artifactId",version,title,body,reason)
+      VALUES ('revision-a','criterion-a',1,'Works','Given context, when action, then outcome.','Approved');
+      INSERT INTO "RefinementFinding" (id,"organizationId","initiativeId","storyId","sourceType",category,title,detail,"createdByUserId","updatedAt")
+      VALUES ('finding-a','org-a','init-a','story-a','manual','engineering_question','Clarify failure behavior','What happens when the provider is unavailable?','user-org-a',now());
+    `));
+    expect((await asUser(authB, () => pg.query(`SELECT id FROM "ArtifactRevision" WHERE id='revision-a'`))).rows).toEqual([]);
+    expect((await asUser(authB, () => pg.query(`SELECT id FROM "RefinementFinding" WHERE id='finding-a'`))).rows).toEqual([]);
+    await asUser(authB, () => pg.exec(`UPDATE "RefinementFinding" SET title='Hacked' WHERE id='finding-a'`));
+    expect((await pg.query<{ title: string }>(`SELECT title FROM "RefinementFinding" WHERE id='finding-a'`)).rows[0].title).toBe("Clarify failure behavior");
+    await expect(asUser(authA, () => pg.exec(`
+      INSERT INTO "ArtifactLayer" (id,"prototypeId",type,"order",title,body,"sourceType","updatedAt")
+      VALUES ('bad-jira','proto-a','story',2,'Missing key','Body','jira',now())
+    `))).rejects.toThrow();
+    await expect(asUser(authA, () => pg.exec(`
+      INSERT INTO "ArtifactLayer" (id,"prototypeId",type,"order",title,body,"sourceType","externalRef","dedupeKey","updatedAt")
+      VALUES ('duplicate-story','proto-a','story',3,'Duplicate','Body','jira','GP-9','feature:artifact-a:title:story',now())
+    `))).rejects.toThrow();
+  });
   it("rolls back a planning mutation when a required downstream write fails", async () => {
     await expect(asUser(authA, async () => {
       await pg.exec(`UPDATE "ArtifactLayer" SET title='Moved' WHERE id='artifact-a'`);
@@ -104,4 +128,38 @@ describe.sequential("migration replay and real PostgreSQL RLS", () => {
     })).rejects.toThrow();
     expect((await pg.query(`SELECT id FROM "LayerLock" WHERE id='lock-a'`)).rows).toEqual([]);
   });
+  it("isolates PO requests and prevents moving them between initiatives", async () => {
+    await asUser(authA, () => pg.exec(`INSERT INTO "PlanningRequest" (id,"initiativeId",data,"updatedAt") VALUES ('request-a','init-a','{}',now())`));
+    expect((await asUser(authB, () => pg.query(`SELECT id FROM "PlanningRequest" WHERE id='request-a'`))).rows).toEqual([]);
+    expect((await asUser(authB, () => pg.query(`UPDATE "PlanningRequest" SET data='{"title":"attack"}' WHERE id='request-a' RETURNING id`))).rows).toEqual([]);
+    await expect(asUser(authA, () => pg.exec(`INSERT INTO "PlanningRequest" (id,"initiativeId",data,"updatedAt") VALUES ('request-bad','init-b','{}',now())`))).rejects.toThrow();
+    await expect(asUser(authA, () => pg.exec(`UPDATE "PlanningRequest" SET "initiativeId"='init-b' WHERE id='request-a'`))).rejects.toThrow();
+  });
+  it("isolates immutable requirement history and validates its tenant parent", async () => {
+    await asUser(authA, () => pg.exec(`
+      INSERT INTO "RequestRevision" (id,"organizationId","requestId","fromRevision","toRevision","nextData",reason,"changedByUserId")
+      VALUES ('request-revision-a','org-a','request-a',0,1,'{}','Request created','user-org-a')
+    `));
+    expect((await asUser(authB, () => pg.query(`SELECT id FROM "RequestRevision" WHERE id='request-revision-a'`))).rows).toEqual([]);
+    expect((await asUser(authA, () => pg.query(`UPDATE "RequestRevision" SET reason='Forged' WHERE id='request-revision-a' RETURNING id`))).rows).toEqual([]);
+    expect((await asUser(authA, () => pg.query(`DELETE FROM "RequestRevision" WHERE id='request-revision-a' RETURNING id`))).rows).toEqual([]);
+    expect((await asUser(authA, () => pg.query<{ reason: string }>(`SELECT reason FROM "RequestRevision" WHERE id='request-revision-a'`))).rows[0].reason).toBe("Request created");
+    await expect(asUser(authA, () => pg.exec(`
+      INSERT INTO "RequestRevision" (id,"organizationId","requestId","fromRevision","toRevision","nextData",reason)
+      VALUES ('request-revision-bad','org-b','request-a',1,2,'{}','Wrong tenant')
+    `))).rejects.toThrow();
+  });
+  it("does not expose PO requests directly to the browser Data API", async () => {
+    await pg.exec("BEGIN; SET LOCAL ROLE authenticated");
+    try { await expect(pg.exec('SELECT * FROM "PlanningRequest"')).rejects.toThrow(); }
+    finally { await pg.exec("ROLLBACK"); }
+  });
+  it("keeps backlog metadata tenant-scoped and enforces one PO key per initiative", async () => {
+    await pg.exec(`INSERT INTO "IntakeAnswerSet" (id,"initiativeId","updatedAt") VALUES ('intake-a','init-a',now()),('intake-b','init-b',now());
+      INSERT INTO "Capability" (id,"intakeAnswerSetId",name,"isMvp","effortSize","businessValue","backlogKey") VALUES ('cap-a','intake-a','A',false,'m','medium','PO-01');`);
+    expect((await asUser(authB, () => pg.query(`SELECT id FROM "Capability" WHERE id='cap-a'`))).rows).toEqual([]);
+    expect((await asUser(authB, () => pg.query(`UPDATE "Capability" SET "backlogLane"='now' WHERE id='cap-a' RETURNING id`))).rows).toEqual([]);
+    await expect(asUser(authA, () => pg.exec(`INSERT INTO "Capability" (id,"intakeAnswerSetId",name,"isMvp","effortSize","businessValue","backlogKey") VALUES ('cap-a-duplicate','intake-a','Duplicate',false,'m','medium','PO-01')`))).rejects.toThrow();
+  });
+
 });

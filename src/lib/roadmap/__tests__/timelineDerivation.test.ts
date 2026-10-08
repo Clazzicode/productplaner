@@ -6,7 +6,6 @@ describe("deriveFeatureSchedule", () => {
     const result = deriveFeatureSchedule({
       spannedSprints: [{ startDate: new Date("2026-01-05"), endDate: new Date("2026-01-18") }],
       phaseRange: null,
-      isContinuousFlow: false,
     });
     expect(result).toEqual({
       start: new Date("2026-01-05"),
@@ -23,30 +22,20 @@ describe("deriveFeatureSchedule", () => {
         { startDate: new Date("2026-03-02"), endDate: new Date("2026-03-15") },
       ],
       phaseRange: null,
-      isContinuousFlow: false,
     });
     expect(result.start).toEqual(new Date("2026-01-05"));
     expect(result.end).toEqual(new Date("2026-03-15"));
     expect(result.source).toBe("sprints");
   });
 
-  it("falls back to the phase's cached range only for Kanban (continuous_flow)", () => {
+  it("falls back to the generated phase range before sprint planning", () => {
     const phaseRange = { start: new Date("2026-01-01"), end: new Date("2026-03-31") };
-    const result = deriveFeatureSchedule({ spannedSprints: [], phaseRange, isContinuousFlow: true });
+    const result = deriveFeatureSchedule({ spannedSprints: [], phaseRange });
     expect(result).toEqual({ start: phaseRange.start, end: phaseRange.end, source: "phase_range" });
   });
 
-  it("a non-Kanban Feature with no scheduled Stories is unscheduled, never fabricated", () => {
-    const result = deriveFeatureSchedule({
-      spannedSprints: [],
-      phaseRange: { start: new Date("2026-01-01"), end: new Date("2026-03-31") },
-      isContinuousFlow: false,
-    });
-    expect(result).toEqual({ start: null, end: null, source: "unscheduled" });
-  });
-
-  it("Kanban with no phase range yet is also unscheduled, not fabricated", () => {
-    const result = deriveFeatureSchedule({ spannedSprints: [], phaseRange: null, isContinuousFlow: true });
+  it("a Feature without Sprint dates or a generated phase range remains unscheduled", () => {
+    const result = deriveFeatureSchedule({ spannedSprints: [], phaseRange: null });
     expect(result.source).toBe("unscheduled");
   });
 });

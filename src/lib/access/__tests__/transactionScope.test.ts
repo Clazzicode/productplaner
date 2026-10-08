@@ -1,11 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const state = vi.hoisted(() => ({ committed: [] as string[], opens: 0 }));
+const state = vi.hoisted(() => ({ committed: [] as string[], opens: 0, isolation: "" }));
 vi.mock("@prisma/client", () => ({
   Prisma: { TransactionIsolationLevel: { Serializable: "Serializable" } },
   PrismaClient: class {
     $extends() { return { prototype: { create: () => { throw new Error("Escaped transaction"); } } }; }
-    async $transaction(fn: (tx: unknown) => Promise<unknown>) {
+    async $transaction(fn: (tx: unknown) => Promise<unknown>, options: { isolationLevel: string }) {
+      state.isolation = options.isolationLevel;
       state.opens++;
       const pending: string[] = [];
       const tx = { $executeRaw: async () => 1, prototype: { create: async ({ data }: { data: { id: string } }) => { pending.push(data.id); return data; } } };
@@ -26,6 +27,7 @@ describe("business transaction composition", () => {
       await withTransaction(() => db.prototype.create({ data: { id: "regenerate", initiativeId: "i" } }));
     });
     expect(state.opens).toBe(1);
+    expect(state.isolation).toBe("Serializable");
     expect(state.committed).toEqual(["move", "regenerate"]);
   });
   it.each(["downstream regeneration", "baseline creation"])("rolls back preceding writes on failure in %s", async (stage) => {

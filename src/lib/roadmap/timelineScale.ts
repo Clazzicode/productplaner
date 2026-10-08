@@ -89,3 +89,9 @@ export function todayOffset(axis: TimeAxis, today: Date): number | null {
   if (today < axis.rangeStart || today > axis.rangeEnd) return null;
   return differenceInCalendarDays(today, axis.rangeStart) * axis.pxPerDay;
 }
+
+/** Left offset for a strategic marker such as a target release date. */
+export function markerOffset(axis: TimeAxis, date: Date): number | null {
+  if (date < axis.rangeStart || date > axis.rangeEnd) return null;
+  return differenceInCalendarDays(date, axis.rangeStart) * axis.pxPerDay;
+}

@@ -19,7 +19,7 @@ import { useCoachMarks } from "@/components/coachmarks/CoachMarkProvider";
  * and /api/admin/* route re-checks accessLevel server-side regardless
  * (reference doc §12: "Hiding the UI link alone is not security").
  *
- * "Account Settings" (formerly the per-user Anthropic API key page) was
+ * "Account Settings" (formerly the per-user AI API key page) was
  * removed when bring-your-own-key was retired — all AI calls now route
  * through the shared platform gateway (src/lib/ai/client.ts), so there was
  * no personal AI setting left to manage. Re-added below (directive item 3)

@@ -4,7 +4,8 @@ import { NextResponse } from "next/server";
 import { requireProjectApiAccess } from "@/lib/access/projectAccess";
 import { jsonError, zodMessage } from "@/lib/api";
 import { requireCurrentUserApi } from "@/lib/auth/session";
-import { db, establishAuthContext } from "@/lib/db";
+import { db, establishAuthContext, withTransaction } from "@/lib/db";
+import { auditOrganization } from "@/lib/audit";
 import { projectPatchSchema } from "@/lib/validation/schemas";
 
 async function GETHandler(_request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -43,7 +44,11 @@ async function PATCHHandler(request: Request, { params }: { params: Promise<{ id
   const existing = await db.project.findUnique({ where: { id }, select: { id: true } });
   if (!existing) return jsonError("Project not found.", 404);
 
-  await db.project.update({ where: { id }, data: parsed.data });
+  await withTransaction(async () => {
+    await db.project.update({ where: { id }, data: parsed.data });
+    await auditOrganization({ organizationId: authGuard.user.organizationId, actorUserId: authGuard.user.id,
+      projectId: id, entityType: "project", entityId: id, action: "project.updated", metadata: { fields: Object.keys(parsed.data) } });
+  });
   return NextResponse.json({ ok: true });
 }
 

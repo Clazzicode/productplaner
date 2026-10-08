@@ -20,8 +20,12 @@ type Tx = Prisma.TransactionClient;
  * roadmap-versions/compare) build the identical shape from one place.
  */
 export async function buildLiveSnapshot(tx: Tx | typeof db, prototypeId: string) {
+  // The request-scoped Prisma extension and TransactionClient expose the same
+  // model delegates at runtime. Normalize the type here so a larger schema
+  // does not make TypeScript compare two deeply generic delegate unions.
+  const client = tx as unknown as Tx;
   const [layers, sprints, releases] = await Promise.all([
-    tx.artifactLayer.findMany({
+    client.artifactLayer.findMany({
       where: { prototypeId },
       orderBy: [{ type: "asc" }, { order: "asc" }],
       select: {
@@ -40,12 +44,12 @@ export async function buildLiveSnapshot(tx: Tx | typeof db, prototypeId: string)
         externalRef: true,
       },
     }),
-    tx.sprint.findMany({ where: { prototypeId }, orderBy: { sprintNumber: "asc" } }),
-    tx.release.findMany({ where: { prototypeId }, orderBy: { order: "asc" } }),
+    client.sprint.findMany({ where: { prototypeId }, orderBy: { sprintNumber: "asc" } }),
+    client.release.findMany({ where: { prototypeId }, orderBy: { order: "asc" } }),
   ]);
-  const prototype = await tx.prototype.findUniqueOrThrow({ where: { id: prototypeId }, select: { initiativeId: true } });
-  const initiative = await tx.initiative.findUniqueOrThrow({ where: { id: prototype.initiativeId }, include: { intakeAnswerSet: { include: { capabilities: { include: { dependsOnEdges: true } } } } } });
-  const locks = await tx.layerLock.findMany({ where: { prototypeId } });
+  const prototype = await client.prototype.findUniqueOrThrow({ where: { id: prototypeId }, select: { initiativeId: true } });
+  const initiative = await client.initiative.findUniqueOrThrow({ where: { id: prototype.initiativeId }, include: { intakeAnswerSet: { include: { capabilities: { include: { dependsOnEdges: true } } } } } });
+  const locks = await client.layerLock.findMany({ where: { prototypeId } });
   return { capturedAt: new Date().toISOString(), layers, sprints, releases, initiative, locks };
 }
 

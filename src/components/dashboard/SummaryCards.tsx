@@ -38,7 +38,7 @@ export default function SummaryCards(props: {
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <Card>
           <p className="text-xs font-semibold uppercase tracking-wide text-neutral-400">
-            Plan progress
+            Planning setup
           </p>
           <p className="mt-1 text-2xl font-bold">{completion.percent}%</p>
           <ProgressBar percent={completion.percent} className="mt-2" />

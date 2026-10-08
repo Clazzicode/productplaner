@@ -2,8 +2,11 @@
   "name": "guided-planning-platform-v2",
   "version": "0.1.0",
   "private": true,
-  "engines": { "node": ">=24.15.0 <25" },
+  "engines": {
+    "node": ">=24.15.0 <25"
+  },
   "scripts": {
+    "demo:po": "node scripts/po-demo.mjs",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
@@ -15,18 +18,23 @@
     "postinstall": "prisma generate"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.124.0",
     "@prisma/client": "^6.19.3",
     "@supabase/ssr": "^0.12.7",
     "@supabase/supabase-js": "^2.116.0",
     "date-fns": "^4.4.0",
-    "next": "16.3.5",
+    "next": "16.3.8",
     "officeparser": "^7.8.0",
+    "openai": "7.23.0",
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "zod": "^4.4.3"
   },
   "overrides": {
+    "sharp": "0.35.5",
+    "source-map-js": "1.2.2",
+    "@prisma/config": {
+      "deepmerge-ts": "8.0.0"
+    },
     "officeparser": {
       "pdfjs-dist": "6.3.289"
     }
@@ -38,7 +46,7 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
-    "eslint-config-next": "16.3.5",
+    "eslint-config-next": "16.3.8",
     "prisma": "6.19.3",
     "tailwindcss": "^4",
     "tsx": "^4.23.1",

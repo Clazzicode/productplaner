@@ -2,7 +2,8 @@ name: Quality gates
 on:
   pull_request:
   push:
-    branches: [main]
+    branches: [master, main]
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:
@@ -26,9 +27,10 @@ jobs:
       - run: npm run lint -- --max-warnings=0
       - run: npm test
       - run: npm run build
-      - name: Dependency advisory report
-        run: npm audit --json > dependency-audit.json
-        continue-on-error: true
+      - name: Runtime dependency audit
+        run: npm audit --omit=dev --audit-level=high
+      - name: Full dependency advisory report
+        run: npm audit --json > dependency-audit.json || true
       - uses: actions/upload-artifact@v4
         if: always()
         with:

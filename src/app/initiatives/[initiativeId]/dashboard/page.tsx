@@ -489,7 +489,7 @@ export default async function DashboardPage({
               stageLabel: STAGE_LABEL[lifecycleResolution.stage],
               nextAction:
                 lifecycleResolution.stage === "active_execution"
-                  ? "Fully active"
+                  ? "Planning setup complete"
                   : lifecycleResolution.nextAction.label,
             }}
             scope={{

@@ -1,0 +1,13 @@
+
+> guided-planning-platform-v2@0.1.0 test
+> vitest run
+
+
+ RUN  v4.1.11 C:/Users/avery/OneDrive/Desktop/TLO project -product-/guided-planning-platform-v2
+
+
+ Test Files  67 passed (67)
+      Tests  543 passed (543)
+   Start at  09:17:56
+   Duration  14.81s (transform 8.04s, setup 0ms, import 48.75s, tests 10.18s, environment 22ms)
+

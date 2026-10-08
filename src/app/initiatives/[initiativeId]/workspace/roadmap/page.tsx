@@ -7,10 +7,13 @@ import RoadmapBoard, { type BoardPhase } from "@/components/workspace/RoadmapBoa
 import RoadmapLegacyViews from "@/components/workspace/RoadmapLegacyViews";
 import RoadmapToolbar from "@/components/workspace/RoadmapToolbar";
 import RoadmapViewSwitcher from "@/components/workspace/RoadmapViewSwitcher";
+import RoadmapPlanningView from "@/components/workspace/RoadmapPlanningView";
 import TraceBadge from "@/components/workspace/TraceBadge";
 import CoachMark from "@/components/coachmarks/CoachMark";
 import TimelineRoadmap from "@/components/workspace/timeline/TimelineRoadmap";
 import AiAssistPanel from "@/components/ai/AiAssistPanel";
+import { requireInitiativeView } from "@/lib/access/guards";
+import { meetsMinimum } from "@/lib/access/resolution";
 import { requireCurrentUser } from "@/lib/auth/session";
 import { db, establishAuthContext } from "@/lib/db";
 import { PHASE_NAMES } from "@/lib/generation/constants";
@@ -37,6 +40,7 @@ export default async function RoadmapPage({
   const { initiativeId } = await params;
   const user = await requireCurrentUser();
   establishAuthContext(user.authUserId);
+  const access = await requireInitiativeView(user, initiativeId);
   const ws = await loadWorkspace(initiativeId);
   if (!ws) notFound();
   const cost = await loadCostContext(initiativeId, ws.prototype.id);
@@ -191,15 +195,32 @@ export default async function RoadmapPage({
   );
 
   const timelineData = await loadRoadmapTimelineData(initiativeId, ws.prototype.id, ws.initiative.methodology);
+  const timelineFeatures = [...timelineData.phases.flatMap((phase) => phase.features), ...timelineData.unscheduled];
+  const timelineByCapabilityId = new Map(timelineFeatures.filter((feature) => feature.capabilityId).map((feature) => [feature.capabilityId!, feature]));
+  const planningView = <RoadmapPlanningView
+    initiativeId={initiativeId}
+    canEdit={meetsMinimum(access.level, "edit")}
+    releases={timelineData.releases.map((release) => ({ id: release.id, label: release.label, targetDate: release.targetDate.toISOString() }))}
+    features={ws.initiative.intakeAnswerSet!.capabilities.map((capability) => {
+      const timeline = timelineByCapabilityId.get(capability.id);
+      return {
+        id: capability.id, name: capability.name, description: capability.description,
+        backlogLane: capability.backlogLane, backlogRevision: capability.backlogRevision,
+        releaseId: capability.releaseId, businessValue: capability.businessValue,
+        riskLevel: capability.riskLevel, dependencyCount: capability.dependsOnEdges.length,
+        dependencyWarnings: timeline?.dependencyWarnings ?? [], defectCount: timeline?.defectCount ?? 0,
+        blockerCount: timeline?.blockerCount ?? 0, qualityRisk: timeline?.qualityRisk ?? "low",
+      };
+    })}
+  />;
   const timelineView = (
     <TimelineRoadmap initiativeId={initiativeId} data={serializeTimelineData(timelineData)} />
   );
 
   const milestonesView = (
-    <EmptyState
-      title="Milestones is coming in Step 9C"
-      description="Releases, the projected go-live date, and the approved-baseline checkpoint will plot on one strategic timeline here — not built yet."
-    />
+    timelineData.releases.length === 0
+      ? <EmptyState title="No target releases yet" description="Create a release from Sprints & Releases to add the release cadence and target release date to this roadmap." />
+      : <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{timelineData.releases.map((release) => <section key={release.id} className="rounded-xl border border-indigo-100 bg-indigo-50/40 p-5"><p className="text-xs font-semibold uppercase tracking-wide text-indigo-600">Target release</p><h3 className="mt-1 text-lg font-bold text-indigo-950">{format(release.targetDate, "MMM d, yyyy")}</h3><p className="mt-2 text-sm text-indigo-800">{release.label}</p><p className="mt-1 text-xs capitalize text-indigo-700">Cadence: {release.cadence.replaceAll("_", " ") || "Not set"}</p><div className="mt-3 flex flex-wrap gap-1.5 text-xs"><span className="rounded-full bg-white px-2 py-1">{release.featureCount} features</span><span className="rounded-full bg-white px-2 py-1">{release.defectCount} active defects</span><span className="rounded-full bg-white px-2 py-1">{release.blockerCount} blockers</span><span className="rounded-full bg-white px-2 py-1 capitalize">{release.qualityRisk} quality risk</span></div></section>)}</div>
   );
   const connectionsView = (
     <EmptyState
@@ -211,10 +232,10 @@ export default async function RoadmapPage({
   return (
     <RoadmapToolbar
       title="Roadmap"
-      description="One page, three lenses over the same plan — Timeline for scanning work over time, Milestones for strategic checkpoints, Connections for dependencies."
+      description="Plan features in Now, Next, Later, or Unscheduled, then enrich the roadmap with release cadence, target dates, and dependencies."
     >
       <CoachMark coachMarkKey="roadmap" className="mb-4" />
-      <RoadmapViewSwitcher timeline={timelineView} milestones={milestonesView} connections={connectionsView} />
+      <RoadmapViewSwitcher planning={planningView} timeline={timelineView} milestones={milestonesView} connections={connectionsView} />
       <RoadmapLegacyViews list={listView} board={boardView} />
 
       {/* Secondary to the roadmap above, never the main output (Section 4). */}

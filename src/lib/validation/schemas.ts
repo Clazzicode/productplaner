@@ -248,10 +248,43 @@ export const artifactPatchSchema = z
     title: z.string().trim().min(3).optional(),
     body: z.string().optional(),
     points: z.number().int().min(1).max(21).optional(),
+    readinessStatus: z.enum(["needs_refinement", "ready_for_refinement", "sprint_ready", "blocked"]).optional(),
+    changeReason: z.string().trim().max(500).optional(),
   })
-  .refine((v) => v.title !== undefined || v.body !== undefined || v.points !== undefined, {
+  .refine((v) => v.title !== undefined || v.body !== undefined || v.points !== undefined || v.readinessStatus !== undefined, {
     message: "Nothing to update.",
   });
+
+export const storyCreateSchema = z.object({
+  epicId: z.string().min(1),
+  title: z.string().trim().min(3).max(160),
+  body: z.string().trim().min(1).max(8000),
+  points: z.number().int().min(1).max(21).nullable().default(null),
+  sourceType: z.enum(["manual", "jira"]).default("manual"),
+  externalRef: z.string().trim().max(120).nullable().default(null),
+}).superRefine((value, ctx) => {
+  if (value.sourceType === "jira" && !value.externalRef) ctx.addIssue({ code: "custom", path: ["externalRef"], message: "Add the Jira story key." });
+});
+
+export const storySplitSchema = z.object({
+  stories: z.array(z.object({
+    title: z.string().trim().min(3).max(160),
+    body: z.string().trim().min(1).max(8000),
+    points: z.number().int().min(1).max(21).nullable().default(null),
+  })).min(2).max(5),
+});
+
+export const acceptanceCriterionCreateSchema = z.object({
+  title: z.string().trim().min(3).max(160),
+  body: z.string().trim().min(3).max(4000),
+  sourceType: z.enum(["manual", "ai"]).default("manual"),
+});
+
+export const acceptanceCriteriaReorderSchema = z.object({
+  orderedIds: z.array(z.string().min(1)).min(1).max(30).refine(ids => new Set(ids).size === ids.length, "Criterion ids must be unique."),
+});
+
+export const acceptanceCriterionApproveSchema = z.object({ comment: z.string().trim().max(500).default("") });
 
 export const moveSprintSchema = z.object({
   sprintNumber: z.number().int().min(1),
@@ -291,9 +324,11 @@ export const movePhaseSchema = z.object({
 // Guided-activation restructure: manual Create Release / Plan Sprint flows
 // (src/app/api/initiatives/[id]/releases, src/app/api/releases/[releaseId]/sprints).
 export const createReleaseSchema = z.object({
-  phaseNumber: z.number().int().min(1),
-  name: z.string().trim().min(1).max(120).optional(),
+  cadence: z.enum(["weekly", "biweekly", "every_three_weeks", "monthly", "quarterly", "custom"]),
+  customCadence: z.string().trim().max(120).default(""),
   targetDate: z.coerce.date(),
+}).refine((value) => value.cadence !== "custom" || value.customCadence.length > 0, {
+  path: ["customCadence"], message: "Describe the custom release cadence.",
 });
 
 export const createSprintSchema = z.object({
@@ -301,7 +336,7 @@ export const createSprintSchema = z.object({
   endDate: z.coerce.date(),
   capacityPoints: z.number().min(0.1).max(10_000),
   storyIds: z.array(z.string()).default([]),
-});
+}).refine(value => value.endDate >= value.startDate, { message: "Sprint end date must be on or after its start date." });
 
 export const integrationActionSchema = z.object({
   action: z.enum(["connect", "configure", "sync", "disconnect", "reconnect"]),
@@ -396,11 +431,38 @@ const proposedEpicSchema = z.object({
   body: z.string().trim().min(1),
   stories: z.array(proposedStorySchema).max(10).default([]),
 });
+export const refinementFindingCategorySchema = z.enum([
+  "missing_information",
+  "engineering_question",
+  "contradiction",
+  "dependency",
+  "scope",
+  "acceptance_criteria",
+  "blocker",
+  "other",
+]);
+export const refinementFindingProposalSchema = z.object({
+  storyArtifactLayerId: z.string().min(1),
+  category: refinementFindingCategorySchema,
+  title: z.string().trim().min(3).max(160),
+  detail: z.string().trim().min(3).max(2000),
+});
 export const proposeStoryContentResultSchema = z.object({
   epics: z.array(proposedEpicSchema).max(6),
+  findings: z.array(refinementFindingProposalSchema).max(30).default([]),
   ...assistExplainFields,
 });
 export type ProposeStoryContentResult = z.infer<typeof proposeStoryContentResultSchema>;
+
+export const refinementFindingUpdateSchema = z.object({
+  status: z.enum(["open", "resolved", "dismissed"]).optional(),
+  ownerUserId: z.string().min(1).nullable().optional(),
+  resolution: z.string().trim().max(2000).optional(),
+}).superRefine((value, ctx) => {
+  if (value.status === "resolved" && !value.resolution) {
+    ctx.addIssue({ code: "custom", path: ["resolution"], message: "Add a resolution before marking this finding resolved." });
+  }
+});
 
 export const proposeDependencyCandidateSchema = z.object({
   fromCapabilityId: z.string().min(1),

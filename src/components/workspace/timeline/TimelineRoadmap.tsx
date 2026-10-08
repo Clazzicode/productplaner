@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import EmptyState from "@/components/ui/EmptyState";
 import type { ClientRoadmapTimelineData } from "@/lib/roadmap/loadRoadmapTimelineData";
 import { EMPTY_FILTERS, filterFeatures, type TimelineFilterState } from "@/lib/roadmap/timelineFilters";
-import { buildTimeAxis, todayOffset, type ZoomLevel } from "@/lib/roadmap/timelineScale";
+import { buildTimeAxis, markerOffset, todayOffset, type ZoomLevel } from "@/lib/roadmap/timelineScale";
 import { LEFT_COL_PX, ROW_HEIGHT_PX } from "./layout";
 import RoadmapDetailDrawer from "./RoadmapDetailDrawer";
 import RoadmapFilters from "./RoadmapFilters";
@@ -60,6 +60,10 @@ export default function TimelineRoadmap(props: { initiativeId: string; data: Cli
 
   const allFeatures = [...data.phases.flatMap((p) => p.features), ...data.unscheduled];
   const selectedFeature = allFeatures.find((f) => f.id === selectedFeatureId) ?? null;
+  const cadenceLabels: Record<string, string> = {
+    weekly: "Weekly", biweekly: "Every two weeks", every_three_weeks: "Every three weeks",
+    monthly: "Monthly", quarterly: "Quarterly",
+  };
 
   if (!data.available) {
     return (
@@ -86,6 +90,16 @@ export default function TimelineRoadmap(props: { initiativeId: string; data: Cli
 
   return (
     <div>
+      {data.releases.length > 0 && <section className="mb-4 rounded-xl border border-indigo-100 bg-indigo-50/50 p-4" aria-label="Release cadence and target dates">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div><h3 className="text-sm font-semibold text-indigo-950">Release cadence</h3>
+            <p className="text-xs text-indigo-700">{(cadenceLabels[data.releases[0].cadence] ?? data.releases[0].cadence) || "Not set"}</p></div>
+          <div className="flex flex-wrap gap-2">{data.releases.map((release) => <span key={release.id} className="rounded-full bg-white px-3 py-1.5 text-xs font-medium text-indigo-800 ring-1 ring-indigo-100">
+            {release.label} · {new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric", year: "numeric" }).format(new Date(release.targetDate))}
+            <span className="ml-1 text-indigo-600">· {release.featureCount} features · {release.defectCount} defects · {release.blockerCount} blockers · {release.qualityRisk} risk</span>
+          </span>)}</div>
+        </div>
+      </section>}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <RoadmapFilters
           filters={filters}
@@ -133,6 +147,13 @@ export default function TimelineRoadmap(props: { initiativeId: string; data: Cli
                 aria-hidden
               />
             )}
+            {data.releases.map((release) => {
+              const left = markerOffset(axis, new Date(release.targetDate));
+              if (left == null) return null;
+              return <div key={release.id} className="pointer-events-none absolute z-10 border-l border-dashed border-indigo-500/70" style={{ left: LEFT_COL_PX + left, top: 0, height: rowsHeight }} aria-hidden>
+                <span className="absolute left-1 top-1 whitespace-nowrap rounded bg-indigo-600 px-1.5 py-0.5 text-[10px] font-semibold text-white">{release.label}</span>
+              </div>;
+            })}
             {filteredPhases.map((group) => (
               <TimelinePhaseGroup
                 key={group.phaseNumber}

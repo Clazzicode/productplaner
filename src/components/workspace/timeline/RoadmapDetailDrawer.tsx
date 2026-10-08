@@ -10,7 +10,7 @@ import { TIMELINE_HEALTH_LABELS } from "@/lib/roadmap/timelineDerivation";
 
 const SCHEDULE_SOURCE_LABEL: Record<ClientTimelineFeature["scheduleSource"], string> = {
   sprints: "From its Stories' Sprint dates",
-  phase_range: "From this phase's throughput-packed range (Kanban)",
+  phase_range: "From the generated phase estimate",
   unscheduled: "Not yet schedulable",
 };
 
@@ -115,6 +115,18 @@ export default function RoadmapDetailDrawer(props: {
               />
             </dl>
           </section>
+
+          {(feature.dependencyWarnings.length > 0 || feature.blockerCount > 0 || feature.defectCount > 0) && (
+            <section className="rounded-xl border border-amber-200 bg-amber-50 p-3">
+              <h3 className="text-xs font-semibold uppercase tracking-wide text-amber-900">Delivery warnings</h3>
+              <div className="mt-2 space-y-1 text-sm text-amber-950">
+                {feature.defectCount > 0 && <p>{feature.defectCount} active defect{feature.defectCount === 1 ? "" : "s"} linked to this feature.</p>}
+                {feature.blockerCount > 0 && <p>{feature.blockerCount} open blocker{feature.blockerCount === 1 ? "" : "s"} must be resolved.</p>}
+                {feature.dependencyWarnings.map((warning) => <p key={warning}>{warning}</p>)}
+                <p className="capitalize">Quality risk: {feature.qualityRisk}</p>
+              </div>
+            </section>
+          )}
 
           <section>
             <h3 className="text-xs font-semibold uppercase tracking-wide text-text-muted">Delivery</h3>

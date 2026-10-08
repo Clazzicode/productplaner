@@ -1,4 +1,9 @@
-# V2 AI Foundation — Step 10A
+# V2 AI Foundation — Step 10A (historical design record)
+
+> **Current provider:** Guided Planning now uses the OpenAI Responses API with
+> the server-side `OPENAI_API_KEY`. See `docs/OPENAI-SETUP.md` for the active
+> configuration. References below to the former provider describe the original
+> foundation and are retained as migration history, not current setup guidance.
 
 A centralized, server-side Anthropic integration and the platform's first real AI action,
 `ANALYZE_INTAKE`. Additive only: new Prisma models, new `src/lib/ai/*` modules, one new API

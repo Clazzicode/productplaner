@@ -1,5 +1,6 @@
 import { Prisma, PrismaClient } from "@prisma/client";
 import { AsyncLocalStorage } from "node:async_hooks";
+import { assertEnvironmentIsolation } from "@/lib/environment";
 
 // ---------- RLS request context (docs/V2-MULTI-TENANT-AUTH.md) ----------
 // Postgres's auth.uid() reads current_setting('request.jwt.claims', true)::json->>'sub'.
@@ -60,6 +61,7 @@ export function withServiceContext<T>(fn: () => T): T {
 }
 
 function claimsJson(): string {
+  assertEnvironmentIsolation();
   const ctx = authContext.getStore();
   if (!ctx) {
     throw new Error(

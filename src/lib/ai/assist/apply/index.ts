@@ -3,6 +3,8 @@ import { applyFeatureProposal } from "./applyFeatureProposal";
 import { applyContentProposal } from "./applyContentProposal";
 import { applyDependencyObservation } from "./applyDependencyObservation";
 import { applyRiskObservation } from "./applyRiskObservation";
+import { applyRefinementFinding } from "./applyRefinementFinding";
+import { applyRequirementReview } from "./applyRequirementReview";
 
 export { AiAssistApplyBlockedError, DependencyAlreadyExistsError } from "@/lib/ai/errors";
 
@@ -16,14 +18,15 @@ export { AiAssistApplyBlockedError, DependencyAlreadyExistsError } from "@/lib/a
 // roadmap insights are read-only (Dismiss/Acknowledge only), and release/
 // sprint recommendations apply through the platform's existing manual forms
 // client-side, confirmed via POST /api/ai-assist-items/[id]/mark-applied.
-export type ApplicableActionKey = "PROPOSE_FEATURES" | "PROPOSE_STORY_CONTENT" | "PROPOSE_DEPENDENCIES" | "PROPOSE_RISKS";
+export type ApplicableActionKey = "PROPOSE_FEATURES" | "PROPOSE_STORY_CONTENT" | "PROPOSE_DEPENDENCIES" | "PROPOSE_RISKS" | "REVIEW_REQUIREMENTS";
 
 export function isApplicableThroughDispatcher(actionKey: string): actionKey is ApplicableActionKey {
   return (
     actionKey === "PROPOSE_FEATURES" ||
     actionKey === "PROPOSE_STORY_CONTENT" ||
     actionKey === "PROPOSE_DEPENDENCIES" ||
-    actionKey === "PROPOSE_RISKS"
+    actionKey === "PROPOSE_RISKS" ||
+    actionKey === "REVIEW_REQUIREMENTS"
   );
 }
 
@@ -37,6 +40,7 @@ export async function applyAiAssistItem(
   item: AiAssistItem,
   content: unknown,
   confirmApprovedImpact: boolean,
+  appliedByUserId = item.generatedByUserId,
 ): Promise<ApplyResult> {
   switch (item.actionKey) {
     case "PROPOSE_FEATURES": {
@@ -45,6 +49,9 @@ export async function applyAiAssistItem(
     }
     case "PROPOSE_STORY_CONTENT": {
       if (!item.targetId) throw new Error("Story content proposal has no target feature.");
+      if (item.targetType === "story_refinement_finding") {
+        return applyRefinementFinding(tx, item, content);
+      }
       return applyContentProposal(tx, item.targetId, content as never, confirmApprovedImpact);
     }
     case "PROPOSE_DEPENDENCIES":
@@ -55,6 +62,8 @@ export async function applyAiAssistItem(
         { organizationId: item.organizationId, projectId: item.projectId, initiativeId: item.initiativeId, fieldKey: "risk" },
         content,
       );
+    case "REVIEW_REQUIREMENTS":
+      return applyRequirementReview(tx, item, content, confirmApprovedImpact, appliedByUserId);
     default:
       throw new Error(`AiAssistItem.actionKey "${item.actionKey}" has no apply path through this dispatcher.`);
   }

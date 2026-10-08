@@ -72,7 +72,7 @@ export default async function InitiativesPage() {
           <h2 className="text-lg font-semibold">No initiatives yet</h2>
           <p className="mx-auto mt-2 max-w-md text-sm text-neutral-500">
             Create one, answer the eight guided planning questions, and get a working
-            prototype of a complete product plan — roadmap to sprint-ready stories.
+            prototype of a complete product plan — roadmap to stories for PO review.
           </p>
           <Link
             href="/initiatives/new"

@@ -1,0 +1,137 @@
+
+> guided-planning-platform-v2@0.1.0 build
+> next build
+
+▲ Next.js 16.3.5 (Turbopack)
+- Environments: .env
+✓ Running next.config.ts took 74ms
+
+  Creating an optimized production build ...
+✓ Compiled successfully in 14.9s
+  Running TypeScript ...
+  Finished TypeScript in 8.4s ...
+  Collecting page data using 11 workers ...
+  Generating static pages using 11 workers (0/18) ...
+  Generating static pages using 11 workers (4/18) 
+  Generating static pages using 11 workers (8/18) 
+  Generating static pages using 11 workers (13/18) 
+✓ Generating static pages using 11 workers (18/18) in 674ms
+  Finalizing page optimization ...
+
+Route (app)
+┌ ƒ /
+├ ƒ /_not-found
+├ ƒ /access-denied
+├ ƒ /account/settings
+├ ƒ /activity
+├ ƒ /admin
+├ ƒ /admin/access
+├ ƒ /admin/access/[initiativeId]
+├ ƒ /admin/dashboard-configuration
+├ ƒ /admin/users
+├ ƒ /admin/users/[userId]
+├ ƒ /api/account/start-over
+├ ƒ /api/account/working-role
+├ ƒ /api/admin/access/[initiativeId]/grants
+├ ƒ /api/admin/access/grants/[grantId]
+├ ƒ /api/admin/access/grants/[grantId]/preview
+├ ƒ /api/admin/ai-usage-summary
+├ ƒ /api/admin/dashboard-config/[workingRole]
+├ ƒ /api/admin/teams
+├ ƒ /api/admin/teams/[teamId]/members
+├ ƒ /api/admin/teams/[teamId]/members/[userId]
+├ ƒ /api/admin/users/[userId]
+├ ƒ /api/ai-assist-items/[id]/apply
+├ ƒ /api/ai-assist-items/[id]/dismiss
+├ ƒ /api/ai-assist-items/[id]/mark-applied
+├ ƒ /api/ai-jobs/[id]
+├ ƒ /api/ai-usage-status
+├ ƒ /api/artifacts/[artifactId]
+├ ƒ /api/artifacts/[artifactId]/move-sprint
+├ ƒ /api/auth/active-organization
+├ ƒ /api/auth/sign-in
+├ ƒ /api/auth/sign-out
+├ ƒ /api/auth/sign-up
+├ ƒ /api/capabilities/[capId]
+├ ƒ /api/capabilities/[capId]/move-phase
+├ ƒ /api/coach-marks
+├ ƒ /api/coach-marks/[key]
+├ ƒ /api/context-items/[id]/approve
+├ ƒ /api/context-items/[id]/reject
+├ ƒ /api/context-items/[id]/resolve-conflict
+├ ƒ /api/documents/[id]/analyze
+├ ƒ /api/documents/[id]/context-items
+├ ƒ /api/health
+├ ƒ /api/initiatives
+├ ƒ /api/initiatives/[id]
+├ ƒ /api/initiatives/[id]/ai-assist
+├ ƒ /api/initiatives/[id]/ai-assist/content
+├ ƒ /api/initiatives/[id]/ai-assist/dependencies
+├ ƒ /api/initiatives/[id]/ai-assist/features
+├ ƒ /api/initiatives/[id]/ai-assist/releases
+├ ƒ /api/initiatives/[id]/ai-assist/risks
+├ ƒ /api/initiatives/[id]/ai-assist/roadmap-insights
+├ ƒ /api/initiatives/[id]/ai-assist/sprints
+├ ƒ /api/initiatives/[id]/ai-assist/status
+├ ƒ /api/initiatives/[id]/analyze-intake
+├ ƒ /api/initiatives/[id]/approve-plan
+├ ƒ /api/initiatives/[id]/assumptions
+├ ƒ /api/initiatives/[id]/capabilities
+├ ƒ /api/initiatives/[id]/documents
+├ ƒ /api/initiatives/[id]/generate
+├ ƒ /api/initiatives/[id]/intake
+├ ƒ /api/initiatives/[id]/methodology
+├ ƒ /api/initiatives/[id]/planning-weights/[weightSetId]
+├ ƒ /api/initiatives/[id]/recalculate
+├ ƒ /api/initiatives/[id]/releases
+├ ƒ /api/initiatives/[id]/roadmap-versions
+├ ƒ /api/initiatives/[id]/roadmap-versions/compare
+├ ƒ /api/initiatives/[id]/sync/jira
+├ ƒ /api/initiatives/[id]/validate
+├ ƒ /api/integrations/[providerKey]
+├ ƒ /api/projects
+├ ƒ /api/projects/[id]
+├ ƒ /api/projects/[id]/decisions
+├ ƒ /api/projects/[id]/documents
+├ ƒ /api/projects/[id]/risks
+├ ƒ /api/qualifying
+├ ƒ /api/ready
+├ ƒ /api/releases/[releaseId]/sprints
+├ ƒ /api/roadmap-status
+├ ƒ /api/roadmap-status/[entityType]/[entityId]
+├ ƒ /decisions
+├ ƒ /home
+├ ƒ /initiatives
+├ ƒ /initiatives/[initiativeId]/dashboard
+├ ƒ /initiatives/[initiativeId]/intake
+├ ƒ /initiatives/[initiativeId]/review
+├ ƒ /initiatives/[initiativeId]/workspace
+├ ƒ /initiatives/[initiativeId]/workspace/capacity
+├ ƒ /initiatives/[initiativeId]/workspace/documents
+├ ƒ /initiatives/[initiativeId]/workspace/epics
+├ ƒ /initiatives/[initiativeId]/workspace/executive
+├ ƒ /initiatives/[initiativeId]/workspace/executive/print
+├ ƒ /initiatives/[initiativeId]/workspace/features
+├ ƒ /initiatives/[initiativeId]/workspace/roadmap
+├ ƒ /initiatives/[initiativeId]/workspace/sprints
+├ ƒ /initiatives/[initiativeId]/workspace/stories/[storyId]
+├ ƒ /initiatives/new
+├ ƒ /integrations
+├ ƒ /login
+├ ƒ /onboarding
+├ ƒ /onboarding/role
+├ ƒ /organizations
+├ ƒ /projects
+├ ƒ /projects/[id]
+├ ƒ /projects/[id]/initiatives/new
+├ ƒ /projects/new
+├ ƒ /risks
+├ ƒ /teams
+├ ƒ /teams/[teamId]
+└ ƒ /welcome
+
+
+ƒ Proxy (Middleware)
+
+ƒ  (Dynamic)  server-rendered on demand
+

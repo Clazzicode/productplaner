@@ -84,7 +84,7 @@ export const STAGE_LABEL: Record<LifecycleStage, string> = {
   initiative_no_plan: "Plan not generated",
   plan_generated_no_release: "Plan generated",
   release_no_sprint: "Release created",
-  active_execution: "Fully active",
+  active_execution: "Planning setup complete",
 };
 
 function actionFor(key: NextActionKey, initiativeId: string | null): NextAction {

@@ -15,6 +15,8 @@ export interface RateLimitResult {
 const AUTH_POLICIES: Record<string, RateLimitPolicy> = {
   "/api/auth/sign-in": { key: "auth.sign_in", limit: 10, windowSeconds: 600 },
   "/api/auth/sign-up": { key: "auth.sign_up", limit: 5, windowSeconds: 3600 },
+  "/api/auth/forgot-password": { key: "auth.recovery", limit: 5, windowSeconds: 3600 },
+  "/api/auth/reset-password": { key: "auth.password_update", limit: 5, windowSeconds: 3600 },
 };
 
 /**
@@ -62,6 +64,7 @@ export function hashRateLimitClient(request: Request): string {
 }
 
 export async function checkRateLimit(request: Request, policy: RateLimitPolicy): Promise<RateLimitResult> {
+  // Prisma binds JavaScript integers as bigint; the Postgres function takes int4.
   const rows = await rawDb.$queryRaw<Array<{
     allowed: boolean;
     remaining: number;
@@ -71,8 +74,8 @@ export async function checkRateLimit(request: Request, policy: RateLimitPolicy):
     FROM app_private.check_rate_limit(
       ${policy.key},
       ${hashRateLimitClient(request)},
-      ${policy.windowSeconds},
-      ${policy.limit}
+      ${policy.windowSeconds}::integer,
+      ${policy.limit}::integer
     )
   `;
   const row = rows[0];

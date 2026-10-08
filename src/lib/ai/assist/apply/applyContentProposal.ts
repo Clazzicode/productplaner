@@ -1,6 +1,6 @@
 import type { Prisma } from "@prisma/client";
 import { assertArtifactEditable, LockedLayerError } from "@/lib/generation/locking";
-import { AiAssistApplyBlockedError } from "@/lib/ai/errors";
+import { AiAssistApplyBlockedError, DependencyAlreadyExistsError } from "@/lib/ai/errors";
 
 // content_proposal -> ArtifactLayer.update/.create (Section 4 §5/§8). Per
 // node: an existing id updates ONLY title/body — order/points/sprintId/
@@ -31,6 +31,7 @@ interface ProposedEpic {
 export interface ProposedContent {
   epics: ProposedEpic[];
 }
+const normalized = (value: string) => value.trim().toLocaleLowerCase().replace(/\s+/g, " ");
 
 export async function applyContentProposal(
   tx: Prisma.TransactionClient,
@@ -38,9 +39,9 @@ export async function applyContentProposal(
   content: ProposedContent,
   confirmApprovedImpact: boolean,
 ): Promise<{ appliedEntityType: "artifact_layer"; appliedEntityId: string }> {
-  const feature = await tx.artifactLayer.findUniqueOrThrow({
-    where: { id: featureArtifactLayerId },
-    select: { prototypeId: true, prototype: { select: { approvedAt: true } } },
+  const feature = await tx.artifactLayer.findFirstOrThrow({
+    where: { id: featureArtifactLayerId, type: "feature" },
+    select: { prototypeId: true, sourceCapabilityId: true, prototype: { select: { approvedAt: true } } },
   });
 
   if (feature.prototype.approvedAt && !confirmApprovedImpact) {
@@ -64,6 +65,10 @@ export async function applyContentProposal(
   for (const epic of content.epics) {
     let epicId = epic.existingArtifactLayerId;
     if (epicId) {
+      await tx.artifactLayer.findFirstOrThrow({
+        where: { id: epicId, prototypeId: feature.prototypeId, type: "epic", parentId: featureArtifactLayerId },
+        select: { id: true },
+      });
       await tx.artifactLayer.update({ where: { id: epicId }, data: { title: epic.title, body: epic.body } });
     } else {
       const created = await tx.artifactLayer.create({
@@ -75,6 +80,8 @@ export async function applyContentProposal(
           title: epic.title,
           body: epic.body,
           traceNote: "AI-assisted addition — see the AI Assist panel for details.",
+          sourceType: "ai",
+          sourceCapabilityId: feature.sourceCapabilityId,
         },
         select: { id: true },
       });
@@ -85,8 +92,18 @@ export async function applyContentProposal(
     for (const story of epic.stories) {
       let storyId = story.existingArtifactLayerId;
       if (storyId) {
+        await tx.artifactLayer.findFirstOrThrow({
+          where: { id: storyId, prototypeId: feature.prototypeId, type: "story", parentId: epicId },
+          select: { id: true },
+        });
         await tx.artifactLayer.update({ where: { id: storyId }, data: { title: story.title, body: story.body } });
       } else {
+        const dedupeKey = `feature:${featureArtifactLayerId}:title:${normalized(story.title)}`;
+        const duplicate = await tx.artifactLayer.findFirst({
+          where: { prototypeId: feature.prototypeId, type: "story", dedupeKey },
+          select: { id: true },
+        });
+        if (duplicate) throw new DependencyAlreadyExistsError(`A story named "${story.title}" already exists for this feature.`);
         const created = await tx.artifactLayer.create({
           data: {
             prototypeId: feature.prototypeId,
@@ -98,6 +115,9 @@ export async function applyContentProposal(
             points: null,
             sprintId: null,
             traceNote: "AI-assisted addition — see the AI Assist panel for details.",
+            sourceType: "ai",
+            dedupeKey,
+            sourceCapabilityId: feature.sourceCapabilityId,
           },
           select: { id: true },
         });
@@ -107,7 +127,27 @@ export async function applyContentProposal(
       let acOrder = await tx.artifactLayer.count({ where: { parentId: storyId } });
       for (const ac of story.acceptanceCriteria) {
         if (ac.existingArtifactLayerId) {
-          await tx.artifactLayer.update({ where: { id: ac.existingArtifactLayerId }, data: { title: ac.title, body: ac.body } });
+          const current = await tx.artifactLayer.findFirstOrThrow({
+            where: {
+              id: ac.existingArtifactLayerId,
+              prototypeId: feature.prototypeId,
+              type: "acceptance_criterion",
+              parentId: storyId,
+            },
+          });
+          const changed = current.title !== ac.title || current.body !== ac.body;
+          if (current.approvedAt && changed) {
+            const version = await tx.artifactRevision.count({ where: { artifactId: current.id } }) + 1;
+            await tx.artifactRevision.create({ data: { artifactId: current.id, version, title: current.title, body: current.body, reason: "Changed through an approved AI refinement proposal." } });
+          }
+          await tx.artifactLayer.update({
+            where: { id: ac.existingArtifactLayerId },
+            data: {
+              title: ac.title,
+              body: ac.body,
+              ...(changed ? { approvedAt: null, approvedByUserId: null } : {}),
+            },
+          });
         } else {
           await tx.artifactLayer.create({
             data: {
@@ -118,6 +158,8 @@ export async function applyContentProposal(
               title: ac.title,
               body: ac.body,
               traceNote: "AI-assisted addition — see the AI Assist panel for details.",
+              sourceType: "ai",
+              sourceCapabilityId: feature.sourceCapabilityId,
             },
           });
         }

@@ -1,70 +1,42 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
-  cacheReadPricePerMillionTokens,
-  cacheWritePricePerMillionTokens,
-  estimateCostUsd,
-  inputPricePerMillionTokens,
-  outputPricePerMillionTokens,
+  assertAiPricingConfigured, cacheReadPricePerMillionTokens, cacheWritePricePerMillionTokens,
+  estimateCostUsd, inputPricePerMillionTokens, outputPricePerMillionTokens,
 } from "../pricing";
-
-const ENV_KEYS = [
-  "ANTHROPIC_INPUT_PRICE_PER_MILLION_USD",
-  "ANTHROPIC_OUTPUT_PRICE_PER_MILLION_USD",
-  "ANTHROPIC_CACHE_WRITE_PRICE_PER_MILLION_USD",
-  "ANTHROPIC_CACHE_READ_PRICE_PER_MILLION_USD",
-] as const;
-
-afterEach(() => {
-  for (const key of ENV_KEYS) delete process.env[key];
-});
-
-describe("estimateCostUsd", () => {
-  it("computes cost from the default Sonnet-tier rates ($3/$15 per million)", () => {
-    expect(estimateCostUsd(1_000_000, 0)).toBeCloseTo(3, 6);
-    expect(estimateCostUsd(0, 1_000_000)).toBeCloseTo(15, 6);
+const KEYS = ["OPENAI_MODEL", ...["INPUT", "OUTPUT", "CACHE_WRITE", "CACHE_READ"].map(
+  kind => "OPENAI_" + kind + "_PRICE_PER_MILLION_USD",
+)];
+beforeEach(() => { for (const key of KEYS) vi.stubEnv(key, undefined); });
+afterEach(() => vi.unstubAllEnvs());
+describe("OpenAI usage estimates", () => {
+  it("uses Standard GPT-6 Sol rates for distinct token categories", () => {
+    expect(inputPricePerMillionTokens()).toBe(2);
+    expect(outputPricePerMillionTokens()).toBe(10);
+    expect(cacheWritePricePerMillionTokens()).toBe(2.5);
+    expect(cacheReadPricePerMillionTokens()).toBe(0.2);
+    expect(estimateCostUsd(500_000, 200_000, 100_000, 100_000)).toBe(3.27);
   });
-
-  it("combines input and output cost", () => {
-    expect(estimateCostUsd(500_000, 200_000)).toBeCloseTo(1.5 + 3, 6);
-  });
-
-  it("returns 0 for zero tokens", () => {
+  it("does not reprice zero-cost reuse or failures with no reported tokens", () => {
+    vi.stubEnv("OPENAI_MODEL", "unknown");
     expect(estimateCostUsd(0, 0)).toBe(0);
   });
-
-  it("honors an env override for the rate", () => {
-    process.env.ANTHROPIC_INPUT_PRICE_PER_MILLION_USD = "10";
-    expect(inputPricePerMillionTokens()).toBe(10);
-    expect(estimateCostUsd(1_000_000, 0)).toBeCloseTo(10, 6);
+  it("selects rates for a configured supported model", () => {
+    vi.stubEnv("OPENAI_MODEL", "gpt-6-luna");
+    expect(estimateCostUsd(1_000_000, 1_000_000)).toBe(0.6);
   });
-
-  it("ignores an invalid env override and falls back to the default", () => {
-    process.env.ANTHROPIC_OUTPUT_PRICE_PER_MILLION_USD = "not-a-number";
-    expect(outputPricePerMillionTokens()).toBe(15);
+  it.each(["bad", "-1", "Infinity"])("rejects invalid price %s instead of bypassing budget", value => {
+    vi.stubEnv("OPENAI_OUTPUT_PRICE_PER_MILLION_USD", value);
+    expect(assertAiPricingConfigured).toThrow("Invalid OPENAI_OUTPUT");
   });
-});
-
-describe("cache-aware pricing (Section 5 §20/§21)", () => {
-  it("defaults cache write/read rates to a multiple of the input rate (1.25x / 0.1x)", () => {
-    expect(cacheWritePricePerMillionTokens()).toBeCloseTo(3 * 1.25, 6);
-    expect(cacheReadPricePerMillionTokens()).toBeCloseTo(3 * 0.1, 6);
-  });
-
-  it("cache rates scale with an input-rate override, staying internally consistent", () => {
-    process.env.ANTHROPIC_INPUT_PRICE_PER_MILLION_USD = "10";
-    expect(cacheWritePricePerMillionTokens()).toBeCloseTo(12.5, 6);
-    expect(cacheReadPricePerMillionTokens()).toBeCloseTo(1, 6);
-  });
-
-  it("an explicit cache-rate env override wins over the derived default", () => {
-    process.env.ANTHROPIC_CACHE_READ_PRICE_PER_MILLION_USD = "0.5";
-    expect(cacheReadPricePerMillionTokens()).toBe(0.5);
-  });
-
-  it("estimateCostUsd includes cache tokens when given, and defaults them to 0 for every pre-Section-5 call site", () => {
-    expect(estimateCostUsd(0, 0, 1_000_000, 0)).toBeCloseTo(3 * 1.25, 6);
-    expect(estimateCostUsd(0, 0, 0, 1_000_000)).toBeCloseTo(3 * 0.1, 6);
-    // Backward compatible — omitting the two new params behaves exactly as before.
-    expect(estimateCostUsd(1_000_000, 0)).toBeCloseTo(3, 6);
+  it("requires all four prices for an unknown model", () => {
+    vi.stubEnv("OPENAI_MODEL", "custom-model");
+    expect(assertAiPricingConfigured).toThrow("Configure OpenAI");
+    vi.stubEnv("OPENAI_INPUT_PRICE_PER_MILLION_USD", "4");
+    vi.stubEnv("OPENAI_OUTPUT_PRICE_PER_MILLION_USD", "20");
+    expect(assertAiPricingConfigured).toThrow("Configure OpenAI");
+    vi.stubEnv("OPENAI_CACHE_WRITE_PRICE_PER_MILLION_USD", "0");
+    vi.stubEnv("OPENAI_CACHE_READ_PRICE_PER_MILLION_USD", "1");
+    expect(assertAiPricingConfigured).not.toThrow();
+    expect(estimateCostUsd(1_000_000, 1_000_000, 1_000_000, 1_000_000)).toBe(25);
   });
 });

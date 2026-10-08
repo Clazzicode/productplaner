@@ -1,60 +1,74 @@
 import { withApi } from "@/lib/observability";
-import { NextResponse } from "next/server";
 import { isAuthRetryableFetchError } from "@supabase/supabase-js";
 import { z } from "zod";
 import { jsonError, zodMessage } from "@/lib/api";
-import { provisionSoloWorkspace } from "@/lib/auth/session";
-import { usernameSchema, usernameToPlaceholderEmail } from "@/lib/auth/username";
-import { db, establishAuthContext } from "@/lib/db";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { normalizeUsername, usernameSchema, usernameToPlaceholderEmail } from "@/lib/auth/username";
+import { emailSchema } from "@/lib/auth/credentials";
+import { ensureAuthenticatedWorkspace } from "@/lib/auth/provision";
+import { createSupabaseServerClient, createSupabaseServiceClient } from "@/lib/supabase/server";
+import { clearActiveOrganizationCookie } from "@/lib/auth/session";
+import { clearOnboardingStateServer } from "@/lib/onboarding/tempStateServer";
 
 const signInSchema = z.object({
-  username: usernameSchema,
-  password: z.string().min(1, "Enter your password."),
+  identifier: z.string().trim().min(1, "Enter your username or email.").max(254).refine(
+    (value) => emailSchema.safeParse(value).success || usernameSchema.safeParse(value).success,
+    "Enter a valid username or email address.",
+  ),
+  password: z.string().min(1).max(128),
 });
+
+async function resolveEmail(identifier: string): Promise<string> {
+  const email = emailSchema.safeParse(identifier);
+  if (email.success) return email.data;
+
+  const username = usernameSchema.parse(identifier);
+  const service = createSupabaseServiceClient();
+  const { data: credential, error } = await service
+    .from("AuthUsername")
+    .select("authUserId")
+    .eq("normalized", normalizeUsername(username))
+    .maybeSingle();
+  if (error) throw new Error("Username lookup unavailable");
+  if (!credential) return usernameToPlaceholderEmail(username);
+
+  const { data, error: userError } = await service.auth.admin.getUserById(credential.authUserId);
+  if (userError || !data.user?.email) throw new Error("Username identity unavailable");
+  return data.user.email;
+}
 
 async function POSTHandler(request: Request) {
   const parsed = signInSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return jsonError(zodMessage(parsed.error), 422);
-
+  const credentials = parsed.data;
+  let email: string;
+  try {
+    email = await resolveEmail(credentials.identifier);
+  } catch {
+    return jsonError("Sign-in unavailable.", 503);
+  }
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase.auth.signInWithPassword({
-    email: usernameToPlaceholderEmail(parsed.data.username),
-    password: parsed.data.password,
+    email,
+    password: credentials.password,
   });
   if (error) {
-    // Supabase's own auth-js docs this error class for exactly this: a 500-504
-    // gateway/infra hiccup, not a real rejection — "should not cause session
-    // invalidation." Reported the same as bad credentials, a transient blip on
-    // Supabase's end looks identical to a wrong password and sends users
-    // chasing a typo that was never there. Reproduced directly against this
-    // project's Supabase instance: a fresh, correct sign-in occasionally comes
-    // back as this error class rather than succeeding.
-    if (isAuthRetryableFetchError(error)) {
-      return jsonError("Sign-in service is temporarily unavailable. Please try again in a moment.", 503);
+    if (isAuthRetryableFetchError(error)) return jsonError("Sign-in unavailable.", 503);
+    if (error.code === "email_not_confirmed") {
+      return jsonError("Confirm your email before signing in. Check your inbox and spam folder for the confirmation link.", 403);
     }
-    return jsonError("Incorrect username or password.", 401);
+    if (error.code === "invalid_credentials") {
+      return jsonError("The username/email or password is incorrect.", 401);
+    }
+    return jsonError("Could not sign in. Please try again or reset your password.", 401);
   }
-
-  // Sign-up creates the Supabase Auth account and this app's own User row as
-  // two separate steps (sign-up route), with no rollback between them. If the
-  // User-row step ever fails partway (a transient DB/pooler error), the auth
-  // account is left with no matching User row: Supabase happily signs it in,
-  // but the rest of the app has nothing to resolve it to and treats the
-  // request as signed out. Self-heal that here with the same idempotent-safe
-  // provisioning sign-up itself uses, so a stuck account recovers on its next
-  // sign-in instead of looping back to /login forever.
-  establishAuthContext(data.user.id);
-  const existing = await db.user.findUnique({ where: { authUserId: data.user.id } });
-  if (!existing) {
-    await provisionSoloWorkspace({
-      authUserId: data.user.id,
-      name: parsed.data.username,
-      email: usernameToPlaceholderEmail(parsed.data.username),
-    });
+  if (!data.user?.email_confirmed_at) {
+    await supabase.auth.signOut({ scope: "local" });
+    return jsonError("Confirm your email before signing in.", 401);
   }
-
-  return NextResponse.json({ ok: true });
+  await ensureAuthenticatedWorkspace(data.user);
+  await clearActiveOrganizationCookie();
+  await clearOnboardingStateServer();
+  return Response.json({ ok: true });
 }
 
 export const POST = withApi(POSTHandler);

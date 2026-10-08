@@ -1,4 +1,4 @@
-import type Anthropic from "@anthropic-ai/sdk";
+import type { AiTool } from "@/lib/ai/providerTypes";
 import { db } from "@/lib/db";
 import { resolveMethodology } from "@/lib/generation/methodology";
 import { proposeStoryContentResultSchema } from "@/lib/validation/schemas";
@@ -21,7 +21,7 @@ import type { AiAssistItem } from "@prisma/client";
 
 const TOOL_NAME = "submit_story_content";
 
-const STORY_CONTENT_TOOL: Anthropic.Tool = {
+const STORY_CONTENT_TOOL: AiTool = {
   name: TOOL_NAME,
   description: "Submit improved epic/story/acceptance-criterion wording for this feature.",
   input_schema: {
@@ -66,12 +66,29 @@ const STORY_CONTENT_TOOL: Anthropic.Tool = {
           required: ["existingArtifactLayerId", "title", "body"],
         },
       },
+      findings: {
+        type: "array",
+        description: "Specific refinement findings tied to existing story ids. Return one item per actionable gap or engineering question.",
+        items: {
+          type: "object",
+          properties: {
+            storyArtifactLayerId: { type: "string", description: "An existing story id from the supplied tree." },
+            category: {
+              type: "string",
+              enum: ["missing_information", "engineering_question", "contradiction", "dependency", "scope", "acceptance_criteria", "blocker", "other"],
+            },
+            title: { type: "string" },
+            detail: { type: "string", description: "The gap, contradiction, or focused question and why it matters for refinement." },
+          },
+          required: ["storyArtifactLayerId", "category", "title", "detail"],
+        },
+      },
       why: { type: "string" },
       informationUsed: { type: "string" },
       assumptions: { type: "array", items: { type: "string" } },
       sources: { type: "array", items: { type: "string" } },
     },
-    required: ["epics", "why", "informationUsed"],
+    required: ["epics", "findings", "why", "informationUsed"],
   },
 };
 
@@ -146,7 +163,7 @@ export async function runProposeStoryContent(params: RunProposeStoryContentParam
   const { initiativeId } = feature.prototype;
   const { projectId, methodology: methodologyRaw } = feature.prototype.initiative;
   const methodology = resolveMethodology(methodologyRaw);
-  const system = `${PLATFORM_SYSTEM_PROMPT}\n\n${GLOBAL_PRODUCT_PLANNING_RULES}\n\n${METHODOLOGY_AI_GUIDANCE[methodology]}\n\nYou propose epic/story/acceptance-criterion TEXT only — never a point estimate, sprint assignment, or ordering. Reference existingArtifactLayerId for a node you're rewording; use null only when proposing a genuinely new epic/story/AC. Propose clearer, more specific titles/wording — grounded in the feature's actual description, not generic phrasing. You may also propose a new story or acceptance criterion this feature is missing.`;
+  const system = `${PLATFORM_SYSTEM_PROMPT}\n\n${GLOBAL_PRODUCT_PLANNING_RULES}\n\n${METHODOLOGY_AI_GUIDANCE[methodology]}\n\nPrepare this feature for engineering refinement. Scan every story and acceptance criterion for missing information, unclear scope, dependencies, contradictions, and outcomes that cannot be tested. Return each actionable gap or focused engineering question in findings, tied only to an existing storyArtifactLayerId from the supplied tree. Do not invent an id and do not turn an assumption into a fact. In why, summarize overall readiness. Propose epic/story/acceptance-criterion TEXT only — never a point estimate, sprint assignment, or ordering. Reference existingArtifactLayerId for a node you're rewording; use null only when proposing a genuinely new epic/story/AC. Ground every suggestion in the feature's actual description. The Product Owner must review, apply, edit, or dismiss every proposal.`;
 
   const tree: TreeNode[] = feature.children.map((epic) => ({
     id: epic.id,
@@ -193,21 +210,37 @@ ${formatTreeForPrompt(tree)}`,
     system,
     extraTiers: [taskTier],
     schema: proposeStoryContentResultSchema,
-    buildDrafts: (parsed): AiAssistItemDraft[] => [
-      {
+    buildDrafts: (parsed): AiAssistItemDraft[] => {
+      const storyIds = new Set(tree.flatMap((epic) => epic.children.map((story) => story.id)));
+      const findingDrafts = parsed.findings
+        .filter((finding) => storyIds.has(finding.storyArtifactLayerId))
+        .map((finding): AiAssistItemDraft => ({
+          targetType: "story_refinement_finding",
+          targetId: finding.storyArtifactLayerId,
+          title: finding.title,
+          synopsis: finding.detail,
+          informationUsed: parsed.informationUsed,
+          why: parsed.why,
+          impact: "Applying adds this item to the tracked refinement agenda. It does not change the story or acceptance criteria.",
+          assumptions: parsed.assumptions ?? [],
+          sources: parsed.sources ?? [],
+          rulesApplied: ["The Product Owner must apply or dismiss this finding.", "The finding must reference an existing story."],
+          proposedContent: finding,
+        }));
+      return [{
         targetType: "feature",
         targetId: featureArtifactLayerId,
-        title: `Suggested wording for "${feature.title}"`,
+        title: `Refinement findings for "${feature.title}"`,
         synopsis: parsed.why,
         informationUsed: parsed.informationUsed,
         why: parsed.why,
-        impact: "Applying updates title/description text only — sizing, sprint assignment, and ordering are never changed.",
+        impact: "Applying updates story or acceptance-criterion wording only. The Product Owner can dismiss the findings; sizing, sprint assignment, and ordering are never changed.",
         assumptions: parsed.assumptions ?? [],
         sources: parsed.sources ?? [],
         rulesApplied: ["Never touches points, sprint assignment, or ordering — text only."],
         proposedContent: { epics: parsed.epics },
-      },
-    ],
+      }, ...findingDrafts];
+    },
   });
 
   return { decision: result.decision, items: result.items };

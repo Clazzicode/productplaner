@@ -1,5 +1,5 @@
-import Anthropic from "@anthropic-ai/sdk";
-import { AI_MODEL, getAnthropicClient } from "@/lib/ai/client";
+import type { AiTool, AiMessage } from "@/lib/ai/providerTypes";
+import { AI_MODEL, createAiResponse } from "@/lib/ai/client";
 import { assertAiActionAllowed, recordAiUsage } from "@/lib/ai/usage";
 import { setAiJobStatus } from "@/lib/ai/job";
 import type { DocumentChunk } from "@/lib/documents/extractChunks";
@@ -45,7 +45,7 @@ Rules:
 - Use the warnings array for anything ambiguous, conflicting, or worth a human double-checking, but don't use it as a dumping ground for items you weren't confident enough to include above.
 Call the ${TOOL_NAME} tool exactly once with your findings.`;
 
-const CONTEXT_EXTRACTION_TOOL: Anthropic.Tool = {
+const CONTEXT_EXTRACTION_TOOL: AiTool = {
   name: TOOL_NAME,
   description: "Submit the structured planning facts, features, and risks extracted from the document.",
   input_schema: {
@@ -185,9 +185,9 @@ export async function runDocumentUnderstanding(
       documentScope === "project_shared" ? ', and the "features" array must be empty' : ""
     }.`;
 
-    let response: Anthropic.Message;
+    let response: AiMessage;
     try {
-      response = await getAnthropicClient().messages.create({
+      response = await createAiResponse({
         model: AI_MODEL,
         max_tokens: capability.maxOutputTokens,
         system: SYSTEM_PROMPT,
@@ -208,7 +208,7 @@ export async function runDocumentUnderstanding(
         aiJobId: jobId,
         action: "DOCUMENT_UNDERSTANDING",
         success: false,
-        errorMessage: err instanceof Error ? err.message : "Anthropic API request failed.",
+        errorMessage: err instanceof Error ? err.message : "OpenAI API request failed.",
       });
       throw err;
     }
@@ -224,13 +224,30 @@ export async function runDocumentUnderstanding(
         success: false,
         inputTokens: response.usage.input_tokens,
         outputTokens: response.usage.output_tokens,
+        cacheCreationInputTokens: response.usage.cache_creation_input_tokens,
+        cacheReadInputTokens: response.usage.cache_read_input_tokens,
+        model: AI_MODEL,
         errorMessage: "Model did not return structured output.",
       });
       throw new Error("Model did not return structured output.");
     }
 
     await setAiJobStatus(jobId, "validating_output");
-    const shape = contextExtractionResultSchema.parse(toolUse.input);
+    const parsedShape = contextExtractionResultSchema.safeParse(toolUse.input);
+    if (!parsedShape.success) {
+      await recordAiUsage({
+        userId, organizationId, initiativeId, aiJobId: jobId,
+        action: "DOCUMENT_UNDERSTANDING", success: false,
+ model: AI_MODEL,
+        inputTokens: response.usage.input_tokens,
+        outputTokens: response.usage.output_tokens,
+        cacheCreationInputTokens: response.usage.cache_creation_input_tokens,
+        cacheReadInputTokens: response.usage.cache_read_input_tokens,
+        errorMessage: "Document response failed validation.",
+      });
+      throw new Error("Document response failed validation.");
+    }
+    const shape = parsedShape.data;
     const chunkCount = chunks.length;
 
     // Strict per-item validation, but a malformed single item never fails
@@ -277,6 +294,9 @@ export async function runDocumentUnderstanding(
       success: true,
       inputTokens: response.usage.input_tokens,
       outputTokens: response.usage.output_tokens,
+      cacheCreationInputTokens: response.usage.cache_creation_input_tokens,
+      cacheReadInputTokens: response.usage.cache_read_input_tokens,
+      model: AI_MODEL,
       resultSummary: {
         itemsExtracted: items.length,
         featuresExtracted: features.length,

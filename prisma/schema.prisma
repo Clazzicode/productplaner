@@ -52,6 +52,10 @@ model Organization {
   aiRequestLocks          AiRequestLock[]
   aiJobs                  AiJob[]
   aiAssistItems           AiAssistItem[]
+  refinementFindings      RefinementFinding[]
+  requestSourceRecords    RequestSourceRecord[]
+  requestRevisions        RequestRevision[]
+  priorityDecisions       PriorityDecision[]
   auditEvents             AuditEvent[]
   planApprovals           PlanApproval[]
   createdAt               DateTime                 @default(now())
@@ -78,6 +82,10 @@ model User {
   memberships            OrganizationMember[]
   name                   String
   email                  String               @unique
+  // User-facing sign-in name. Authentication still belongs to Supabase Auth;
+  // normalized provides case-insensitive uniqueness without changing display.
+  username               String?
+  usernameNormalized     String?              @unique
   // Step 8B (docs/V2-USERS-TEAMS.md). String + default, matching this schema's
   // existing convention (e.g. Initiative.status) rather than a native enum.
   // Default "org_admin" is deliberate: today there is exactly one User per
@@ -106,6 +114,7 @@ model User {
   createdProjects        Project[]
   decisionsDecided       Decision[]
   risksOwned             Risk[]
+  ownedCapabilities      Capability[]          @relation("CapabilityOwner")
   documentsUploaded      Document[]
   contextItemsApproved   ContextItem[] @relation("ContextItemApprovedBy")
   roadmapStatusesUpdated RoadmapStatus[]
@@ -120,7 +129,23 @@ model User {
   aiAssistItemsGenerated  AiAssistItem[] @relation("AiAssistItemGeneratedBy")
   aiAssistItemsApplied    AiAssistItem[] @relation("AiAssistItemAppliedBy")
   aiAssistItemsDismissed  AiAssistItem[] @relation("AiAssistItemDismissedBy")
+  refinementFindingsOwned RefinementFinding[] @relation("RefinementFindingOwner")
+  refinementFindingsCreated RefinementFinding[] @relation("RefinementFindingCreatedBy")
+  requestSourceRecordsCreated RequestSourceRecord[] @relation("RequestSourceRecordCreatedBy")
+  requestRevisionsCreated RequestRevision[] @relation("RequestRevisionChangedBy")
+  priorityDecisionsMade   PriorityDecision[] @relation("PriorityDecisionChangedBy")
   createdAt              DateTime             @default(now())
+}
+
+// Server-only username -> Supabase Auth identity registry. This allows a user
+// to sign in with a username without exposing tenant User rows before auth.
+model AuthUsername {
+  id         String   @id @default(cuid())
+  authUserId String   @unique @db.Uuid
+  username   String
+  normalized String   @unique
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 }
 
 // Step [AUTH] (docs/V2-MULTI-TENANT-AUTH.md). Real multi-org membership: one
@@ -243,6 +268,7 @@ model Project {
   risks                Risk[]
   documents            Document[]
   contextItems         ContextItem[]
+  requestSourceRecords RequestSourceRecord[]
   aiJobs               AiJob[]
   aiAssistItems        AiAssistItem[]
   aiUsageEvents        AiUsageEvent[]
@@ -337,6 +363,7 @@ model Document {
   supersedesDocument   Document?     @relation("DocumentSupersedes", fields: [supersedesDocumentId], references: [id])
   supersededBy         Document[]    @relation("DocumentSupersedes")
   contextItems         ContextItem[]
+  requestSourceRecords RequestSourceRecord[]
   createdAt            DateTime      @default(now())
   updatedAt            DateTime      @updatedAt
 
@@ -385,6 +412,7 @@ model ContextItem {
   approvedByUserId  String?
   approvedByUser    User?         @relation("ContextItemApprovedBy", fields: [approvedByUserId], references: [id], onDelete: SetNull)
   approvedAt        DateTime?
+  requestSourceRecords RequestSourceRecord[]
   createdAt         DateTime      @default(now())
   updatedAt         DateTime      @updatedAt
 
@@ -453,6 +481,7 @@ model QualifyingProfile {
 }
 
 model Initiative {
+  planningRequests          PlanningRequest[]
   id                        String                   @id @default(cuid())
   // Kept denormalized (not inferred via projectId -> Project.organizationId)
   // deliberately: every existing RLS policy and resolveInitiativeAccess/
@@ -470,6 +499,10 @@ model Initiative {
   name                      String
   description               String                   @default("")
   methodology               String                   @default("hybrid")
+  // Product Owner release rhythm. This is initiative-level planning context,
+  // while Release.targetDate remains the date for one concrete release.
+  releaseCadence            String                   @default("") // weekly | biweekly | every_three_weeks | monthly | quarterly | custom
+  customReleaseCadence      String                   @default("")
   status                    String                   @default("draft") // draft | intake_in_progress | generated
   // How this initiative's intake began — persisted (was only ephemeral
   // client state in ProductDirectionBootstrap before this). guided | import |
@@ -499,6 +532,9 @@ model Initiative {
   contextItems              ContextItem[]
   roadmapVersions           RoadmapVersion[]
   aiAssistItems             AiAssistItem[]
+  refinementFindings        RefinementFinding[]
+  requestSourceRecords      RequestSourceRecord[]
+  priorityDecisions         PriorityDecision[]
   createdAt                 DateTime                 @default(now())
   updatedAt                 DateTime                 @updatedAt
 
@@ -530,6 +566,15 @@ model IntakeAnswerSet {
 }
 
 model Capability {
+  backlogLane             String                 @default("unscheduled")
+  backlogStatus           String                 @default("planned")
+  backlogRevision         Int                    @default(1)
+  backlogKey              String?
+  sourceRequests          PlanningRequest[]
+  ownerUserId             String?
+  owner                   User?                  @relation("CapabilityOwner", fields: [ownerUserId], references: [id], onDelete: SetNull)
+  releaseId               String?
+  release                 Release?               @relation("ReleaseFeatures", fields: [releaseId], references: [id], onDelete: SetNull)
   id                      String                 @id @default(cuid())
   intakeAnswerSetId       String
   intakeAnswerSet         IntakeAnswerSet        @relation(fields: [intakeAnswerSetId], references: [id], onDelete: Cascade)
@@ -553,6 +598,8 @@ model Capability {
   createdAt               DateTime               @default(now())
 
   @@index([intakeAnswerSetId])
+  @@index([releaseId])
+  @@unique([intakeAnswerSetId, backlogKey])
 }
 
 model CapabilityDependency {
@@ -695,11 +742,70 @@ model ArtifactLayer {
   sprintId           String? // stories only
   sprint             Sprint?         @relation(fields: [sprintId], references: [id], onDelete: SetNull)
   externalRef        String? // fake Jira key once "synced" (stub)
+  sourceType         String          @default("generated") // generated | manual | jira | ai | split
+  readinessStatus    String          @default("needs_refinement") // needs_refinement | ready_for_refinement | sprint_ready | blocked | split
+  backlogRevision    Int             @default(1)
+  archivedAt         DateTime?
+  dedupeKey          String?
+  approvedAt         DateTime? // acceptance criteria only
+  approvedByUserId   String?
+  revisions          ArtifactRevision[]
+  refinementFindings RefinementFinding[]
   createdAt          DateTime        @default(now())
   updatedAt          DateTime        @updatedAt
 
   @@index([prototypeId, type])
+  @@index([prototypeId, archivedAt])
   @@index([parentId])
+  @@unique([prototypeId, type, dedupeKey])
+  @@unique([prototypeId, type, externalRef])
+}
+
+model ArtifactRevision {
+  id          String        @id @default(cuid())
+  artifactId  String
+  artifact    ArtifactLayer @relation(fields: [artifactId], references: [id], onDelete: Cascade)
+  version     Int
+  title       String
+  body        String
+  reason      String        @default("")
+  actorUserId String?
+  createdAt   DateTime      @default(now())
+
+  @@unique([artifactId, version])
+  @@index([artifactId, createdAt])
+}
+
+// A durable Product Owner refinement observation or engineering question.
+// AI findings reach this table only after explicit Apply; dismissed AI
+// suggestions remain AiAssistItem history and never create a finding.
+model RefinementFinding {
+  id                   String         @id @default(cuid())
+  organizationId       String
+  organization         Organization   @relation(fields: [organizationId], references: [id])
+  initiativeId         String
+  initiative           Initiative     @relation(fields: [initiativeId], references: [id], onDelete: Cascade)
+  storyId              String
+  story                 ArtifactLayer @relation(fields: [storyId], references: [id], onDelete: Cascade)
+  sourceType           String         @default("manual") // manual | ai | deterministic
+  category             String // missing_information | engineering_question | contradiction | dependency | scope | acceptance_criteria | blocker | other
+  title                String
+  detail               String         @default("")
+  status               String         @default("open") // open | resolved | dismissed
+  ownerUserId          String?
+  ownerUser            User?          @relation("RefinementFindingOwner", fields: [ownerUserId], references: [id], onDelete: SetNull)
+  resolution           String         @default("")
+  sourceAiAssistItemId String?         @unique
+  sourceAiAssistItem   AiAssistItem?   @relation(fields: [sourceAiAssistItemId], references: [id], onDelete: SetNull)
+  createdByUserId      String?
+  createdByUser        User?           @relation("RefinementFindingCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  resolvedAt           DateTime?
+  createdAt            DateTime        @default(now())
+  updatedAt            DateTime        @updatedAt
+
+  @@index([organizationId, initiativeId, status])
+  @@index([storyId, status])
+  @@index([ownerUserId, status])
 }
 
 // Guided-activation restructure (docs/V2-... lifecycle work): `origin`
@@ -741,6 +847,7 @@ model Release {
   order       Int
   origin      String    @default("auto") // auto | manual — see Sprint.origin comment above
   sprints     Sprint[]
+  features    Capability[] @relation("ReleaseFeatures")
   createdAt   DateTime  @default(now())
 
   @@unique([prototypeId, order])
@@ -888,10 +995,10 @@ model PlanningWeightOverride {
 }
 
 // ---------- AI Foundation (docs/V2-AI-FOUNDATION.md) ----------
-// Server-side only: every call uses the server ANTHROPIC_API_KEY env var,
+// Server-side only: every call uses the server OPENAI_API_KEY env var,
 // never a value exposed to the client. The intake-document-import feature
-// (src/lib/intakeImport) used to call Anthropic directly with a per-user key
-// (User.anthropicApiKeyEncrypted) — that field is gone; import is now the
+// previously used a different provider with a per-user key. That retired
+// field is gone; import is now the
 // DOCUMENT_UNDERSTANDING action below, routed through the same gateway as
 // every other AI call.
 
@@ -941,7 +1048,7 @@ model AiUsageEvent {
   aiAssistItemId   String?
   aiAssistItem     AiAssistItem? @relation(fields: [aiAssistItemId], references: [id], onDelete: SetNull)
   action           String // AiActionKey
-  // Section 5 §22: "generation" (a real Anthropic call happened) vs "reuse"
+  // Section 5 §22: "generation" (a real OpenAI call happened) vs "reuse"
   // (the fingerprint reuse gate served an existing artifact — inputTokens/
   // outputTokens/estimatedCostUsd are 0). Distinct from `success`, which is
   // only meaningful for a real "generation" attempt.
@@ -953,8 +1060,8 @@ model AiUsageEvent {
   success          Boolean
   inputTokens      Int           @default(0)
   outputTokens     Int           @default(0)
-  // Section 5 §20/§21: Anthropic prompt-caching token counts, from the
-  // response's usage.cache_creation_input_tokens/cache_read_input_tokens.
+  // Section 5 §20/§21: provider-neutral prompt-caching token counts. The
+  // OpenAI adapter maps its usage fields into these durable ledger columns.
   cacheCreationInputTokens Int   @default(0)
   cacheReadInputTokens     Int   @default(0)
   // Computed at record-time from src/lib/ai/pricing.ts's published per-model
@@ -1002,7 +1109,7 @@ model AiRequestLock {
 // `status` is the directive's internal-stage vocabulary — never surfaced
 // to the user directly; src/lib/ai/activityCopy.ts maps each value to
 // plain-language copy shown in the UI. Today's actions are single
-// synchronous Anthropic calls, so only a handful of these values are ever
+// synchronous OpenAI calls, so only a handful of these values are ever
 // real in practice; the fuller set (checking_gaps/waiting_for_user/
 // building_recommendation/saving_artifact) is reserved for the richer
 // multi-stage pipelines Phase 4/5 add later — foundation-scoped, not
@@ -1101,6 +1208,8 @@ model AiAssistItem {
   updatedAt DateTime @updatedAt
 
   usageEvents AiUsageEvent[]
+  refinementFinding RefinementFinding?
+  requestRevision RequestRevision?
 
   @@index([initiativeId, actionKey, targetType, targetId, status])
   @@index([projectId, actionKey, status])
@@ -1129,4 +1238,105 @@ model IntakeAiAnalysis {
   createdAt              DateTime   @default(now())
 
   @@index([initiativeId, createdAt])
+}
+
+// PO request workflow: data is validated as structured JSON by requestSchema.
+model PlanningRequest {
+  id String @id @default(cuid())
+  initiativeId String
+  initiative Initiative @relation(fields: [initiativeId], references: [id], onDelete: Cascade)
+  data Json
+  revision Int @default(1)
+  capabilityId String?
+  capability Capability? @relation(fields: [capabilityId], references: [id], onDelete: SetNull)
+  dedupeKey String?
+  sourceRecordId String?
+  sourceRecord RequestSourceRecord? @relation(fields: [sourceRecordId], references: [id], onDelete: SetNull)
+  archivedAt DateTime?
+  revisions RequestRevision[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([initiativeId, updatedAt])
+  @@index([capabilityId])
+  @@unique([initiativeId, dedupeKey])
+  @@index([sourceRecordId])
+}
+
+model RequestRevision {
+  id String @id @default(cuid())
+  organizationId String
+  organization Organization @relation(fields: [organizationId], references: [id])
+  requestId String
+  request PlanningRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  fromRevision Int
+  toRevision Int
+  previousData Json?
+  nextData Json
+  reason String
+  changedByUserId String?
+  changedByUser User? @relation("RequestRevisionChangedBy", fields: [changedByUserId], references: [id], onDelete: SetNull)
+  sourceAiAssistItemId String? @unique
+  sourceAiAssistItem AiAssistItem? @relation(fields: [sourceAiAssistItemId], references: [id], onDelete: SetNull)
+  createdAt DateTime @default(now())
+
+  @@unique([requestId, toRevision])
+  @@index([organizationId, createdAt])
+  @@index([changedByUserId])
+}
+
+model PriorityDecision {
+  id                     String       @id @default(cuid())
+  organizationId         String
+  organization           Organization @relation(fields: [organizationId], references: [id])
+  initiativeId           String
+  initiative             Initiative   @relation(fields: [initiativeId], references: [id], onDelete: Cascade)
+  entityType             String // request | feature | story
+  entityId               String
+  revision               Int
+  score                  Int
+  dependencyAdjustedScore Int
+  moscow                 String
+  roadmapLane            String
+  reason                 String
+  source                 String       @default("manual") // manual | ai
+  factors                Json
+  changedByUserId        String
+  changedByUser          User         @relation("PriorityDecisionChangedBy", fields: [changedByUserId], references: [id])
+  recommendationItemId   String?
+  createdAt              DateTime     @default(now())
+
+  @@unique([entityType, entityId, revision])
+  @@index([initiativeId, createdAt])
+  @@index([organizationId, createdAt])
+  @@index([entityType, entityId, createdAt])
+  @@index([changedByUserId])
+}
+
+// Immutable evidence behind an imported or meeting-sourced planning request.
+model RequestSourceRecord {
+  id String @id @default(cuid())
+  organizationId String
+  organization Organization @relation(fields: [organizationId], references: [id])
+  projectId String
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  initiativeId String
+  initiative Initiative @relation(fields: [initiativeId], references: [id], onDelete: Cascade)
+  type String // spreadsheet_row | document_finding | meeting_note
+  label String
+  rawContent String
+  locator String?
+  fingerprint String
+  documentId String?
+  document Document? @relation(fields: [documentId], references: [id])
+  contextItemId String?
+  contextItem ContextItem? @relation(fields: [contextItemId], references: [id])
+  createdByUserId String
+  createdByUser User @relation("RequestSourceRecordCreatedBy", fields: [createdByUserId], references: [id])
+  requests PlanningRequest[]
+  createdAt DateTime @default(now())
+
+  @@unique([initiativeId, fingerprint])
+  @@index([documentId])
+  @@index([contextItemId])
+  @@index([createdByUserId])
 }

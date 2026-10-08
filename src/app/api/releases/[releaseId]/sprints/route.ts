@@ -1,9 +1,10 @@
+import { createManualSprint } from "@/lib/generation/manualScheduling";
 import { withApi } from "@/lib/observability";
 import { NextResponse } from "next/server";
 import { requireInitiativeApiAccess } from "@/lib/access/guards";
 import { jsonError, zodMessage } from "@/lib/api";
 import { requireCurrentUserApi } from "@/lib/auth/session";
-import { db, establishAuthContext, withTransaction } from "@/lib/db";
+import { db, establishAuthContext } from "@/lib/db";
 import { createSprintSchema } from "@/lib/validation/schemas";
 
 /**
@@ -42,60 +43,8 @@ async function POSTHandler(
 
   const parsed = createSprintSchema.safeParse(await request.json());
   if (!parsed.success) return jsonError(zodMessage(parsed.error), 422);
-  const { startDate, endDate, capacityPoints, storyIds } = parsed.data;
-
-  const prototypeId = release.prototype.id;
-
-  // Only stories under THIS release's own claimed phase, still unassigned,
-  // may be picked — validated server-side, not trusted from the request.
-  let validStoryIds: string[] = [];
-  if (storyIds.length > 0) {
-    const candidates = await db.artifactLayer.findMany({
-      where: { id: { in: storyIds }, prototypeId, type: "story", sprintId: null },
-      select: {
-        id: true,
-        parent: { select: { parent: { select: { parent: { select: { contentJson: true } } } } } },
-      },
-    });
-    validStoryIds = candidates
-      .filter((s) => {
-        const raw = s.parent?.parent?.parent?.contentJson ?? "{}";
-        try {
-          return (JSON.parse(raw) as { phaseNumber?: number }).phaseNumber === release.phaseNumber;
-        } catch {
-          return false;
-        }
-      })
-      .map((s) => s.id);
-  }
-
-  const sprint = await withTransaction(async (tx) => {
-    const maxSprintNumber = await tx.sprint.aggregate({
-      where: { prototypeId },
-      _max: { sprintNumber: true },
-    });
-    const created = await tx.sprint.create({
-      data: {
-        prototypeId,
-        sprintNumber: (maxSprintNumber._max.sprintNumber ?? 0) + 1,
-        phaseNumber: release.phaseNumber,
-        startDate,
-        endDate,
-        capacityPoints,
-        origin: "manual",
-        releaseId: release.id,
-      },
-    });
-    if (validStoryIds.length > 0) {
-      await tx.artifactLayer.updateMany({
-        where: { id: { in: validStoryIds } },
-        data: { sprintId: created.id },
-      });
-    }
-    return created;
-  });
-
-  return NextResponse.json({ ok: true, sprint, assignedStoryCount: validStoryIds.length });
+  const result = await createManualSprint(release.prototype.initiativeId, releaseId, parsed.data);
+  return NextResponse.json({ ok: true, ...result });
 }
 
 export const POST = withApi(POSTHandler);

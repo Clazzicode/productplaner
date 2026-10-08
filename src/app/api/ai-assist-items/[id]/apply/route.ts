@@ -87,9 +87,11 @@ async function POSTHandler(request: Request, { params }: { params: Promise<{ id:
       const claimed = await tx.aiAssistItem.updateMany({ where: { id, status: { in: ["proposed", "stale"] } }, data: { status: nextStatus } });
       if (claimed.count !== 1) throw new Error("Suggestion was already applied.");
       const prototype = item.initiativeId ? await tx.prototype.findUnique({ where: { initiativeId: item.initiativeId } }) : null;
-      if (prototype) await archiveWorkingVersion(prototype.id);
-      const applied = await applyAiAssistItem(tx, item, content, confirmApprovedImpact ?? false);
-      if (prototype && item.actionKey === "PROPOSE_STORY_CONTENT") {
+      if (prototype && item.targetType !== "story_refinement_finding" && item.actionKey !== "REVIEW_REQUIREMENTS") {
+        await archiveWorkingVersion(prototype.id);
+      }
+      const applied = await applyAiAssistItem(tx, item, content, confirmApprovedImpact ?? false, user.id);
+      if (prototype && item.actionKey === "PROPOSE_STORY_CONTENT" && item.targetType === "feature") {
         await tx.prototype.update({ where: { id: prototype.id }, data: { approvedAt: null, approvedBaselineJson: null } });
       }
       if (item.initiativeId) await auditInitiative(item.initiativeId, "ai_suggestion.applied", { itemId: id, actionKey: item.actionKey });
