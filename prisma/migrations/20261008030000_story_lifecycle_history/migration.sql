@@ -1,2 +1,2 @@
 ALTER TABLE "ArtifactRevision"
-ADD COLUMN "metadata" JSONB NOT NULL DEFAULT '{}'::jsonb;
+ADD COLUMN IF NOT EXISTS "metadata" JSONB NOT NULL DEFAULT '{}'::jsonb;
