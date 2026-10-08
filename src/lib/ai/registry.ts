@@ -162,6 +162,20 @@ const AI_CAPABILITIES: AiCapabilityConfig[] = [
     reusable: true,
   },
   {
+    action: "RECOMMEND_PRIORITY",
+    enabled: true,
+    maxOutputTokens: 1536,
+    userMonthlyLimit: 30,
+    organizationMonthlyLimit: 300,
+    description:
+      "Recommends explainable priority factors, MoSCoW necessity, and roadmap placement for one backlog item. The recommendation never changes authoritative data until an owner or administrator applies it.",
+    maxContextTokens: 3000,
+    requiredContextLayers: ["task"],
+    optionalContextLayers: ["initiative"],
+    outputType: "priority_recommendation",
+    reusable: true,
+  },
+  {
     action: "REVIEW_REQUIREMENTS",
     enabled: true,
     maxOutputTokens: 3072,
