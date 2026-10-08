@@ -23,6 +23,7 @@ vi.mock("../service", () => ({ listFeatures: async () => [state.feature] }));
 
 vi.mock("@/lib/db", () => ({
   db: {
+    priorityDecision: { findMany: async () => [] },
     planningRequest: {
       findMany: async () => state.request ? [state.request] : [],
       findFirst: async ({ where }: { where: { id: string } }) => state.request?.id === where.id ? state.request : null,
