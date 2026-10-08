@@ -290,14 +290,30 @@ export const storySplitSchema = z.object({
 export const acceptanceCriterionCreateSchema = z.object({
   title: z.string().trim().min(3).max(160),
   body: z.string().trim().min(3).max(4000),
-  sourceType: z.enum(["manual", "ai"]).default("manual"),
+  sourceType: z.literal("manual").default("manual"),
 });
+
+export const acceptanceCriterionUpdateSchema = z.object({
+  expectedRevision: z.number().int().positive(),
+  reason: z.string().trim().min(3, "Explain why the acceptance criterion is changing.").max(1000),
+  title: z.string().trim().min(3).max(160).optional(),
+  body: z.string().trim().min(3).max(4000).optional(),
+  archived: z.boolean().optional(),
+  reopen: z.literal(true).optional(),
+}).refine(
+  (value) => value.title !== undefined || value.body !== undefined ||
+    value.archived !== undefined || value.reopen === true,
+  "Choose at least one acceptance-criterion change.",
+);
 
 export const acceptanceCriteriaReorderSchema = z.object({
   orderedIds: z.array(z.string().min(1)).min(1).max(30).refine(ids => new Set(ids).size === ids.length, "Criterion ids must be unique."),
 });
 
-export const acceptanceCriterionApproveSchema = z.object({ comment: z.string().trim().max(500).default("") });
+export const acceptanceCriterionApproveSchema = z.object({
+  expectedRevision: z.number().int().positive(),
+  comment: z.string().trim().min(3, "Explain why this criterion is ready for approval.").max(500),
+});
 
 export const moveSprintSchema = z.object({
   sprintNumber: z.number().int().min(1),

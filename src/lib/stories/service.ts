@@ -7,6 +7,7 @@ import { assertArtifactEditable } from "@/lib/generation/locking";
 import type { z } from "zod";
 import type {
   acceptanceCriterionCreateSchema,
+  acceptanceCriterionUpdateSchema,
   storyCreateSchema,
   storySplitSchema,
   storyUpdateSchema,
@@ -16,6 +17,7 @@ type StoryCreate = z.infer<typeof storyCreateSchema>;
 type StorySplit = z.infer<typeof storySplitSchema>;
 type StoryUpdate = z.infer<typeof storyUpdateSchema>;
 type AcCreate = z.infer<typeof acceptanceCriterionCreateSchema>;
+type AcUpdate = z.infer<typeof acceptanceCriterionUpdateSchema>;
 
 const normalized = (value: string) => value.trim().toLocaleLowerCase().split(" ").filter(Boolean).join(" ");
 
@@ -24,19 +26,23 @@ export function storyReadiness(input: {
   body: string;
   points: number | null;
   readinessStatus: string;
-  criteria: { body: string }[];
+  criteria: { title?: string; body: string }[];
 }) {
   const gaps: string[] = [];
   if (!/^as an? .+, i want .+, so that .+/i.test(input.body)) gaps.push("Use a clear As a / I want / so that outcome.");
   if (input.points == null) gaps.push("Add a story-point estimate.");
   if (input.criteria.length < 2) gaps.push("Add at least two acceptance criteria.");
-  if (input.criteria.some((criterion) => {
-    const outcome = criterion.body.trim().toLocaleLowerCase();
-    const when = outcome.indexOf(" when ");
-    const then = outcome.indexOf(" then", when + 1);
-    return !outcome.startsWith("given ") || when < 0 || then < 0;
-  })) {
-    gaps.push("Write each criterion as a testable Given / When / Then outcome.");
+  if (input.criteria.some((criterion) =>
+    !acceptanceCriterionAdequacy({
+      title: criterion.title ?? "Acceptance criterion",
+      body: criterion.body,
+    }).adequate
+  )) {
+    gaps.push("Make each acceptance criterion specific, testable, and observable.");
+  }
+  const uniqueCriteria = new Set(input.criteria.map((criterion) => normalized(criterion.body)));
+  if (uniqueCriteria.size !== input.criteria.length) {
+    gaps.push("Remove duplicate acceptance criteria.");
   }
   if (input.readinessStatus === "blocked") gaps.push("Resolve the recorded blocker.");
   return { ready: gaps.length === 0, gaps };
@@ -319,18 +325,100 @@ export async function splitStory(
   }, true);
 }
 
-export async function createAcceptanceCriterion(initiativeId: string, storyId: string, input: AcCreate) {
+export function acceptanceCriterionAdequacy(input: { title: string; body: string }) {
+  const gaps: string[] = [];
+  const title = input.title.trim();
+  const body = input.body.trim();
+  const outcome = body.toLocaleLowerCase();
+  const when = outcome.indexOf(" when ");
+  const then = outcome.indexOf(" then", when + 1);
+  if (title.length < 3) gaps.push("Add a specific criterion title.");
+  if (!outcome.startsWith("given ") || when < 0 || then < 0) {
+    gaps.push("Use a Given / When / Then outcome in that order.");
+  } else {
+    const givenClause = body.slice(6, when).trim();
+    const whenClause = body.slice(when + 6, then).trim();
+    const thenClause = body.slice(then + 5).trim();
+    if (givenClause.length < 4) gaps.push("Describe a concrete starting condition.");
+    if (whenClause.length < 4) gaps.push("Describe a specific user or system action.");
+    if (thenClause.length < 6) gaps.push("Describe an observable result.");
+  }
+  if (/\b(tbd|etc\.?|something|works correctly|as expected|properly)\b/i.test(body)) {
+    gaps.push("Replace vague wording with an observable result.");
+  }
+  return { adequate: gaps.length === 0, gaps };
+}
+
+async function criterionContext(initiativeId: string, criterionId: string) {
+  const criterion = await db.artifactLayer.findFirst({
+    where: {
+      id: criterionId,
+      type: "acceptance_criterion",
+      prototype: { initiativeId },
+    },
+    include: {
+      prototype: { select: { initiativeId: true } },
+      parent: { select: { id: true, type: true, archivedAt: true } },
+    },
+  });
+  if (!criterion || criterion.parent?.type !== "story") {
+    throw new BusinessError("Acceptance criterion not found.", 404);
+  }
+  return criterion;
+}
+
+function criterionSnapshot(criterion: {
+  title: string;
+  body: string;
+  parentId: string | null;
+  sourceType: string;
+  order: number;
+  approvedAt: Date | null;
+  approvedByUserId: string | null;
+  archivedAt: Date | null;
+  backlogRevision: number;
+}) {
+  return {
+    title: criterion.title,
+    body: criterion.body,
+    storyId: criterion.parentId,
+    sourceType: criterion.sourceType,
+    order: criterion.order,
+    approvedAt: criterion.approvedAt?.toISOString() ?? null,
+    approvedByUserId: criterion.approvedByUserId,
+    archivedAt: criterion.archivedAt?.toISOString() ?? null,
+    revision: criterion.backlogRevision,
+  };
+}
+
+const criterionKey = (storyId: string, title: string, body: string) =>
+  `story:${storyId}:criterion:${normalized(title)}:${normalized(body)}`;
+
+export async function createAcceptanceCriterion(
+  initiativeId: string,
+  storyId: string,
+  input: AcCreate,
+  actorUserId?: string,
+) {
   return withPlanningMutation(initiativeId, "acceptance_criterion.created", async () => {
-    const story = await db.artifactLayer.findUnique({
-      where: { id: storyId },
-      include: { prototype: { select: { initiativeId: true } } },
-    });
-    if (!story || story.prototype.initiativeId !== initiativeId || story.type !== "story") {
-      throw new BusinessError("Story not found.", 404);
-    }
+    const story = await storyContext(initiativeId, storyId);
+    if (story.archivedAt) throw new BusinessError("Restore this story before adding acceptance criteria.");
     await assertArtifactEditable(story.prototypeId, "acceptance_criterion");
-    const order = await db.artifactLayer.count({ where: { parentId: storyId, type: "acceptance_criterion" } });
-    return db.artifactLayer.create({
+    const dedupeKey = criterionKey(storyId, input.title, input.body);
+    const duplicate = await db.artifactLayer.findFirst({
+      where: {
+        parentId: storyId,
+        type: "acceptance_criterion",
+        dedupeKey,
+        archivedAt: null,
+      },
+      select: { id: true },
+    });
+    if (duplicate) throw new BusinessError("This acceptance criterion already exists for the story.", 409);
+    const order = await db.artifactLayer.count({
+      where: { parentId: storyId, type: "acceptance_criterion", archivedAt: null },
+    });
+    const created = await db.artifactLayer.create({
       data: {
         prototypeId: story.prototypeId,
         type: "acceptance_criterion",
@@ -339,36 +427,172 @@ export async function createAcceptanceCriterion(initiativeId: string, storyId: s
         title: input.title,
         body: input.body,
         sourceCapabilityId: story.sourceCapabilityId,
-        sourceType: input.sourceType,
-        traceNote: input.sourceType === "ai"
-          ? "AI-assisted criterion; reviewed before creation."
-          : "Created manually by the Product Owner.",
+        sourceType: "manual",
+        dedupeKey,
+        traceNote: "Created manually by the Product Owner.",
       },
     });
+    await auditInitiative(initiativeId, "acceptance_criterion.created", {
+      criterionId: created.id,
+      storyId,
+      actorUserId: actorUserId ?? null,
+    } as Prisma.InputJsonObject);
+    return created;
   }, true);
 }
 
-export async function reorderAcceptanceCriteria(initiativeId: string, storyId: string, orderedIds: string[]) {
-  return withPlanningMutation(initiativeId, "acceptance_criteria.reordered", async () => {
-    const story = await db.artifactLayer.findFirst({
-      where: { id: storyId, type: "story", prototype: { initiativeId } },
-      select: { prototypeId: true },
+export async function updateAcceptanceCriterion(
+  initiativeId: string,
+  criterionId: string,
+  input: AcUpdate,
+  actorUserId: string,
+) {
+  return withPlanningMutation(initiativeId, "acceptance_criterion.changed", async () => {
+    const current = await criterionContext(initiativeId, criterionId);
+    await assertArtifactEditable(current.prototypeId, "acceptance_criterion");
+    if (current.parent?.archivedAt) {
+      throw new BusinessError("Restore the story before changing its acceptance criteria.");
+    }
+    if (current.archivedAt && input.archived !== false) {
+      throw new BusinessError("Restore this criterion before changing it.");
+    }
+    if (current.backlogRevision !== input.expectedRevision) {
+      throw new BusinessError("This acceptance criterion changed. Reload before saving.", 409);
+    }
+    if (input.reopen && !current.approvedAt) {
+      throw new BusinessError("This acceptance criterion is not approved.");
+    }
+
+    const nextTitle = input.title ?? current.title;
+    const nextBody = input.body ?? current.body;
+    const dedupeKey = criterionKey(current.parentId!, nextTitle, nextBody);
+    const duplicate = await db.artifactLayer.findFirst({
+      where: {
+        parentId: current.parentId,
+        type: "acceptance_criterion",
+        dedupeKey,
+        archivedAt: null,
+        NOT: { id: current.id },
+      },
+      select: { id: true },
     });
-    if (!story) throw new BusinessError("Story not found.", 404);
+    if (duplicate) throw new BusinessError("This acceptance criterion already exists for the story.", 409);
+
+    const version = await db.artifactRevision.count({ where: { artifactId: current.id } }) + 1;
+    await db.artifactRevision.create({
+      data: {
+        artifactId: current.id,
+        version,
+        title: current.title,
+        body: current.body,
+        reason: input.reason,
+        actorUserId,
+        metadata: criterionSnapshot(current),
+      },
+    });
+
+    const contentChanged = input.title !== undefined || input.body !== undefined;
+    const reopen = input.reopen === true || Boolean(current.approvedAt && contentChanged);
+    const updated = await db.artifactLayer.updateMany({
+      where: { id: current.id, backlogRevision: input.expectedRevision },
+      data: {
+        ...(input.title !== undefined ? { title: input.title } : {}),
+        ...(input.body !== undefined ? { body: input.body } : {}),
+        ...(input.archived !== undefined ? { archivedAt: input.archived ? new Date() : null } : {}),
+        ...(reopen || input.archived === true
+          ? { approvedAt: null, approvedByUserId: null }
+          : {}),
+        dedupeKey,
+        backlogRevision: { increment: 1 },
+      },
+    });
+    if (updated.count !== 1) {
+      throw new BusinessError("This acceptance criterion changed. Reload before saving.", 409);
+    }
+
+    const saved = await db.artifactLayer.findUniqueOrThrow({ where: { id: current.id } });
+    const action = input.archived === true
+      ? "acceptance_criterion.archived"
+      : input.archived === false
+        ? "acceptance_criterion.restored"
+        : reopen
+          ? "acceptance_criterion.reopened"
+          : "acceptance_criterion.updated";
+    await auditInitiative(initiativeId, action, {
+      criterionId,
+      storyId: current.parentId,
+      reason: input.reason,
+      before: criterionSnapshot(current),
+      after: criterionSnapshot(saved),
+    } as Prisma.InputJsonObject);
+    return saved;
+  }, true);
+}
+
+export async function listAcceptanceCriterionHistory(
+  initiativeId: string,
+  criterionId: string,
+) {
+  await criterionContext(initiativeId, criterionId);
+  const revisions = await db.artifactRevision.findMany({
+    where: { artifactId: criterionId },
+    orderBy: { version: "desc" },
+  });
+  const actorIds = [...new Set(
+    revisions.map((revision) => revision.actorUserId).filter((id): id is string => Boolean(id)),
+  )];
+  const actors = actorIds.length
+    ? await db.user.findMany({
+        where: { id: { in: actorIds } },
+        select: { id: true, name: true, email: true },
+      })
+    : [];
+  const actorById = new Map(actors.map((actor) => [actor.id, actor]));
+  return revisions.map((revision) => ({
+    id: revision.id,
+    version: revision.version,
+    title: revision.title,
+    body: revision.body,
+    reason: revision.reason,
+    snapshot: revision.metadata,
+    createdAt: revision.createdAt.toISOString(),
+    actor: revision.actorUserId ? actorById.get(revision.actorUserId) ?? null : null,
+  }));
+}
+
+export async function reorderAcceptanceCriteria(
+  initiativeId: string,
+  storyId: string,
+  orderedIds: string[],
+  actorUserId?: string,
+) {
+  return withPlanningMutation(initiativeId, "acceptance_criteria.reordered", async () => {
+    const story = await storyContext(initiativeId, storyId);
+    if (story.archivedAt) throw new BusinessError("Restore this story before reordering acceptance criteria.");
     await assertArtifactEditable(story.prototypeId, "acceptance_criterion");
     const rows = await db.artifactLayer.findMany({
       where: {
         id: { in: orderedIds },
         parentId: storyId,
         type: "acceptance_criterion",
+        archivedAt: null,
         prototype: { initiativeId },
       },
       select: { id: true },
     });
-    if (rows.length !== orderedIds.length) throw new BusinessError("One or more acceptance criteria were not found.", 404);
-    await Promise.all(orderedIds.map((id, order) =>
-      db.artifactLayer.update({ where: { id }, data: { order } })
-    ));
+    if (rows.length !== orderedIds.length) {
+      throw new BusinessError("One or more acceptance criteria were not found.", 404);
+    }
+    await Promise.all(
+      orderedIds.map((id, order) =>
+        db.artifactLayer.update({ where: { id }, data: { order } }),
+      ),
+    );
+    await auditInitiative(initiativeId, "acceptance_criteria.reordered", {
+      storyId,
+      orderedIds,
+      actorUserId: actorUserId ?? null,
+    } as Prisma.InputJsonObject);
   }, true);
 }
 
@@ -376,31 +600,51 @@ export async function approveAcceptanceCriterion(
   initiativeId: string,
   criterionId: string,
   actorUserId: string,
-  comment: string,
+  input: { expectedRevision: number; comment: string },
 ) {
   return withPlanningMutation(initiativeId, "acceptance_criterion.approved", async () => {
-    const row = await db.artifactLayer.findUnique({
-      where: { id: criterionId },
-      include: { prototype: { select: { initiativeId: true } } },
-    });
-    if (!row || row.type !== "acceptance_criterion" || row.prototype.initiativeId !== initiativeId) {
-      throw new BusinessError("Acceptance criterion not found.", 404);
+    const current = await criterionContext(initiativeId, criterionId);
+    await assertArtifactEditable(current.prototypeId, "acceptance_criterion");
+    if (current.archivedAt) throw new BusinessError("Restore this criterion before approving it.");
+    if (current.parent?.archivedAt) throw new BusinessError("Restore the story before approving its criteria.");
+    if (current.backlogRevision !== input.expectedRevision) {
+      throw new BusinessError("This acceptance criterion changed. Reload before approving.", 409);
     }
-    await assertArtifactEditable(row.prototypeId, "acceptance_criterion");
-    const version = await db.artifactRevision.count({ where: { artifactId: row.id } }) + 1;
+    if (current.approvedAt) throw new BusinessError("This acceptance criterion is already approved.", 409);
+    const adequacy = acceptanceCriterionAdequacy(current);
+    if (!adequacy.adequate) {
+      throw new BusinessError(`This criterion is not ready for approval: ${adequacy.gaps.join(" ")}`, 422);
+    }
+
+    const version = await db.artifactRevision.count({ where: { artifactId: current.id } }) + 1;
     await db.artifactRevision.create({
       data: {
-        artifactId: row.id,
+        artifactId: current.id,
         version,
-        title: row.title,
-        body: row.body,
-        reason: comment || "Approved acceptance criterion",
+        title: current.title,
+        body: current.body,
+        reason: input.comment,
         actorUserId,
+        metadata: criterionSnapshot(current),
       },
     });
-    return db.artifactLayer.update({
-      where: { id: row.id },
-      data: { approvedAt: new Date(), approvedByUserId: actorUserId },
+    const updated = await db.artifactLayer.updateMany({
+      where: { id: current.id, backlogRevision: input.expectedRevision },
+      data: {
+        approvedAt: new Date(),
+        approvedByUserId: actorUserId,
+        backlogRevision: { increment: 1 },
+      },
     });
-  });
+    if (updated.count !== 1) {
+      throw new BusinessError("This acceptance criterion changed. Reload before approving.", 409);
+    }
+    const saved = await db.artifactLayer.findUniqueOrThrow({ where: { id: current.id } });
+    await auditInitiative(initiativeId, "acceptance_criterion.approved", {
+      criterionId,
+      storyId: current.parentId,
+      reason: input.comment,
+    } as Prisma.InputJsonObject);
+    return saved;
+  }, true);
 }
