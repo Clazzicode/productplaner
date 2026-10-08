@@ -14,6 +14,6 @@ async function POSTHandler(request: Request, { params }: { params: Promise<{ id:
   const access = await requireInitiativeApiAccess(auth.user, id, "edit"); if (!access.ok) return access.response;
   const parsed = storySplitSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return jsonError(zodMessage(parsed.error), 422);
-  return NextResponse.json({ stories: await splitStory(id, storyId, parsed.data) }, { status: 201 });
+  return NextResponse.json({ stories: await splitStory(id, storyId, parsed.data, auth.user.id) }, { status: 201 });
 }
 export const POST = withApi(POSTHandler);
