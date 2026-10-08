@@ -83,7 +83,7 @@ export async function listUnifiedBacklog(initiativeId: string): Promise<BacklogI
       } : {
         businessValue: valueRatings[feature.businessValue] ?? 3, urgency: 3, userImpact: 3, dependencyImpact: 3,
         risk: riskRatings[feature.riskLevel] ?? 3, effort: effortRatingBySize[row.effortSize] ?? 3,
-        effortPoints: effortPointsBySize[row.effortSize] ?? 5, bugSeverity: "not_applicable",
+        effortPoints: effortPointsBySize[row.effortSize] ?? 5, bugSeverity: "not_applicable" as const,
       },
       roadmapLane: feature.backlogLane, archived: feature.backlogStatus === "archived",
       revision: feature.backlogRevision, sourceFeatureId: feature.id,
@@ -124,7 +124,7 @@ export async function listUnifiedBacklog(initiativeId: string): Promise<BacklogI
         risk: capability ? riskRatings[capability.riskLevel] ?? 3 : 3,
         effort: capability ? effortRatingBySize[capability.effortSize] ?? 3 : 3,
         effortPoints: capability ? effortPointsBySize[capability.effortSize] ?? 5 : 5,
-        bugSeverity: "not_applicable",
+        bugSeverity: "not_applicable" as const,
       },
       roadmapLane: capability && ["now", "next", "later", "unscheduled"].includes(capability.backlogLane)
         ? capability.backlogLane as BacklogItemRecord["roadmapLane"] : "unscheduled" as const,
