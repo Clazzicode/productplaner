@@ -17,7 +17,7 @@ type StorySplit = z.infer<typeof storySplitSchema>;
 type StoryUpdate = z.infer<typeof storyUpdateSchema>;
 type AcCreate = z.infer<typeof acceptanceCriterionCreateSchema>;
 
-const normalized = (value: string) => value.trim().toLocaleLowerCase().replace(/\\s+/g, " ");
+const normalized = (value: string) => value.trim().toLocaleLowerCase().split(" ").filter(Boolean).join(" ");
 
 export function storyReadiness(input: {
   title: string;
@@ -30,10 +30,7 @@ export function storyReadiness(input: {
   if (!/^as an? .+, i want .+, so that .+/i.test(input.body)) gaps.push("Use a clear As a / I want / so that outcome.");
   if (input.points == null) gaps.push("Add a story-point estimate.");
   if (input.criteria.length < 2) gaps.push("Add at least two acceptance criteria.");
-  if (input.criteria.some((criterion) => !/given\\s+.*when\\s+.*then/i.test(criterion.body))) {
-    gaps.push("Write each criterion as a testable Given / When / Then outcome.");
-  }
-  if (input.readinessStatus === "blocked") gaps.push("Resolve the recorded blocker.");
+  if (input.criteria.some((criterion) => {\n    const outcome = criterion.body.trim().toLocaleLowerCase();\n    const when = outcome.indexOf(" when ");\n    const then = outcome.indexOf(" then", when + 1);\n    return !outcome.startsWith("given ") || when < 0 || then < 0;\n  })) {\n    gaps.push("Write each criterion as a testable Given / When / Then outcome.");\n  }\n  if (input.readinessStatus === "blocked") gaps.push("Resolve the recorded blocker.");
   return { ready: gaps.length === 0, gaps };
 }
 
