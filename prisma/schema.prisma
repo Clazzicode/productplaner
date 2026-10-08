@@ -131,6 +131,7 @@ model User {
   aiAssistItemsDismissed  AiAssistItem[] @relation("AiAssistItemDismissedBy")
   refinementFindingsOwned RefinementFinding[] @relation("RefinementFindingOwner")
   refinementFindingsCreated RefinementFinding[] @relation("RefinementFindingCreatedBy")
+  refinementFindingRevisions RefinementFindingRevision[] @relation("RefinementFindingRevisionActor")
   requestSourceRecordsCreated RequestSourceRecord[] @relation("RequestSourceRecordCreatedBy")
   requestRevisionsCreated RequestRevision[] @relation("RequestRevisionChangedBy")
   priorityDecisionsMade   PriorityDecision[] @relation("PriorityDecisionChangedBy")
@@ -793,9 +794,13 @@ model RefinementFinding {
   title                String
   detail               String         @default("")
   status               String         @default("open") // open | resolved | dismissed
+  revision             Int            @default(1)
+  dedupeKey            String?
   ownerUserId          String?
   ownerUser            User?          @relation("RefinementFindingOwner", fields: [ownerUserId], references: [id], onDelete: SetNull)
   resolution           String         @default("")
+  followUpNote         String         @default("")
+  followUpAt           DateTime?
   sourceAiAssistItemId String?         @unique
   sourceAiAssistItem   AiAssistItem?   @relation(fields: [sourceAiAssistItemId], references: [id], onDelete: SetNull)
   createdByUserId      String?
@@ -803,10 +808,29 @@ model RefinementFinding {
   resolvedAt           DateTime?
   createdAt            DateTime        @default(now())
   updatedAt            DateTime        @updatedAt
+  revisions            RefinementFindingRevision[]
 
   @@index([organizationId, initiativeId, status])
   @@index([storyId, status])
   @@index([ownerUserId, status])
+  @@index([storyId, dedupeKey, status])
+}
+
+model RefinementFindingRevision {
+  id             String            @id @default(cuid())
+  findingId      String
+  finding        RefinementFinding @relation(fields: [findingId], references: [id], onDelete: Cascade)
+  fromRevision   Int
+  toRevision     Int
+  previousData   Json
+  nextData       Json
+  reason         String
+  actorUserId    String?
+  actorUser      User?             @relation("RefinementFindingRevisionActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+  createdAt      DateTime          @default(now())
+
+  @@unique([findingId, toRevision])
+  @@index([actorUserId, createdAt])
 }
 
 // Guided-activation restructure (docs/V2-... lifecycle work): `origin`

@@ -33,7 +33,10 @@ function buildStubTx() {
       count: vi.fn().mockResolvedValue(0),
     },
     artifactRevision: { count: vi.fn().mockResolvedValue(0), create: vi.fn().mockResolvedValue({}) },
-    refinementFinding: { create: vi.fn().mockResolvedValue({ id: "finding-1" }) },
+    refinementFinding: {
+      findFirst: vi.fn().mockResolvedValue(null),
+      create: vi.fn().mockResolvedValue({ id: "finding-1" }),
+    },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } as any;
 }
@@ -113,11 +116,25 @@ describe("applyAiAssistItem — dispatch completeness", () => {
       false,
     );
     expect(tx.refinementFinding.create).toHaveBeenCalledWith({
-      data: expect.objectContaining({ storyId: "story-1", sourceType: "ai", sourceAiAssistItemId: "item-1" }),
+      data: expect.objectContaining({ storyId: "story-1", sourceType: "ai", sourceAiAssistItemId: "item-1", dedupeKey: expect.any(String) }),
       select: { id: true },
     });
     expect(tx.artifactLayer.update).not.toHaveBeenCalled();
     expect(result).toEqual({ appliedEntityType: "refinement_finding", appliedEntityId: "finding-1" });
+  });
+
+  it("reuses an existing open refinement finding instead of creating a duplicate", async () => {
+    const tx = buildStubTx();
+    tx.artifactLayer.findFirst.mockResolvedValueOnce({ id: "story-1" });
+    tx.refinementFinding.findFirst.mockResolvedValueOnce({ id: "finding-existing" });
+    const result = await applyAiAssistItem(
+      tx,
+      { ...baseItem, actionKey: "PROPOSE_STORY_CONTENT", targetType: "story_refinement_finding", targetId: "story-1", generatedByUserId: "user-1" },
+      { storyArtifactLayerId: "story-1", category: "engineering_question", title: "Clarify failure behavior", detail: "What should happen when the provider is unavailable?" },
+      false,
+    );
+    expect(tx.refinementFinding.create).not.toHaveBeenCalled();
+    expect(result).toEqual({ appliedEntityType: "refinement_finding", appliedEntityId: "finding-existing" });
   });
 
   it("an unsupported actionKey (e.g. ROADMAP_INSIGHTS) throws — never a silent no-op write", async () => {

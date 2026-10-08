@@ -103,8 +103,14 @@ describe("proposeStoryContentResultSchema", () => {
   });
 
   it("requires a resolution before a finding can be resolved", () => {
-    expect(() => refinementFindingUpdateSchema.parse({ status: "resolved", resolution: "" })).toThrow();
-    expect(() => refinementFindingUpdateSchema.parse({ status: "resolved", resolution: "Confirmed retry behavior." })).not.toThrow();
+    expect(() => refinementFindingUpdateSchema.parse({ expectedRevision: 1, reason: "Reviewed", status: "resolved", resolution: "" })).toThrow();
+    expect(() => refinementFindingUpdateSchema.parse({ expectedRevision: 1, reason: "Reviewed", status: "resolved", resolution: "Confirmed retry behavior." })).not.toThrow();
+  });
+
+  it("requires an exact revision, reason, and actual finding change", () => {
+    expect(() => refinementFindingUpdateSchema.parse({ ownerUserId: "user-1" })).toThrow();
+    expect(() => refinementFindingUpdateSchema.parse({ expectedRevision: 1, reason: "Assigned" })).toThrow();
+    expect(() => refinementFindingUpdateSchema.parse({ expectedRevision: 1, reason: "Assigned", ownerUserId: "user-1" })).not.toThrow();
   });
 });
 

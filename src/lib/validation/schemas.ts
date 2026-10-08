@@ -476,6 +476,14 @@ export const refinementFindingProposalSchema = z.object({
   title: z.string().trim().min(3).max(160),
   detail: z.string().trim().min(3).max(2000),
 });
+export const refinementFindingCreateSchema = refinementFindingProposalSchema.omit({
+  storyArtifactLayerId: true,
+}).extend({
+  storyId: z.string().min(1),
+  ownerUserId: z.string().min(1).nullable().optional(),
+  followUpNote: z.string().trim().max(2000).default(""),
+  followUpAt: z.coerce.date().nullable().optional(),
+});
 export const proposeStoryContentResultSchema = z.object({
   epics: z.array(proposedEpicSchema).max(6),
   findings: z.array(refinementFindingProposalSchema).max(30).default([]),
@@ -484,12 +492,19 @@ export const proposeStoryContentResultSchema = z.object({
 export type ProposeStoryContentResult = z.infer<typeof proposeStoryContentResultSchema>;
 
 export const refinementFindingUpdateSchema = z.object({
+  expectedRevision: z.number().int().positive(),
+  reason: z.string().trim().min(3).max(500),
   status: z.enum(["open", "resolved", "dismissed"]).optional(),
   ownerUserId: z.string().min(1).nullable().optional(),
   resolution: z.string().trim().max(2000).optional(),
+  followUpNote: z.string().trim().max(2000).optional(),
+  followUpAt: z.coerce.date().nullable().optional(),
 }).superRefine((value, ctx) => {
   if (value.status === "resolved" && !value.resolution) {
     ctx.addIssue({ code: "custom", path: ["resolution"], message: "Add a resolution before marking this finding resolved." });
+  }
+  if (!Object.keys(value).some((key) => !["expectedRevision", "reason"].includes(key))) {
+    ctx.addIssue({ code: "custom", message: "Choose at least one refinement finding change." });
   }
 });
 
