@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { BacklogItemRecord } from "@/lib/backlog/unified";
 import {
   calculatePriorityScore,
@@ -52,7 +52,7 @@ export default function PriorityEditor({ initiativeId, item, onSaved, onClose }:
 
   const score = useMemo(() => calculatePriorityScore(factors), [factors]);
 
-  async function load() {
+  const load = useCallback(async () => {
     const query = new URLSearchParams({ entityType: item.recordType, entityId: item.id });
     const [historyResponse, recommendationResponse] = await Promise.all([
       fetch(`/api/initiatives/${initiativeId}/backlog/priority?${query}`),
@@ -66,9 +66,12 @@ export default function PriorityEditor({ initiativeId, item, onSaved, onClose }:
       const data = await recommendationResponse.json() as { items?: Recommendation[] };
       setRecommendations(data.items ?? []);
     }
-  }
+  }, [initiativeId, item.id, item.recordType]);
 
-  useEffect(() => { void load(); }, [initiativeId, item.id, item.recordType]);
+  useEffect(() => {
+    const timer = window.setTimeout(() => { void load(); }, 0);
+    return () => window.clearTimeout(timer);
+  }, [load]);
 
   async function save() {
     if (reason.trim().length < 3) { setMessage("Explain why this priority is being set."); return; }
@@ -117,7 +120,7 @@ export default function PriorityEditor({ initiativeId, item, onSaved, onClose }:
     } finally { setBusy(false); }
   }
 
-  function useRecommendation(recommendation: Recommendation) {
+  function applyRecommendationToForm(recommendation: Recommendation) {
     try {
       const proposal = JSON.parse(recommendation.proposedContentJson) as {
         factors: PriorityFactors; moscow: string; roadmapLane: BacklogItemRecord["roadmapLane"]; reason: string;
@@ -196,7 +199,7 @@ export default function PriorityEditor({ initiativeId, item, onSaved, onClose }:
       {activeRecommendations.map(recommendation => <article key={recommendation.id} className="rounded-lg border p-4"><p className="font-medium">{recommendation.synopsis}</p>
         <p className="mt-1 text-xs text-slate-500">Information used: {recommendation.informationUsed}</p>
         {recommendation.status === "stale" && <p className="mt-2 text-xs font-semibold text-amber-700">The backlog item changed after this suggestion was generated.</p>}
-        <div className="mt-3 flex gap-2"><button disabled={busy} onClick={() => useRecommendation(recommendation)} className="rounded bg-indigo-600 px-3 py-1.5 text-sm font-semibold text-white">Use suggestion</button>
+        <div className="mt-3 flex gap-2"><button disabled={busy} onClick={() => applyRecommendationToForm(recommendation)} className="rounded bg-indigo-600 px-3 py-1.5 text-sm font-semibold text-white">Use suggestion</button>
           <button disabled={busy} onClick={() => dismiss(recommendation)} className="rounded border px-3 py-1.5 text-sm">Dismiss</button></div>
       </article>)}
     </div>}
