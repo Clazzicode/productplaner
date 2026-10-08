@@ -31,6 +31,7 @@ async function PATCHHandler(
 
   const guard = await requireInitiativeApiAccess(authGuard.user, artifact.prototype.initiativeId, "edit");
   if (!guard.ok) return guard.response;
+  if (artifact.type === "story") return jsonError("Use the story workflow to edit stories so history and concurrency checks are preserved.", 409);
 
   try {
     await assertArtifactEditable(artifact.prototypeId, artifact.type as ArtifactType);
