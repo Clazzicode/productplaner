@@ -8,6 +8,7 @@ import { priorityScore, requestSchema } from "@/lib/requests/model";
 import { featureRecord } from "./model";
 import { listFeatures } from "./service";
 import { latestPriorityDecisionMap } from "@/lib/prioritization/service";
+import type { PriorityFactors } from "@/lib/prioritization/model";
 
 export const backlogItemTypes = ["request", "feature", "story"] as const;
 export const bulkTriageCommand = z.object({
@@ -34,6 +35,7 @@ export type BacklogItemRecord = {
   readiness: string;
   priorityLabel: string;
   priorityScore: number | null;
+  priorityFactors: PriorityFactors;
   dependencyAdjustedScore: number | null;
   priorityReason: string;
   priorityDecisionId: string | null;
@@ -45,6 +47,10 @@ export type BacklogItemRecord = {
 };
 
 const valueScores: Record<string, number> = { very_low: 20, low: 40, medium: 60, high: 80, critical: 100 };
+const valueRatings: Record<string, number> = { very_low: 1, low: 2, medium: 3, high: 4, critical: 5 };
+const riskRatings: Record<string, number> = { low: 1, medium: 3, high: 4, critical: 5 };
+const effortPointsBySize: Record<string, 1 | 2 | 3 | 5 | 8 | 13> = { xs: 1, s: 2, m: 5, l: 8, xl: 13 };
+const effortRatingBySize: Record<string, number> = { xs: 1, s: 2, m: 3, l: 4, xl: 5 };
 
 export async function listUnifiedBacklog(initiativeId: string): Promise<BacklogItemRecord[]> {
   const [features, requests, stories, priorityDecisions] = await Promise.all([
@@ -69,6 +75,16 @@ export async function listUnifiedBacklog(initiativeId: string): Promise<BacklogI
       owner: feature.owner, status: feature.backlogStatus, readiness: feature.backlogStatus,
       priorityLabel: originData?.success ? originData.data.priority.moscow : feature.businessValue,
       priorityScore: originData?.success ? priorityScore(originData.data.priority) : valueScores[feature.businessValue] ?? null,
+      priorityFactors: originData?.success ? {
+        businessValue: originData.data.priority.businessValue, urgency: originData.data.priority.urgency,
+        userImpact: originData.data.priority.userNeed, dependencyImpact: originData.data.priority.dependencyImpact,
+        risk: originData.data.priority.risk, effort: originData.data.priority.effort,
+        effortPoints: originData.data.priority.effortPoints, bugSeverity: originData.data.priority.bugSeverity,
+      } : {
+        businessValue: valueRatings[feature.businessValue] ?? 3, urgency: 3, userImpact: 3, dependencyImpact: 3,
+        risk: riskRatings[feature.riskLevel] ?? 3, effort: effortRatingBySize[row.effortSize] ?? 3,
+        effortPoints: effortPointsBySize[row.effortSize] ?? 5, bugSeverity: "not_applicable",
+      },
       roadmapLane: feature.backlogLane, archived: feature.backlogStatus === "archived",
       revision: feature.backlogRevision, sourceFeatureId: feature.id,
     };
@@ -83,6 +99,12 @@ export async function listUnifiedBacklog(initiativeId: string): Promise<BacklogI
       title: request.title, description: request.problem || request.requestedChange, source: request.source,
       owner: null, status: request.status, readiness: request.readiness,
       priorityLabel: request.priority.moscow, priorityScore: priorityScore(request.priority),
+      priorityFactors: {
+        businessValue: request.priority.businessValue, urgency: request.priority.urgency,
+        userImpact: request.priority.userNeed, dependencyImpact: request.priority.dependencyImpact,
+        risk: request.priority.risk, effort: request.priority.effort,
+        effortPoints: request.priority.effortPoints, bugSeverity: request.priority.bugSeverity,
+      },
       roadmapLane: request.priority.decision === "untriaged" ? "unscheduled" as const : request.priority.decision,
       archived: Boolean(row.archivedAt), revision: row.revision, sourceFeatureId: null,
     }];
@@ -96,6 +118,14 @@ export async function listUnifiedBacklog(initiativeId: string): Promise<BacklogI
       status: row.readinessStatus, readiness: row.readinessStatus,
       priorityLabel: capability?.businessValue ?? "unscored",
       priorityScore: capability ? valueScores[capability.businessValue] ?? null : null,
+      priorityFactors: {
+        businessValue: capability ? valueRatings[capability.businessValue] ?? 3 : 3,
+        urgency: 3, userImpact: 3, dependencyImpact: 3,
+        risk: capability ? riskRatings[capability.riskLevel] ?? 3 : 3,
+        effort: capability ? effortRatingBySize[capability.effortSize] ?? 3 : 3,
+        effortPoints: capability ? effortPointsBySize[capability.effortSize] ?? 5 : 5,
+        bugSeverity: "not_applicable",
+      },
       roadmapLane: capability && ["now", "next", "later", "unscheduled"].includes(capability.backlogLane)
         ? capability.backlogLane as BacklogItemRecord["roadmapLane"] : "unscheduled" as const,
       archived: Boolean(row.archivedAt), revision: row.backlogRevision, sourceFeatureId: capability?.id ?? null,
@@ -108,6 +138,7 @@ export async function listUnifiedBacklog(initiativeId: string): Promise<BacklogI
       ...item,
       priorityLabel: decision.moscow,
       priorityScore: decision.score,
+      priorityFactors: decision.factors,
       dependencyAdjustedScore: decision.dependencyAdjustedScore,
       priorityReason: decision.reason,
       priorityDecisionId: decision.id,
