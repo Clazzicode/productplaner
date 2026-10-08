@@ -769,6 +769,7 @@ model ArtifactRevision {
   title       String
   body        String
   reason      String        @default("")
+  metadata    Json          @default("{}")
   actorUserId String?
   createdAt   DateTime      @default(now())
 

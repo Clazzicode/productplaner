@@ -260,11 +260,24 @@ export const storyCreateSchema = z.object({
   title: z.string().trim().min(3).max(160),
   body: z.string().trim().min(1).max(8000),
   points: z.number().int().min(1).max(21).nullable().default(null),
-  sourceType: z.enum(["manual", "jira"]).default("manual"),
-  externalRef: z.string().trim().max(120).nullable().default(null),
-}).superRefine((value, ctx) => {
-  if (value.sourceType === "jira" && !value.externalRef) ctx.addIssue({ code: "custom", path: ["externalRef"], message: "Add the Jira story key." });
+  sourceType: z.literal("manual").default("manual"),
+  externalRef: z.null().default(null),
 });
+
+export const storyUpdateSchema = z.object({
+  expectedRevision: z.number().int().positive(),
+  reason: z.string().trim().min(3, "Explain why the story is changing.").max(1000),
+  title: z.string().trim().min(3).max(160).optional(),
+  body: z.string().trim().min(1).max(8000).optional(),
+  points: z.number().int().min(1).max(21).nullable().optional(),
+  readinessStatus: z.enum(["needs_refinement", "ready_for_refinement", "sprint_ready", "blocked", "split"]).optional(),
+  epicId: z.string().min(1).optional(),
+  archived: z.boolean().optional(),
+}).refine((value) =>
+  value.title !== undefined || value.body !== undefined || value.points !== undefined ||
+  value.readinessStatus !== undefined || value.epicId !== undefined || value.archived !== undefined,
+  "Choose at least one story change.",
+);
 
 export const storySplitSchema = z.object({
   stories: z.array(z.object({

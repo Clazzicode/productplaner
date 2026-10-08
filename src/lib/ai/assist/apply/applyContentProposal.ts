@@ -92,11 +92,49 @@ export async function applyContentProposal(
     for (const story of epic.stories) {
       let storyId = story.existingArtifactLayerId;
       if (storyId) {
-        await tx.artifactLayer.findFirstOrThrow({
+        const current = await tx.artifactLayer.findFirstOrThrow({
           where: { id: storyId, prototypeId: feature.prototypeId, type: "story", parentId: epicId },
+        });
+        const dedupeKey = `feature:${featureArtifactLayerId}:title:${normalized(story.title)}`;
+        const duplicate = await tx.artifactLayer.findFirst({
+          where: { prototypeId: feature.prototypeId, type: "story", dedupeKey, NOT: { id: storyId } },
           select: { id: true },
         });
-        await tx.artifactLayer.update({ where: { id: storyId }, data: { title: story.title, body: story.body } });
+        if (duplicate) throw new DependencyAlreadyExistsError(`A story named "${story.title}" already exists for this feature.`);
+        const changed = current.title !== story.title || current.body !== story.body;
+        if (changed) {
+          const version = await tx.artifactRevision.count({ where: { artifactId: current.id } }) + 1;
+          await tx.artifactRevision.create({
+            data: {
+              artifactId: current.id,
+              version,
+              title: current.title,
+              body: current.body,
+              reason: "Applied a reviewed AI story suggestion.",
+              metadata: {
+                title: current.title,
+                body: current.body,
+                points: current.points,
+                readinessStatus: current.readinessStatus,
+                epicId: current.parentId,
+                sourceCapabilityId: current.sourceCapabilityId,
+                sourceType: current.sourceType,
+                externalRef: current.externalRef,
+                archivedAt: current.archivedAt?.toISOString() ?? null,
+                revision: current.backlogRevision,
+              },
+            },
+          });
+        }
+        await tx.artifactLayer.update({
+          where: { id: storyId },
+          data: {
+            title: story.title,
+            body: story.body,
+            dedupeKey,
+            ...(changed ? { backlogRevision: { increment: 1 } } : {}),
+          },
+        });
       } else {
         const dedupeKey = `feature:${featureArtifactLayerId}:title:${normalized(story.title)}`;
         const duplicate = await tx.artifactLayer.findFirst({
