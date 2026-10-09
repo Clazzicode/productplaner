@@ -31,6 +31,7 @@ vi.mock("@/lib/audit", () => ({ auditInitiative: async (_id: string, action: str
 vi.mock("@/lib/generation/mutation", () => ({ withPlanningMutation: async (_id: string, _action: string, fn: () => Promise<unknown>) => {
   const { withTransaction } = await import("@/lib/db"); return withTransaction(fn);
 } }));
+vi.mock("@/lib/bugs/service", () => ({ syncBugPlanningFromRequest: async () => null }));
 import { saveRequest, promoteRequest } from "../service";
 import { emptyRequest } from "../model";
 const input = () => ({ ...emptyRequest(), title: "Saved maps", requestor: "PO",

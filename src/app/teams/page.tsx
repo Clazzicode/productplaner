@@ -2,6 +2,8 @@ import { redirect } from "next/navigation";
 import { ContainedLayout } from "@/components/layout/PageLayouts";
 import PageHeader from "@/components/ui/PageHeader";
 import TeamsList from "@/components/admin/TeamsList";
+import StakeholderWorkspace from "@/components/stakeholders/StakeholderWorkspace";
+import { listAuthorizedInitiativeIds } from "@/lib/access/initiativeAccess";
 import { requireCurrentUser } from "@/lib/auth/session";
 import { db, establishAuthContext } from "@/lib/db";
 
@@ -24,6 +26,19 @@ export default async function TeamsPage() {
     orderBy: { name: "asc" },
     include: { members: { include: { user: { select: { memberType: true } } } } },
   });
+  const authorizedIds = await listAuthorizedInitiativeIds(user);
+  const [initiatives, members] = await Promise.all([
+    db.initiative.findMany({
+      where: { organizationId: user.organizationId, ...(authorizedIds ? { id: { in: authorizedIds } } : {}) },
+      select: { id: true, name: true, project: { select: { name: true } } },
+      orderBy: { updatedAt: "desc" },
+    }),
+    db.organizationMember.findMany({
+      where: { organizationId: user.organizationId, status: "active" },
+      select: { user: { select: { id: true, name: true, email: true } } },
+      orderBy: { createdAt: "asc" },
+    }),
+  ]);
 
   return (
     <ContainedLayout>
@@ -44,6 +59,11 @@ export default async function TeamsPage() {
           }))}
         />
       </div>
+      <StakeholderWorkspace
+        initiatives={initiatives.map((initiative) => ({ id: initiative.id, name: initiative.name, projectName: initiative.project.name }))}
+        members={members.map((member) => member.user)}
+        canEdit={user.accessLevel === "org_admin" || user.status === "active"}
+      />
     </ContainedLayout>
   );
 }

@@ -16,76 +16,88 @@ datasource db {
 // src/lib/validation). JSON payloads are serialized into String columns.
 
 model Organization {
-  id                      String                   @id @default(cuid())
-  createdByAuthUserId      String?                  @default(dbgenerated("auth.uid()")) @db.Uuid
-  name                    String
+  id                             String                          @id @default(cuid())
+  createdByAuthUserId            String?                         @default(dbgenerated("auth.uid()")) @db.Uuid
+  name                           String
   // Step [AUTH] (docs/V2-MULTI-TENANT-AUTH.md). "solo" = auto-created personal
   // workspace behind a solo signup; "team" = everything else, including every
   // Organization that existed before this field was added (see migration
   // backfill note on OrganizationMember below). Informational only — never an
   // authorization signal by itself, membership is what RLS/app code check.
-  workspaceType           String                   @default("team") // solo | team
+  workspaceType                  String                          @default("team") // solo | team
   // Directive §28: null = fall back to 4% of the platform-wide monthly AI
   // budget (env PLATFORM_AI_MONTHLY_BUDGET_USD), and only if that platform
   // budget is actually configured — never a flat 4% reservation with no
   // platform cap set. See src/lib/ai/budget.ts's resolveOrganizationAiBudget().
-  aiMonthlyBudgetUsd      Decimal? @db.Decimal(20, 8)
-  ownerUserId             String?
-  owner                   User?                    @relation("OrganizationOwner", fields: [ownerUserId], references: [id], onDelete: SetNull)
+  aiMonthlyBudgetUsd             Decimal?                        @db.Decimal(20, 8)
+  ownerUserId                    String?
+  owner                          User?                           @relation("OrganizationOwner", fields: [ownerUserId], references: [id], onDelete: SetNull)
   // Renamed relation (was `users`) now that User.organizationId -> homeOrganizationId:
   // this is "users whose home/default workspace is this org," not "members of
   // this org" — membership (including users whose home org is elsewhere) lives
   // in OrganizationMember below.
-  homeUsers               User[]                   @relation("OrganizationHomeUsers")
-  members                 OrganizationMember[]
-  teams                   Team[]
-  initiatives             Initiative[]
-  projects                Project[]
-  decisions               Decision[]
-  risks                   Risk[]
-  documents               Document[]
-  contextItems            ContextItem[]
-  roadmapStatuses         RoadmapStatus[]
-  integrationConnections  IntegrationConnection[]
-  dashboardConfigurations DashboardConfiguration[]
-  aiUsageEvents           AiUsageEvent[]
-  aiRequestLocks          AiRequestLock[]
-  aiJobs                  AiJob[]
-  aiAssistItems           AiAssistItem[]
-  refinementFindings      RefinementFinding[]
-  requestSourceRecords    RequestSourceRecord[]
-  requestRevisions        RequestRevision[]
-  priorityDecisions       PriorityDecision[]
-  auditEvents             AuditEvent[]
-  planApprovals           PlanApproval[]
-  createdAt               DateTime                 @default(now())
+  homeUsers                      User[]                          @relation("OrganizationHomeUsers")
+  members                        OrganizationMember[]
+  teams                          Team[]
+  initiatives                    Initiative[]
+  projects                       Project[]
+  decisions                      Decision[]
+  risks                          Risk[]
+  documents                      Document[]
+  contextItems                   ContextItem[]
+  roadmapStatuses                RoadmapStatus[]
+  integrationConnections         IntegrationConnection[]
+  dashboardConfigurations        DashboardConfiguration[]
+  aiUsageEvents                  AiUsageEvent[]
+  aiRequestLocks                 AiRequestLock[]
+  aiJobs                         AiJob[]
+  aiAssistItems                  AiAssistItem[]
+  refinementFindings             RefinementFinding[]
+  refinementSessions             RefinementSession[]
+  refinementSessionRevisions     RefinementSessionRevision[]
+  workDependencies               WorkDependency[]
+  planningBlockers               PlanningBlocker[]
+  planningBlockerRevisions       PlanningBlockerRevision[]
+  sprintReadinessAssessments     SprintReadinessAssessment[]
+  sprintPlans                    SprintPlan[]
+  requestSourceRecords           RequestSourceRecord[]
+  requestRevisions               RequestRevision[]
+  priorityDecisions              PriorityDecision[]
+  stakeholderContacts            StakeholderContact[]
+  stakeholderAssignments         StakeholderAssignment[]
+  stakeholderAssignmentRevisions StakeholderAssignmentRevision[]
+  bugPlanningRecords             BugPlanningRecord[]
+  bugPlanningRevisions           BugPlanningRevision[]
+  auditEvents                    AuditEvent[]
+  planApprovals                  PlanApproval[]
+  createdAt                      DateTime                        @default(now())
 }
 
 model User {
-  id                     String               @id @default(cuid())
+  id                             String                          @id @default(cuid())
   // Step [AUTH]. Bridges to Supabase Auth's auth.users.id. Nullable until the
   // one-time backfill (docs/V2-MULTI-TENANT-AUTH.md) links every existing User
   // row to a real auth.users row; required for every row created afterward.
   // Deliberately NOT the primary key: User.id (cuid) is already referenced by
   // 7+ other tables' FKs, and existing ids aren't valid UUID text, so bridging
   // via a separate column is additive and leaves every existing FK untouched.
-  authUserId             String?              @unique @db.Uuid
+  authUserId                     String?                         @unique @db.Uuid
   // Renamed from `organizationId`: this is now the user's *default* workspace,
   // not their only one — see OrganizationMember for actual (possibly
   // multi-org) membership. @map keeps the underlying column name unchanged
   // (no data migration needed) while forcing every direct Prisma read of the
   // old field name to fail to compile, so each call site gets an explicit,
   // reviewed decision: "home org" or "resolved active org" (getCurrentUser()).
-  homeOrganizationId     String               @map("organizationId")
-  homeOrganization       Organization         @relation("OrganizationHomeUsers", fields: [homeOrganizationId], references: [id])
-  ownedOrganizations     Organization[]       @relation("OrganizationOwner")
-  memberships            OrganizationMember[]
-  name                   String
-  email                  String               @unique
+  homeOrganizationId             String                          @map("organizationId")
+  homeOrganization               Organization                    @relation("OrganizationHomeUsers", fields: [homeOrganizationId], references: [id])
+  ownedOrganizations             Organization[]                  @relation("OrganizationOwner")
+  memberships                    OrganizationMember[]
+  name                           String
+  email                          String                          @unique
   // User-facing sign-in name. Authentication still belongs to Supabase Auth;
   // normalized provides case-insensitive uniqueness without changing display.
-  username               String?
-  usernameNormalized     String?              @unique
+  username                       String?
+  usernameNormalized             String?                         @unique
   // Step 8B (docs/V2-USERS-TEAMS.md). String + default, matching this schema's
   // existing convention (e.g. Initiative.status) rather than a native enum.
   // Default "org_admin" is deliberate: today there is exactly one User per
@@ -100,42 +112,62 @@ model User {
   // request from the resolved active org's membership row, so existing
   // `accessLevel === "org_admin"` checks throughout the codebase keep working
   // unchanged. New code should read OrganizationMember.role directly.
-  accessLevel            String               @default("org_admin") // standard_user | org_admin
+  accessLevel                    String                          @default("org_admin") // standard_user | org_admin
   // Nullable, no default, deliberately: Working Role has lived only in the
   // Step 4 onboarding cookie (src/lib/onboarding/tempStateServer.ts) and there
   // is no truthful value to backfill an existing User row with. Populated
   // naturally as a user completes/updates onboarding — see docs/V2-USERS-TEAMS.md
   // "Auth Transition" for the read-persisted-fall-back-to-cookie strategy.
-  workingRole            String? // product_management | project_manager | product_owner
-  memberType             String               @default("internal") // internal | external
-  status                 String               @default("active") // active | disabled | archived
-  profiles               QualifyingProfile[]
-  initiatives            Initiative[]
-  createdProjects        Project[]
-  decisionsDecided       Decision[]
-  risksOwned             Risk[]
-  ownedCapabilities      Capability[]          @relation("CapabilityOwner")
-  documentsUploaded      Document[]
-  contextItemsApproved   ContextItem[] @relation("ContextItemApprovedBy")
-  roadmapStatusesUpdated RoadmapStatus[]
-  coachMarkDismissals    CoachMarkDismissal[]
-  teamMemberships        TeamMember[]
-  initiativeAccess       InitiativeAccess[]
-  aiUsageEvents          AiUsageEvent[]
-  aiRequestLocks         AiRequestLock[]
-  aiJobs                 AiJob[]
-  intakeAiAnalyses       IntakeAiAnalysis[]
-  roadmapVersionsApproved RoadmapVersion[]
-  aiAssistItemsGenerated  AiAssistItem[] @relation("AiAssistItemGeneratedBy")
-  aiAssistItemsApplied    AiAssistItem[] @relation("AiAssistItemAppliedBy")
-  aiAssistItemsDismissed  AiAssistItem[] @relation("AiAssistItemDismissedBy")
-  refinementFindingsOwned RefinementFinding[] @relation("RefinementFindingOwner")
-  refinementFindingsCreated RefinementFinding[] @relation("RefinementFindingCreatedBy")
-  refinementFindingRevisions RefinementFindingRevision[] @relation("RefinementFindingRevisionActor")
-  requestSourceRecordsCreated RequestSourceRecord[] @relation("RequestSourceRecordCreatedBy")
-  requestRevisionsCreated RequestRevision[] @relation("RequestRevisionChangedBy")
-  priorityDecisionsMade   PriorityDecision[] @relation("PriorityDecisionChangedBy")
-  createdAt              DateTime             @default(now())
+  workingRole                    String? // product_management | project_manager | product_owner
+  memberType                     String                          @default("internal") // internal | external
+  status                         String                          @default("active") // active | disabled | archived
+  profiles                       QualifyingProfile[]
+  initiatives                    Initiative[]
+  createdProjects                Project[]
+  decisionsDecided               Decision[]
+  risksOwned                     Risk[]
+  ownedCapabilities              Capability[]                    @relation("CapabilityOwner")
+  documentsUploaded              Document[]
+  contextItemsApproved           ContextItem[]                   @relation("ContextItemApprovedBy")
+  roadmapStatusesUpdated         RoadmapStatus[]
+  coachMarkDismissals            CoachMarkDismissal[]
+  teamMemberships                TeamMember[]
+  initiativeAccess               InitiativeAccess[]
+  aiUsageEvents                  AiUsageEvent[]
+  aiRequestLocks                 AiRequestLock[]
+  aiJobs                         AiJob[]
+  intakeAiAnalyses               IntakeAiAnalysis[]
+  roadmapVersionsApproved        RoadmapVersion[]
+  aiAssistItemsGenerated         AiAssistItem[]                  @relation("AiAssistItemGeneratedBy")
+  aiAssistItemsApplied           AiAssistItem[]                  @relation("AiAssistItemAppliedBy")
+  aiAssistItemsDismissed         AiAssistItem[]                  @relation("AiAssistItemDismissedBy")
+  refinementFindingsOwned        RefinementFinding[]             @relation("RefinementFindingOwner")
+  refinementFindingsCreated      RefinementFinding[]             @relation("RefinementFindingCreatedBy")
+  refinementFindingRevisions     RefinementFindingRevision[]     @relation("RefinementFindingRevisionActor")
+  refinementSessionsFacilitated  RefinementSession[]             @relation("RefinementSessionFacilitator")
+  refinementSessionsCreated      RefinementSession[]             @relation("RefinementSessionCreatedBy")
+  refinementQuestionsOwned       RefinementSessionQuestion[]     @relation("RefinementQuestionOwner")
+  refinementDecisionsMade        RefinementSessionDecision[]     @relation("RefinementDecisionMaker")
+  refinementActionsOwned         RefinementSessionAction[]       @relation("RefinementActionOwner")
+  refinementSessionRevisions     RefinementSessionRevision[]     @relation("RefinementSessionRevisionActor")
+  requestSourceRecordsCreated    RequestSourceRecord[]           @relation("RequestSourceRecordCreatedBy")
+  requestRevisionsCreated        RequestRevision[]               @relation("RequestRevisionChangedBy")
+  priorityDecisionsMade          PriorityDecision[]              @relation("PriorityDecisionChangedBy")
+  stakeholderContacts            StakeholderContact[]            @relation("StakeholderContactUser")
+  stakeholderAssignmentsCreated  StakeholderAssignment[]         @relation("StakeholderAssignmentCreatedBy")
+  stakeholderAssignmentRevisions StakeholderAssignmentRevision[] @relation("StakeholderAssignmentRevisionActor")
+  bugPlanningRecordsOwned        BugPlanningRecord[]             @relation("BugPlanningOwner")
+  bugPlanningRevisions           BugPlanningRevision[]           @relation("BugPlanningRevisionActor")
+  workDependenciesCreated        WorkDependency[]                @relation("WorkDependencyCreatedBy")
+  planningBlockersOwned          PlanningBlocker[]               @relation("PlanningBlockerOwner")
+  planningBlockersResolved       PlanningBlocker[]               @relation("PlanningBlockerResolvedBy")
+  planningBlockerOverrides       PlanningBlocker[]               @relation("PlanningBlockerOverrideBy")
+  planningBlockersCreated        PlanningBlocker[]               @relation("PlanningBlockerCreatedBy")
+  planningBlockerRevisions       PlanningBlockerRevision[]       @relation("PlanningBlockerRevisionActor")
+  sprintReadinessDecisions       SprintReadinessAssessment[]     @relation("SprintReadinessDecidedBy")
+  sprintPlansCreated             SprintPlan[]                    @relation("SprintPlanCreatedBy")
+  sprintPlansCommitted           SprintPlan[]                    @relation("SprintPlanCommittedBy")
+  createdAt                      DateTime                        @default(now())
 }
 
 // Server-only username -> Supabase Auth identity registry. This allows a user
@@ -242,43 +274,46 @@ model InitiativeAccess {
 // bootstrap-visibility migration needed (unlike Organization/OrganizationMember
 // at signup).
 model Project {
-  id                   String       @id @default(cuid())
+  id                     String                  @id @default(cuid())
   // RESTRICT by default (no onDelete clause) — matches the existing
   // Initiative/Team/IntegrationConnection/AiUsageEvent convention of
   // org-root-owned rows: organizationId is a denormalized RLS-scoping
   // column, not the cascade path. Deletion cascades through the more
   // specific parent (projectId/initiativeId below) instead.
-  organizationId       String
-  organization         Organization @relation(fields: [organizationId], references: [id])
-  createdByUserId      String
-  createdByUser        User         @relation(fields: [createdByUserId], references: [id])
-  name                 String
-  description          String       @default("")
-  goal                 String       @default("")
-  budget               Decimal? @db.Decimal(20, 4)
-  averageHourlyRate    Decimal? @default(85) @db.Decimal(20, 4)
-  targetLaunchDate     DateTime? // "target / projected go-live"
-  teamCompositionJson  String       @default("{}") // serialized team info, matching this schema's JSON-in-String convention
-  constraintsJson      String       @default("[]")
-  stakeholdersJson     String       @default("[]")
-  planningApproach     String       @default("")
-  connectedSystemsJson String       @default("[]")
-  defaultMethodology   String       @default("hybrid") // inherited default; Initiative.methodology may still override
-  initiatives          Initiative[]
-  decisions            Decision[]
-  risks                Risk[]
-  documents            Document[]
-  contextItems         ContextItem[]
-  requestSourceRecords RequestSourceRecord[]
-  aiJobs               AiJob[]
-  aiAssistItems        AiAssistItem[]
-  aiUsageEvents        AiUsageEvent[]
-  createdAt            DateTime     @default(now())
-  updatedAt            DateTime     @updatedAt
+  organizationId         String
+  organization           Organization            @relation(fields: [organizationId], references: [id])
+  createdByUserId        String
+  createdByUser          User                    @relation(fields: [createdByUserId], references: [id])
+  name                   String
+  description            String                  @default("")
+  goal                   String                  @default("")
+  budget                 Decimal?                @db.Decimal(20, 4)
+  averageHourlyRate      Decimal?                @default(85) @db.Decimal(20, 4)
+  targetLaunchDate       DateTime? // "target / projected go-live"
+  teamCompositionJson    String                  @default("{}") // serialized team info, matching this schema's JSON-in-String convention
+  constraintsJson        String                  @default("[]")
+  stakeholdersJson       String                  @default("[]")
+  planningApproach       String                  @default("")
+  connectedSystemsJson   String                  @default("[]")
+  defaultMethodology     String                  @default("hybrid") // inherited default; Initiative.methodology may still override
+  initiatives            Initiative[]
+  decisions              Decision[]
+  risks                  Risk[]
+  documents              Document[]
+  contextItems           ContextItem[]
+  requestSourceRecords   RequestSourceRecord[]
+  stakeholderAssignments StakeholderAssignment[]
+  refinementSessions     RefinementSession[]
+  aiJobs                 AiJob[]
+  aiAssistItems          AiAssistItem[]
+  aiUsageEvents          AiUsageEvent[]
+  createdAt              DateTime                @default(now())
+  updatedAt              DateTime                @updatedAt
   // Directive item 12: "recently opened project," distinct from updatedAt
   // (last edited). Bumped fire-and-forget whenever Project Home loads for an
   // authorized member — never awaited, never blocks the page.
-  lastOpenedAt         DateTime?
+  lastOpenedAt           DateTime?
+
   @@index([organizationId, updatedAt])
 }
 
@@ -287,20 +322,21 @@ model Project {
 // never a persisted fact. initiativeId is nullable: a decision can belong to
 // the Project as a whole or to one specific Initiative within it.
 model Decision {
-  id              String       @id @default(cuid())
-  organizationId  String // RESTRICT by default — see Project's organization relation comment
-  organization    Organization @relation(fields: [organizationId], references: [id])
-  projectId       String
-  project         Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  initiativeId    String?
-  initiative      Initiative?  @relation(fields: [initiativeId], references: [id], onDelete: Cascade)
-  title           String
-  description     String       @default("")
-  decidedByUserId String?
-  decidedByUser   User?        @relation(fields: [decidedByUserId], references: [id])
-  decidedAt       DateTime?
-  createdAt       DateTime     @default(now())
-  updatedAt       DateTime     @updatedAt
+  id                     String                  @id @default(cuid())
+  organizationId         String // RESTRICT by default — see Project's organization relation comment
+  organization           Organization            @relation(fields: [organizationId], references: [id])
+  projectId              String
+  project                Project                 @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  initiativeId           String?
+  initiative             Initiative?             @relation(fields: [initiativeId], references: [id], onDelete: Cascade)
+  title                  String
+  description            String                  @default("")
+  decidedByUserId        String?
+  decidedByUser          User?                   @relation(fields: [decidedByUserId], references: [id])
+  decidedAt              DateTime?
+  createdAt              DateTime                @default(now())
+  updatedAt              DateTime                @updatedAt
+  stakeholderAssignments StakeholderAssignment[]
 }
 
 // Net-new, distinct from the ephemeral IntakeAiAnalysis.risksJson (a raw AI
@@ -340,33 +376,33 @@ model Risk {
 // way the exact same Postgres RLS already covering every other table covers
 // documents too, with no second authorization system to design/test.
 model Document {
-  id                   String        @id @default(cuid())
+  id                   String                @id @default(cuid())
   organizationId       String // direct column, not a join — see RLS migration comment
-  organization         Organization  @relation(fields: [organizationId], references: [id])
+  organization         Organization          @relation(fields: [organizationId], references: [id])
   projectId            String // always set, even for an initiative-only doc (its initiative's project)
-  project              Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project              Project               @relation(fields: [projectId], references: [id], onDelete: Cascade)
   initiativeId         String? // null = project_shared; set = initiative_only
-  initiative           Initiative?   @relation(fields: [initiativeId], references: [id], onDelete: Cascade)
+  initiative           Initiative?           @relation(fields: [initiativeId], references: [id], onDelete: Cascade)
   scope                String // project_shared | initiative_only
   uploadedByUserId     String
-  uploadedByUser       User          @relation(fields: [uploadedByUserId], references: [id])
+  uploadedByUser       User                  @relation(fields: [uploadedByUserId], references: [id])
   fileName             String
   fileExt              String // pdf | docx | pptx
   fileSizeBytes        Int
   fileBytes            Bytes
-  status               String        @default("uploaded") // uploaded | extracted | analyzed | failed
+  status               String                @default("uploaded") // uploaded | extracted | analyzed | failed
   processingError      String? // user-facing reason when status="failed" — never a silent failure
   extractedChunksJson  String? // serialized DocumentChunk[] (src/lib/documents/extractChunks.ts), set once extraction succeeds
   // Explicit "this replaces an earlier upload" link (directive item 24) —
   // never auto-detected by filename. The old Document row/bytes are never
   // deleted (directive item 20).
   supersedesDocumentId String?
-  supersedesDocument   Document?     @relation("DocumentSupersedes", fields: [supersedesDocumentId], references: [id])
-  supersededBy         Document[]    @relation("DocumentSupersedes")
+  supersedesDocument   Document?             @relation("DocumentSupersedes", fields: [supersedesDocumentId], references: [id])
+  supersededBy         Document[]            @relation("DocumentSupersedes")
   contextItems         ContextItem[]
   requestSourceRecords RequestSourceRecord[]
-  createdAt            DateTime      @default(now())
-  updatedAt            DateTime      @updatedAt
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
 
   @@index([projectId])
   @@index([initiativeId])
@@ -377,45 +413,45 @@ model Document {
 // only reaches "approved" through an explicit user action that also
 // crystallizes it (see model comment above).
 model ContextItem {
-  id             String       @id @default(cuid())
-  organizationId String
-  organization   Organization @relation(fields: [organizationId], references: [id])
-  projectId      String
-  project        Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  initiativeId   String? // null = a project-level fact
-  initiative     Initiative?  @relation(fields: [initiativeId], references: [id], onDelete: Cascade)
-  documentId     String // source — every ContextItem originates from an import
-  document       Document     @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  id                             String                @id @default(cuid())
+  organizationId                 String
+  organization                   Organization          @relation(fields: [organizationId], references: [id])
+  projectId                      String
+  project                        Project               @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  initiativeId                   String? // null = a project-level fact
+  initiative                     Initiative?           @relation(fields: [initiativeId], references: [id], onDelete: Cascade)
+  documentId                     String // source — every ContextItem originates from an import
+  document                       Document              @relation(fields: [documentId], references: [id], onDelete: Cascade)
   // project_name | description | goal | budget | projected_go_live | team |
   // constraints | stakeholders | initiative_name | initiative_goal |
   // success_measure | initiative_target_date | feature | risk | dependency | assumption
-  fieldKey       String
-  kind           String // explicit | interpretation — directive item 10
+  fieldKey                       String
+  kind                           String // explicit | interpretation — directive item 10
   // Serialized proposed value: a plain string for scalar facts, a small
   // JSON object for feature/risk (name/description/isMvp/effortSize/
   // businessValue/riskLevel, or description/severity).
-  valueJson         String
-  sourceExcerpt     String // original text snippet supporting this item
-  sourceChunkIndex  Int?
-  sourceHeading     String?
-  sourcePageNumber  Int? // PDF only
-  sourceSlideNumber Int? // PPTX only
+  valueJson                      String
+  sourceExcerpt                  String // original text snippet supporting this item
+  sourceChunkIndex               Int?
+  sourceHeading                  String?
+  sourcePageNumber               Int? // PDF only
+  sourceSlideNumber              Int? // PPTX only
   // extracted | needs_review | approved | rejected | conflict | needs_clarification
-  status                         String        @default("extracted")
+  status                         String                @default("extracted")
   conflictWithItemId             String? // another pending ContextItem for the same field, disagreeing
-  conflictWithItem               ContextItem?  @relation("ContextItemConflict", fields: [conflictWithItemId], references: [id])
-  conflictedBy                   ContextItem[] @relation("ContextItemConflict")
+  conflictWithItem               ContextItem?          @relation("ContextItemConflict", fields: [conflictWithItemId], references: [id])
+  conflictedBy                   ContextItem[]         @relation("ContextItemConflict")
   conflictsWithExistingValueText String? // snapshot of the CURRENT approved value it disagreed with, if any
   // The user's FINAL value — may differ from valueJson if they edited it
   // before approving (directive item 16) — this is what actually got
   // crystallized.
-  approvedValueText String?
-  approvedByUserId  String?
-  approvedByUser    User?         @relation("ContextItemApprovedBy", fields: [approvedByUserId], references: [id], onDelete: SetNull)
-  approvedAt        DateTime?
-  requestSourceRecords RequestSourceRecord[]
-  createdAt         DateTime      @default(now())
-  updatedAt         DateTime      @updatedAt
+  approvedValueText              String?
+  approvedByUserId               String?
+  approvedByUser                 User?                 @relation("ContextItemApprovedBy", fields: [approvedByUserId], references: [id], onDelete: SetNull)
+  approvedAt                     DateTime?
+  requestSourceRecords           RequestSourceRecord[]
+  createdAt                      DateTime              @default(now())
+  updatedAt                      DateTime              @updatedAt
 
   @@index([projectId, initiativeId, fieldKey])
   @@index([documentId])
@@ -482,62 +518,69 @@ model QualifyingProfile {
 }
 
 model Initiative {
-  planningRequests          PlanningRequest[]
-  id                        String                   @id @default(cuid())
+  planningRequests           PlanningRequest[]
+  id                         String                      @id @default(cuid())
   // Kept denormalized (not inferred via projectId -> Project.organizationId)
   // deliberately: every existing RLS policy and resolveInitiativeAccess/
   // getResolvedAccess read this column directly, not through a join — see
   // the RLS migration for Project, which mirrors initiative_all exactly
   // rather than rewriting any of those.
-  organizationId            String
-  organization              Organization             @relation(fields: [organizationId], references: [id])
-  projectId                 String
-  project                   Project                  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  userId                    String
-  user                      User                     @relation(fields: [userId], references: [id])
-  qualifyingProfileId       String?
-  qualifyingProfile         QualifyingProfile?       @relation(fields: [qualifyingProfileId], references: [id])
-  name                      String
-  description               String                   @default("")
-  methodology               String                   @default("hybrid")
+  organizationId             String
+  organization               Organization                @relation(fields: [organizationId], references: [id])
+  projectId                  String
+  project                    Project                     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  userId                     String
+  user                       User                        @relation(fields: [userId], references: [id])
+  qualifyingProfileId        String?
+  qualifyingProfile          QualifyingProfile?          @relation(fields: [qualifyingProfileId], references: [id])
+  name                       String
+  description                String                      @default("")
+  methodology                String                      @default("hybrid")
   // Product Owner release rhythm. This is initiative-level planning context,
   // while Release.targetDate remains the date for one concrete release.
-  releaseCadence            String                   @default("") // weekly | biweekly | every_three_weeks | monthly | quarterly | custom
-  customReleaseCadence      String                   @default("")
-  status                    String                   @default("draft") // draft | intake_in_progress | generated
+  releaseCadence             String                      @default("") // weekly | biweekly | every_three_weeks | monthly | quarterly | custom
+  customReleaseCadence       String                      @default("")
+  status                     String                      @default("draft") // draft | intake_in_progress | generated
   // How this initiative's intake began — persisted (was only ephemeral
   // client state in ProductDirectionBootstrap before this). guided | import |
   // use_project_context | connect (reserved, not yet enabled).
-  intakeMethod              String?
+  intakeMethod               String?
   // Override-if-set, inherit-from-Project-if-null — resolve via
   // resolveInitiativeEconomics() in src/lib/projectContext.ts, never read
   // directly. Directive §9: "ask only initiative-specific questions ...
   // unless the initiative overrides them." Superseded the old direct
   // budget/averageHourlyRate/targetLaunchDate columns (moved onto Project).
-  targetLaunchDateOverride  DateTime?
-  budgetOverride            Decimal? @db.Decimal(20, 4)
-  averageHourlyRateOverride Decimal? @db.Decimal(20, 4)
-  intakeAnswerSet           IntakeAnswerSet?
-  prototype                 Prototype?
-  syncConnections           SyncConnection[]
-  integrationConnections    IntegrationConnection[]
-  initiativeAccess          InitiativeAccess[]
-  aiUsageEvents             AiUsageEvent[]
-  aiRequestLocks            AiRequestLock[]
-  aiJobs                    AiJob[]
-  intakeAiAnalyses          IntakeAiAnalysis[]
-  planningWeightOverrides   PlanningWeightOverride[]
-  decisions                 Decision[]
-  risks                     Risk[]
-  documents                 Document[]
-  contextItems              ContextItem[]
-  roadmapVersions           RoadmapVersion[]
-  aiAssistItems             AiAssistItem[]
-  refinementFindings        RefinementFinding[]
-  requestSourceRecords      RequestSourceRecord[]
-  priorityDecisions         PriorityDecision[]
-  createdAt                 DateTime                 @default(now())
-  updatedAt                 DateTime                 @updatedAt
+  targetLaunchDateOverride   DateTime?
+  budgetOverride             Decimal?                    @db.Decimal(20, 4)
+  averageHourlyRateOverride  Decimal?                    @db.Decimal(20, 4)
+  intakeAnswerSet            IntakeAnswerSet?
+  prototype                  Prototype?
+  syncConnections            SyncConnection[]
+  integrationConnections     IntegrationConnection[]
+  initiativeAccess           InitiativeAccess[]
+  aiUsageEvents              AiUsageEvent[]
+  aiRequestLocks             AiRequestLock[]
+  aiJobs                     AiJob[]
+  intakeAiAnalyses           IntakeAiAnalysis[]
+  planningWeightOverrides    PlanningWeightOverride[]
+  decisions                  Decision[]
+  risks                      Risk[]
+  documents                  Document[]
+  contextItems               ContextItem[]
+  roadmapVersions            RoadmapVersion[]
+  aiAssistItems              AiAssistItem[]
+  refinementFindings         RefinementFinding[]
+  refinementSessions         RefinementSession[]
+  workDependencies           WorkDependency[]
+  planningBlockers           PlanningBlocker[]
+  sprintReadinessAssessments SprintReadinessAssessment[]
+  sprintPlans                SprintPlan[]
+  requestSourceRecords       RequestSourceRecord[]
+  priorityDecisions          PriorityDecision[]
+  stakeholderAssignments     StakeholderAssignment[]
+  bugPlanningRecords         BugPlanningRecord[]
+  createdAt                  DateTime                    @default(now())
+  updatedAt                  DateTime                    @updatedAt
 
   @@index([projectId])
   @@index([organizationId, projectId])
@@ -567,40 +610,45 @@ model IntakeAnswerSet {
 }
 
 model Capability {
-  backlogLane             String                 @default("unscheduled")
-  backlogStatus           String                 @default("planned")
-  backlogRevision         Int                    @default(1)
-  backlogKey              String?
-  sourceRequests          PlanningRequest[]
-  ownerUserId             String?
-  owner                   User?                  @relation("CapabilityOwner", fields: [ownerUserId], references: [id], onDelete: SetNull)
-  releaseId               String?
-  release                 Release?               @relation("ReleaseFeatures", fields: [releaseId], references: [id], onDelete: SetNull)
-  id                      String                 @id @default(cuid())
-  intakeAnswerSetId       String
-  intakeAnswerSet         IntakeAnswerSet        @relation(fields: [intakeAnswerSetId], references: [id], onDelete: Cascade)
-  name                    String
-  description             String                 @default("")
-  isMvp                   Boolean // Q4
-  effortSize              String // Q6: xs | s | m | l | xl
-  businessValue           String // Q8: very_low | low | medium | high | critical (§2 five-level scale)
-  riskLevel               String                 @default("medium") // §4: low | medium | high | critical
-  mvpImportance           String? // §5 optional override: required_for_mvp | strongly_preferred | useful_not_required | future_enhancement | optional (derived from isMvp when null)
-  manualPhaseOverride     Int? // Timeline drag-and-drop override (1/2/3); null = computed by partitionPhases. Ignored by partitionPhasesContinuousBacklog (agile_scrum).
-  customerImpactScore     Int? // §2 optional weighted sub-factors, each 1-5
-  revenueImpactScore      Int?
-  strategicAlignmentScore Int?
-  riskComplianceScore     Int?
-  businessValueScore      Float? // §2 computed weighted score, snapshotted only when sub-factors are used
-  order                   Int                    @default(0)
-  dependsOnEdges          CapabilityDependency[] @relation("FromCapability")
-  dependedOnBy            CapabilityDependency[] @relation("ToCapability")
-  artifacts               ArtifactLayer[]
-  createdAt               DateTime               @default(now())
+  backlogLane                String                      @default("unscheduled")
+  backlogStatus              String                      @default("planned")
+  backlogRevision            Int                         @default(1)
+  backlogKey                 String?
+  sourceRequests             PlanningRequest[]
+  ownerUserId                String?
+  owner                      User?                       @relation("CapabilityOwner", fields: [ownerUserId], references: [id], onDelete: SetNull)
+  releaseId                  String?
+  release                    Release?                    @relation("ReleaseFeatures", fields: [releaseId], references: [id], onDelete: SetNull)
+  id                         String                      @id @default(cuid())
+  intakeAnswerSetId          String
+  intakeAnswerSet            IntakeAnswerSet             @relation(fields: [intakeAnswerSetId], references: [id], onDelete: Cascade)
+  name                       String
+  description                String                      @default("")
+  isMvp                      Boolean // Q4
+  effortSize                 String // Q6: xs | s | m | l | xl
+  businessValue              String // Q8: very_low | low | medium | high | critical (§2 five-level scale)
+  riskLevel                  String                      @default("medium") // §4: low | medium | high | critical
+  mvpImportance              String? // §5 optional override: required_for_mvp | strongly_preferred | useful_not_required | future_enhancement | optional (derived from isMvp when null)
+  manualPhaseOverride        Int? // Timeline drag-and-drop override (1/2/3); null = computed by partitionPhases. Ignored by partitionPhasesContinuousBacklog (agile_scrum).
+  customerImpactScore        Int? // §2 optional weighted sub-factors, each 1-5
+  revenueImpactScore         Int?
+  strategicAlignmentScore    Int?
+  riskComplianceScore        Int?
+  businessValueScore         Float? // §2 computed weighted score, snapshotted only when sub-factors are used
+  order                      Int                         @default(0)
+  dependsOnEdges             CapabilityDependency[]      @relation("FromCapability")
+  dependedOnBy               CapabilityDependency[]      @relation("ToCapability")
+  artifacts                  ArtifactLayer[]
+  stakeholderAssignments     StakeholderAssignment[]
+  affectedBugPlanningRecords BugPlanningRecord[]         @relation("BugPlanningCapability")
+  predecessorDependencies    WorkDependency[]            @relation("DependencyPredecessorCapability")
+  dependentDependencies      WorkDependency[]            @relation("DependencyDependentCapability")
+  planningBlockers           PlanningBlocker[]
+  createdAt                  DateTime                    @default(now())
 
+  @@unique([intakeAnswerSetId, backlogKey])
   @@index([intakeAnswerSetId])
   @@index([releaseId])
-  @@unique([intakeAnswerSetId, backlogKey])
 }
 
 model CapabilityDependency {
@@ -615,12 +663,12 @@ model CapabilityDependency {
 }
 
 model Prototype {
-  id                   String          @id @default(cuid())
-  initiativeId         String          @unique
-  initiative           Initiative      @relation(fields: [initiativeId], references: [id], onDelete: Cascade)
-  status               String          @default("active")
-  approvedBaselineJson String? // FR-13 snapshot, serialized JSON
-  approvedAt           DateTime?
+  id                            String          @id @default(cuid())
+  initiativeId                  String          @unique
+  initiative                    Initiative      @relation(fields: [initiativeId], references: [id], onDelete: Cascade)
+  status                        String          @default("active")
+  approvedBaselineJson          String? // FR-13 snapshot, serialized JSON
+  approvedAt                    DateTime?
   // Roadmap versioning foundation. computeRoadmapInputsFingerprint() output
   // captured the moment this prototype was generated (src/lib/generation/
   // fingerprint.ts) — compared against a fresh recompute by
@@ -628,12 +676,12 @@ model Prototype {
   // workspace page. Null for any prototype generated before this feature
   // shipped — treated as "no signal," never a false positive.
   inputsFingerprintAtGeneration String?
-  layers               ArtifactLayer[]
-  sprints              Sprint[]
-  releases             Release[]
-  layerLocks           LayerLock[]
-  createdAt            DateTime        @default(now())
-  updatedAt            DateTime        @updatedAt
+  layers                        ArtifactLayer[]
+  sprints                       Sprint[]
+  releases                      Release[]
+  layerLocks                    LayerLock[]
+  createdAt                     DateTime        @default(now())
+  updatedAt                     DateTime        @updatedAt
 }
 
 // Roadmap versioning foundation. Append-only archive of past approved
@@ -650,49 +698,49 @@ model Prototype {
 // window — normally a no-op, not a second primary write path. See
 // src/lib/generation/versioning.ts.
 model RoadmapVersion {
-  id           String     @id @default(cuid())
-  initiativeId String
-  initiative   Initiative @relation(fields: [initiativeId], references: [id], onDelete: Cascade)
+  id                String         @id @default(cuid())
+  initiativeId      String
+  initiative        Initiative     @relation(fields: [initiativeId], references: [id], onDelete: Cascade)
   // Explicit and immutable, assigned once at write time — never recomputed
   // at read time, so a version label a user has already seen can never
   // shift under them later.
-  versionNumber Int
-  status       String     @default("draft") // draft | approved | superseded
-  snapshotJson String // same {capturedAt, layers, sprints, releases} shape Prototype.approvedBaselineJson uses
+  versionNumber     Int
+  status            String         @default("draft") // draft | approved | superseded
+  snapshotJson      String // same {capturedAt, layers, sprints, releases} shape Prototype.approvedBaselineJson uses
   // computeRoadmapInputsFingerprint() output at the moment this version was
   // recorded. Null only for versions defensively backfilled by
   // ensureApprovedVersionArchived's legacy-data path, where the true
   // at-time-of-approval fingerprint is genuinely unrecoverable.
   inputsFingerprint String?
-  approvedAt       DateTime?
-  approvedByUserId String?
-  approvedByUser   User?      @relation(fields: [approvedByUserId], references: [id], onDelete: SetNull)
-  createdAt        DateTime   @default(now())
+  approvedAt        DateTime?
+  approvedByUserId  String?
+  approvedByUser    User?          @relation(fields: [approvedByUserId], references: [id], onDelete: SetNull)
+  createdAt         DateTime       @default(now())
   authoredByUserId  String?
-  approvals        PlanApproval[]
+  approvals         PlanApproval[]
 
   @@unique([initiativeId, versionNumber])
   @@index([initiativeId, createdAt])
 }
 
 model PlanApproval {
-  id             String @id @default(cuid())
+  id             String         @id @default(cuid())
   organizationId String
-  organization   Organization @relation(fields: [organizationId], references: [id])
+  organization   Organization   @relation(fields: [organizationId], references: [id])
   initiativeId   String
   projectId      String?
-  planVersionId  String @unique
+  planVersionId  String         @unique
   planVersion    RoadmapVersion @relation(fields: [planVersionId], references: [id], onDelete: Restrict)
-  status         String @default("approved")
+  status         String         @default("approved")
   approvedBy     String?
-  approvedAt     DateTime @default(now())
-  metadata       Json @default("{}")
+  approvedAt     DateTime       @default(now())
+  metadata       Json           @default("{}")
 
   @@index([organizationId, initiativeId, approvedAt])
 }
 
 model AuditEvent {
-  id             String @id @default(cuid())
+  id             String       @id @default(cuid())
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id])
   actorUserId    String?
@@ -700,9 +748,9 @@ model AuditEvent {
   entityType     String
   entityId       String
   action         String
-  metadata       Json @default("{}")
+  metadata       Json         @default("{}")
   requestId      String?
-  createdAt      DateTime @default(now())
+  createdAt      DateTime     @default(now())
 
   @@index([organizationId, createdAt])
   @@index([entityType, entityId, createdAt])
@@ -724,42 +772,50 @@ model LayerLock {
 }
 
 model ArtifactLayer {
-  id                 String          @id @default(cuid())
-  prototypeId        String
-  prototype          Prototype       @relation(fields: [prototypeId], references: [id], onDelete: Cascade)
-  type               String // roadmap | roadmap_phase | feature | epic | story | acceptance_criterion
-  parentId           String?
-  parent             ArtifactLayer?  @relation("LayerChildren", fields: [parentId], references: [id], onDelete: Cascade)
-  children           ArtifactLayer[] @relation("LayerChildren")
-  order              Int             @default(0)
-  title              String
-  body               String          @default("")
-  contentJson        String          @default("{}") // type-specific payload, serialized JSON
-  points             Int? // stories only
-  sourceCapabilityId String?
-  sourceCapability   Capability?     @relation(fields: [sourceCapabilityId], references: [id])
-  traceAnswerKeys    String          @default("") // comma-separated subset of q1..q8 (FR-10)
-  traceNote          String          @default("")
-  sprintId           String? // stories only
-  sprint             Sprint?         @relation(fields: [sprintId], references: [id], onDelete: SetNull)
-  externalRef        String? // fake Jira key once "synced" (stub)
-  sourceType         String          @default("generated") // generated | manual | jira | ai | split
-  readinessStatus    String          @default("needs_refinement") // needs_refinement | ready_for_refinement | sprint_ready | blocked | split
-  backlogRevision    Int             @default(1)
-  archivedAt         DateTime?
-  dedupeKey          String?
-  approvedAt         DateTime? // acceptance criteria only
-  approvedByUserId   String?
-  revisions          ArtifactRevision[]
-  refinementFindings RefinementFinding[]
-  createdAt          DateTime        @default(now())
-  updatedAt          DateTime        @updatedAt
+  id                         String                      @id @default(cuid())
+  prototypeId                String
+  prototype                  Prototype                   @relation(fields: [prototypeId], references: [id], onDelete: Cascade)
+  type                       String // roadmap | roadmap_phase | feature | epic | story | acceptance_criterion
+  parentId                   String?
+  parent                     ArtifactLayer?              @relation("LayerChildren", fields: [parentId], references: [id], onDelete: Cascade)
+  children                   ArtifactLayer[]             @relation("LayerChildren")
+  order                      Int                         @default(0)
+  title                      String
+  body                       String                      @default("")
+  contentJson                String                      @default("{}") // type-specific payload, serialized JSON
+  points                     Int? // stories only
+  sourceCapabilityId         String?
+  sourceCapability           Capability?                 @relation(fields: [sourceCapabilityId], references: [id])
+  traceAnswerKeys            String                      @default("") // comma-separated subset of q1..q8 (FR-10)
+  traceNote                  String                      @default("")
+  sprintId                   String? // stories only
+  sprint                     Sprint?                     @relation(fields: [sprintId], references: [id], onDelete: SetNull)
+  externalRef                String? // fake Jira key once "synced" (stub)
+  sourceType                 String                      @default("generated") // generated | manual | jira | ai | split
+  readinessStatus            String                      @default("needs_refinement") // needs_refinement | ready_for_refinement | sprint_ready | blocked | split
+  backlogRevision            Int                         @default(1)
+  archivedAt                 DateTime?
+  dedupeKey                  String?
+  approvedAt                 DateTime? // acceptance criteria only
+  approvedByUserId           String?
+  revisions                  ArtifactRevision[]
+  refinementFindings         RefinementFinding[]
+  refinementSessionItems     RefinementSessionItem[]
+  stakeholderAssignments     StakeholderAssignment[]
+  affectedBugPlanningRecords BugPlanningRecord[]         @relation("BugPlanningStory")
+  predecessorDependencies    WorkDependency[]            @relation("DependencyPredecessorStory")
+  dependentDependencies      WorkDependency[]            @relation("DependencyDependentStory")
+  planningBlockers           PlanningBlocker[]
+  createdAt                  DateTime                    @default(now())
+  updatedAt                  DateTime                    @updatedAt
+  sprintReadinessAssessments SprintReadinessAssessment[]
+  sprintPlanningItems        SprintPlanningItem[]
 
+  @@unique([prototypeId, type, dedupeKey])
+  @@unique([prototypeId, type, externalRef])
   @@index([prototypeId, type])
   @@index([prototypeId, archivedAt])
   @@index([parentId])
-  @@unique([prototypeId, type, dedupeKey])
-  @@unique([prototypeId, type, externalRef])
 }
 
 model ArtifactRevision {
@@ -782,52 +838,55 @@ model ArtifactRevision {
 // AI findings reach this table only after explicit Apply; dismissed AI
 // suggestions remain AiAssistItem history and never create a finding.
 model RefinementFinding {
-  id                   String         @id @default(cuid())
+  id                   String                      @id @default(cuid())
   organizationId       String
-  organization         Organization   @relation(fields: [organizationId], references: [id])
+  organization         Organization                @relation(fields: [organizationId], references: [id])
   initiativeId         String
-  initiative           Initiative     @relation(fields: [initiativeId], references: [id], onDelete: Cascade)
+  initiative           Initiative                  @relation(fields: [initiativeId], references: [id], onDelete: Cascade)
   storyId              String
-  story                 ArtifactLayer @relation(fields: [storyId], references: [id], onDelete: Cascade)
-  sourceType           String         @default("manual") // manual | ai | deterministic
+  story                ArtifactLayer               @relation(fields: [storyId], references: [id], onDelete: Cascade)
+  sourceType           String                      @default("manual") // manual | ai | deterministic
   category             String // missing_information | engineering_question | contradiction | dependency | scope | acceptance_criteria | blocker | other
   title                String
-  detail               String         @default("")
-  status               String         @default("open") // open | resolved | dismissed
-  revision             Int            @default(1)
+  detail               String                      @default("")
+  status               String                      @default("open") // open | resolved | dismissed
+  revision             Int                         @default(1)
   dedupeKey            String?
   ownerUserId          String?
-  ownerUser            User?          @relation("RefinementFindingOwner", fields: [ownerUserId], references: [id], onDelete: SetNull)
-  resolution           String         @default("")
-  followUpNote         String         @default("")
+  ownerUser            User?                       @relation("RefinementFindingOwner", fields: [ownerUserId], references: [id], onDelete: SetNull)
+  resolution           String                      @default("")
+  followUpNote         String                      @default("")
   followUpAt           DateTime?
-  sourceAiAssistItemId String?         @unique
-  sourceAiAssistItem   AiAssistItem?   @relation(fields: [sourceAiAssistItemId], references: [id], onDelete: SetNull)
+  sourceAiAssistItemId String?                     @unique
+  sourceAiAssistItem   AiAssistItem?               @relation(fields: [sourceAiAssistItemId], references: [id], onDelete: SetNull)
   createdByUserId      String?
-  createdByUser        User?           @relation("RefinementFindingCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  createdByUser        User?                       @relation("RefinementFindingCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
   resolvedAt           DateTime?
-  createdAt            DateTime        @default(now())
-  updatedAt            DateTime        @updatedAt
+  createdAt            DateTime                    @default(now())
+  updatedAt            DateTime                    @updatedAt
   revisions            RefinementFindingRevision[]
+  refinementSessionId  String?
+  refinementSession    RefinementSession?          @relation(fields: [refinementSessionId], references: [id], onDelete: SetNull)
 
   @@index([organizationId, initiativeId, status])
   @@index([storyId, status])
   @@index([ownerUserId, status])
   @@index([storyId, dedupeKey, status])
+  @@index([refinementSessionId])
 }
 
 model RefinementFindingRevision {
-  id             String            @id @default(cuid())
-  findingId      String
-  finding        RefinementFinding @relation(fields: [findingId], references: [id], onDelete: Cascade)
-  fromRevision   Int
-  toRevision     Int
-  previousData   Json
-  nextData       Json
-  reason         String
-  actorUserId    String?
-  actorUser      User?             @relation("RefinementFindingRevisionActor", fields: [actorUserId], references: [id], onDelete: SetNull)
-  createdAt      DateTime          @default(now())
+  id           String            @id @default(cuid())
+  findingId    String
+  finding      RefinementFinding @relation(fields: [findingId], references: [id], onDelete: Cascade)
+  fromRevision Int
+  toRevision   Int
+  previousData Json
+  nextData     Json
+  reason       String
+  actorUserId  String?
+  actorUser    User?             @relation("RefinementFindingRevisionActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+  createdAt    DateTime          @default(now())
 
   @@unique([findingId, toRevision])
   @@index([actorUserId, createdAt])
@@ -844,36 +903,47 @@ model RefinementFindingRevision {
 // assignments were invalidated by a later roadmap regeneration, instead of
 // silently dropping/renaming them (see `regenerateBelow` in engine.ts).
 model Sprint {
-  id             String          @id @default(cuid())
-  prototypeId    String
-  prototype      Prototype       @relation(fields: [prototypeId], references: [id], onDelete: Cascade)
-  sprintNumber   Int
-  phaseNumber    Int
-  startDate      DateTime
-  endDate        DateTime
-  capacityPoints Float
-  origin         String          @default("auto") // auto | manual
-  status         String          @default("planned") // planned | needs_reconciliation
-  releaseId      String?
-  release        Release?        @relation(fields: [releaseId], references: [id], onDelete: SetNull)
-  stories        ArtifactLayer[]
-  createdAt      DateTime        @default(now())
+  id                         String                  @id @default(cuid())
+  prototypeId                String
+  prototype                  Prototype               @relation(fields: [prototypeId], references: [id], onDelete: Cascade)
+  sprintNumber               Int
+  phaseNumber                Int
+  startDate                  DateTime
+  endDate                    DateTime
+  capacityPoints             Float
+  origin                     String                  @default("auto") // auto | manual
+  status                     String                  @default("planned") // planned | needs_reconciliation
+  releaseId                  String?
+  release                    Release?                @relation(fields: [releaseId], references: [id], onDelete: SetNull)
+  stories                    ArtifactLayer[]
+  stakeholderAssignments     StakeholderAssignment[]
+  affectedBugPlanningRecords BugPlanningRecord[]     @relation("BugPlanningSprint")
+  predecessorDependencies    WorkDependency[]        @relation("DependencyPredecessorSprint")
+  dependentDependencies      WorkDependency[]        @relation("DependencyDependentSprint")
+  planningBlockers           PlanningBlocker[]
+  createdAt                  DateTime                @default(now())
+  sprintPlan                 SprintPlan?
 
   @@unique([prototypeId, sprintNumber])
 }
 
 model Release {
-  id          String    @id @default(cuid())
-  prototypeId String
-  prototype   Prototype @relation(fields: [prototypeId], references: [id], onDelete: Cascade)
-  name        String // "Release 1 (MVP)" ...
-  phaseNumber Int
-  targetDate  DateTime
-  order       Int
-  origin      String    @default("auto") // auto | manual — see Sprint.origin comment above
-  sprints     Sprint[]
-  features    Capability[] @relation("ReleaseFeatures")
-  createdAt   DateTime  @default(now())
+  id                         String                  @id @default(cuid())
+  prototypeId                String
+  prototype                  Prototype               @relation(fields: [prototypeId], references: [id], onDelete: Cascade)
+  name                       String // "Release 1 (MVP)" ...
+  phaseNumber                Int
+  targetDate                 DateTime
+  order                      Int
+  origin                     String                  @default("auto") // auto | manual — see Sprint.origin comment above
+  sprints                    Sprint[]
+  features                   Capability[]            @relation("ReleaseFeatures")
+  stakeholderAssignments     StakeholderAssignment[]
+  affectedBugPlanningRecords BugPlanningRecord[]     @relation("BugPlanningRelease")
+  predecessorDependencies    WorkDependency[]        @relation("DependencyPredecessorRelease")
+  dependentDependencies      WorkDependency[]        @relation("DependencyDependentRelease")
+  planningBlockers           PlanningBlocker[]
+  createdAt                  DateTime                @default(now())
 
   @@unique([prototypeId, order])
 }
@@ -1028,74 +1098,74 @@ model PlanningWeightOverride {
 // every other AI call.
 
 model AiCapability {
-  id                       String   @id @default(cuid())
-  action                   String   @unique // AiActionKey, e.g. "ANALYZE_INTAKE"
-  enabled                  Boolean  @default(true)
-  maxOutputTokens          Int      @default(4096)
-  userMonthlyLimit         Int      @default(50)
-  organizationMonthlyLimit Int      @default(500)
-  description              String   @default("")
+  id                        String   @id @default(cuid())
+  action                    String   @unique // AiActionKey, e.g. "ANALYZE_INTAKE"
+  enabled                   Boolean  @default(true)
+  maxOutputTokens           Int      @default(4096)
+  userMonthlyLimit          Int      @default(50)
+  organizationMonthlyLimit  Int      @default(500)
+  description               String   @default("")
   // Section 5 — AI Operation Registry metadata (§5/§24). Extends this
   // already-runtime-configurable per-action config rather than a second,
   // parallel static registry — same "seeded once, then only DB-edited"
   // philosophy this model's header comment already documents.
-  maxContextTokens         Int      @default(8000) // input-side budget cap, alongside maxOutputTokens's output-side cap
-  requiredContextLayersJson String  @default("[]") // ContextLayer[] this operation always needs — see src/lib/ai/context/types.ts
-  optionalContextLayersJson String  @default("[]") // ContextLayer[] included when the budget allows, trimmed first under pressure
-  outputType               String   @default("") // free-text label of what this operation produces, for operational/reporting clarity only
-  reusable                 Boolean  @default(true) // whether a saved result may be served again via the fingerprint reuse gate
-  createdAt                DateTime @default(now())
-  updatedAt                DateTime @updatedAt
+  maxContextTokens          Int      @default(8000) // input-side budget cap, alongside maxOutputTokens's output-side cap
+  requiredContextLayersJson String   @default("[]") // ContextLayer[] this operation always needs — see src/lib/ai/context/types.ts
+  optionalContextLayersJson String   @default("[]") // ContextLayer[] included when the budget allows, trimmed first under pressure
+  outputType                String   @default("") // free-text label of what this operation produces, for operational/reporting clarity only
+  reusable                  Boolean  @default(true) // whether a saved result may be served again via the fingerprint reuse gate
+  createdAt                 DateTime @default(now())
+  updatedAt                 DateTime @updatedAt
 }
 
 // One row per finished AI attempt (never "processing" — see AiRequestLock
 // for the in-flight marker), so usage history and limit-counting queries
 // never need to filter out in-progress rows.
 model AiUsageEvent {
-  id               String        @id @default(cuid())
-  userId           String
-  user             User          @relation(fields: [userId], references: [id])
-  organizationId   String
-  organization     Organization  @relation(fields: [organizationId], references: [id])
+  id                       String        @id @default(cuid())
+  userId                   String
+  user                     User          @relation(fields: [userId], references: [id])
+  organizationId           String
+  organization             Organization  @relation(fields: [organizationId], references: [id])
   // Section 5 §21: direct project scoping — previously only reachable
   // indirectly via aiJobId -> AiJob.projectId. SetNull (not Cascade, unlike
   // AiJob.projectId) deliberately: a usage/cost ledger row is a historical
   // fact that should outlive the project it was about, not disappear with it.
-  projectId        String?
-  project          Project?      @relation(fields: [projectId], references: [id], onDelete: SetNull)
-  initiativeId     String?
-  initiative       Initiative?   @relation(fields: [initiativeId], references: [id], onDelete: Cascade)
-  aiJobId          String?
-  aiJob            AiJob?        @relation(fields: [aiJobId], references: [id], onDelete: SetNull)
+  projectId                String?
+  project                  Project?      @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  initiativeId             String?
+  initiative               Initiative?   @relation(fields: [initiativeId], references: [id], onDelete: Cascade)
+  aiJobId                  String?
+  aiJob                    AiJob?        @relation(fields: [aiJobId], references: [id], onDelete: SetNull)
   // Section 5 §21: direct link to the artifact this event created or
   // reused, for "artifact created / artifact reused" tracking without going
   // through the AiJob indirection (a "reuse" event has no AiJob at all).
-  aiAssistItemId   String?
-  aiAssistItem     AiAssistItem? @relation(fields: [aiAssistItemId], references: [id], onDelete: SetNull)
-  action           String // AiActionKey
+  aiAssistItemId           String?
+  aiAssistItem             AiAssistItem? @relation(fields: [aiAssistItemId], references: [id], onDelete: SetNull)
+  action                   String // AiActionKey
   // Section 5 §22: "generation" (a real OpenAI call happened) vs "reuse"
   // (the fingerprint reuse gate served an existing artifact — inputTokens/
   // outputTokens/estimatedCostUsd are 0). Distinct from `success`, which is
   // only meaningful for a real "generation" attempt.
-  kind             String        @default("generation") // generation | reuse
+  kind                     String        @default("generation") // generation | reuse
   // Section 5 §21: the model string actually used for this call. Empty for
   // "reuse" rows (no call was made) and for events recorded before this
   // column existed.
-  model            String        @default("")
-  success          Boolean
-  inputTokens      Int           @default(0)
-  outputTokens     Int           @default(0)
+  model                    String        @default("")
+  success                  Boolean
+  inputTokens              Int           @default(0)
+  outputTokens             Int           @default(0)
   // Section 5 §20/§21: provider-neutral prompt-caching token counts. The
   // OpenAI adapter maps its usage fields into these durable ledger columns.
-  cacheCreationInputTokens Int   @default(0)
-  cacheReadInputTokens     Int   @default(0)
+  cacheCreationInputTokens Int           @default(0)
+  cacheReadInputTokens     Int           @default(0)
   // Computed at record-time from src/lib/ai/pricing.ts's published per-model
   // rates (a technical fact, not an invented business rule — directive §28)
   // — never recomputed retroactively, so a historical event's cost stays
   // accurate even if rates change later.
-  estimatedCostUsd Decimal       @default(0) @db.Decimal(20, 8)
-  errorMessage     String?
-  createdAt        DateTime      @default(now())
+  estimatedCostUsd         Decimal       @default(0) @db.Decimal(20, 8)
+  errorMessage             String?
+  createdAt                DateTime      @default(now())
 
   @@index([userId, action, createdAt])
   @@index([organizationId, action, createdAt])
@@ -1197,15 +1267,15 @@ model AiAssistItem {
   version    Int     @default(1)
 
   supersedesItemId String?
-  supersedes        AiAssistItem?  @relation("AiAssistSupersession", fields: [supersedesItemId], references: [id])
-  supersededBy      AiAssistItem[] @relation("AiAssistSupersession")
+  supersedes       AiAssistItem?  @relation("AiAssistSupersession", fields: [supersedesItemId], references: [id])
+  supersededBy     AiAssistItem[] @relation("AiAssistSupersession")
 
   fingerprint       String // hash of the approved-context slice this was generated from
   aiJobId           String?
-  aiJob             AiJob?   @relation(fields: [aiJobId], references: [id], onDelete: SetNull)
+  aiJob             AiJob?  @relation(fields: [aiJobId], references: [id], onDelete: SetNull)
   aiModelUsed       String
   generatedByUserId String
-  generatedByUser   User     @relation("AiAssistItemGeneratedBy", fields: [generatedByUserId], references: [id])
+  generatedByUser   User    @relation("AiAssistItemGeneratedBy", fields: [generatedByUserId], references: [id])
 
   title               String
   synopsis            String // always-visible Level 1 summary
@@ -1217,12 +1287,12 @@ model AiAssistItem {
   rulesAppliedJson    String @default("[]")
   proposedContentJson String @default("{}") // category-specific draft payload
 
-  appliedByUserId    String?
-  appliedByUser      User?     @relation("AiAssistItemAppliedBy", fields: [appliedByUserId], references: [id], onDelete: SetNull)
-  appliedAt          DateTime?
-  appliedValueJson   String? // final (possibly user-edited) content actually applied
-  appliedEntityType  String? // capability | artifact_layer | capability_dependency | risk | roadmap_status | release | sprint
-  appliedEntityId    String?
+  appliedByUserId   String?
+  appliedByUser     User?     @relation("AiAssistItemAppliedBy", fields: [appliedByUserId], references: [id], onDelete: SetNull)
+  appliedAt         DateTime?
+  appliedValueJson  String? // final (possibly user-edited) content actually applied
+  appliedEntityType String? // capability | artifact_layer | capability_dependency | risk | roadmap_status | release | sprint
+  appliedEntityId   String?
 
   dismissedByUserId String?
   dismissedByUser   User?     @relation("AiAssistItemDismissedBy", fields: [dismissedByUserId], references: [id], onDelete: SetNull)
@@ -1232,9 +1302,9 @@ model AiAssistItem {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  usageEvents AiUsageEvent[]
+  usageEvents       AiUsageEvent[]
   refinementFinding RefinementFinding?
-  requestRevision RequestRevision?
+  requestRevision   RequestRevision?
 
   @@index([initiativeId, actionKey, targetType, targetId, status])
   @@index([projectId, actionKey, status])
@@ -1267,42 +1337,45 @@ model IntakeAiAnalysis {
 
 // PO request workflow: data is validated as structured JSON by requestSchema.
 model PlanningRequest {
-  id String @id @default(cuid())
-  initiativeId String
-  initiative Initiative @relation(fields: [initiativeId], references: [id], onDelete: Cascade)
-  data Json
-  revision Int @default(1)
-  capabilityId String?
-  capability Capability? @relation(fields: [capabilityId], references: [id], onDelete: SetNull)
-  dedupeKey String?
-  sourceRecordId String?
-  sourceRecord RequestSourceRecord? @relation(fields: [sourceRecordId], references: [id], onDelete: SetNull)
-  archivedAt DateTime?
-  revisions RequestRevision[]
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id                     String                  @id @default(cuid())
+  initiativeId           String
+  initiative             Initiative              @relation(fields: [initiativeId], references: [id], onDelete: Cascade)
+  data                   Json
+  revision               Int                     @default(1)
+  capabilityId           String?
+  capability             Capability?             @relation(fields: [capabilityId], references: [id], onDelete: SetNull)
+  dedupeKey              String?
+  sourceRecordId         String?
+  sourceRecord           RequestSourceRecord?    @relation(fields: [sourceRecordId], references: [id], onDelete: SetNull)
+  archivedAt             DateTime?
+  revisions              RequestRevision[]
+  stakeholderAssignments StakeholderAssignment[]
+  bugPlanningRecord      BugPlanningRecord?
+  createdAt              DateTime                @default(now())
+  updatedAt              DateTime                @updatedAt
+
+  @@unique([initiativeId, dedupeKey])
   @@index([initiativeId, updatedAt])
   @@index([capabilityId])
-  @@unique([initiativeId, dedupeKey])
   @@index([sourceRecordId])
 }
 
 model RequestRevision {
-  id String @id @default(cuid())
-  organizationId String
-  organization Organization @relation(fields: [organizationId], references: [id])
-  requestId String
-  request PlanningRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
-  fromRevision Int
-  toRevision Int
-  previousData Json?
-  nextData Json
-  reason String
-  changedByUserId String?
-  changedByUser User? @relation("RequestRevisionChangedBy", fields: [changedByUserId], references: [id], onDelete: SetNull)
-  sourceAiAssistItemId String? @unique
-  sourceAiAssistItem AiAssistItem? @relation(fields: [sourceAiAssistItemId], references: [id], onDelete: SetNull)
-  createdAt DateTime @default(now())
+  id                   String          @id @default(cuid())
+  organizationId       String
+  organization         Organization    @relation(fields: [organizationId], references: [id])
+  requestId            String
+  request              PlanningRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  fromRevision         Int
+  toRevision           Int
+  previousData         Json?
+  nextData             Json
+  reason               String
+  changedByUserId      String?
+  changedByUser        User?           @relation("RequestRevisionChangedBy", fields: [changedByUserId], references: [id], onDelete: SetNull)
+  sourceAiAssistItemId String?         @unique
+  sourceAiAssistItem   AiAssistItem?   @relation(fields: [sourceAiAssistItemId], references: [id], onDelete: SetNull)
+  createdAt            DateTime        @default(now())
 
   @@unique([requestId, toRevision])
   @@index([organizationId, createdAt])
@@ -1310,25 +1383,25 @@ model RequestRevision {
 }
 
 model PriorityDecision {
-  id                     String       @id @default(cuid())
-  organizationId         String
-  organization           Organization @relation(fields: [organizationId], references: [id])
-  initiativeId           String
-  initiative             Initiative   @relation(fields: [initiativeId], references: [id], onDelete: Cascade)
-  entityType             String // request | feature | story
-  entityId               String
-  revision               Int
-  score                  Int
+  id                      String       @id @default(cuid())
+  organizationId          String
+  organization            Organization @relation(fields: [organizationId], references: [id])
+  initiativeId            String
+  initiative              Initiative   @relation(fields: [initiativeId], references: [id], onDelete: Cascade)
+  entityType              String // request | feature | story
+  entityId                String
+  revision                Int
+  score                   Int
   dependencyAdjustedScore Int
-  moscow                 String
-  roadmapLane            String
-  reason                 String
-  source                 String       @default("manual") // manual | ai
-  factors                Json
-  changedByUserId        String
-  changedByUser          User         @relation("PriorityDecisionChangedBy", fields: [changedByUserId], references: [id])
-  recommendationItemId   String?
-  createdAt              DateTime     @default(now())
+  moscow                  String
+  roadmapLane             String
+  reason                  String
+  source                  String       @default("manual") // manual | ai
+  factors                 Json
+  changedByUserId         String
+  changedByUser           User         @relation("PriorityDecisionChangedBy", fields: [changedByUserId], references: [id])
+  recommendationItemId    String?
+  createdAt               DateTime     @default(now())
 
   @@unique([entityType, entityId, revision])
   @@index([initiativeId, createdAt])
@@ -1339,29 +1412,517 @@ model PriorityDecision {
 
 // Immutable evidence behind an imported or meeting-sourced planning request.
 model RequestSourceRecord {
-  id String @id @default(cuid())
-  organizationId String
-  organization Organization @relation(fields: [organizationId], references: [id])
-  projectId String
-  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  initiativeId String
-  initiative Initiative @relation(fields: [initiativeId], references: [id], onDelete: Cascade)
-  type String // spreadsheet_row | document_finding | meeting_note
-  label String
-  rawContent String
-  locator String?
-  fingerprint String
-  documentId String?
-  document Document? @relation(fields: [documentId], references: [id])
-  contextItemId String?
-  contextItem ContextItem? @relation(fields: [contextItemId], references: [id])
+  id              String            @id @default(cuid())
+  organizationId  String
+  organization    Organization      @relation(fields: [organizationId], references: [id])
+  projectId       String
+  project         Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  initiativeId    String
+  initiative      Initiative        @relation(fields: [initiativeId], references: [id], onDelete: Cascade)
+  type            String // spreadsheet_row | document_finding | meeting_note
+  label           String
+  rawContent      String
+  locator         String?
+  fingerprint     String
+  documentId      String?
+  document        Document?         @relation(fields: [documentId], references: [id])
+  contextItemId   String?
+  contextItem     ContextItem?      @relation(fields: [contextItemId], references: [id])
   createdByUserId String
-  createdByUser User @relation("RequestSourceRecordCreatedBy", fields: [createdByUserId], references: [id])
-  requests PlanningRequest[]
-  createdAt DateTime @default(now())
+  createdByUser   User              @relation("RequestSourceRecordCreatedBy", fields: [createdByUserId], references: [id])
+  requests        PlanningRequest[]
+  createdAt       DateTime          @default(now())
 
   @@unique([initiativeId, fingerprint])
   @@index([documentId])
   @@index([contextItemId])
   @@index([createdByUserId])
+}
+
+// A durable person or external contact who can participate in Product Owner
+// planning work. Authorization continues to come exclusively from
+// OrganizationMember; these product roles describe responsibility, not access.
+model StakeholderContact {
+  id             String                  @id @default(cuid())
+  organizationId String
+  organization   Organization            @relation(fields: [organizationId], references: [id])
+  userId         String?
+  user           User?                   @relation("StakeholderContactUser", fields: [userId], references: [id], onDelete: SetNull)
+  displayName    String
+  email          String?
+  company        String?
+  external       Boolean                 @default(false)
+  archivedAt     DateTime?
+  assignments    StakeholderAssignment[]
+  createdAt      DateTime                @default(now())
+  updatedAt      DateTime                @updatedAt
+
+  @@unique([organizationId, userId])
+  @@index([organizationId, archivedAt, displayName])
+}
+
+// One accountable product-role assignment to exactly one planning object.
+// The database CHECK in the migration enforces the single-target invariant.
+model StakeholderAssignment {
+  id                    String                          @id @default(cuid())
+  organizationId        String
+  organization          Organization                    @relation(fields: [organizationId], references: [id])
+  projectId             String
+  project               Project                         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  initiativeId          String?
+  initiative            Initiative?                     @relation(fields: [initiativeId], references: [id], onDelete: Cascade)
+  stakeholderId         String
+  stakeholder           StakeholderContact              @relation(fields: [stakeholderId], references: [id])
+  productRole           String
+  responsibility        String                          @default("")
+  influence             String                          @default("medium")
+  interest              String                          @default("medium")
+  engagementExpectation String                          @default("")
+  planningRequestId     String?
+  planningRequest       PlanningRequest?                @relation(fields: [planningRequestId], references: [id], onDelete: Cascade)
+  capabilityId          String?
+  capability            Capability?                     @relation(fields: [capabilityId], references: [id], onDelete: Cascade)
+  storyId               String?
+  story                 ArtifactLayer?                  @relation(fields: [storyId], references: [id], onDelete: Cascade)
+  sprintId              String?
+  sprint                Sprint?                         @relation(fields: [sprintId], references: [id], onDelete: Cascade)
+  releaseId             String?
+  release               Release?                        @relation(fields: [releaseId], references: [id], onDelete: Cascade)
+  decisionId            String?
+  decision              Decision?                       @relation(fields: [decisionId], references: [id], onDelete: Cascade)
+  refinementSessionId   String?
+  refinementSession     RefinementSession?              @relation(fields: [refinementSessionId], references: [id], onDelete: Cascade)
+  revision              Int                             @default(1)
+  createdByUserId       String?
+  createdByUser         User?                           @relation("StakeholderAssignmentCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  archivedAt            DateTime?
+  revisions             StakeholderAssignmentRevision[]
+  createdAt             DateTime                        @default(now())
+  updatedAt             DateTime                        @updatedAt
+
+  @@index([organizationId, projectId, archivedAt])
+  @@index([initiativeId, productRole])
+  @@index([stakeholderId, archivedAt])
+  @@index([planningRequestId])
+  @@index([capabilityId])
+  @@index([storyId])
+  @@index([sprintId])
+  @@index([releaseId])
+  @@index([decisionId])
+  @@index([refinementSessionId])
+}
+
+model StakeholderAssignmentRevision {
+  id             String                @id @default(cuid())
+  organizationId String
+  organization   Organization          @relation(fields: [organizationId], references: [id])
+  assignmentId   String
+  assignment     StakeholderAssignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  fromRevision   Int
+  toRevision     Int
+  previousData   Json?
+  nextData       Json
+  reason         String
+  actorUserId    String?
+  actor          User?                 @relation("StakeholderAssignmentRevisionActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+  createdAt      DateTime              @default(now())
+
+  @@unique([assignmentId, toRevision])
+  @@index([organizationId, createdAt])
+}
+
+// Relational planning projection for a bug/defect intake. PlanningRequest and
+// RequestSourceRecord remain the immutable intake/source trail.
+model BugPlanningRecord {
+  id                         String                      @id @default(cuid())
+  organizationId             String
+  organization               Organization                @relation(fields: [organizationId], references: [id])
+  initiativeId               String
+  initiative                 Initiative                  @relation(fields: [initiativeId], references: [id], onDelete: Cascade)
+  requestId                  String                      @unique
+  request                    PlanningRequest             @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  bugType                    String                      @default("defect")
+  source                     String                      @default("manual")
+  sourceReference            String?
+  externalSystem             String?
+  externalKey                String?
+  severity                   String                      @default("medium")
+  status                     String                      @default("open")
+  priority                   String                      @default("medium")
+  environment                String                      @default("")
+  readinessStatus            String                      @default("needs_refinement")
+  affectedCapabilityId       String?
+  affectedCapability         Capability?                 @relation("BugPlanningCapability", fields: [affectedCapabilityId], references: [id], onDelete: SetNull)
+  affectedStoryId            String?
+  affectedStory              ArtifactLayer?              @relation("BugPlanningStory", fields: [affectedStoryId], references: [id], onDelete: SetNull)
+  affectedSprintId           String?
+  affectedSprint             Sprint?                     @relation("BugPlanningSprint", fields: [affectedSprintId], references: [id], onDelete: SetNull)
+  affectedReleaseId          String?
+  affectedRelease            Release?                    @relation("BugPlanningRelease", fields: [affectedReleaseId], references: [id], onDelete: SetNull)
+  ownerUserId                String?
+  owner                      User?                       @relation("BugPlanningOwner", fields: [ownerUserId], references: [id], onDelete: SetNull)
+  revision                   Int                         @default(1)
+  archivedAt                 DateTime?
+  revisions                  BugPlanningRevision[]
+  refinementSessionItems     RefinementSessionItem[]
+  predecessorDependencies    WorkDependency[]            @relation("DependencyPredecessorBug")
+  dependentDependencies      WorkDependency[]            @relation("DependencyDependentBug")
+  planningBlockers           PlanningBlocker[]
+  createdAt                  DateTime                    @default(now())
+  updatedAt                  DateTime                    @updatedAt
+  sprintReadinessAssessments SprintReadinessAssessment[]
+  sprintPlanningItems        SprintPlanningItem[]
+
+  @@index([organizationId, initiativeId, archivedAt])
+  @@index([initiativeId, severity, status])
+  @@index([affectedCapabilityId])
+  @@index([affectedStoryId])
+  @@index([affectedSprintId])
+  @@index([affectedReleaseId])
+  @@index([ownerUserId])
+}
+
+model BugPlanningRevision {
+  id             String            @id @default(cuid())
+  organizationId String
+  organization   Organization      @relation(fields: [organizationId], references: [id])
+  bugId          String
+  bug            BugPlanningRecord @relation(fields: [bugId], references: [id], onDelete: Cascade)
+  fromRevision   Int
+  toRevision     Int
+  previousData   Json?
+  nextData       Json
+  reason         String
+  actorUserId    String?
+  actor          User?             @relation("BugPlanningRevisionActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+  createdAt      DateTime          @default(now())
+
+  @@unique([bugId, toRevision])
+  @@index([organizationId, createdAt])
+}
+
+// Durable PO refinement workspace. AI may propose findings or summaries, but
+// only explicit user mutations update these authoritative session records.
+model RefinementSession {
+  id                String                      @id @default(cuid())
+  organizationId    String
+  organization      Organization                @relation(fields: [organizationId], references: [id])
+  projectId         String
+  project           Project                     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  initiativeId      String
+  initiative        Initiative                  @relation(fields: [initiativeId], references: [id], onDelete: Cascade)
+  title             String
+  scheduledAt       DateTime?
+  status            String                      @default("scheduled") // scheduled | in_progress | completed | cancelled
+  facilitatorUserId String?
+  facilitator       User?                       @relation("RefinementSessionFacilitator", fields: [facilitatorUserId], references: [id], onDelete: SetNull)
+  purpose           String                      @default("")
+  agenda            String                      @default("")
+  notes             String                      @default("")
+  summary           String                      @default("")
+  revision          Int                         @default(1)
+  startedAt         DateTime?
+  completedAt       DateTime?
+  createdByUserId   String
+  createdByUser     User                        @relation("RefinementSessionCreatedBy", fields: [createdByUserId], references: [id])
+  items             RefinementSessionItem[]
+  questions         RefinementSessionQuestion[]
+  decisions         RefinementSessionDecision[]
+  actions           RefinementSessionAction[]
+  findings          RefinementFinding[]
+  participants      StakeholderAssignment[]
+  revisions         RefinementSessionRevision[]
+  createdAt         DateTime                    @default(now())
+  updatedAt         DateTime                    @updatedAt
+
+  @@index([organizationId, initiativeId, status])
+  @@index([initiativeId, scheduledAt])
+}
+
+model RefinementSessionItem {
+  id             String             @id @default(cuid())
+  sessionId      String
+  session        RefinementSession  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  storyId        String?
+  story          ArtifactLayer?     @relation(fields: [storyId], references: [id], onDelete: Cascade)
+  bugId          String?
+  bug            BugPlanningRecord? @relation(fields: [bugId], references: [id], onDelete: Cascade)
+  status         String             @default("selected") // selected | discussed | deferred | ready
+  estimateBefore Int?
+  estimateAfter  Int?
+  scopeChange    String             @default("")
+  outcome        String             @default("")
+  order          Int                @default(0)
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+
+  @@unique([sessionId, storyId])
+  @@unique([sessionId, bugId])
+  @@index([storyId])
+  @@index([bugId])
+}
+
+model RefinementSessionQuestion {
+  id          String            @id @default(cuid())
+  sessionId   String
+  session     RefinementSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  question    String
+  answer      String            @default("")
+  ownerUserId String?
+  owner       User?             @relation("RefinementQuestionOwner", fields: [ownerUserId], references: [id], onDelete: SetNull)
+  dueAt       DateTime?
+  status      String            @default("open") // open | answered | dismissed
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  @@index([sessionId, status])
+  @@index([ownerUserId, status])
+}
+
+model RefinementSessionDecision {
+  id              String            @id @default(cuid())
+  sessionId       String
+  session         RefinementSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  title           String
+  rationale       String            @default("")
+  decidedByUserId String?
+  decidedBy       User?             @relation("RefinementDecisionMaker", fields: [decidedByUserId], references: [id], onDelete: SetNull)
+  decidedAt       DateTime          @default(now())
+  createdAt       DateTime          @default(now())
+
+  @@index([sessionId, decidedAt])
+}
+
+model RefinementSessionAction {
+  id             String            @id @default(cuid())
+  sessionId      String
+  session        RefinementSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  title          String
+  ownerUserId    String?
+  owner          User?             @relation("RefinementActionOwner", fields: [ownerUserId], references: [id], onDelete: SetNull)
+  dueAt          DateTime?
+  status         String            @default("open") // open | completed | cancelled
+  completionNote String            @default("")
+  completedAt    DateTime?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  @@index([sessionId, status])
+  @@index([ownerUserId, status])
+}
+
+model RefinementSessionRevision {
+  id             String            @id @default(cuid())
+  organizationId String
+  organization   Organization      @relation(fields: [organizationId], references: [id])
+  sessionId      String
+  session        RefinementSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  fromRevision   Int
+  toRevision     Int
+  previousData   Json?
+  nextData       Json
+  reason         String
+  actorUserId    String?
+  actor          User?             @relation("RefinementSessionRevisionActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+  createdAt      DateTime          @default(now())
+
+  @@unique([sessionId, toRevision])
+  @@index([organizationId, createdAt])
+}
+
+model WorkDependency {
+  id                      String             @id @default(cuid())
+  organizationId          String
+  organization            Organization       @relation(fields: [organizationId], references: [id])
+  initiativeId            String
+  initiative              Initiative         @relation(fields: [initiativeId], references: [id], onDelete: Cascade)
+  dependencyType          String             @default("depends_on") // depends_on | blocks
+  description             String             @default("")
+  predecessorCapabilityId String?
+  predecessorCapability   Capability?        @relation("DependencyPredecessorCapability", fields: [predecessorCapabilityId], references: [id], onDelete: Cascade)
+  predecessorStoryId      String?
+  predecessorStory        ArtifactLayer?     @relation("DependencyPredecessorStory", fields: [predecessorStoryId], references: [id], onDelete: Cascade)
+  predecessorBugId        String?
+  predecessorBug          BugPlanningRecord? @relation("DependencyPredecessorBug", fields: [predecessorBugId], references: [id], onDelete: Cascade)
+  predecessorSprintId     String?
+  predecessorSprint       Sprint?            @relation("DependencyPredecessorSprint", fields: [predecessorSprintId], references: [id], onDelete: Cascade)
+  predecessorReleaseId    String?
+  predecessorRelease      Release?           @relation("DependencyPredecessorRelease", fields: [predecessorReleaseId], references: [id], onDelete: Cascade)
+  dependentCapabilityId   String?
+  dependentCapability     Capability?        @relation("DependencyDependentCapability", fields: [dependentCapabilityId], references: [id], onDelete: Cascade)
+  dependentStoryId        String?
+  dependentStory          ArtifactLayer?     @relation("DependencyDependentStory", fields: [dependentStoryId], references: [id], onDelete: Cascade)
+  dependentBugId          String?
+  dependentBug            BugPlanningRecord? @relation("DependencyDependentBug", fields: [dependentBugId], references: [id], onDelete: Cascade)
+  dependentSprintId       String?
+  dependentSprint         Sprint?            @relation("DependencyDependentSprint", fields: [dependentSprintId], references: [id], onDelete: Cascade)
+  dependentReleaseId      String?
+  dependentRelease        Release?           @relation("DependencyDependentRelease", fields: [dependentReleaseId], references: [id], onDelete: Cascade)
+  createdByUserId         String
+  createdByUser           User               @relation("WorkDependencyCreatedBy", fields: [createdByUserId], references: [id])
+  createdAt               DateTime           @default(now())
+
+  @@index([organizationId, initiativeId])
+  @@index([predecessorCapabilityId])
+  @@index([predecessorStoryId])
+  @@index([predecessorBugId])
+  @@index([predecessorSprintId])
+  @@index([predecessorReleaseId])
+  @@index([dependentCapabilityId])
+  @@index([dependentStoryId])
+  @@index([dependentBugId])
+  @@index([dependentSprintId])
+  @@index([dependentReleaseId])
+}
+
+model PlanningBlocker {
+  id               String                    @id @default(cuid())
+  organizationId   String
+  organization     Organization              @relation(fields: [organizationId], references: [id])
+  initiativeId     String
+  initiative       Initiative                @relation(fields: [initiativeId], references: [id], onDelete: Cascade)
+  blockerType      String
+  description      String
+  ownerUserId      String?
+  owner            User?                     @relation("PlanningBlockerOwner", fields: [ownerUserId], references: [id], onDelete: SetNull)
+  status           String                    @default("open") // open | in_progress | resolved | accepted
+  dueAt            DateTime?
+  resolution       String                    @default("")
+  resolvedByUserId String?
+  resolvedBy       User?                     @relation("PlanningBlockerResolvedBy", fields: [resolvedByUserId], references: [id], onDelete: SetNull)
+  resolvedAt       DateTime?
+  overrideByUserId String?
+  overrideBy       User?                     @relation("PlanningBlockerOverrideBy", fields: [overrideByUserId], references: [id], onDelete: SetNull)
+  overrideReason   String                    @default("")
+  capabilityId     String?
+  capability       Capability?               @relation(fields: [capabilityId], references: [id], onDelete: Cascade)
+  storyId          String?
+  story            ArtifactLayer?            @relation(fields: [storyId], references: [id], onDelete: Cascade)
+  bugId            String?
+  bug              BugPlanningRecord?        @relation(fields: [bugId], references: [id], onDelete: Cascade)
+  sprintId         String?
+  sprint           Sprint?                   @relation(fields: [sprintId], references: [id], onDelete: Cascade)
+  releaseId        String?
+  release          Release?                  @relation(fields: [releaseId], references: [id], onDelete: Cascade)
+  revision         Int                       @default(1)
+  createdByUserId  String
+  createdByUser    User                      @relation("PlanningBlockerCreatedBy", fields: [createdByUserId], references: [id])
+  revisions        PlanningBlockerRevision[]
+  createdAt        DateTime                  @default(now())
+  updatedAt        DateTime                  @updatedAt
+
+  @@index([organizationId, initiativeId, status])
+  @@index([ownerUserId, status])
+  @@index([capabilityId])
+  @@index([storyId])
+  @@index([bugId])
+  @@index([sprintId])
+  @@index([releaseId])
+}
+
+model PlanningBlockerRevision {
+  id             String          @id @default(cuid())
+  organizationId String
+  organization   Organization    @relation(fields: [organizationId], references: [id])
+  blockerId      String
+  blocker        PlanningBlocker @relation(fields: [blockerId], references: [id], onDelete: Cascade)
+  fromRevision   Int
+  toRevision     Int
+  previousData   Json?
+  nextData       Json
+  reason         String
+  actorUserId    String?
+  actor          User?           @relation("PlanningBlockerRevisionActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+  createdAt      DateTime        @default(now())
+
+  @@unique([blockerId, toRevision])
+  @@index([organizationId, createdAt])
+}
+
+// Immutable evidence for the Product Owner's Feature 12 readiness decision.
+// A fresh assessment supersedes prior evidence; older decisions remain history.
+model SprintReadinessAssessment {
+  id               String                 @id @default(cuid())
+  organizationId   String
+  organization     Organization           @relation(fields: [organizationId], references: [id])
+  initiativeId     String
+  initiative       Initiative             @relation(fields: [initiativeId], references: [id], onDelete: Cascade)
+  storyId          String?
+  story            ArtifactLayer?         @relation(fields: [storyId], references: [id], onDelete: Cascade)
+  bugId            String?
+  bug              BugPlanningRecord?     @relation(fields: [bugId], references: [id], onDelete: Cascade)
+  inputFingerprint String
+  decision         String // ready | not_ready | overridden
+  reason           String                 @default("")
+  checks           SprintReadinessCheck[]
+  decidedByUserId  String
+  decidedBy        User                   @relation("SprintReadinessDecidedBy", fields: [decidedByUserId], references: [id])
+  invalidatedAt    DateTime?
+  createdAt        DateTime               @default(now())
+  planningItems    SprintPlanningItem[]
+  @@index([organizationId, initiativeId, createdAt])
+  @@index([storyId, createdAt])
+  @@index([bugId, createdAt])
+}
+
+model SprintReadinessCheck {
+  id           String                    @id @default(cuid())
+  assessmentId String
+  assessment   SprintReadinessAssessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  checkKey     String
+  status       String // pass | fail | review
+  explanation  String
+  evidence     Json                      @default("{}")
+  createdAt    DateTime                  @default(now())
+
+  @@unique([assessmentId, checkKey])
+}
+
+// Feature 13 planning decision layered on the existing execution-shaped Sprint.
+model SprintPlan {
+  id                String               @id @default(cuid())
+  organizationId    String
+  organization      Organization         @relation(fields: [organizationId], references: [id])
+  initiativeId      String
+  initiative        Initiative           @relation(fields: [initiativeId], references: [id], onDelete: Cascade)
+  sprintId          String               @unique
+  sprint            Sprint               @relation(fields: [sprintId], references: [id], onDelete: Cascade)
+  goal              String               @default("")
+  cadence           String               @default("")
+  status            String               @default("draft") // draft | committed
+  capacityPoints    Float
+  plannedPoints     Float                @default(0)
+  revision          Int                  @default(1)
+  createdByUserId   String
+  createdBy         User                 @relation("SprintPlanCreatedBy", fields: [createdByUserId], references: [id])
+  committedByUserId String?
+  committedBy       User?                @relation("SprintPlanCommittedBy", fields: [committedByUserId], references: [id], onDelete: SetNull)
+  committedAt       DateTime?
+  items             SprintPlanningItem[]
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+
+  @@index([organizationId, initiativeId, status])
+}
+
+model SprintPlanningItem {
+  id                    String                     @id @default(cuid())
+  sprintPlanId          String
+  sprintPlan            SprintPlan                 @relation(fields: [sprintPlanId], references: [id], onDelete: Cascade)
+  storyId               String?
+  story                 ArtifactLayer?             @relation(fields: [storyId], references: [id], onDelete: Cascade)
+  bugId                 String?
+  bug                   BugPlanningRecord?         @relation(fields: [bugId], references: [id], onDelete: Cascade)
+  readinessAssessmentId String?
+  readinessAssessment   SprintReadinessAssessment? @relation(fields: [readinessAssessmentId], references: [id], onDelete: SetNull)
+  estimatePoints        Float
+  order                 Int
+  carryoverReason       String                     @default("")
+  overrideReason        String                     @default("")
+  createdAt             DateTime                   @default(now())
+
+  @@unique([sprintPlanId, storyId])
+  @@unique([sprintPlanId, bugId])
+  @@index([storyId])
+  @@index([bugId])
 }

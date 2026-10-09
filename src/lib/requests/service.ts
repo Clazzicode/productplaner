@@ -4,6 +4,7 @@ import { db, withTransaction } from "@/lib/db";
 import { auditInitiative } from "@/lib/audit";
 import { BusinessError } from "@/lib/businessError";
 import { withPlanningMutation } from "@/lib/generation/mutation";
+import { syncBugPlanningFromRequest } from "@/lib/bugs/service";
 import { requestSchema, type RequestInput, type RequestRecord } from "./model";
 
 export function requestRecord(row: PlanningRequest): RequestRecord {
@@ -66,6 +67,14 @@ export async function saveRequest(initiativeId: string, input: RequestInput, exi
       ? await db.planningRequest.update({ where: { id: previous.id, initiativeId, revision: existing!.revision },
           data: { data: data as Prisma.InputJsonObject, dedupeKey, revision: { increment: 1 } } })
       : await db.planningRequest.create({ data: { initiativeId, data: data as Prisma.InputJsonObject, dedupeKey, sourceRecordId, capabilityId: options?.linkedCapabilityId } });
+    await syncBugPlanningFromRequest({
+      organizationId: initiative.organizationId,
+      initiativeId,
+      requestId: row.id,
+      data,
+      actorUserId: options?.actorUserId,
+      reason: options?.changeReason?.trim() || (previous ? "Request details updated" : "Bug intake created"),
+    });
     await db.requestRevision.create({ data: {
       organizationId: initiative.organizationId,
       requestId: row.id,

@@ -162,4 +162,47 @@ describe.sequential("migration replay and real PostgreSQL RLS", () => {
     await expect(asUser(authA, () => pg.exec(`INSERT INTO "Capability" (id,"intakeAnswerSetId",name,"isMvp","effortSize","businessValue","backlogKey") VALUES ('cap-a-duplicate','intake-a','Duplicate',false,'m','medium','PO-01')`))).rejects.toThrow();
   });
 
+  it("enforces PO workflow targets, dependency uniqueness, and tenant isolation", async () => {
+    await asUser(authA, () => pg.exec(`
+      INSERT INTO "ArtifactLayer" (id,"prototypeId",type,"order",title,body,"updatedAt")
+      VALUES ('story-a2','proto-a','story',2,'Second story','As a planner, I need a second result, so that dependencies can be tested.',now());
+      INSERT INTO "WorkDependency" (id,"organizationId","initiativeId","predecessorStoryId","dependentStoryId","createdByUserId")
+      VALUES ('dependency-a','org-a','init-a','story-a','story-a2','user-org-a');
+      INSERT INTO "PlanningBlocker" (id,"organizationId","initiativeId","blockerType",description,"storyId","createdByUserId","updatedAt")
+      VALUES ('blocker-a','org-a','init-a','dependency','Waiting for an external decision','story-a2','user-org-a',now());
+    `));
+    await expect(asUser(authA, () => pg.exec(`
+      INSERT INTO "WorkDependency" (id,"organizationId","initiativeId","predecessorStoryId","dependentStoryId","createdByUserId")
+      VALUES ('dependency-duplicate','org-a','init-a','story-a','story-a2','user-org-a')
+    `))).rejects.toThrow();
+    await expect(asUser(authA, () => pg.exec(`
+      INSERT INTO "PlanningBlocker" (id,"organizationId","initiativeId","blockerType",description,"storyId","createdByUserId","updatedAt")
+      VALUES ('blocker-cross','org-a','init-a','dependency','Wrong initiative','artifact-b','user-org-a',now())
+    `))).rejects.toThrow();
+    expect((await asUser(authB, () => pg.query(`SELECT id FROM "PlanningBlocker" WHERE id='blocker-a'`))).rows).toEqual([]);
+  });
+
+  it("keeps refinement, readiness, and sprint-plan targets inside one initiative", async () => {
+    await asUser(authA, () => pg.exec(`
+      INSERT INTO "RefinementSession" (id,"organizationId","projectId","initiativeId",title,"createdByUserId","updatedAt")
+      VALUES ('session-a','org-a','project-a','init-a','Refinement','user-org-a',now());
+      INSERT INTO "RefinementSessionItem" (id,"sessionId","storyId","updatedAt") VALUES ('session-item-a','session-a','story-a',now());
+      INSERT INTO "SprintReadinessAssessment" (id,"organizationId","initiativeId","storyId","inputFingerprint",decision,reason,"decidedByUserId")
+      VALUES ('readiness-a','org-a','init-a','story-a',repeat('a',64),'ready','All checks passed','user-org-a');
+      INSERT INTO "Sprint" (id,"prototypeId","sprintNumber","phaseNumber","startDate","endDate","capacityPoints")
+      VALUES ('sprint-a','proto-a',1,1,now(),now() + interval '14 days',20);
+      INSERT INTO "SprintPlan" (id,"organizationId","initiativeId","sprintId",goal,"capacityPoints","createdByUserId","updatedAt")
+      VALUES ('sprint-plan-a','org-a','init-a','sprint-a','Deliver the validated stories',20,'user-org-a',now());
+      INSERT INTO "SprintPlanningItem" (id,"sprintPlanId","storyId","readinessAssessmentId","estimatePoints","order")
+      VALUES ('sprint-item-a','sprint-plan-a','story-a','readiness-a',3,0);
+    `));
+    await expect(asUser(authA, () => pg.exec(`INSERT INTO "RefinementSessionItem" (id,"sessionId","storyId","updatedAt") VALUES ('session-item-cross','session-a','artifact-b',now())`))).rejects.toThrow();
+    await expect(asUser(authA, () => pg.exec(`
+      INSERT INTO "SprintReadinessAssessment" (id,"organizationId","initiativeId","storyId","inputFingerprint",decision,reason,"decidedByUserId")
+      VALUES ('readiness-cross','org-a','init-a','artifact-b',repeat('b',64),'not_ready','Wrong initiative','user-org-a')
+    `))).rejects.toThrow();
+    expect((await asUser(authB, () => pg.query(`SELECT id FROM "SprintPlan" WHERE id='sprint-plan-a'`))).rows).toEqual([]);
+    await expect(asUser(authA, () => pg.exec(`UPDATE "SprintReadinessAssessment" SET decision='overridden' WHERE id='readiness-a'`))).rejects.toThrow();
+  });
+
 });
