@@ -8,6 +8,7 @@ export const BASE_TABS = [
   { slug: "features", label: "Feature Hierarchy" },
   { slug: "epics", label: "Epics & Stories" },
   { slug: "refinement", label: "Refinement" },
+  { slug: "sprint-preparation", label: "Sprint Preparation" },
   { slug: "sprints", label: "Sprints & Releases" },
   { slug: "capacity", label: "Capacity & Cost" },
   { slug: "executive", label: "Executive View" },
@@ -40,8 +41,8 @@ export default function NavTabs({
   const pathname = usePathname();
   const overrides = LABEL_OVERRIDES[methodology ?? ""] ?? {};
   const currentSlug = BASE_TABS.find((tab) => pathname?.includes(`/workspace/${tab.slug}`))?.slug;
-  const visibleTabs = currentSlug === "features" || currentSlug === "epics" || currentSlug === "refinement" || currentSlug === "documents"
-    ? BASE_TABS.filter((tab) => ["features", "epics", "refinement", "documents"].includes(tab.slug))
+  const visibleTabs = currentSlug === "features" || currentSlug === "epics" || currentSlug === "refinement" || currentSlug === "sprint-preparation" || currentSlug === "documents"
+    ? BASE_TABS.filter((tab) => ["features", "epics", "refinement", "sprint-preparation", "documents"].includes(tab.slug))
     : currentSlug === "roadmap"
       ? BASE_TABS.filter((tab) => tab.slug === "roadmap")
       : currentSlug === "sprints"
