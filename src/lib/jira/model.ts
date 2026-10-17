@@ -27,4 +27,14 @@ export const jiraImportApplySchema = z.object({
   reason: z.string().trim().min(5).max(1000),
 });
 
+export const jiraExportPreviewSchema = z.object({ connectionId: z.string().trim().min(1) });
+
+export const jiraExportApprovalSchema = z.object({
+  expectedStatus: z.literal("previewed"),
+  selectedItemIds: z.array(z.string().trim().min(1)).min(1).max(1000),
+  reason: z.string().trim().min(5).max(1000),
+});
+
+export const jiraExportExecuteSchema = z.object({ expectedStatus: z.literal("approved") });
+
 export type JiraProjectInput = z.infer<typeof jiraProjectSchema>;

@@ -17,7 +17,7 @@ type PreviewItem = {
   conflictReason: string | null; selected: boolean;
 };
 
-function plainText(value: unknown): string {
+export function plainText(value: unknown): string {
   if (typeof value === "string") return value;
   if (Array.isArray(value)) return value.map(plainText).filter(Boolean).join("\n");
   if (!value || typeof value !== "object") return "";
@@ -28,7 +28,7 @@ function plainText(value: unknown): string {
   return content.join("\n");
 }
 
-const fingerprint = (value: unknown) => jiraHash(JSON.stringify(value));
+export const fingerprint = (value: unknown) => jiraHash(JSON.stringify(value));
 
 function mappings(connection: JiraConnection): Record<string, TargetType> {
   if (!connection.issueTypeMappings || typeof connection.issueTypeMappings !== "object" || Array.isArray(connection.issueTypeMappings)) return {};
@@ -50,7 +50,7 @@ function storyPointsField(connection: JiraConnection) {
   return typeof fields.storyPointsField === "string" ? fields.storyPointsField : "customfield_10016";
 }
 
-async function currentTargetFingerprint(link: JiraExternalLink) {
+export async function currentTargetFingerprint(link: JiraExternalLink) {
   if (link.targetType === "feature") {
     const row = await db.capability.findUnique({ where: { id: link.targetId }, select: { name: true, description: true, backlogLane: true, backlogStatus: true, businessValue: true, riskLevel: true, backlogRevision: true } });
     return row ? fingerprint(row) : null;
@@ -63,7 +63,7 @@ async function currentTargetFingerprint(link: JiraExternalLink) {
   return row ? fingerprint({ severity: row.severity, status: row.status, priority: row.priority, environment: row.environment, revision: row.revision, request: row.request.data }) : null;
 }
 
-function sourceSnapshot(issue: JiraSourceIssue) {
+export function sourceSnapshot(issue: JiraSourceIssue) {
   return { ...issue, descriptionText: plainText(issue.description).trim() };
 }
 

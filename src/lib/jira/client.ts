@@ -58,7 +58,7 @@ export function jiraAuthorizationUrl(state: string) {
   const params = new URLSearchParams({
     audience: "api.atlassian.com",
     client_id: clientId,
-    scope: "read:jira-work read:jira-user offline_access",
+    scope: "read:jira-work write:jira-work read:jira-user offline_access",
     redirect_uri: redirectUri,
     state,
     response_type: "code",
@@ -117,7 +117,7 @@ export async function listJiraProjects(cloudId: string, accessToken: string, fet
   return values.map((value) => object(value)).map((row) => ({ id: text(row.id), key: text(row.key), name: text(row.name), projectTypeKey: text(row.projectTypeKey) })).filter((row) => row.id && row.key);
 }
 
-function issueSnapshot(value: unknown, storyPointsField: string): JiraIssueSnapshot | null {
+export function issueSnapshot(value: unknown, storyPointsField: string): JiraIssueSnapshot | null {
   const row = object(value);
   const fields = object(row.fields);
   const issueType = object(fields.issuetype);
@@ -149,9 +149,31 @@ function issueSnapshot(value: unknown, storyPointsField: string): JiraIssueSnaps
   };
 }
 
+const ISSUE_FIELDS = ["summary","description","issuetype","status","assignee","priority","labels","parent","fixVersions","updated"];
+
+export async function getJiraIssue(input: { cloudId: string; accessToken: string; issueIdOrKey: string; storyPointsField?: string }, fetcher: Fetcher = fetch) {
+  const storyPointsField = input.storyPointsField || "customfield_10016";
+  const fields = [...ISSUE_FIELDS, storyPointsField, "customfield_10020"].join(",");
+  const payload = await jiraApi(input.cloudId, input.accessToken, `/rest/api/3/issue/${encodeURIComponent(input.issueIdOrKey)}?fields=${encodeURIComponent(fields)}`, {}, fetcher);
+  const issue = issueSnapshot(payload, storyPointsField);
+  if (!issue) throw new Error("Jira returned an invalid issue response.");
+  return issue;
+}
+
+export async function createJiraIssue(input: { cloudId: string; accessToken: string; fields: Record<string, unknown> }, fetcher: Fetcher = fetch) {
+  const payload = object(await jiraApi(input.cloudId, input.accessToken, "/rest/api/3/issue", { method: "POST", body: JSON.stringify({ fields: input.fields }) }, fetcher));
+  const id = text(payload.id); const key = text(payload.key);
+  if (!id || !key) throw new Error("Jira created the issue but did not return its identity.");
+  return { id, key };
+}
+
+export async function updateJiraIssue(input: { cloudId: string; accessToken: string; issueIdOrKey: string; fields: Record<string, unknown> }, fetcher: Fetcher = fetch) {
+  await jiraApi(input.cloudId, input.accessToken, `/rest/api/3/issue/${encodeURIComponent(input.issueIdOrKey)}`, { method: "PUT", body: JSON.stringify({ fields: input.fields }) }, fetcher);
+}
+
 export async function searchJiraIssues(input: { cloudId: string; accessToken: string; projectKey: string; nextPageToken?: string; storyPointsField?: string }, fetcher: Fetcher = fetch) {
   const storyPointsField = input.storyPointsField || "customfield_10016";
-  const body = { jql: `project = \"${input.projectKey.replaceAll('"', '\\"')}\" ORDER BY updated ASC`, maxResults: 100, ...(input.nextPageToken ? { nextPageToken: input.nextPageToken } : {}), fields: ["summary","description","issuetype","status","assignee","priority","labels","parent","fixVersions","updated",storyPointsField,"customfield_10020"] };
+  const body = { jql: `project = \"${input.projectKey.replaceAll('"', '\\"')}\" ORDER BY updated ASC`, maxResults: 100, ...(input.nextPageToken ? { nextPageToken: input.nextPageToken } : {}), fields: [...ISSUE_FIELDS,storyPointsField,"customfield_10020"] };
   const payload = object(await jiraApi(input.cloudId, input.accessToken, "/rest/api/3/search/jql", { method: "POST", body: JSON.stringify(body) }, fetcher));
   const issues = Array.isArray(payload.issues) ? payload.issues.map((issue) => issueSnapshot(issue, storyPointsField)).filter((issue): issue is JiraIssueSnapshot => Boolean(issue)) : [];
   return { issues, nextPageToken: text(payload.nextPageToken) || null, isLast: Boolean(payload.isLast) };

@@ -1397,6 +1397,72 @@ model JiraExternalLink {
   @@index([organizationId, initiativeId, externalKey])
 }
 
+// Feature 21B: outbound Jira changes are frozen into a preview, approved by an
+// authorized user, and executed separately. JiraExportApproval is append-only
+// evidence; AI has no route to create it or execute the run.
+model JiraExportRun {
+  id                String    @id @default(cuid())
+  organizationId    String
+  initiativeId      String
+  connectionId      String
+  status            String    @default("previewed") // previewed | approved | executing | completed | partial_failure | cancelled
+  sourceFingerprint String
+  itemCount         Int       @default(0)
+  createCount       Int       @default(0)
+  updateCount       Int       @default(0)
+  conflictCount     Int       @default(0)
+  unchangedCount    Int       @default(0)
+  initiatedByUserId String
+  executedByUserId  String?
+  executedAt        DateTime?
+  failureMessage    String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@index([organizationId, initiativeId, createdAt])
+  @@index([connectionId, status, createdAt])
+}
+
+model JiraExportItem {
+  id                 String   @id @default(cuid())
+  organizationId     String
+  exportRunId        String
+  targetType         String // feature | story | bug
+  targetId           String
+  summary            String
+  externalIssueId    String?
+  externalKey        String?
+  action             String // create | update | unchanged | conflict | skip
+  requestPayload     Json
+  targetFingerprint  String
+  expectedSourceHash String?
+  idempotencyKey     String   @unique
+  conflictReason     String?
+  selected           Boolean  @default(true)
+  status             String   @default("previewed") // previewed | pending | succeeded | failed | skipped | conflict
+  resultSnapshot     Json?
+  failureMessage     String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@unique([exportRunId, targetType, targetId])
+  @@index([organizationId, exportRunId, action])
+  @@index([externalKey])
+}
+
+model JiraExportApproval {
+  id               String   @id @default(cuid())
+  organizationId   String
+  exportRunId      String   @unique
+  selectedItemIds  Json
+  reason           String
+  snapshotHash     String
+  approvedByUserId String
+  approvedAt       DateTime @default(now())
+
+  @@index([organizationId, approvedAt])
+}
+
 // Step 8E (docs/V2-DASHBOARD-CONFIGURATION.md). Presentation only — never an
 // authorization signal (docs/V2-STANDARD-DASHBOARD.md §8/§9,
 // docs/V2-ACCESS-TEAMS-VISIBILITY.md §13/§18). Deliberately no userId, no

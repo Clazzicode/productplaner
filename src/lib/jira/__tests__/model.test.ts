@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { jiraImportApplySchema, jiraProjectSchema, jiraStartSchema } from "../model";
+import { jiraExportApprovalSchema, jiraExportExecuteSchema, jiraImportApplySchema, jiraProjectSchema, jiraStartSchema } from "../model";
 
 describe("Jira command validation", () => {
   it("allows only local integration return paths", () => {
@@ -13,5 +13,11 @@ describe("Jira command validation", () => {
   it("requires explicit selected item IDs and a human reason", () => {
     expect(jiraImportApplySchema.safeParse({ expectedStatus: "previewed", selectedItemIds: ["item-a"], reason: "Reviewed by the Product Owner." }).success).toBe(true);
     expect(jiraImportApplySchema.safeParse({ expectedStatus: "previewed", selectedItemIds: ["item-a"], reason: "ok" }).success).toBe(false);
+  });
+  it("separates Jira export approval from execution", () => {
+    expect(jiraExportApprovalSchema.safeParse({ expectedStatus: "previewed", selectedItemIds: ["item-a"], reason: "Approved for the planned release." }).success).toBe(true);
+    expect(jiraExportApprovalSchema.safeParse({ expectedStatus: "previewed", selectedItemIds: [], reason: "Approved" }).success).toBe(false);
+    expect(jiraExportExecuteSchema.safeParse({ expectedStatus: "approved" }).success).toBe(true);
+    expect(jiraExportExecuteSchema.safeParse({ expectedStatus: "previewed" }).success).toBe(false);
   });
 });

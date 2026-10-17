@@ -24,3 +24,10 @@ export async function jiraImportForUser(user: CurrentUser, runId: string) {
   const access = await requireJiraManager(user, run.initiativeId);
   return access.ok ? { ok: true as const, run } : access;
 }
+
+export async function jiraExportForUser(user: CurrentUser, runId: string) {
+  const run = await db.jiraExportRun.findFirst({ where: { id: runId, organizationId: user.organizationId } });
+  if (!run) return { ok: false as const, response: jsonError("Not found.", 404) };
+  const access = await requireJiraManager(user, run.initiativeId);
+  return access.ok ? { ok: true as const, run } : access;
+}

@@ -381,4 +381,23 @@ describe.sequential("migration replay and real PostgreSQL RLS", () => {
     await expect(asUser(authA, () => pg.exec(`INSERT INTO "JiraImportItem" (id,"organizationId","importRunId","externalIssueId","externalKey","issueTypeId","issueTypeName","targetType",summary,"sourceSnapshot","sourceHash",action,"updatedAt") VALUES ('jira-item-cross','org-b','jira-run-a','10002','GP-2','10000','Story','story','Forged','{}',repeat('d',64),'create',now())`))).rejects.toThrow();
   });
 
+  it("isolates Jira exports and freezes approved payloads", async () => {
+    await asUser(authA, () => pg.exec(`
+      INSERT INTO "JiraExportRun" (id,"organizationId","initiativeId","connectionId","sourceFingerprint","itemCount","createCount","initiatedByUserId","updatedAt")
+      VALUES ('jira-export-a','org-a','init-a','jira-a',repeat('e',64),1,1,'user-org-a',now());
+      INSERT INTO "JiraExportItem" (id,"organizationId","exportRunId","targetType","targetId",summary,action,"requestPayload","targetFingerprint","idempotencyKey","updatedAt")
+      VALUES ('jira-export-item-a','org-a','jira-export-a','feature','capability-a','Approved feature','create','{"fields":{"summary":"Approved feature"}}',repeat('f',64),repeat('1',64),now());
+      UPDATE "JiraExportRun" SET status='approved' WHERE id='jira-export-a';
+      INSERT INTO "JiraExportApproval" (id,"organizationId","exportRunId","selectedItemIds",reason,"snapshotHash","approvedByUserId")
+      VALUES ('jira-export-approval-a','org-a','jira-export-a','["jira-export-item-a"]','PO reviewed the frozen export.',repeat('2',64),'user-org-a');
+    `));
+    expect((await asUser(authB, () => pg.query(`SELECT id FROM "JiraExportItem" WHERE id='jira-export-item-a'`))).rows).toEqual([]);
+    expect((await asUser(authB, () => pg.query(`SELECT id FROM "JiraExportApproval" WHERE id='jira-export-approval-a'`))).rows).toEqual([]);
+    expect((await asUser(authA, () => pg.query(`UPDATE "JiraExportApproval" SET reason='Forged' WHERE id='jira-export-approval-a' RETURNING id`))).rows).toEqual([]);
+    await expect(asUser(authA, () => pg.exec(`UPDATE "JiraExportItem" SET "requestPayload"='{"fields":{"summary":"Forged"}}' WHERE id='jira-export-item-a'`))).rejects.toThrow();
+    await expect(asUser(authA, () => pg.exec(`INSERT INTO "JiraExportItem" (id,"organizationId","exportRunId","targetType","targetId",summary,action,"requestPayload","targetFingerprint","idempotencyKey","updatedAt") VALUES ('jira-export-cross','org-b','jira-export-a','feature','capability-a','Forged','create','{}',repeat('3',64),repeat('4',64),now())`))).rejects.toThrow();
+    await asUser(authA, () => pg.exec(`UPDATE "JiraExportRun" SET status='completed', "executedAt"=now() WHERE id='jira-export-a'`));
+    await expect(asUser(authA, () => pg.exec(`UPDATE "JiraExportRun" SET "failureMessage"='Changed later' WHERE id='jira-export-a'`))).rejects.toThrow();
+  });
+
 });

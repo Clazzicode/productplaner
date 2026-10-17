@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { accessibleJiraResources, exchangeJiraCode, jiraAuthorizationUrl, searchJiraIssues } from "../client";
+import { accessibleJiraResources, createJiraIssue, exchangeJiraCode, jiraAuthorizationUrl, searchJiraIssues, updateJiraIssue } from "../client";
 
 const original = { id: process.env.JIRA_CLIENT_ID, secret: process.env.JIRA_CLIENT_SECRET, redirect: process.env.JIRA_REDIRECT_URI };
 beforeEach(() => { process.env.JIRA_CLIENT_ID = "client-a"; process.env.JIRA_CLIENT_SECRET = "secret-a"; process.env.JIRA_REDIRECT_URI = "https://app.example/api/integrations/jira/oauth/callback"; });
@@ -11,6 +11,7 @@ describe("Atlassian OAuth and Jira REST client", () => {
     expect(url.origin).toBe("https://auth.atlassian.com");
     expect(url.searchParams.get("state")).toBe("opaque-state");
     expect(url.searchParams.get("scope")).toContain("offline_access");
+    expect(url.searchParams.get("scope")).toContain("write:jira-work");
     expect(url.searchParams.get("redirect_uri")).toBe(process.env.JIRA_REDIRECT_URI);
   });
   it("exchanges the code and loads accessible resources", async () => {
@@ -29,5 +30,14 @@ describe("Atlassian OAuth and Jira REST client", () => {
     expect(fetcher.mock.calls[0][0]).toContain("/rest/api/3/search/jql");
     const body = JSON.parse(String(fetcher.mock.calls[0][1]?.body));
     expect(body.jql).toContain("project = \"GP\"");
+  });
+  it("creates and updates Jira issues only through explicit write calls", async () => {
+    const fetcher = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ id: "10001", key: "GP-1" }), { status: 201 }))
+      .mockResolvedValueOnce(new Response(null, { status: 204 }));
+    expect(await createJiraIssue({ cloudId: "cloud-a", accessToken: "token", fields: { summary: "Approved story" } }, fetcher)).toEqual({ id: "10001", key: "GP-1" });
+    await updateJiraIssue({ cloudId: "cloud-a", accessToken: "token", issueIdOrKey: "GP-1", fields: { summary: "Updated story" } }, fetcher);
+    expect(fetcher.mock.calls[0][1]?.method).toBe("POST");
+    expect(fetcher.mock.calls[1][1]?.method).toBe("PUT");
   });
 });
