@@ -102,7 +102,10 @@ export default function LeftNav(props: { initiatives: NavInitiative[] }) {
         },
         {
           title: "Intelligence",
-          items: [scoped("workspace/executive", "Reports")],
+          items: [
+            scoped("workspace/matrix", "Matrix Portal"),
+            scoped("workspace/executive", "Reports"),
+          ],
         },
         {
           title: "Organization",

@@ -11,6 +11,7 @@ export const BASE_TABS = [
   { slug: "sprint-preparation", label: "Sprint Preparation" },
   { slug: "sprints", label: "Sprints & Releases" },
   { slug: "capacity", label: "Capacity & Cost" },
+  { slug: "matrix", label: "Matrix Portal" },
   { slug: "executive", label: "Executive View" },
   // Directive item 2: "Add Documents" from inside the initiative workspace
   // — no entry point existed here before Document Import & Approved Context.
@@ -45,8 +46,10 @@ export default function NavTabs({
     ? BASE_TABS.filter((tab) => ["features", "epics", "refinement", "sprint-preparation", "documents"].includes(tab.slug))
     : currentSlug === "roadmap"
       ? BASE_TABS.filter((tab) => tab.slug === "roadmap")
-      : currentSlug === "sprints"
+    : currentSlug === "sprints"
         ? BASE_TABS.filter((tab) => tab.slug === "sprints")
+      : currentSlug === "matrix" || currentSlug === "executive"
+        ? BASE_TABS.filter((tab) => tab.slug === "matrix" || tab.slug === "executive")
         : [];
   if (visibleTabs.length === 0) return null;
   return (
