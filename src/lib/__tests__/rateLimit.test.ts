@@ -14,8 +14,22 @@ describe("rateLimitPolicyFor", () => {
     expect(rateLimitPolicyFor(request("/api/account/start-over"))?.key).toBe("account.start_over");
   });
 
+  it("limits every sensitive Jira integration operation", () => {
+    expect(rateLimitPolicyFor(request("/api/integrations/jira/oauth/start"))?.key).toBe("jira.oauth_start");
+    expect(rateLimitPolicyFor(request("/api/integrations/jira/oauth/callback", "GET"))?.key).toBe("jira.oauth_callback");
+    expect(rateLimitPolicyFor(request("/api/integrations/jira/imports"))?.key).toBe("jira.transfer");
+    expect(rateLimitPolicyFor(request("/api/integrations/jira/imports/run-1", "PATCH"))?.key).toBe("jira.transfer");
+    expect(rateLimitPolicyFor(request("/api/integrations/jira/exports/run-1/execute"))?.key).toBe("jira.transfer");
+    expect(rateLimitPolicyFor(request("/api/integrations/jira/jobs/job-1", "PATCH"))?.key).toBe("jira.job_control");
+    expect(rateLimitPolicyFor(request("/api/integrations/jira/connections/connection-1/webhooks"))?.key).toBe("jira.webhook_management");
+    expect(rateLimitPolicyFor(request("/api/integrations/jira/connections/connection-1", "DELETE"))?.key).toBe("jira.disconnect");
+    expect(rateLimitPolicyFor(request("/api/integrations/jira/conflicts/conflict-1", "PATCH"))?.key).toBe("jira.conflict_resolution");
+    expect(rateLimitPolicyFor(request("/api/integrations/jira/webhooks/connection-1"))?.key).toBe("jira.webhook_delivery");
+  });
+
   it("does not throttle reads or ordinary planning edits", () => {
     expect(rateLimitPolicyFor(request("/api/auth/sign-in", "GET"))).toBeNull();
+    expect(rateLimitPolicyFor(request("/api/integrations/jira/imports/run-1", "GET"))).toBeNull();
     expect(rateLimitPolicyFor(request("/api/capabilities/c1", "PATCH"))).toBeNull();
   });
 });

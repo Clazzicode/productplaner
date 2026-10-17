@@ -955,24 +955,250 @@ model Sprint {
 }
 
 model Release {
-  id                         String                  @id @default(cuid())
+  id                         String                       @id @default(cuid())
   prototypeId                String
-  prototype                  Prototype               @relation(fields: [prototypeId], references: [id], onDelete: Cascade)
+  prototype                  Prototype                    @relation(fields: [prototypeId], references: [id], onDelete: Cascade)
   name                       String // "Release 1 (MVP)" ...
   phaseNumber                Int
   targetDate                 DateTime
   order                      Int
-  origin                     String                  @default("auto") // auto | manual — see Sprint.origin comment above
+  origin                     String                       @default("auto") // auto | manual — see Sprint.origin comment above
   sprints                    Sprint[]
-  features                   Capability[]            @relation("ReleaseFeatures")
+  features                   Capability[]                 @relation("ReleaseFeatures")
   stakeholderAssignments     StakeholderAssignment[]
-  affectedBugPlanningRecords BugPlanningRecord[]     @relation("BugPlanningRelease")
-  predecessorDependencies    WorkDependency[]        @relation("DependencyPredecessorRelease")
-  dependentDependencies      WorkDependency[]        @relation("DependencyDependentRelease")
+  affectedBugPlanningRecords BugPlanningRecord[]          @relation("BugPlanningRelease")
+  predecessorDependencies    WorkDependency[]             @relation("DependencyPredecessorRelease")
+  dependentDependencies      WorkDependency[]             @relation("DependencyDependentRelease")
   planningBlockers           PlanningBlocker[]
-  createdAt                  DateTime                @default(now())
+  readinessAssessments       ReleaseReadinessAssessment[]
+  createdAt                  DateTime                     @default(now())
 
   @@unique([prototypeId, order])
+}
+
+// Feature 19: a release-level decision record built from frozen planning,
+// delivery, validation, risk, dependency, and quality evidence. AI may draft
+// narrative text, but readiness gates and approval remain deterministic and
+// explicitly controlled by an authorized person.
+model ReleaseReadinessAssessment {
+  id                              String    @id @default(cuid())
+  organizationId                  String
+  projectId                       String
+  initiativeId                    String
+  releaseId                       String
+  release                         Release   @relation(fields: [releaseId], references: [id], onDelete: Restrict)
+  sequence                        Int
+  status                          String    @default("draft") // draft | needs_attention | ready | approved
+  releaseSnapshot                 Json
+  summary                         String    @default("")
+  stakeholderCommunication        String    @default("")
+  communicationOwnerStakeholderId String?
+  communicationOwnerNameSnapshot  String    @default("")
+  communicationStatus             String    @default("not_started") // not_started | drafted | sent
+  decisionReason                  String    @default("")
+  revision                        Int       @default(1)
+  supersedesAssessmentId          String?
+  createdByUserId                 String
+  approvedByUserId                String?
+  approvedAt                      DateTime?
+  createdAt                       DateTime  @default(now())
+  updatedAt                       DateTime  @updatedAt
+
+  checks      ReleaseReadinessCheck[]
+  revisions   ReleaseReadinessRevision[]
+  suggestions ReleaseReadinessAiSuggestion[]
+  followUps    ReleaseReadinessFollowUp[]
+
+  @@unique([releaseId, sequence])
+  @@index([organizationId, initiativeId, status])
+  @@index([releaseId, createdAt])
+}
+
+// Traceable work created from a failed or warning release-readiness gate.
+// The linked PlanningRequest remains the authoritative backlog record.
+model ReleaseReadinessFollowUp {
+  id                String                     @id @default(cuid())
+  organizationId    String
+  assessmentId      String
+  assessment        ReleaseReadinessAssessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  checkKey          String
+  planningRequestId String                     @unique
+  planningRequest   PlanningRequest            @relation(fields: [planningRequestId], references: [id], onDelete: Restrict)
+  createdByUserId   String
+  createdAt         DateTime                   @default(now())
+
+  @@unique([assessmentId, checkKey])
+  @@index([organizationId, createdAt])
+}
+
+model ReleaseReadinessCheck {
+  id                 String                     @id @default(cuid())
+  organizationId     String
+  assessmentId       String
+  assessment         ReleaseReadinessAssessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  checkKey           String
+  label              String
+  status             String // pass | warning | fail | overridden
+  explanation        String
+  evidence           Json                       @default("{}")
+  overrideReason     String                     @default("")
+  overriddenByUserId String?
+  overriddenAt       DateTime?
+  createdAt          DateTime                   @default(now())
+  updatedAt          DateTime                   @updatedAt
+
+  @@unique([assessmentId, checkKey])
+  @@index([organizationId, assessmentId])
+}
+
+model ReleaseReadinessRevision {
+  id             String                     @id @default(cuid())
+  organizationId String
+  assessmentId   String
+  assessment     ReleaseReadinessAssessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  fromRevision   Int
+  toRevision     Int
+  previousData   Json
+  nextData       Json
+  reason         String
+  actorUserId    String?
+  createdAt      DateTime                   @default(now())
+
+  @@unique([assessmentId, toRevision])
+  @@index([organizationId, createdAt])
+}
+
+model ReleaseReadinessAiSuggestion {
+  id                       String                     @id @default(cuid())
+  organizationId           String
+  assessmentId             String
+  assessment               ReleaseReadinessAssessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  fingerprint              String
+  summary                  String
+  stakeholderCommunication String
+  informationUsed          String                     @default("")
+  status                   String                     @default("proposed") // proposed | used | dismissed | stale
+  model                    String                     @default("")
+  generatedByUserId        String
+  actedByUserId            String?
+  actedAt                  DateTime?
+  createdAt                DateTime                   @default(now())
+
+  @@unique([assessmentId, fingerprint])
+  @@index([organizationId, createdAt])
+  @@index([assessmentId, status, createdAt])
+}
+
+// Feature 20: durable feedback intake and human-approved reprioritization.
+// Linked planning records stay authoritative; feedback only proposes changes
+// until an authorized user applies a proposal through the priority service.
+model FeedbackRecord {
+  id               String    @id @default(cuid())
+  organizationId   String
+  projectId        String
+  initiativeId     String
+  title            String
+  details          String
+  source           String // customer | stakeholder | demo | sprint_review | release | meeting | support | jira | manual
+  sourceReference  String?
+  category         String    @default("general") // general | request | quality | usability | scope | delivery | risk
+  status           String    @default("captured") // captured | triaged | actioned | closed
+  summary          String    @default("")
+  dedupeKey        String
+  linkedEntityType String?
+  linkedEntityId   String?
+  revision         Int       @default(1)
+  createdByUserId  String
+  archivedAt       DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  revisions   FeedbackRevision[]
+  followUps   FeedbackFollowUp[]
+  proposals   ReprioritizationProposal[]
+  suggestions FeedbackAiSuggestion[]
+
+  @@unique([initiativeId, dedupeKey])
+  @@index([organizationId, initiativeId, status])
+  @@index([initiativeId, linkedEntityType, linkedEntityId])
+}
+
+model FeedbackRevision {
+  id             String         @id @default(cuid())
+  organizationId String
+  feedbackId     String
+  feedback       FeedbackRecord @relation(fields: [feedbackId], references: [id], onDelete: Cascade)
+  fromRevision   Int
+  toRevision     Int
+  previousData   Json
+  nextData       Json
+  reason         String
+  actorUserId    String?
+  createdAt      DateTime       @default(now())
+
+  @@unique([feedbackId, toRevision])
+  @@index([organizationId, createdAt])
+}
+
+model FeedbackFollowUp {
+  id                String         @id @default(cuid())
+  organizationId    String
+  feedbackId        String
+  feedback          FeedbackRecord @relation(fields: [feedbackId], references: [id], onDelete: Cascade)
+  planningRequestId String         @unique
+  createdByUserId   String
+  createdAt         DateTime       @default(now())
+
+  @@index([organizationId, feedbackId])
+}
+
+model ReprioritizationProposal {
+  id                        String         @id @default(cuid())
+  organizationId            String
+  feedbackId                String
+  feedback                  FeedbackRecord @relation(fields: [feedbackId], references: [id], onDelete: Cascade)
+  entityType                String // request | feature | story
+  entityId                  String
+  expectedEntityRevision    Int
+  currentPrioritySnapshot   Json
+  proposedFactors           Json
+  moscow                    String
+  roadmapLane               String
+  rationale                 String
+  source                    String         @default("manual") // manual | ai
+  status                    String         @default("proposed") // proposed | applied | dismissed
+  decisionReason            String         @default("")
+  appliedPriorityDecisionId String?
+  revision                  Int            @default(1)
+  createdByUserId           String
+  decidedByUserId           String?
+  decidedAt                 DateTime?
+  createdAt                 DateTime       @default(now())
+  updatedAt                 DateTime       @updatedAt
+
+  @@index([organizationId, feedbackId, status])
+  @@index([entityType, entityId, createdAt])
+}
+
+model FeedbackAiSuggestion {
+  id                String         @id @default(cuid())
+  organizationId    String
+  feedbackId        String
+  feedback          FeedbackRecord @relation(fields: [feedbackId], references: [id], onDelete: Cascade)
+  kind              String // summary | reprioritization
+  fingerprint       String
+  content           Json
+  informationUsed   String         @default("")
+  status            String         @default("proposed") // proposed | used | dismissed | stale
+  model             String         @default("")
+  generatedByUserId String
+  actedByUserId     String?
+  actedAt           DateTime?
+  createdAt         DateTime       @default(now())
+
+  @@unique([feedbackId, kind, fingerprint])
+  @@index([organizationId, createdAt])
+  @@index([feedbackId, status, createdAt])
 }
 
 // Jira only — Aha!/Azure DevOps intentionally not modeled (out of scope).
@@ -1025,7 +1251,7 @@ model IntegrationConnection {
   provider           IntegrationProvider  @relation(fields: [providerId], references: [id])
   connectionName     String               @default("")
   status             String               @default("available") // available | needs_configuration | demo_connected | sync_ready | sync_complete | demo_error
-  mode               String               @default("demo") // demo | live_future
+  mode               String               @default("demo") // demo | live
   workspaceName      String?
   workspaceUrl       String?
   projectKey         String?
@@ -1067,6 +1293,297 @@ model IntegrationSyncLog {
   startedAt      DateTime              @default(now())
   finishedAt     DateTime?
   detailsJson    String                @default("{}")
+}
+
+// Feature 21A: live Jira Cloud OAuth and read/import foundation. Tokens are
+// encrypted by the application before persistence; previews are durable and
+// require an explicit apply action before any planning record is changed.
+model JiraConnection {
+  id                     String    @id @default(cuid())
+  organizationId         String
+  initiativeId           String?
+  configuredByUserId     String
+  status                 String    @default("site_selection_required") // site_selection_required | project_selection_required | connected | reauthorization_required | revoked
+  cloudId                String?
+  siteUrl                String?
+  siteName               String?
+  projectId              String?
+  projectKey             String?
+  projectName            String?
+  accessTokenCiphertext  String
+  refreshTokenCiphertext String
+  tokenExpiresAt         DateTime
+  scopes                 String
+  accessibleResources    Json      @default("[]")
+  issueTypeMappings      Json      @default("{}")
+  fieldMappings          Json      @default("{}")
+  revision               Int       @default(1)
+  lastImportedAt         DateTime?
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
+
+  @@index([organizationId, initiativeId, status])
+  @@index([cloudId, projectKey])
+}
+
+model JiraOAuthState {
+  id             String    @id @default(cuid())
+  stateHash      String    @unique
+  organizationId String
+  initiativeId   String?
+  userId         String
+  returnPath     String    @default("/integrations/jira")
+  expiresAt      DateTime
+  consumedAt     DateTime?
+  createdAt      DateTime  @default(now())
+
+  @@index([organizationId, expiresAt])
+}
+
+model JiraImportRun {
+  id                String    @id @default(cuid())
+  organizationId    String
+  initiativeId      String
+  connectionId      String
+  status            String    @default("previewed") // previewed | applying | applied | cancelled | failed
+  jql               String
+  sourceCursor      String?
+  sourceFingerprint String
+  itemCount         Int       @default(0)
+  createCount       Int       @default(0)
+  updateCount       Int       @default(0)
+  conflictCount     Int       @default(0)
+  unchangedCount    Int       @default(0)
+  initiatedByUserId String
+  appliedByUserId   String?
+  appliedAt         DateTime?
+  failureMessage    String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@index([organizationId, initiativeId, createdAt])
+  @@index([connectionId, status, createdAt])
+}
+
+model JiraImportItem {
+  id                String   @id @default(cuid())
+  organizationId    String
+  importRunId       String
+  externalIssueId   String
+  externalKey       String
+  issueTypeId       String
+  issueTypeName     String
+  targetType        String // feature | story | bug | skip
+  targetId          String?
+  parentExternalKey String?
+  summary           String
+  sourceSnapshot    Json
+  sourceHash        String
+  action            String // create | update | unchanged | conflict | skip
+  conflictReason    String?
+  selected          Boolean  @default(true)
+  status            String   @default("previewed") // previewed | imported | skipped | failed
+  failureMessage    String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@unique([importRunId, externalIssueId])
+  @@index([organizationId, importRunId, action])
+  @@index([externalKey])
+}
+
+model JiraExternalLink {
+  id                   String    @id @default(cuid())
+  organizationId       String
+  initiativeId         String
+  connectionId         String
+  externalIssueId      String
+  externalKey          String
+  issueTypeName        String
+  targetType           String // feature | story | bug
+  targetId             String
+  sourceHash           String
+  targetFingerprint    String
+  sourceUpdatedAt      DateTime?
+  lastImportedSnapshot Json
+  lastImportedAt       DateTime  @default(now())
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  @@unique([connectionId, externalIssueId])
+  @@unique([connectionId, targetType, targetId])
+  @@index([organizationId, initiativeId, externalKey])
+}
+
+// Feature 21B: outbound Jira changes are frozen into a preview, approved by an
+// authorized user, and executed separately. JiraExportApproval is append-only
+// evidence; AI has no route to create it or execute the run.
+model JiraExportRun {
+  id                String    @id @default(cuid())
+  organizationId    String
+  initiativeId      String
+  connectionId      String
+  status            String    @default("previewed") // previewed | approved | executing | completed | partial_failure | cancelled
+  sourceFingerprint String
+  itemCount         Int       @default(0)
+  createCount       Int       @default(0)
+  updateCount       Int       @default(0)
+  conflictCount     Int       @default(0)
+  unchangedCount    Int       @default(0)
+  initiatedByUserId String
+  executedByUserId  String?
+  executedAt        DateTime?
+  failureMessage    String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@index([organizationId, initiativeId, createdAt])
+  @@index([connectionId, status, createdAt])
+}
+
+model JiraExportItem {
+  id                 String   @id @default(cuid())
+  organizationId     String
+  exportRunId        String
+  targetType         String // feature | story | bug
+  targetId           String
+  summary            String
+  externalIssueId    String?
+  externalKey        String?
+  action             String // create | update | unchanged | conflict | skip
+  requestPayload     Json
+  targetFingerprint  String
+  expectedSourceHash String?
+  idempotencyKey     String   @unique
+  conflictReason     String?
+  selected           Boolean  @default(true)
+  status             String   @default("previewed") // previewed | pending | succeeded | failed | skipped | conflict
+  resultSnapshot     Json?
+  failureMessage     String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@unique([exportRunId, targetType, targetId])
+  @@index([organizationId, exportRunId, action])
+  @@index([externalKey])
+}
+
+model JiraExportApproval {
+  id               String   @id @default(cuid())
+  organizationId   String
+  exportRunId      String   @unique
+  selectedItemIds  Json
+  reason           String
+  snapshotHash     String
+  approvedByUserId String
+  approvedAt       DateTime @default(now())
+
+  @@index([organizationId, approvedAt])
+}
+
+// Feature 21C: durable delivery, webhook deduplication, and explicit conflict
+// recovery. Jobs are leased and retried; conflict resolution only updates sync
+// baselines so a later human-approved import/export remains mandatory.
+model JiraWebhookSubscription {
+  id                 String   @id @default(cuid())
+  organizationId     String
+  connectionId       String   @unique
+  externalId         String
+  callbackSecretHash String
+  status             String   @default("active") // active | renewal_required | disabled
+  expiresAt          DateTime
+  lastRenewedAt      DateTime @default(now())
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@unique([connectionId, externalId])
+  @@index([organizationId, expiresAt])
+}
+
+model JiraWebhookEvent {
+  id              String    @id @default(cuid())
+  organizationId  String
+  connectionId    String
+  externalEventId String
+  eventType       String
+  externalIssueId String?
+  externalKey     String?
+  payloadHash     String
+  payload         Json
+  status          String    @default("received") // received | queued | processed | ignored | failed
+  receivedAt      DateTime  @default(now())
+  processedAt     DateTime?
+  failureMessage  String?
+
+  @@unique([connectionId, externalEventId])
+  @@index([organizationId, receivedAt])
+}
+
+model JiraSyncJob {
+  id             String    @id @default(cuid())
+  organizationId String
+  initiativeId   String
+  connectionId   String
+  jobType        String // webhook_import | export_item | renew_webhook
+  payload        Json
+  idempotencyKey String    @unique
+  status         String    @default("queued") // queued | processing | completed | failed | cancelled
+  attemptCount   Int       @default(0)
+  maxAttempts    Int       @default(5)
+  availableAt    DateTime  @default(now())
+  lockedAt       DateTime?
+  lockedBy       String?
+  completedAt    DateTime?
+  lastError      String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([organizationId, status, availableAt])
+  @@index([connectionId, status, createdAt])
+}
+
+model JiraSyncAttempt {
+  id             String    @id @default(cuid())
+  organizationId String
+  jobId          String
+  attemptNumber  Int
+  status         String // processing | succeeded | retry_scheduled | failed
+  errorMessage   String?
+  startedAt      DateTime  @default(now())
+  finishedAt     DateTime?
+
+  @@unique([jobId, attemptNumber])
+  @@index([organizationId, startedAt])
+}
+
+model JiraSyncConflict {
+  id                  String    @id @default(cuid())
+  organizationId      String
+  initiativeId        String
+  connectionId        String
+  externalLinkId      String
+  importItemId        String?
+  exportItemId        String?
+  targetType          String
+  targetId            String
+  externalIssueId     String
+  externalKey         String
+  baselineSourceHash  String
+  baselineTargetHash  String
+  jiraFingerprint     String
+  planningFingerprint String
+  jiraSnapshot        Json
+  explanation         String
+  status              String    @default("open") // open | resolved
+  resolution          String? // keep_planning | accept_jira | manual
+  resolutionReason    String?
+  resolvedByUserId    String?
+  resolvedAt          DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  @@index([organizationId, initiativeId, status, createdAt])
+  @@index([connectionId, externalIssueId, status])
 }
 
 // Step 8E (docs/V2-DASHBOARD-CONFIGURATION.md). Presentation only — never an
@@ -1378,7 +1895,8 @@ model PlanningRequest {
   revisions              RequestRevision[]
   stakeholderAssignments StakeholderAssignment[]
   bugPlanningRecord      BugPlanningRecord?
-  sourceClarifications   InSprintClarification[] @relation("ClarificationFollowUpRequest")
+  sourceClarifications      InSprintClarification[]    @relation("ClarificationFollowUpRequest")
+  releaseReadinessFollowUps ReleaseReadinessFollowUp[]
   createdAt              DateTime                @default(now())
   updatedAt              DateTime                @updatedAt
 
@@ -2155,4 +2673,252 @@ model DemoAiSuggestion {
   @@unique([demoItemId, kind, fingerprint])
   @@index([organizationId, createdAt])
   @@index([demoItemId, status, createdAt])
+}
+
+// Shared meeting foundation for Product Owner ceremonies. Existing
+// RefinementSession rows remain authoritative for refinement and are linked
+// through sourceRefinementSessionId rather than destructively replaced.
+model PlanningMeeting {
+  id                        String    @id @default(cuid())
+  organizationId            String
+  projectId                 String
+  initiativeId              String
+  meetingType               String
+  sourceRefinementSessionId String?   @unique
+  sprintId                  String?
+  releaseId                 String?
+  title                     String
+  scheduledAt               DateTime?
+  facilitatorStakeholderId  String?
+  facilitatorNameSnapshot   String    @default("")
+  purpose                   String    @default("")
+  notes                     String    @default("")
+  transcriptText            String    @default("")
+  transcriptDocumentId      String?
+  outcome                   String    @default("")
+  status                    String    @default("draft")
+  createdByUserId           String
+  createdAt                 DateTime  @default(now())
+  updatedAt                 DateTime  @updatedAt
+
+  @@index([organizationId, initiativeId, meetingType])
+  @@index([sprintId])
+  @@index([releaseId])
+  @@index([transcriptDocumentId])
+}
+
+model PlanningMeetingParticipant {
+  id                       String   @id @default(cuid())
+  organizationId           String
+  meetingId                String
+  stakeholderId            String?
+  participantNameSnapshot  String
+  participantEmailSnapshot String?
+  role                     String   @default("participant")
+  createdAt                DateTime @default(now())
+
+  @@unique([meetingId, stakeholderId])
+  @@index([organizationId, meetingId])
+}
+
+model PlanningMeetingWorkItem {
+  id             String   @id @default(cuid())
+  organizationId String
+  meetingId      String
+  storyId        String?
+  bugId          String?
+  demoItemId     String?
+  createdAt      DateTime @default(now())
+
+  @@unique([meetingId, storyId])
+  @@unique([meetingId, bugId])
+  @@unique([meetingId, demoItemId])
+  @@index([organizationId, meetingId])
+}
+
+model PlanningMeetingDecision {
+  id                         String   @id @default(cuid())
+  organizationId             String
+  meetingId                  String
+  title                      String
+  rationale                  String   @default("")
+  decisionMakerStakeholderId String?
+  decisionMakerNameSnapshot  String   @default("")
+  decidedAt                  DateTime @default(now())
+  createdByUserId            String
+  createdAt                  DateTime @default(now())
+
+  @@index([organizationId, meetingId, decidedAt])
+}
+
+model PlanningMeetingAction {
+  id                 String    @id @default(cuid())
+  organizationId     String
+  meetingId          String
+  title              String
+  ownerStakeholderId String?
+  ownerNameSnapshot  String    @default("")
+  dueAt              DateTime?
+  status             String    @default("open")
+  completionNote     String    @default("")
+  completedAt        DateTime?
+  createdByUserId    String
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  @@index([organizationId, meetingId, status])
+}
+
+model SprintReview {
+  id                String    @id @default(cuid())
+  organizationId    String
+  projectId         String
+  initiativeId      String
+  sprintId          String    @unique
+  meetingId         String    @unique
+  status            String    @default("draft")
+  draftSnapshot     Json
+  finalSnapshot     Json?
+  missingWarnings   Json      @default("[]")
+  summary           String    @default("")
+  overrideReason    String    @default("")
+  revision          Int       @default(1)
+  createdByUserId   String
+  finalizedByUserId String?
+  finalizedAt       DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@index([organizationId, initiativeId, status])
+}
+
+model SprintReviewRevision {
+  id             String   @id @default(cuid())
+  organizationId String
+  reviewId       String
+  fromRevision   Int
+  toRevision     Int
+  previousData   Json
+  nextData       Json
+  reason         String
+  actorUserId    String?
+  createdAt      DateTime @default(now())
+
+  @@unique([reviewId, toRevision])
+  @@index([organizationId, createdAt])
+}
+
+model SprintReviewAiSuggestion {
+  id                String    @id @default(cuid())
+  organizationId    String
+  reviewId          String
+  kind              String
+  fingerprint       String
+  ordinal           Int       @default(0)
+  content           String
+  informationUsed   String    @default("")
+  status            String    @default("proposed")
+  model             String    @default("")
+  generatedByUserId String
+  actedByUserId     String?
+  actedAt           DateTime?
+  createdAt         DateTime  @default(now())
+
+  @@unique([reviewId, kind, fingerprint, ordinal])
+  @@index([organizationId, createdAt])
+  @@index([reviewId, status, createdAt])
+}
+
+// Feature 18: immutable Product Owner validation of delivered story evidence.
+model ProductValidation {
+  id                     String    @id @default(cuid())
+  organizationId         String
+  projectId              String
+  initiativeId           String
+  sprintId               String
+  storyId                String
+  demoItemId             String?
+  sprintReviewId         String?
+  validatorStakeholderId String?
+  validatorNameSnapshot  String    @default("")
+  status                 String    @default("pending") // pending | accepted | rejected | changes_needed
+  storyVersion           Int
+  storySnapshot          Json
+  evidenceNotes          String    @default("")
+  evidenceLinks          Json      @default("[]")
+  decisionReason         String    @default("")
+  sequence               Int
+  revision               Int       @default(1)
+  supersedesValidationId String?
+  createdByUserId        String
+  finalizedByUserId      String?
+  finalizedAt            DateTime?
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
+
+  @@unique([storyId, sprintId, sequence])
+  @@index([organizationId, initiativeId, status])
+  @@index([storyId, createdAt])
+  @@index([sprintId, status])
+}
+
+model ValidationCriterionResult {
+  id                String   @id @default(cuid())
+  organizationId    String
+  validationId      String
+  criterionId       String
+  criterionVersion  Int
+  criterionSnapshot Json
+  result            String   @default("pending") // pending | met | not_met | not_demonstrated | not_applicable
+  reason            String   @default("")
+  evidenceNotes     String   @default("")
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@unique([validationId, criterionId])
+  @@index([organizationId, validationId])
+}
+
+model ProductValidationRevision {
+  id             String   @id @default(cuid())
+  organizationId String
+  validationId   String
+  fromRevision   Int
+  toRevision     Int
+  previousData   Json
+  nextData       Json
+  reason         String
+  actorUserId    String?
+  createdAt      DateTime @default(now())
+
+  @@unique([validationId, toRevision])
+  @@index([organizationId, createdAt])
+}
+
+model ValidationFollowUp {
+  id                String   @id @default(cuid())
+  organizationId    String
+  validationId      String
+  planningRequestId String   @unique
+  createdAt         DateTime @default(now())
+
+  @@index([organizationId, validationId])
+}
+
+model ValidationAiSuggestion {
+  id                String    @id @default(cuid())
+  organizationId    String
+  validationId      String
+  fingerprint       String
+  content           String
+  informationUsed   String    @default("")
+  status            String    @default("proposed") // proposed | used | dismissed | stale
+  model             String    @default("")
+  generatedByUserId String
+  actedByUserId     String?
+  actedAt           DateTime?
+  createdAt         DateTime  @default(now())
+
+  @@unique([validationId, fingerprint])
+  @@index([organizationId, createdAt])
 }

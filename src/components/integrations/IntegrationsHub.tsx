@@ -219,7 +219,9 @@ export default function IntegrationsHub(props: {
                       <ActionButton
                         primary
                         onClick={() =>
-                          conn && !conn.isEnabled
+                          provider.key === "jira"
+                            ? router.push("/integrations/jira")
+                            : conn && !conn.isEnabled
                             ? act(provider, { action: "reconnect", connectionId: conn.id }, "reconnect")
                             : setModalProvider(provider)
                         }
@@ -231,7 +233,7 @@ export default function IntegrationsHub(props: {
                     )}
                     {connected && (
                       <>
-                        <ActionButton onClick={() => setModalProvider(provider)}>
+                        <ActionButton onClick={() => provider.key === "jira" ? router.push("/integrations/jira") : setModalProvider(provider)}>
                           {provider.category === "execution" ? "Configure / mapping" : "Configure"}
                         </ActionButton>
                         {syncable && (

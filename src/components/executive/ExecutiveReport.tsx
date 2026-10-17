@@ -35,7 +35,7 @@ export default async function ExecutiveReport({ initiativeId }: { initiativeId: 
   const intake = initiative.intakeAnswerSet!;
   const prototype = initiative.prototype!;
 
-  const [phases, sprints, releases, storyCount] = await Promise.all([
+  const [phases, sprints, releases, storyCount, bugs, blockers, risks, priorityDecisions, sprintPlans] = await Promise.all([
     db.artifactLayer.findMany({
       where: { prototypeId: prototype.id, type: "roadmap_phase" },
       orderBy: { order: "asc" },
@@ -44,10 +44,15 @@ export default async function ExecutiveReport({ initiativeId }: { initiativeId: 
     db.sprint.findMany({
       where: { prototypeId: prototype.id },
       orderBy: { sprintNumber: "asc" },
-      include: { stories: { select: { points: true } } },
+      include: { stories: { where: { archivedAt: null }, select: { title: true, points: true, readinessStatus: true } } },
     }),
     db.release.findMany({ where: { prototypeId: prototype.id }, orderBy: { order: "asc" } }),
     db.artifactLayer.count({ where: { prototypeId: prototype.id, type: "story" } }),
+    db.bugPlanningRecord.findMany({ where: { initiativeId, archivedAt: null }, select: { id: true, severity: true, status: true, priority: true, request: { select: { data: true } } } }),
+    db.planningBlocker.findMany({ where: { initiativeId, status: { in: ["open", "in_progress"] } }, select: { id: true, blockerType: true, description: true, status: true } }),
+    db.risk.findMany({ where: { projectId: initiative.projectId, OR: [{ initiativeId }, { initiativeId: null }], status: { in: ["open", "accepted"] } }, select: { id: true, description: true, severity: true, status: true } }),
+    db.priorityDecision.findMany({ where: { initiativeId }, orderBy: { createdAt: "desc" }, select: { id: true, entityType: true, entityId: true, score: true, dependencyAdjustedScore: true, moscow: true, roadmapLane: true, reason: true } }),
+    db.sprintPlan.findMany({ where: { initiativeId }, orderBy: { updatedAt: "desc" }, select: { id: true, sprintId: true, goal: true, status: true, plannedPoints: true, capacityPoints: true, items: { select: { id: true, carryoverReason: true } } } }),
   ]);
 
   const totalPlanned = sprints.reduce(
@@ -69,6 +74,14 @@ export default async function ExecutiveReport({ initiativeId }: { initiativeId: 
     (a, b) => (valueRank[a.businessValue] ?? 9) - (valueRank[b.businessValue] ?? 9),
   );
   const depCaps = intake.capabilities.filter((c) => c.dependsOnEdges.length > 0);
+  const latestPriority = [...new Map(priorityDecisions.map((row) => [`${row.entityType}:${row.entityId}`, row])).values()]
+    .sort((a, b) => b.dependencyAdjustedScore - a.dependencyAdjustedScore);
+  const currentSprint = sprints.find((s) => s.startDate <= new Date() && s.endDate >= new Date()) ?? sprints.find((s) => s.endDate >= new Date()) ?? sprints.at(-1) ?? null;
+  const currentSprintPlan = currentSprint ? sprintPlans.find((plan) => plan.sprintId === currentSprint.id) ?? null : null;
+  const openBugs = bugs.filter((bug) => !["resolved", "closed"].includes(bug.status));
+  const severeBugs = openBugs.filter((bug) => ["critical", "high"].includes(bug.severity));
+  const criticalRisks = risks.filter((risk) => ["critical", "high"].includes(risk.severity));
+  const requestTitle = (data: unknown) => data && typeof data === "object" && !Array.isArray(data) && "title" in data ? String((data as { title?: unknown }).title ?? "Bug") : "Bug";
 
   return (
     <article className="mx-auto max-w-3xl">
@@ -101,6 +114,24 @@ export default async function ExecutiveReport({ initiativeId }: { initiativeId: 
             </div>
           ))}
         </div>
+      </Section>
+
+      <Section title="Sprint status and velocity">
+        <div className="grid gap-3 sm:grid-cols-3">
+          <Stat label="Current sprint" value={currentSprint ? `Sprint ${currentSprint.sprintNumber}` : "None"} />
+          <Stat label="Planned / capacity" value={currentSprintPlan ? `${currentSprintPlan.plannedPoints}/${currentSprintPlan.capacityPoints} pts` : currentSprint ? `${currentSprint.stories.reduce((sum, story) => sum + (story.points ?? 1), 0)}/${currentSprint.capacityPoints} pts` : "—"} />
+          <Stat label="Historical velocity" value={intake.historicalVelocityPoints != null ? `${intake.historicalVelocityPoints} pts` : "Not entered"} />
+        </div>
+        {currentSprint && <div className="mt-4 text-sm text-neutral-600"><p><strong>Goal:</strong> {currentSprintPlan?.goal || "No sprint goal recorded."}</p><p className="mt-1"><strong>Work:</strong> {currentSprint.stories.length ? currentSprint.stories.map((story) => story.title).join(" · ") : "No stories assigned."}</p>{currentSprintPlan?.items.some((item) => item.carryoverReason) && <p className="mt-1"><strong>Carryover:</strong> {currentSprintPlan.items.filter((item) => item.carryoverReason).length} item(s) have a recorded reason.</p>}</div>}
+      </Section>
+
+      <Section title="Backlog priorities">
+        {latestPriority.length ? <ol className="space-y-1.5 text-sm text-neutral-600">{latestPriority.slice(0, 8).map((item, index) => <li key={item.id}>{index + 1}. <strong>{item.entityType}</strong> · {item.moscow.replaceAll("_", " ")} · {item.roadmapLane.replaceAll("_", " ")} · score {item.dependencyAdjustedScore}<span className="block pl-4 text-xs text-neutral-500">{item.reason}</span></li>)}</ol> : <p className="text-sm text-neutral-500">No Product Owner priority decisions have been recorded.</p>}
+      </Section>
+
+      <Section title="Quality, risks, and blockers">
+        <div className="grid gap-3 sm:grid-cols-3"><Stat label="Open bugs" value={String(openBugs.length)} /><Stat label="High / critical bugs" value={String(severeBugs.length)} /><Stat label="Active blockers" value={String(blockers.length)} /></div>
+        <div className="mt-4 grid gap-4 sm:grid-cols-2"><div><h3 className="text-sm font-semibold">Quality</h3>{openBugs.length ? <ul className="mt-2 space-y-1 text-sm text-neutral-600">{openBugs.slice(0, 6).map((bug) => <li key={bug.id}><strong>{bug.severity}</strong> · {requestTitle(bug.request.data)} · {bug.status}</li>)}</ul> : <p className="mt-2 text-sm text-neutral-500">No open bugs.</p>}</div><div><h3 className="text-sm font-semibold">Scope and delivery risk</h3>{risks.length || blockers.length ? <ul className="mt-2 space-y-1 text-sm text-neutral-600">{criticalRisks.slice(0, 4).map((risk) => <li key={risk.id}><strong>{risk.severity}</strong> · {risk.description}</li>)}{blockers.slice(0, 4).map((blocker) => <li key={blocker.id}><strong>blocker</strong> · {blocker.description} · {blocker.status}</li>)}</ul> : <p className="mt-2 text-sm text-neutral-500">No active risks or blockers.</p>}</div></div>
       </Section>
 
       {/* Scope */}

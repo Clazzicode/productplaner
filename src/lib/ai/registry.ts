@@ -19,6 +19,30 @@ import type { ContextLayer } from "./context/types";
 
 const AI_CAPABILITIES: AiCapabilityConfig[] = [
   {
+    action: "SUMMARIZE_FEEDBACK", enabled: true, maxOutputTokens: 1200,
+    userMonthlyLimit: 30, organizationMonthlyLimit: 300,
+    description: "Summarizes supplied feedback and identifies source-grounded themes without creating or changing planning records.",
+    maxContextTokens: 5000, requiredContextLayers: ["task"], optionalContextLayers: ["initiative"], outputType: "feedback_summary", reusable: true,
+  },
+  {
+    action: "RECOMMEND_REPRIORITIZATION", enabled: true, maxOutputTokens: 1500,
+    userMonthlyLimit: 20, organizationMonthlyLimit: 200,
+    description: "Suggests explainable reprioritization for one explicitly linked backlog item; an authorized PO or admin must create and apply any proposal.",
+    maxContextTokens: 6000, requiredContextLayers: ["task"], optionalContextLayers: ["initiative"], outputType: "reprioritization_recommendation", reusable: true,
+  },
+  {
+    action: "DRAFT_RELEASE_SUMMARY", enabled: true, maxOutputTokens: 1400,
+    userMonthlyLimit: 20, organizationMonthlyLimit: 200,
+    description: "Drafts a release-readiness summary and stakeholder communication from frozen deterministic gates without deciding readiness or approval.",
+    maxContextTokens: 6000, requiredContextLayers: ["task"], optionalContextLayers: ["initiative"], outputType: "release_readiness_draft", reusable: true,
+  },
+  {
+    action: "DRAFT_VALIDATION_EVIDENCE", enabled: true, maxOutputTokens: 1200,
+    userMonthlyLimit: 20, organizationMonthlyLimit: 200,
+    description: "Summarizes supplied delivery evidence against immutable story and acceptance-criteria snapshots without making validation decisions.",
+    maxContextTokens: 5000, requiredContextLayers: ["task"], optionalContextLayers: ["initiative"], outputType: "validation_evidence_draft", reusable: true,
+  },
+  {
     action: "ANALYZE_INTAKE",
     enabled: true,
     maxOutputTokens: 4096,
@@ -214,6 +238,19 @@ const AI_CAPABILITIES: AiCapabilityConfig[] = [
     requiredContextLayers: ["task"],
     optionalContextLayers: ["initiative"],
     outputType: "demo_content_draft",
+    reusable: true,
+  },
+  {
+    action: "DRAFT_SPRINT_REVIEW",
+    enabled: true,
+    maxOutputTokens: 1500,
+    userMonthlyLimit: 20,
+    organizationMonthlyLimit: 200,
+    description: "Drafts a sprint-review summary and proposed follow-up items from the recorded agenda, notes, outcomes, decisions, and actions. It cannot finalize the review or create authoritative decisions.",
+    maxContextTokens: 6000,
+    requiredContextLayers: ["task"],
+    optionalContextLayers: ["initiative"],
+    outputType: "sprint_review_draft",
     reusable: true,
   },
 ];

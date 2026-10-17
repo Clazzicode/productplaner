@@ -254,4 +254,180 @@ describe.sequential("migration replay and real PostgreSQL RLS", () => {
     await expect(asUser(authA, () => pg.exec(`UPDATE "DemoAiSuggestion" SET status='used' WHERE id='demo-ai-a'`))).rejects.toThrow();
   });
 
+  it("isolates sprint reviews and protects final snapshots, revisions, and AI evidence", async () => {
+    await asUser(authA, () => pg.exec(`
+      UPDATE "DemoItem" SET purpose='Explain customer value', "presenterNameSnapshot"='Avery', "completedWork"='The story is complete',
+        status='ready', "readinessReason"='Evidence reviewed', "decidedByUserId"='user-org-a', "decidedAt"=now(), revision=2
+      WHERE id='demo-a';
+      INSERT INTO "PlanningMeeting" (id,"organizationId","projectId","initiativeId","meetingType","sprintId",title,purpose,"createdByUserId","updatedAt")
+      VALUES ('review-meeting-a','org-a','project-a','init-a','sprint_review','sprint-a','Sprint 1 Review','Review delivered value','user-org-a',now());
+      INSERT INTO "PlanningMeetingWorkItem" (id,"organizationId","meetingId","demoItemId")
+      VALUES ('review-work-a','org-a','review-meeting-a','demo-a');
+      INSERT INTO "SprintReview" (id,"organizationId","projectId","initiativeId","sprintId","meetingId","draftSnapshot","createdByUserId","updatedAt")
+      VALUES ('review-a','org-a','project-a','init-a','sprint-a','review-meeting-a','{"readyDemos":[{"id":"demo-a"}]}','user-org-a',now());
+      INSERT INTO "SprintReviewRevision" (id,"organizationId","reviewId","fromRevision","toRevision","previousData","nextData",reason,"actorUserId")
+      VALUES ('review-revision-a','org-a','review-a',1,2,'{}','{}','Final review approved','user-org-a');
+      INSERT INTO "SprintReviewAiSuggestion" (id,"organizationId","reviewId",kind,fingerprint,content,"informationUsed","generatedByUserId")
+      VALUES ('review-ai-a','org-a','review-a','summary',repeat('9',64),'The sprint delivered the planned story.','Committed sprint and demo evidence','user-org-a');
+      UPDATE "SprintReview" SET status='finalized', "finalSnapshot"='{"readyDemos":[{"id":"demo-a"}],"summary":"Approved"}', "finalizedByUserId"='user-org-a', "finalizedAt"=now(), revision=2 WHERE id='review-a';
+    `));
+    expect((await asUser(authB, () => pg.query(`SELECT id FROM "SprintReview" WHERE id='review-a'`))).rows).toEqual([]);
+    await expect(asUser(authA, () => pg.exec(`UPDATE "SprintReview" SET "finalSnapshot"='{"forged":true}' WHERE id='review-a'`))).rejects.toThrow();
+    expect((await asUser(authA, () => pg.query(`UPDATE "SprintReviewRevision" SET reason='Forged' WHERE id='review-revision-a' RETURNING id`))).rows).toEqual([]);
+    await expect(asUser(authA, () => pg.exec(`UPDATE "SprintReviewAiSuggestion" SET content='Forged' WHERE id='review-ai-a'`))).rejects.toThrow();
+    await asUser(authA, () => pg.exec(`UPDATE "SprintReviewAiSuggestion" SET status='dismissed', "actedByUserId"='user-org-a', "actedAt"=now() WHERE id='review-ai-a'`));
+    await expect(asUser(authA, () => pg.exec(`UPDATE "SprintReviewAiSuggestion" SET status='used' WHERE id='review-ai-a'`))).rejects.toThrow();
+    await expect(asUser(authA, () => pg.exec(`
+      INSERT INTO "PlanningMeetingWorkItem" (id,"organizationId","meetingId","storyId")
+      VALUES ('review-work-cross','org-a','review-meeting-a','artifact-b')
+    `))).rejects.toThrow();
+    expect((await asUser(authA, () => pg.query(`SELECT "meetingType" FROM "PlanningMeeting" WHERE "sourceRefinementSessionId"='session-a'`))).rows).toEqual([{ meetingType: "refinement" }]);
+  });
+
+  it("isolates PO validation and preserves final decisions, criterion versions, and AI evidence", async () => {
+    await asUser(authA, () => pg.exec(`
+      UPDATE "DemoItem" SET status='demonstrated', "decidedByUserId"='user-org-a', "decidedAt"=now() WHERE id='demo-a';
+      INSERT INTO "ProductValidation" (id,"organizationId","projectId","initiativeId","sprintId","storyId","demoItemId","sprintReviewId",status,"storyVersion","storySnapshot",sequence,"createdByUserId","updatedAt")
+      VALUES ('validation-a','org-a','project-a','init-a','sprint-a','story-a','demo-a','review-a','pending',1,'{"title":"Story A","version":1}',1,'user-org-a',now());
+      INSERT INTO "ValidationCriterionResult" (id,"organizationId","validationId","criterionId","criterionVersion","criterionSnapshot","updatedAt")
+      VALUES ('validation-criterion-a','org-a','validation-a','criterion-a',1,'{"title":"Criterion A","version":1}',now());
+      INSERT INTO "ValidationAiSuggestion" (id,"organizationId","validationId",fingerprint,content,"informationUsed",model,"generatedByUserId")
+      VALUES ('validation-ai-a','org-a','validation-a',repeat('7',64),'Evidence summary only.','Story, criteria, and evidence','gpt-test','user-org-a');
+    `));
+    expect((await asUser(authB, () => pg.query(`SELECT id FROM "ProductValidation" WHERE id='validation-a'`))).rows).toEqual([]);
+    await expect(asUser(authA, () => pg.exec(`
+      INSERT INTO "ValidationCriterionResult" (id,"organizationId","validationId","criterionId","criterionVersion","criterionSnapshot","updatedAt")
+      VALUES ('validation-criterion-cross','org-a','validation-a','artifact-b',1,'{}',now())
+    `))).rejects.toThrow();
+    await asUser(authA, () => pg.exec(`
+      UPDATE "ValidationCriterionResult" SET result='met', "evidenceNotes"='Observed in review' WHERE id='validation-criterion-a';
+      INSERT INTO "ProductValidationRevision" (id,"organizationId","validationId","fromRevision","toRevision","previousData","nextData",reason,"actorUserId")
+      VALUES ('validation-revision-a','org-a','validation-a',1,2,'{}','{}','PO accepted delivery','user-org-a');
+      UPDATE "ProductValidation" SET status='accepted', "decisionReason"='All approved outcomes were demonstrated.', "finalizedByUserId"='user-org-a', "finalizedAt"=now(), revision=2 WHERE id='validation-a';
+    `));
+    await expect(asUser(authA, () => pg.exec(`UPDATE "ProductValidation" SET "decisionReason"='Changed later' WHERE id='validation-a'`))).rejects.toThrow();
+    await expect(asUser(authA, () => pg.exec(`UPDATE "ValidationCriterionResult" SET result='not_met' WHERE id='validation-criterion-a'`))).rejects.toThrow();
+    expect((await asUser(authA, () => pg.query(`UPDATE "ProductValidationRevision" SET reason='Forged' WHERE id='validation-revision-a' RETURNING id`))).rows).toEqual([]);
+    await expect(asUser(authA, () => pg.exec(`UPDATE "ValidationAiSuggestion" SET content='Forged' WHERE id='validation-ai-a'`))).rejects.toThrow();
+    await asUser(authA, () => pg.exec(`UPDATE "ValidationAiSuggestion" SET status='dismissed', "actedByUserId"='user-org-a', "actedAt"=now() WHERE id='validation-ai-a'`));
+    await expect(asUser(authA, () => pg.exec(`UPDATE "ValidationAiSuggestion" SET status='used' WHERE id='validation-ai-a'`))).rejects.toThrow();
+  });
+
+  it("isolates release readiness and preserves approved evidence and history", async () => {
+    await asUser(authA, () => pg.exec(`
+      INSERT INTO "Release" (id,"prototypeId",name,"phaseNumber","targetDate","order")
+      VALUES ('release-readiness-a','proto-a','Release readiness',1,now() + interval '14 days',99);
+      INSERT INTO "ReleaseReadinessAssessment" (id,"organizationId","projectId","initiativeId","releaseId",sequence,status,"releaseSnapshot","createdByUserId","updatedAt")
+      VALUES ('release-assessment-a','org-a','project-a','init-a','release-readiness-a',1,'draft','{"release":{"name":"Release readiness"}}','user-org-a',now());
+      INSERT INTO "ReleaseReadinessCheck" (id,"organizationId","assessmentId","checkKey",label,status,explanation,"updatedAt")
+      VALUES ('release-check-a','org-a','release-assessment-a','quality','Quality','pass','No severe open bugs',now());
+      INSERT INTO "ReleaseReadinessRevision" (id,"organizationId","assessmentId","fromRevision","toRevision","previousData","nextData",reason,"actorUserId")
+      VALUES ('release-revision-a','org-a','release-assessment-a',1,2,'{}','{}','Release evidence reviewed','user-org-a');
+      INSERT INTO "ReleaseReadinessAiSuggestion" (id,"organizationId","assessmentId",fingerprint,summary,"stakeholderCommunication","informationUsed",model,"generatedByUserId")
+      VALUES ('release-ai-a','org-a','release-assessment-a',repeat('6',64),'Draft summary only.','Draft stakeholder update.','Frozen release checks','gpt-test','user-org-a');
+      INSERT INTO "PlanningRequest" (id,"initiativeId",data,"updatedAt")
+      VALUES ('release-follow-up-request-a','init-a','{"title":"Resolve release quality gate"}',now());
+      INSERT INTO "ReleaseReadinessFollowUp" (id,"organizationId","assessmentId","checkKey","planningRequestId","createdByUserId")
+      VALUES ('release-follow-up-a','org-a','release-assessment-a','quality','release-follow-up-request-a','user-org-a');
+    `));
+    expect((await asUser(authB, () => pg.query(`SELECT id FROM "ReleaseReadinessAssessment" WHERE id='release-assessment-a'`))).rows).toEqual([]);
+    expect((await asUser(authB, () => pg.query(`SELECT id FROM "ReleaseReadinessFollowUp" WHERE id='release-follow-up-a'`))).rows).toEqual([]);
+    await expect(asUser(authA, () => pg.exec(`
+      INSERT INTO "ReleaseReadinessCheck" (id,"organizationId","assessmentId","checkKey",label,status,explanation,"updatedAt")
+      VALUES ('release-check-cross','org-b','release-assessment-a','cross','Cross tenant','pass','Forged',now())
+    `))).rejects.toThrow();
+    await expect(asUser(authA, () => pg.exec(`INSERT INTO "ReleaseReadinessFollowUp" (id,"organizationId","assessmentId","checkKey","planningRequestId","createdByUserId") VALUES ('release-follow-up-cross','org-b','release-assessment-a','cross','release-follow-up-request-a','user-org-a')`))).rejects.toThrow();
+    expect((await asUser(authA, () => pg.query(`UPDATE "ReleaseReadinessFollowUp" SET "checkKey"='changed' WHERE id='release-follow-up-a' RETURNING id`))).rows).toEqual([]);
+    await asUser(authA, () => pg.exec(`UPDATE "ReleaseReadinessAssessment" SET status='approved', "decisionReason"='PO approved frozen evidence', "approvedByUserId"='user-org-a', "approvedAt"=now(), revision=2 WHERE id='release-assessment-a'`));
+    await expect(asUser(authA, () => pg.exec(`UPDATE "ReleaseReadinessAssessment" SET "decisionReason"='Changed later' WHERE id='release-assessment-a'`))).rejects.toThrow();
+    await expect(asUser(authA, () => pg.exec(`UPDATE "ReleaseReadinessCheck" SET status='fail' WHERE id='release-check-a'`))).rejects.toThrow();
+    expect((await asUser(authA, () => pg.query(`UPDATE "ReleaseReadinessRevision" SET reason='Forged' WHERE id='release-revision-a' RETURNING id`))).rows).toEqual([]);
+  });
+
+  it("isolates feedback, enforces duplicate protection, and preserves reprioritization decisions", async () => {
+    await asUser(authA, () => pg.exec(`
+      INSERT INTO "FeedbackRecord" (id,"organizationId","projectId","initiativeId",title,details,source,category,"dedupeKey","createdByUserId","updatedAt")
+      VALUES ('feedback-a','org-a','project-a','init-a','Reporting feedback','Customers cannot find reports.','customer','usability',repeat('5',64),'user-org-a',now());
+      INSERT INTO "FeedbackRevision" (id,"organizationId","feedbackId","fromRevision","toRevision","previousData","nextData",reason,"actorUserId")
+      VALUES ('feedback-revision-a','org-a','feedback-a',1,2,'{}','{}','Feedback triaged','user-org-a');
+      INSERT INTO "ReprioritizationProposal" (id,"organizationId","feedbackId","entityType","entityId","expectedEntityRevision","currentPrioritySnapshot","proposedFactors",moscow,"roadmapLane",rationale,"createdByUserId","updatedAt")
+      VALUES ('feedback-proposal-a','org-a','feedback-a','feature','capability-a',1,'{}','{"businessValue":5,"urgency":4,"userImpact":5,"dependencyImpact":3,"risk":3,"effort":3,"effortPoints":3,"bugSeverity":"not_applicable"}','must','now','Repeated customer feedback','user-org-a',now());
+      INSERT INTO "FeedbackAiSuggestion" (id,"organizationId","feedbackId",kind,fingerprint,content,"informationUsed",model,"generatedByUserId")
+      VALUES ('feedback-ai-a','org-a','feedback-a','summary',repeat('4',64),'{"summary":"Customers cannot locate reports."}','Feedback details','gpt-test','user-org-a');
+    `));
+    expect((await asUser(authB, () => pg.query(`SELECT id FROM "FeedbackRecord" WHERE id='feedback-a'`))).rows).toEqual([]);
+    await expect(asUser(authA, () => pg.exec(`
+      INSERT INTO "FeedbackRecord" (id,"organizationId","projectId","initiativeId",title,details,source,"dedupeKey","createdByUserId","updatedAt")
+      VALUES ('feedback-duplicate','org-a','project-a','init-a','Duplicate','Duplicate','manual',repeat('5',64),'user-org-a',now())
+    `))).rejects.toThrow();
+    await expect(asUser(authA, () => pg.exec(`INSERT INTO "FeedbackRevision" (id,"organizationId","feedbackId","fromRevision","toRevision","previousData","nextData",reason) VALUES ('feedback-revision-cross','org-b','feedback-a',2,3,'{}','{}','Forged history')`))).rejects.toThrow();
+    await asUser(authA, () => pg.exec(`UPDATE "ReprioritizationProposal" SET status='dismissed', "decisionReason"='PO retained current priority', "decidedByUserId"='user-org-a', "decidedAt"=now(), revision=2 WHERE id='feedback-proposal-a'`));
+    await expect(asUser(authA, () => pg.exec(`UPDATE "ReprioritizationProposal" SET rationale='Changed later' WHERE id='feedback-proposal-a'`))).rejects.toThrow();
+    expect((await asUser(authA, () => pg.query(`UPDATE "FeedbackRevision" SET reason='Forged' WHERE id='feedback-revision-a' RETURNING id`))).rows).toEqual([]);
+  });
+
+  it("isolates Jira credentials and previews while preventing OAuth-state replay", async () => {
+    await asUser(authA, () => pg.exec(`
+      INSERT INTO "JiraConnection" (id,"organizationId","initiativeId","configuredByUserId",status,"cloudId","projectId","projectKey","accessTokenCiphertext","refreshTokenCiphertext","tokenExpiresAt",scopes,"updatedAt")
+      VALUES ('jira-a','org-a','init-a','user-org-a','connected','cloud-a','project-jira','GP','v1:encrypted-access-token-value','v1:encrypted-refresh-token-value',now() + interval '1 hour','read:jira-work',now());
+      INSERT INTO "JiraOAuthState" (id,"stateHash","organizationId","initiativeId","userId","expiresAt")
+      VALUES ('jira-state-a',repeat('a',64),'org-a','init-a','user-org-a',now() + interval '10 minutes');
+      INSERT INTO "JiraImportRun" (id,"organizationId","initiativeId","connectionId",jql,"sourceFingerprint","initiatedByUserId","updatedAt")
+      VALUES ('jira-run-a','org-a','init-a','jira-a','project = GP',repeat('b',64),'user-org-a',now());
+      INSERT INTO "JiraImportItem" (id,"organizationId","importRunId","externalIssueId","externalKey","issueTypeId","issueTypeName","targetType",summary,"sourceSnapshot","sourceHash",action,"updatedAt")
+      VALUES ('jira-item-a','org-a','jira-run-a','10001','GP-1','10000','Story','story','Imported story','{}',repeat('c',64),'create',now());
+    `));
+    expect((await asUser(authB, () => pg.query(`SELECT id FROM "JiraConnection" WHERE id='jira-a'`))).rows).toEqual([]);
+    expect((await asUser(authB, () => pg.query(`SELECT id FROM "JiraImportItem" WHERE id='jira-item-a'`))).rows).toEqual([]);
+    await expect(asUser(authA, () => pg.exec(`
+      INSERT INTO "JiraConnection" (id,"organizationId","initiativeId","configuredByUserId","accessTokenCiphertext","refreshTokenCiphertext","tokenExpiresAt",scopes,"updatedAt")
+      VALUES ('jira-cross','org-a','init-b','user-org-a','v1:encrypted-access-token-value','v1:encrypted-refresh-token-value',now() + interval '1 hour','read:jira-work',now())
+    `))).rejects.toThrow();
+    await asUser(authA, () => pg.exec(`UPDATE "JiraOAuthState" SET "consumedAt"=now() WHERE id='jira-state-a'`));
+    await expect(asUser(authA, () => pg.exec(`UPDATE "JiraOAuthState" SET "returnPath"='/integrations/jira?replay=1' WHERE id='jira-state-a'`))).rejects.toThrow();
+    await expect(asUser(authA, () => pg.exec(`INSERT INTO "JiraImportItem" (id,"organizationId","importRunId","externalIssueId","externalKey","issueTypeId","issueTypeName","targetType",summary,"sourceSnapshot","sourceHash",action,"updatedAt") VALUES ('jira-item-cross','org-b','jira-run-a','10002','GP-2','10000','Story','story','Forged','{}',repeat('d',64),'create',now())`))).rejects.toThrow();
+  });
+
+  it("isolates Jira exports and freezes approved payloads", async () => {
+    await asUser(authA, () => pg.exec(`
+      INSERT INTO "JiraExportRun" (id,"organizationId","initiativeId","connectionId","sourceFingerprint","itemCount","createCount","initiatedByUserId","updatedAt")
+      VALUES ('jira-export-a','org-a','init-a','jira-a',repeat('e',64),1,1,'user-org-a',now());
+      INSERT INTO "JiraExportItem" (id,"organizationId","exportRunId","targetType","targetId",summary,action,"requestPayload","targetFingerprint","idempotencyKey","updatedAt")
+      VALUES ('jira-export-item-a','org-a','jira-export-a','feature','capability-a','Approved feature','create','{"fields":{"summary":"Approved feature"}}',repeat('f',64),repeat('1',64),now());
+      UPDATE "JiraExportRun" SET status='approved' WHERE id='jira-export-a';
+      INSERT INTO "JiraExportApproval" (id,"organizationId","exportRunId","selectedItemIds",reason,"snapshotHash","approvedByUserId")
+      VALUES ('jira-export-approval-a','org-a','jira-export-a','["jira-export-item-a"]','PO reviewed the frozen export.',repeat('2',64),'user-org-a');
+    `));
+    expect((await asUser(authB, () => pg.query(`SELECT id FROM "JiraExportItem" WHERE id='jira-export-item-a'`))).rows).toEqual([]);
+    expect((await asUser(authB, () => pg.query(`SELECT id FROM "JiraExportApproval" WHERE id='jira-export-approval-a'`))).rows).toEqual([]);
+    expect((await asUser(authA, () => pg.query(`UPDATE "JiraExportApproval" SET reason='Forged' WHERE id='jira-export-approval-a' RETURNING id`))).rows).toEqual([]);
+    await expect(asUser(authA, () => pg.exec(`UPDATE "JiraExportItem" SET "requestPayload"='{"fields":{"summary":"Forged"}}' WHERE id='jira-export-item-a'`))).rejects.toThrow();
+    await expect(asUser(authA, () => pg.exec(`INSERT INTO "JiraExportItem" (id,"organizationId","exportRunId","targetType","targetId",summary,action,"requestPayload","targetFingerprint","idempotencyKey","updatedAt") VALUES ('jira-export-cross','org-b','jira-export-a','feature','capability-a','Forged','create','{}',repeat('3',64),repeat('4',64),now())`))).rejects.toThrow();
+    await asUser(authA, () => pg.exec(`UPDATE "JiraExportRun" SET status='completed', "executedAt"=now() WHERE id='jira-export-a'`));
+    await expect(asUser(authA, () => pg.exec(`UPDATE "JiraExportRun" SET "failureMessage"='Changed later' WHERE id='jira-export-a'`))).rejects.toThrow();
+  });
+
+  it("deduplicates Jira webhooks, leases durable jobs, and preserves conflict decisions", async () => {
+    await asUser(authA, () => pg.exec(`
+      INSERT INTO "JiraWebhookSubscription" (id,"organizationId","connectionId","externalId","callbackSecretHash","expiresAt","updatedAt")
+      VALUES ('jira-hook-a','org-a','jira-a','9001',repeat('a',64),now()+interval '30 days',now());
+      INSERT INTO "JiraExternalLink" (id,"organizationId","initiativeId","connectionId","externalIssueId","externalKey","issueTypeName","targetType","targetId","sourceHash","targetFingerprint","lastImportedSnapshot","updatedAt")
+      VALUES ('jira-link-a','org-a','init-a','jira-a','10010','GP-10','Epic','feature','capability-a',repeat('b',64),repeat('c',64),'{}',now());
+      INSERT INTO "JiraSyncConflict" (id,"organizationId","initiativeId","connectionId","externalLinkId","targetType","targetId","externalIssueId","externalKey","baselineSourceHash","baselineTargetHash","jiraFingerprint","planningFingerprint","jiraSnapshot",explanation,"updatedAt")
+      VALUES ('jira-conflict-a','org-a','init-a','jira-a','jira-link-a','feature','capability-a','10010','GP-10',repeat('b',64),repeat('c',64),repeat('d',64),repeat('e',64),'{}','Both sides changed.',now());
+    `));
+    const first = await asUser(authA, () => pg.query(`SELECT * FROM app_private.enqueue_jira_webhook('jira-a',repeat('a',64),'event-1','jira:issue_updated','10010','GP-10',repeat('f',64),'{}')`)) as unknown as { rows: { created: boolean }[] };
+    const duplicate = await asUser(authA, () => pg.query(`SELECT * FROM app_private.enqueue_jira_webhook('jira-a',repeat('a',64),'event-1','jira:issue_updated','10010','GP-10',repeat('f',64),'{}')`)) as unknown as { rows: { created: boolean }[] };
+    expect(first.rows[0]?.created).toBe(true);
+    expect(duplicate.rows[0]?.created).toBe(false);
+    expect((await asUser(authA, () => pg.query(`SELECT id FROM "JiraSyncJob" WHERE "connectionId"='jira-a' AND "jobType"='webhook_import'`))).rows).toHaveLength(1);
+    await expect(asUser(authA, () => pg.query(`SELECT * FROM app_private.enqueue_jira_webhook('jira-a',repeat('0',64),'event-2','jira:issue_updated',NULL,NULL,repeat('1',64),'{}')`))).rejects.toThrow();
+    const claimed = await asUser(authA, () => pg.query(`SELECT * FROM app_private.claim_jira_jobs('worker-a',10,'org-a')`)) as unknown as { rows: { connection_id: string; actor_auth_user_id: string }[] };
+    expect(claimed.rows.some((row) => row.connection_id === 'jira-a' && row.actor_auth_user_id === authA)).toBe(true);
+    expect((await asUser(authB, () => pg.query(`SELECT id FROM "JiraWebhookEvent" WHERE "connectionId"='jira-a'`))).rows).toEqual([]);
+    await expect(asUser(authA, () => pg.exec(`INSERT INTO "JiraWebhookEvent" (id,"organizationId","connectionId","externalEventId","eventType","payloadHash",payload) VALUES ('jira-event-cross','org-b','jira-a','cross','updated',repeat('2',64),'{}')`))).rejects.toThrow();
+    await asUser(authA, () => pg.exec(`UPDATE "JiraSyncConflict" SET status='resolved',resolution='keep_planning',"resolutionReason"='PO retained the planning version.',"resolvedByUserId"='user-org-a',"resolvedAt"=now() WHERE id='jira-conflict-a'`));
+    await expect(asUser(authA, () => pg.exec(`UPDATE "JiraSyncConflict" SET explanation='Forged later' WHERE id='jira-conflict-a'`))).rejects.toThrow();
+  });
+
 });

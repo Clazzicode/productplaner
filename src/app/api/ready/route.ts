@@ -15,7 +15,18 @@ async function GETHandler() {
       SELECT NOT (rolsuper OR rolbypassrls) AND current_user = 'app_rw'
         AND to_regclass('public."PlanApproval"') IS NOT NULL
         AND to_regprocedure('app_private.check_rate_limit(text,text,integer,integer)') IS NOT NULL
-        AND to_regclass('public."AuditEvent"') IS NOT NULL AS safe
+        AND to_regclass('public."AuditEvent"') IS NOT NULL
+        AND to_regclass('public."StakeholderContact"') IS NOT NULL
+        AND to_regclass('public."InSprintClarification"') IS NOT NULL
+        AND to_regclass('public."DemoItem"') IS NOT NULL
+        AND to_regclass('public."SprintReview"') IS NOT NULL
+        AND to_regclass('public."ProductValidation"') IS NOT NULL
+        AND to_regclass('public."ReleaseReadinessAssessment"') IS NOT NULL
+        AND to_regclass('public."FeedbackRecord"') IS NOT NULL
+        AND to_regclass('public."JiraConnection"') IS NOT NULL
+        AND to_regclass('public."JiraExportApproval"') IS NOT NULL
+        AND to_regclass('public."JiraSyncJob"') IS NOT NULL
+        AND to_regprocedure('app_private.claim_jira_jobs(text,integer,text)') IS NOT NULL AS safe
       FROM pg_roles WHERE rolname = current_user`;
     if (!rows[0]?.safe) throw new Error("Database not ready");
     return Response.json(
