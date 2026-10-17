@@ -25,7 +25,8 @@ export type AiActionKey =
   | "RECOMMEND_PRIORITY"
   | "DRAFT_CLARIFICATION"
   | "DRAFT_DEMO_CONTENT"
-  | "DRAFT_SPRINT_REVIEW";
+  | "DRAFT_SPRINT_REVIEW"
+  | "DRAFT_VALIDATION_EVIDENCE";
 
 export interface AiCapabilityConfig {
   action: AiActionKey;

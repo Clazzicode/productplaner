@@ -56,6 +56,10 @@ interface AssistActionCopy {
 }
 
 export const AI_ASSIST_ACTION_COPY: Record<AiActionKey, AssistActionCopy> = {
+  DRAFT_VALIDATION_EVIDENCE: {
+    title: "Summarize validation evidence",
+    explanation: "Compares supplied delivery evidence with the frozen story and criteria snapshots, identifies missing evidence, and drafts notes for review. It cannot mark criteria or decide acceptance.",
+  },
   DRAFT_SPRINT_REVIEW: {
     title: "Draft sprint review summary",
     explanation: "Uses the sprint-review agenda, recorded notes, outcomes, decisions, and follow-ups to draft a concise summary and possible follow-up items. Every suggestion requires review and cannot finalize the review.",

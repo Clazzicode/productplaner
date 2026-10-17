@@ -284,4 +284,33 @@ describe.sequential("migration replay and real PostgreSQL RLS", () => {
     expect((await asUser(authA, () => pg.query(`SELECT "meetingType" FROM "PlanningMeeting" WHERE "sourceRefinementSessionId"='session-a'`))).rows).toEqual([{ meetingType: "refinement" }]);
   });
 
+  it("isolates PO validation and preserves final decisions, criterion versions, and AI evidence", async () => {
+    await asUser(authA, () => pg.exec(`
+      UPDATE "DemoItem" SET status='demonstrated', "decidedByUserId"='user-org-a', "decidedAt"=now() WHERE id='demo-a';
+      INSERT INTO "ProductValidation" (id,"organizationId","projectId","initiativeId","sprintId","storyId","demoItemId","sprintReviewId",status,"storyVersion","storySnapshot",sequence,"createdByUserId","updatedAt")
+      VALUES ('validation-a','org-a','project-a','init-a','sprint-a','story-a','demo-a','review-a','pending',1,'{"title":"Story A","version":1}',1,'user-org-a',now());
+      INSERT INTO "ValidationCriterionResult" (id,"organizationId","validationId","criterionId","criterionVersion","criterionSnapshot","updatedAt")
+      VALUES ('validation-criterion-a','org-a','validation-a','criterion-a',1,'{"title":"Criterion A","version":1}',now());
+      INSERT INTO "ValidationAiSuggestion" (id,"organizationId","validationId",fingerprint,content,"informationUsed",model,"generatedByUserId")
+      VALUES ('validation-ai-a','org-a','validation-a',repeat('7',64),'Evidence summary only.','Story, criteria, and evidence','gpt-test','user-org-a');
+    `));
+    expect((await asUser(authB, () => pg.query(`SELECT id FROM "ProductValidation" WHERE id='validation-a'`))).rows).toEqual([]);
+    await expect(asUser(authA, () => pg.exec(`
+      INSERT INTO "ValidationCriterionResult" (id,"organizationId","validationId","criterionId","criterionVersion","criterionSnapshot","updatedAt")
+      VALUES ('validation-criterion-cross','org-a','validation-a','artifact-b',1,'{}',now())
+    `))).rejects.toThrow();
+    await asUser(authA, () => pg.exec(`
+      UPDATE "ValidationCriterionResult" SET result='met', "evidenceNotes"='Observed in review' WHERE id='validation-criterion-a';
+      INSERT INTO "ProductValidationRevision" (id,"organizationId","validationId","fromRevision","toRevision","previousData","nextData",reason,"actorUserId")
+      VALUES ('validation-revision-a','org-a','validation-a',1,2,'{}','{}','PO accepted delivery','user-org-a');
+      UPDATE "ProductValidation" SET status='accepted', "decisionReason"='All approved outcomes were demonstrated.', "finalizedByUserId"='user-org-a', "finalizedAt"=now(), revision=2 WHERE id='validation-a';
+    `));
+    await expect(asUser(authA, () => pg.exec(`UPDATE "ProductValidation" SET "decisionReason"='Changed later' WHERE id='validation-a'`))).rejects.toThrow();
+    await expect(asUser(authA, () => pg.exec(`UPDATE "ValidationCriterionResult" SET result='not_met' WHERE id='validation-criterion-a'`))).rejects.toThrow();
+    expect((await asUser(authA, () => pg.query(`UPDATE "ProductValidationRevision" SET reason='Forged' WHERE id='validation-revision-a' RETURNING id`))).rows).toEqual([]);
+    await expect(asUser(authA, () => pg.exec(`UPDATE "ValidationAiSuggestion" SET content='Forged' WHERE id='validation-ai-a'`))).rejects.toThrow();
+    await asUser(authA, () => pg.exec(`UPDATE "ValidationAiSuggestion" SET status='dismissed', "actedByUserId"='user-org-a', "actedAt"=now() WHERE id='validation-ai-a'`));
+    await expect(asUser(authA, () => pg.exec(`UPDATE "ValidationAiSuggestion" SET status='used' WHERE id='validation-ai-a'`))).rejects.toThrow();
+  });
+
 });

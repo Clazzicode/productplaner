@@ -19,6 +19,12 @@ import type { ContextLayer } from "./context/types";
 
 const AI_CAPABILITIES: AiCapabilityConfig[] = [
   {
+    action: "DRAFT_VALIDATION_EVIDENCE", enabled: true, maxOutputTokens: 1200,
+    userMonthlyLimit: 20, organizationMonthlyLimit: 200,
+    description: "Summarizes supplied delivery evidence against immutable story and acceptance-criteria snapshots without making validation decisions.",
+    maxContextTokens: 5000, requiredContextLayers: ["task"], optionalContextLayers: ["initiative"], outputType: "validation_evidence_draft", reusable: true,
+  },
+  {
     action: "ANALYZE_INTAKE",
     enabled: true,
     maxOutputTokens: 4096,

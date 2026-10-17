@@ -12,6 +12,7 @@ export const BASE_TABS = [
   { slug: "sprints", label: "Sprints & Releases" },
   { slug: "demos", label: "Demos" },
   { slug: "sprint-review", label: "Sprint Review" },
+  { slug: "validation", label: "PO Validation" },
   { slug: "capacity", label: "Capacity & Cost" },
   { slug: "matrix", label: "Matrix Portal" },
   { slug: "executive", label: "Executive View" },
@@ -48,8 +49,8 @@ export default function NavTabs({
     ? BASE_TABS.filter((tab) => ["features", "epics", "refinement", "sprint-preparation", "documents"].includes(tab.slug))
     : currentSlug === "roadmap"
       ? BASE_TABS.filter((tab) => tab.slug === "roadmap")
-      : currentSlug === "sprints" || currentSlug === "demos" || currentSlug === "sprint-review"
-        ? BASE_TABS.filter((tab) => ["sprints", "demos", "sprint-review"].includes(tab.slug))
+      : currentSlug === "sprints" || currentSlug === "demos" || currentSlug === "sprint-review" || currentSlug === "validation"
+        ? BASE_TABS.filter((tab) => ["sprints", "demos", "sprint-review", "validation"].includes(tab.slug))
       : currentSlug === "matrix" || currentSlug === "executive"
         ? BASE_TABS.filter((tab) => tab.slug === "matrix" || tab.slug === "executive")
         : [];
