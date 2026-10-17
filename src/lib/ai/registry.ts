@@ -189,6 +189,20 @@ const AI_CAPABILITIES: AiCapabilityConfig[] = [
     outputType: "requirement_review",
     reusable: true,
   },
+  {
+    action: "DRAFT_CLARIFICATION",
+    enabled: true,
+    maxOutputTokens: 1200,
+    userMonthlyLimit: 30,
+    organizationMonthlyLimit: 300,
+    description:
+      "Drafts one concise Product Owner answer grounded only in the committed sprint item, approved criteria, recorded decisions, and the clarification question. It never submits or resolves the answer.",
+    maxContextTokens: 4000,
+    requiredContextLayers: ["task"],
+    optionalContextLayers: ["initiative"],
+    outputType: "clarification_answer_draft",
+    reusable: true,
+  },
 ];
 
 function toDbCreateData(c: AiCapabilityConfig) {

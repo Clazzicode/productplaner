@@ -60,6 +60,9 @@ model Organization {
   planningBlockerRevisions       PlanningBlockerRevision[]
   sprintReadinessAssessments     SprintReadinessAssessment[]
   sprintPlans                    SprintPlan[]
+  inSprintClarifications         InSprintClarification[]
+  clarificationRevisions         InSprintClarificationRevision[]
+  clarificationAiSuggestions     ClarificationAiSuggestion[]
   requestSourceRecords           RequestSourceRecord[]
   requestRevisions               RequestRevision[]
   priorityDecisions              PriorityDecision[]
@@ -167,6 +170,14 @@ model User {
   sprintReadinessDecisions       SprintReadinessAssessment[]     @relation("SprintReadinessDecidedBy")
   sprintPlansCreated             SprintPlan[]                    @relation("SprintPlanCreatedBy")
   sprintPlansCommitted           SprintPlan[]                    @relation("SprintPlanCommittedBy")
+  clarificationsRequested        InSprintClarification[]         @relation("ClarificationRequester")
+  clarificationsOwned            InSprintClarification[]         @relation("ClarificationOwner")
+  clarificationsAnswered         InSprintClarification[]         @relation("ClarificationAnsweredBy")
+  clarificationsAcknowledged     InSprintClarification[]         @relation("ClarificationAcknowledgedBy")
+  clarificationsResolved         InSprintClarification[]         @relation("ClarificationResolvedBy")
+  clarificationRevisions         InSprintClarificationRevision[] @relation("ClarificationRevisionActor")
+  clarificationSuggestionsMade   ClarificationAiSuggestion[]     @relation("ClarificationSuggestionGeneratedBy")
+  clarificationSuggestionsActed  ClarificationAiSuggestion[]     @relation("ClarificationSuggestionActedBy")
   createdAt                      DateTime                        @default(now())
 }
 
@@ -579,6 +590,7 @@ model Initiative {
   priorityDecisions          PriorityDecision[]
   stakeholderAssignments     StakeholderAssignment[]
   bugPlanningRecords         BugPlanningRecord[]
+  inSprintClarifications     InSprintClarification[]
   createdAt                  DateTime                    @default(now())
   updatedAt                  DateTime                    @updatedAt
 
@@ -610,24 +622,24 @@ model IntakeAnswerSet {
 }
 
 model Capability {
-  backlogLane                String                      @default("unscheduled")
-  backlogStatus              String                      @default("planned")
-  backlogRevision            Int                         @default(1)
+  backlogLane                String                  @default("unscheduled")
+  backlogStatus              String                  @default("planned")
+  backlogRevision            Int                     @default(1)
   backlogKey                 String?
   sourceRequests             PlanningRequest[]
   ownerUserId                String?
-  owner                      User?                       @relation("CapabilityOwner", fields: [ownerUserId], references: [id], onDelete: SetNull)
+  owner                      User?                   @relation("CapabilityOwner", fields: [ownerUserId], references: [id], onDelete: SetNull)
   releaseId                  String?
-  release                    Release?                    @relation("ReleaseFeatures", fields: [releaseId], references: [id], onDelete: SetNull)
-  id                         String                      @id @default(cuid())
+  release                    Release?                @relation("ReleaseFeatures", fields: [releaseId], references: [id], onDelete: SetNull)
+  id                         String                  @id @default(cuid())
   intakeAnswerSetId          String
-  intakeAnswerSet            IntakeAnswerSet             @relation(fields: [intakeAnswerSetId], references: [id], onDelete: Cascade)
+  intakeAnswerSet            IntakeAnswerSet         @relation(fields: [intakeAnswerSetId], references: [id], onDelete: Cascade)
   name                       String
-  description                String                      @default("")
+  description                String                  @default("")
   isMvp                      Boolean // Q4
   effortSize                 String // Q6: xs | s | m | l | xl
   businessValue              String // Q8: very_low | low | medium | high | critical (§2 five-level scale)
-  riskLevel                  String                      @default("medium") // §4: low | medium | high | critical
+  riskLevel                  String                  @default("medium") // §4: low | medium | high | critical
   mvpImportance              String? // §5 optional override: required_for_mvp | strongly_preferred | useful_not_required | future_enhancement | optional (derived from isMvp when null)
   manualPhaseOverride        Int? // Timeline drag-and-drop override (1/2/3); null = computed by partitionPhases. Ignored by partitionPhasesContinuousBacklog (agile_scrum).
   customerImpactScore        Int? // §2 optional weighted sub-factors, each 1-5
@@ -635,16 +647,16 @@ model Capability {
   strategicAlignmentScore    Int?
   riskComplianceScore        Int?
   businessValueScore         Float? // §2 computed weighted score, snapshotted only when sub-factors are used
-  order                      Int                         @default(0)
-  dependsOnEdges             CapabilityDependency[]      @relation("FromCapability")
-  dependedOnBy               CapabilityDependency[]      @relation("ToCapability")
+  order                      Int                     @default(0)
+  dependsOnEdges             CapabilityDependency[]  @relation("FromCapability")
+  dependedOnBy               CapabilityDependency[]  @relation("ToCapability")
   artifacts                  ArtifactLayer[]
   stakeholderAssignments     StakeholderAssignment[]
-  affectedBugPlanningRecords BugPlanningRecord[]         @relation("BugPlanningCapability")
-  predecessorDependencies    WorkDependency[]            @relation("DependencyPredecessorCapability")
-  dependentDependencies      WorkDependency[]            @relation("DependencyDependentCapability")
+  affectedBugPlanningRecords BugPlanningRecord[]     @relation("BugPlanningCapability")
+  predecessorDependencies    WorkDependency[]        @relation("DependencyPredecessorCapability")
+  dependentDependencies      WorkDependency[]        @relation("DependencyDependentCapability")
   planningBlockers           PlanningBlocker[]
-  createdAt                  DateTime                    @default(now())
+  createdAt                  DateTime                @default(now())
 
   @@unique([intakeAnswerSetId, backlogKey])
   @@index([intakeAnswerSetId])
@@ -810,6 +822,7 @@ model ArtifactLayer {
   updatedAt                  DateTime                    @updatedAt
   sprintReadinessAssessments SprintReadinessAssessment[]
   sprintPlanningItems        SprintPlanningItem[]
+  inSprintClarifications     InSprintClarification[]
 
   @@unique([prototypeId, type, dedupeKey])
   @@unique([prototypeId, type, externalRef])
@@ -923,6 +936,7 @@ model Sprint {
   planningBlockers           PlanningBlocker[]
   createdAt                  DateTime                @default(now())
   sprintPlan                 SprintPlan?
+  inSprintClarifications     InSprintClarification[]
 
   @@unique([prototypeId, sprintNumber])
 }
@@ -1351,6 +1365,7 @@ model PlanningRequest {
   revisions              RequestRevision[]
   stakeholderAssignments StakeholderAssignment[]
   bugPlanningRecord      BugPlanningRecord?
+  sourceClarifications   InSprintClarification[] @relation("ClarificationFollowUpRequest")
   createdAt              DateTime                @default(now())
   updatedAt              DateTime                @updatedAt
 
@@ -1572,6 +1587,7 @@ model BugPlanningRecord {
   updatedAt                  DateTime                    @updatedAt
   sprintReadinessAssessments SprintReadinessAssessment[]
   sprintPlanningItems        SprintPlanningItem[]
+  inSprintClarifications     InSprintClarification[]
 
   @@index([organizationId, initiativeId, archivedAt])
   @@index([initiativeId, severity, status])
@@ -1860,6 +1876,7 @@ model SprintReadinessAssessment {
   invalidatedAt    DateTime?
   createdAt        DateTime               @default(now())
   planningItems    SprintPlanningItem[]
+
   @@index([organizationId, initiativeId, createdAt])
   @@index([storyId, createdAt])
   @@index([bugId, createdAt])
@@ -1925,4 +1942,106 @@ model SprintPlanningItem {
   @@unique([sprintPlanId, bugId])
   @@index([storyId])
   @@index([bugId])
+}
+
+// Feature 14: a controlled Product Owner question/answer lifecycle for work
+// already committed to a sprint. This is deliberately not a chat model: one
+// row represents one clarification and its authoritative current state, while
+// immutable revisions retain every previous state.
+model InSprintClarification {
+  id                   String                          @id @default(cuid())
+  organizationId       String
+  organization         Organization                    @relation(fields: [organizationId], references: [id])
+  initiativeId         String
+  initiative           Initiative                      @relation(fields: [initiativeId], references: [id], onDelete: Cascade)
+  sprintId             String
+  sprint               Sprint                          @relation(fields: [sprintId], references: [id], onDelete: Restrict)
+  storyId              String?
+  story                ArtifactLayer?                  @relation(fields: [storyId], references: [id], onDelete: Restrict)
+  bugId                String?
+  bug                  BugPlanningRecord?              @relation(fields: [bugId], references: [id], onDelete: Restrict)
+  question             String
+  context              String                          @default("")
+  dedupeKey            String
+  status               String                          @default("open") // open | answered | acknowledged | resolved | withdrawn
+  urgency              String                          @default("normal") // low | normal | high | urgent
+  ownerUserId          String?
+  owner                User?                           @relation("ClarificationOwner", fields: [ownerUserId], references: [id], onDelete: SetNull)
+  requesterUserId      String
+  requester            User                            @relation("ClarificationRequester", fields: [requesterUserId], references: [id], onDelete: Restrict)
+  answer               String                          @default("")
+  rationale            String                          @default("")
+  impact               String                          @default("none") // none | clarification_only | acceptance_criteria_change | scope_change | estimate_impact | schedule_impact | follow_up_work
+  dueAt                DateTime?
+  externalReference    String?
+  followUpRequestId    String?
+  followUpRequest      PlanningRequest?                @relation("ClarificationFollowUpRequest", fields: [followUpRequestId], references: [id], onDelete: Restrict)
+  answeredByUserId     String?
+  answeredBy           User?                           @relation("ClarificationAnsweredBy", fields: [answeredByUserId], references: [id], onDelete: SetNull)
+  answeredAt           DateTime?
+  acknowledgedByUserId String?
+  acknowledgedBy       User?                           @relation("ClarificationAcknowledgedBy", fields: [acknowledgedByUserId], references: [id], onDelete: SetNull)
+  acknowledgedAt       DateTime?
+  resolvedByUserId     String?
+  resolvedBy           User?                           @relation("ClarificationResolvedBy", fields: [resolvedByUserId], references: [id], onDelete: SetNull)
+  resolvedAt           DateTime?
+  revision             Int                             @default(1)
+  revisions            InSprintClarificationRevision[]
+  aiSuggestions        ClarificationAiSuggestion[]
+  createdAt            DateTime                        @default(now())
+  updatedAt            DateTime                        @updatedAt
+
+  @@index([organizationId, initiativeId, status])
+  @@index([sprintId, status, createdAt])
+  @@index([storyId, status])
+  @@index([bugId, status])
+  @@index([ownerUserId, status])
+  @@index([requesterUserId, status])
+  @@index([followUpRequestId])
+}
+
+model InSprintClarificationRevision {
+  id              String                @id @default(cuid())
+  organizationId  String
+  organization    Organization          @relation(fields: [organizationId], references: [id])
+  clarificationId String
+  clarification   InSprintClarification @relation(fields: [clarificationId], references: [id], onDelete: Cascade)
+  fromRevision    Int
+  toRevision      Int
+  previousData    Json
+  nextData        Json
+  reason          String
+  actorUserId     String?
+  actor           User?                 @relation("ClarificationRevisionActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+  createdAt       DateTime              @default(now())
+
+  @@unique([clarificationId, toRevision])
+  @@index([organizationId, createdAt])
+  @@index([actorUserId, createdAt])
+}
+
+// Bounded, reusable AI draft for one clarification. A suggestion never edits
+// the authoritative answer. The Product Owner must explicitly use, edit, or
+// dismiss it before separately submitting an answer.
+model ClarificationAiSuggestion {
+  id                String                @id @default(cuid())
+  organizationId    String
+  organization      Organization          @relation(fields: [organizationId], references: [id])
+  clarificationId   String
+  clarification     InSprintClarification @relation(fields: [clarificationId], references: [id], onDelete: Cascade)
+  fingerprint       String
+  draftAnswer       String
+  informationUsed   String                @default("")
+  status            String                @default("proposed") // proposed | used | dismissed | stale
+  model             String                @default("")
+  generatedByUserId String
+  generatedBy       User                  @relation("ClarificationSuggestionGeneratedBy", fields: [generatedByUserId], references: [id], onDelete: Restrict)
+  actedByUserId     String?
+  actedBy           User?                 @relation("ClarificationSuggestionActedBy", fields: [actedByUserId], references: [id], onDelete: SetNull)
+  actedAt           DateTime?
+  createdAt         DateTime              @default(now())
+
+  @@unique([clarificationId, fingerprint])
+  @@index([organizationId, createdAt])
+  @@index([clarificationId, status, createdAt])
 }
