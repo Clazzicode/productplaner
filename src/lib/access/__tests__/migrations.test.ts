@@ -400,4 +400,27 @@ describe.sequential("migration replay and real PostgreSQL RLS", () => {
     await expect(asUser(authA, () => pg.exec(`UPDATE "JiraExportRun" SET "failureMessage"='Changed later' WHERE id='jira-export-a'`))).rejects.toThrow();
   });
 
+  it("deduplicates Jira webhooks, leases durable jobs, and preserves conflict decisions", async () => {
+    await asUser(authA, () => pg.exec(`
+      INSERT INTO "JiraWebhookSubscription" (id,"organizationId","connectionId","externalId","callbackSecretHash","expiresAt","updatedAt")
+      VALUES ('jira-hook-a','org-a','jira-a','9001',repeat('a',64),now()+interval '30 days',now());
+      INSERT INTO "JiraExternalLink" (id,"organizationId","initiativeId","connectionId","externalIssueId","externalKey","issueTypeName","targetType","targetId","sourceHash","targetFingerprint","lastImportedSnapshot","updatedAt")
+      VALUES ('jira-link-a','org-a','init-a','jira-a','10010','GP-10','Epic','feature','capability-a',repeat('b',64),repeat('c',64),'{}',now());
+      INSERT INTO "JiraSyncConflict" (id,"organizationId","initiativeId","connectionId","externalLinkId","targetType","targetId","externalIssueId","externalKey","baselineSourceHash","baselineTargetHash","jiraFingerprint","planningFingerprint","jiraSnapshot",explanation,"updatedAt")
+      VALUES ('jira-conflict-a','org-a','init-a','jira-a','jira-link-a','feature','capability-a','10010','GP-10',repeat('b',64),repeat('c',64),repeat('d',64),repeat('e',64),'{}','Both sides changed.',now());
+    `));
+    const first = await asUser(authA, () => pg.query(`SELECT * FROM app_private.enqueue_jira_webhook('jira-a',repeat('a',64),'event-1','jira:issue_updated','10010','GP-10',repeat('f',64),'{}')`)) as unknown as { rows: { created: boolean }[] };
+    const duplicate = await asUser(authA, () => pg.query(`SELECT * FROM app_private.enqueue_jira_webhook('jira-a',repeat('a',64),'event-1','jira:issue_updated','10010','GP-10',repeat('f',64),'{}')`)) as unknown as { rows: { created: boolean }[] };
+    expect(first.rows[0]?.created).toBe(true);
+    expect(duplicate.rows[0]?.created).toBe(false);
+    expect((await asUser(authA, () => pg.query(`SELECT id FROM "JiraSyncJob" WHERE "connectionId"='jira-a' AND "jobType"='webhook_import'`))).rows).toHaveLength(1);
+    await expect(asUser(authA, () => pg.query(`SELECT * FROM app_private.enqueue_jira_webhook('jira-a',repeat('0',64),'event-2','jira:issue_updated',NULL,NULL,repeat('1',64),'{}')`))).rejects.toThrow();
+    const claimed = await asUser(authA, () => pg.query(`SELECT * FROM app_private.claim_jira_jobs('worker-a',10,'org-a')`)) as unknown as { rows: { connection_id: string; actor_auth_user_id: string }[] };
+    expect(claimed.rows.some((row) => row.connection_id === 'jira-a' && row.actor_auth_user_id === authA)).toBe(true);
+    expect((await asUser(authB, () => pg.query(`SELECT id FROM "JiraWebhookEvent" WHERE "connectionId"='jira-a'`))).rows).toEqual([]);
+    await expect(asUser(authA, () => pg.exec(`INSERT INTO "JiraWebhookEvent" (id,"organizationId","connectionId","externalEventId","eventType","payloadHash",payload) VALUES ('jira-event-cross','org-b','jira-a','cross','updated',repeat('2',64),'{}')`))).rejects.toThrow();
+    await asUser(authA, () => pg.exec(`UPDATE "JiraSyncConflict" SET status='resolved',resolution='keep_planning',"resolutionReason"='PO retained the planning version.',"resolvedByUserId"='user-org-a',"resolvedAt"=now() WHERE id='jira-conflict-a'`));
+    await expect(asUser(authA, () => pg.exec(`UPDATE "JiraSyncConflict" SET explanation='Forged later' WHERE id='jira-conflict-a'`))).rejects.toThrow();
+  });
+
 });

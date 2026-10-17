@@ -101,6 +101,17 @@ export async function previewJiraImport(connectionId: string, actorUserId: strin
   return withTransaction(async () => {
     const run = await db.jiraImportRun.create({ data: { organizationId: connection.organizationId, initiativeId: connection.initiativeId!, connectionId, status: "previewed", jql: `project = \"${connection.projectKey}\" ORDER BY updated ASC`, sourceCursor: null, sourceFingerprint, itemCount: items.length, createCount: items.filter((item) => item.action === "create").length, updateCount: items.filter((item) => item.action === "update").length, conflictCount: items.filter((item) => item.action === "conflict").length, unchangedCount: items.filter((item) => item.action === "unchanged").length, initiatedByUserId: actorUserId } });
     if (items.length) await db.jiraImportItem.createMany({ data: items.map((item) => ({ ...item, importRunId: run.id })) });
+    const conflictItems = await db.jiraImportItem.findMany({ where: { importRunId: run.id, action: "conflict" } });
+    for (const item of conflictItems) {
+      const link = links.find((candidate) => candidate.externalIssueId === item.externalIssueId);
+      if (!link) continue;
+      const planningFingerprint = await currentTargetFingerprint(link);
+      if (!planningFingerprint) continue;
+      const existing = await db.jiraSyncConflict.findFirst({ where: { connectionId: connection.id, externalIssueId: item.externalIssueId, jiraFingerprint: item.sourceHash, planningFingerprint, status: "open" } });
+      const conflictUpdate = { importItemId: item.id, explanation: item.conflictReason ?? "Jira and Guided Planning changed since the last synchronization." };
+      if (existing) await db.jiraSyncConflict.update({ where: { id: existing.id }, data: conflictUpdate });
+      else await db.jiraSyncConflict.create({ data: { organizationId: connection.organizationId, initiativeId: connection.initiativeId!, connectionId: connection.id, externalLinkId: link.id, targetType: link.targetType, targetId: link.targetId, externalIssueId: link.externalIssueId, externalKey: link.externalKey, baselineSourceHash: link.sourceHash, baselineTargetHash: link.targetFingerprint, jiraFingerprint: item.sourceHash, planningFingerprint, jiraSnapshot: item.sourceSnapshot as Prisma.InputJsonValue, ...conflictUpdate } });
+    }
     await auditInitiative(connection.initiativeId!, "jira.import_previewed", { jiraImportRunId: run.id, jiraConnectionId: connection.id, itemCount: items.length, createCount: run.createCount, updateCount: run.updateCount, conflictCount: run.conflictCount, unchangedCount: run.unchangedCount });
     return loadJiraImport(run.id);
   });

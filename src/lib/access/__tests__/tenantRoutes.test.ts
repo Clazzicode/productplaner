@@ -20,6 +20,7 @@ vi.mock("@/lib/db", () => ({
     jiraConnection: { findFirst: async () => null },
     jiraImportRun: { findFirst: async () => null },
     jiraExportRun: { findFirst: async () => null },
+    jiraSyncConflict: { findFirst: async () => null },
     prototype: { findUnique: mocks.write },
   },
 }));
@@ -52,6 +53,8 @@ import { GET as jiraImportGet, PATCH as jiraImportApply } from "@/app/api/integr
 import { POST as jiraExportPreview } from "@/app/api/integrations/jira/exports/preview/route";
 import { GET as jiraExportGet, PATCH as jiraExportApprove } from "@/app/api/integrations/jira/exports/[runId]/route";
 import { POST as jiraExportExecute } from "@/app/api/integrations/jira/exports/[runId]/execute/route";
+import { POST as jiraWebhookConfigure } from "@/app/api/integrations/jira/connections/[connectionId]/webhooks/route";
+import { PATCH as jiraConflictResolve } from "@/app/api/integrations/jira/conflicts/[conflictId]/route";
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -136,6 +139,11 @@ describe("cross-organization API authorization independent of RLS", () => {
     expect((await jiraExportGet(request("GET"), { params: Promise.resolve({ runId: "jira-export-b" }) })).status).toBe(404);
     expect((await jiraExportApprove(request("PATCH", { expectedStatus: "previewed", selectedItemIds: ["item-b"], reason: "Foreign export attempt" }), { params: Promise.resolve({ runId: "jira-export-b" }) })).status).toBe(404);
     expect((await jiraExportExecute(request("POST", { expectedStatus: "approved" }), { params: Promise.resolve({ runId: "jira-export-b" }) })).status).toBe(404);
+    expect(mocks.write).not.toHaveBeenCalled();
+  });
+  it("cannot configure webhooks or resolve Jira conflicts for another organization", async () => {
+    expect((await jiraWebhookConfigure(request("POST", { action: "register" }), { params: Promise.resolve({ connectionId: "jira-b" }) })).status).toBe(404);
+    expect((await jiraConflictResolve(request("PATCH", { resolution: "keep_planning", reason: "Foreign conflict attempt" }), { params: Promise.resolve({ conflictId: "conflict-b" }) })).status).toBe(404);
     expect(mocks.write).not.toHaveBeenCalled();
   });
   it("rejects signed-out access to the request workflow", async () => {

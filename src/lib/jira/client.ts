@@ -58,7 +58,7 @@ export function jiraAuthorizationUrl(state: string) {
   const params = new URLSearchParams({
     audience: "api.atlassian.com",
     client_id: clientId,
-    scope: "read:jira-work write:jira-work read:jira-user offline_access",
+    scope: "read:jira-work write:jira-work read:jira-user manage:jira-webhook offline_access",
     redirect_uri: redirectUri,
     state,
     response_type: "code",
@@ -169,6 +169,21 @@ export async function createJiraIssue(input: { cloudId: string; accessToken: str
 
 export async function updateJiraIssue(input: { cloudId: string; accessToken: string; issueIdOrKey: string; fields: Record<string, unknown> }, fetcher: Fetcher = fetch) {
   await jiraApi(input.cloudId, input.accessToken, `/rest/api/3/issue/${encodeURIComponent(input.issueIdOrKey)}`, { method: "PUT", body: JSON.stringify({ fields: input.fields }) }, fetcher);
+}
+
+export async function registerJiraWebhook(input: { cloudId: string; accessToken: string; callbackUrl: string; projectKey: string }, fetcher: Fetcher = fetch) {
+  const payload = object(await jiraApi(input.cloudId, input.accessToken, "/rest/api/3/webhook", { method: "POST", body: JSON.stringify({ url: input.callbackUrl, webhooks: [{ events: ["jira:issue_created", "jira:issue_updated", "jira:issue_deleted"], jqlFilter: `project = \"${input.projectKey.replaceAll('"', '\\"')}\"` }] }) }, fetcher));
+  const rows = Array.isArray(payload.webhookRegistrationResult) ? payload.webhookRegistrationResult.map(object) : [];
+  const id = rows.map((row) => number(row.createdWebhookId)).find((value): value is number => value !== null);
+  if (!id) throw new Error("Jira did not register the webhook. Check the callback URL and OAuth scopes.");
+  return { id: String(id) };
+}
+
+export async function refreshJiraWebhook(input: { cloudId: string; accessToken: string; webhookId: string }, fetcher: Fetcher = fetch) {
+  const payload = object(await jiraApi(input.cloudId, input.accessToken, "/rest/api/3/webhook/refresh", { method: "PUT", body: JSON.stringify({ webhookIds: [Number(input.webhookId)] }) }, fetcher));
+  const expiration = text(payload.expirationDate);
+  if (!expiration || Number.isNaN(new Date(expiration).getTime())) throw new Error("Jira did not return the renewed webhook expiration.");
+  return { expiresAt: new Date(expiration) };
 }
 
 export async function searchJiraIssues(input: { cloudId: string; accessToken: string; projectKey: string; nextPageToken?: string; storyPointsField?: string }, fetcher: Fetcher = fetch) {

@@ -1463,6 +1463,111 @@ model JiraExportApproval {
   @@index([organizationId, approvedAt])
 }
 
+// Feature 21C: durable delivery, webhook deduplication, and explicit conflict
+// recovery. Jobs are leased and retried; conflict resolution only updates sync
+// baselines so a later human-approved import/export remains mandatory.
+model JiraWebhookSubscription {
+  id                 String   @id @default(cuid())
+  organizationId     String
+  connectionId       String   @unique
+  externalId         String
+  callbackSecretHash String
+  status             String   @default("active") // active | renewal_required | disabled
+  expiresAt          DateTime
+  lastRenewedAt      DateTime @default(now())
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@unique([connectionId, externalId])
+  @@index([organizationId, expiresAt])
+}
+
+model JiraWebhookEvent {
+  id              String    @id @default(cuid())
+  organizationId  String
+  connectionId    String
+  externalEventId String
+  eventType       String
+  externalIssueId String?
+  externalKey     String?
+  payloadHash     String
+  payload         Json
+  status          String    @default("received") // received | queued | processed | ignored | failed
+  receivedAt      DateTime  @default(now())
+  processedAt     DateTime?
+  failureMessage  String?
+
+  @@unique([connectionId, externalEventId])
+  @@index([organizationId, receivedAt])
+}
+
+model JiraSyncJob {
+  id             String    @id @default(cuid())
+  organizationId String
+  initiativeId   String
+  connectionId   String
+  jobType        String // webhook_import | export_item | renew_webhook
+  payload        Json
+  idempotencyKey String    @unique
+  status         String    @default("queued") // queued | processing | completed | failed | cancelled
+  attemptCount   Int       @default(0)
+  maxAttempts    Int       @default(5)
+  availableAt    DateTime  @default(now())
+  lockedAt       DateTime?
+  lockedBy       String?
+  completedAt    DateTime?
+  lastError      String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([organizationId, status, availableAt])
+  @@index([connectionId, status, createdAt])
+}
+
+model JiraSyncAttempt {
+  id             String    @id @default(cuid())
+  organizationId String
+  jobId          String
+  attemptNumber  Int
+  status         String // processing | succeeded | retry_scheduled | failed
+  errorMessage   String?
+  startedAt      DateTime  @default(now())
+  finishedAt     DateTime?
+
+  @@unique([jobId, attemptNumber])
+  @@index([organizationId, startedAt])
+}
+
+model JiraSyncConflict {
+  id                  String    @id @default(cuid())
+  organizationId      String
+  initiativeId        String
+  connectionId        String
+  externalLinkId      String
+  importItemId        String?
+  exportItemId        String?
+  targetType          String
+  targetId            String
+  externalIssueId     String
+  externalKey         String
+  baselineSourceHash  String
+  baselineTargetHash  String
+  jiraFingerprint     String
+  planningFingerprint String
+  jiraSnapshot        Json
+  explanation         String
+  status              String    @default("open") // open | resolved
+  resolution          String? // keep_planning | accept_jira | manual
+  resolutionReason    String?
+  resolvedByUserId    String?
+  resolvedAt          DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  @@index([organizationId, initiativeId, status, createdAt])
+  @@index([connectionId, externalIssueId, status])
+}
+
 // Step 8E (docs/V2-DASHBOARD-CONFIGURATION.md). Presentation only — never an
 // authorization signal (docs/V2-STANDARD-DASHBOARD.md §8/§9,
 // docs/V2-ACCESS-TEAMS-VISIBILITY.md §13/§18). Deliberately no userId, no

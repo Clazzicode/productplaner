@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { jiraExportApprovalSchema, jiraExportExecuteSchema, jiraImportApplySchema, jiraProjectSchema, jiraStartSchema } from "../model";
+import { jiraConflictResolutionSchema, jiraExportApprovalSchema, jiraExportExecuteSchema, jiraImportApplySchema, jiraProjectSchema, jiraStartSchema, jiraWebhookCommandSchema } from "../model";
 
 describe("Jira command validation", () => {
   it("allows only local integration return paths", () => {
@@ -19,5 +19,11 @@ describe("Jira command validation", () => {
     expect(jiraExportApprovalSchema.safeParse({ expectedStatus: "previewed", selectedItemIds: [], reason: "Approved" }).success).toBe(false);
     expect(jiraExportExecuteSchema.safeParse({ expectedStatus: "approved" }).success).toBe(true);
     expect(jiraExportExecuteSchema.safeParse({ expectedStatus: "previewed" }).success).toBe(false);
+  });
+  it("requires explicit webhook and conflict commands", () => {
+    expect(jiraWebhookCommandSchema.safeParse({ action: "register" }).success).toBe(true);
+    expect(jiraWebhookCommandSchema.safeParse({ action: "delete" }).success).toBe(false);
+    expect(jiraConflictResolutionSchema.safeParse({ resolution: "keep_planning", reason: "PO chose the planning version." }).success).toBe(true);
+    expect(jiraConflictResolutionSchema.safeParse({ resolution: "auto", reason: "Decide automatically" }).success).toBe(false);
   });
 });

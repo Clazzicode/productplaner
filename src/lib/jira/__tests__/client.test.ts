@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { accessibleJiraResources, createJiraIssue, exchangeJiraCode, jiraAuthorizationUrl, searchJiraIssues, updateJiraIssue } from "../client";
+import { accessibleJiraResources, createJiraIssue, exchangeJiraCode, jiraAuthorizationUrl, refreshJiraWebhook, registerJiraWebhook, searchJiraIssues, updateJiraIssue } from "../client";
 
 const original = { id: process.env.JIRA_CLIENT_ID, secret: process.env.JIRA_CLIENT_SECRET, redirect: process.env.JIRA_REDIRECT_URI };
 beforeEach(() => { process.env.JIRA_CLIENT_ID = "client-a"; process.env.JIRA_CLIENT_SECRET = "secret-a"; process.env.JIRA_REDIRECT_URI = "https://app.example/api/integrations/jira/oauth/callback"; });
@@ -12,6 +12,7 @@ describe("Atlassian OAuth and Jira REST client", () => {
     expect(url.searchParams.get("state")).toBe("opaque-state");
     expect(url.searchParams.get("scope")).toContain("offline_access");
     expect(url.searchParams.get("scope")).toContain("write:jira-work");
+    expect(url.searchParams.get("scope")).toContain("manage:jira-webhook");
     expect(url.searchParams.get("redirect_uri")).toBe(process.env.JIRA_REDIRECT_URI);
   });
   it("exchanges the code and loads accessible resources", async () => {
@@ -39,5 +40,14 @@ describe("Atlassian OAuth and Jira REST client", () => {
     await updateJiraIssue({ cloudId: "cloud-a", accessToken: "token", issueIdOrKey: "GP-1", fields: { summary: "Updated story" } }, fetcher);
     expect(fetcher.mock.calls[0][1]?.method).toBe("POST");
     expect(fetcher.mock.calls[1][1]?.method).toBe("PUT");
+  });
+  it("registers and renews scoped dynamic webhooks", async () => {
+    const fetcher = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ webhookRegistrationResult: [{ createdWebhookId: 9001 }] }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ expirationDate: "2026-11-16T12:00:00.000+0000" }), { status: 200 }));
+    expect(await registerJiraWebhook({ cloudId: "cloud-a", accessToken: "token", callbackUrl: "https://app.example/api/integrations/jira/webhooks/connection-a?token=secret", projectKey: "GP" }, fetcher)).toEqual({ id: "9001" });
+    const renewed = await refreshJiraWebhook({ cloudId: "cloud-a", accessToken: "token", webhookId: "9001" }, fetcher);
+    expect(renewed.expiresAt.toISOString()).toBe("2026-11-16T12:00:00.000Z");
+    expect(fetcher.mock.calls[1][0]).toContain("/rest/api/3/webhook/refresh");
   });
 });

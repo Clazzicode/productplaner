@@ -6,6 +6,7 @@ import { createJiraIssue, getJiraIssue, updateJiraIssue } from "./client";
 import { jiraHash } from "./crypto";
 import { currentTargetFingerprint, fingerprint, sourceSnapshot } from "./import";
 import { accessTokenFor } from "./oauth";
+import { recordJiraConflict } from "./conflicts";
 
 type TargetType = "feature" | "story" | "bug";
 type ExportPayload = { fields: Record<string, unknown> };
@@ -54,6 +55,7 @@ export async function previewJiraExport(connectionId: string, actorUserId: strin
   const local = await candidates(connection.initiativeId);
   const links = await db.jiraExternalLink.findMany({ where: { connectionId } });
   const byTarget = new Map(links.map((link) => [`${link.targetType}:${link.targetId}`, link]));
+  const conflictEvidence = new Map<string, { link: JiraExternalLink; snapshot: Prisma.InputJsonValue; jiraFingerprint: string }>();
   const items: PreviewExportItem[] = [];
   for (const candidate of local) {
     const link = byTarget.get(`${candidate.targetType}:${candidate.targetId}`);
@@ -64,9 +66,11 @@ export async function previewJiraExport(connectionId: string, actorUserId: strin
     else if (link) {
       try {
         const remote = await getJiraIssue({ cloudId: connection.cloudId, accessToken, issueIdOrKey: link.externalIssueId });
-        const currentSourceHash = fingerprint(sourceSnapshot(remote));
+        const snapshot = sourceSnapshot(remote) as unknown as Prisma.InputJsonValue;
+        const currentSourceHash = fingerprint(snapshot);
         if (currentSourceHash !== link.sourceHash) { action = "conflict"; conflictReason = "Both Jira and the planning record changed since the last synchronization."; }
         expectedSourceHash = currentSourceHash;
+        if (action === "conflict") conflictEvidence.set(candidate.targetId, { link, snapshot, jiraFingerprint: currentSourceHash });
       } catch (error) { action = "conflict"; conflictReason = error instanceof Error ? `Could not verify Jira: ${error.message}` : "Could not verify the linked Jira issue."; }
     }
     const payload = fieldsFor(candidate, connection.projectId);
@@ -76,6 +80,12 @@ export async function previewJiraExport(connectionId: string, actorUserId: strin
   return withTransaction(async () => {
     const run = await db.jiraExportRun.create({ data: { organizationId: connection.organizationId, initiativeId: connection.initiativeId!, connectionId, sourceFingerprint, itemCount: items.length, createCount: items.filter((item) => item.action === "create").length, updateCount: items.filter((item) => item.action === "update").length, conflictCount: items.filter((item) => item.action === "conflict").length, unchangedCount: items.filter((item) => item.action === "unchanged").length, initiatedByUserId: actorUserId } });
     if (items.length) await db.jiraExportItem.createMany({ data: items.map((item) => ({ ...item, exportRunId: run.id })) });
+    const conflictItems = await db.jiraExportItem.findMany({ where: { exportRunId: run.id, action: "conflict", externalIssueId: { not: null } } });
+    for (const item of conflictItems) {
+      const evidence = conflictEvidence.get(item.targetId);
+      if (!evidence) continue;
+      await recordJiraConflict({ link: evidence.link, jiraSnapshot: evidence.snapshot, jiraFingerprint: evidence.jiraFingerprint, planningFingerprint: item.targetFingerprint, exportItemId: item.id, explanation: item.conflictReason ?? "Jira and Guided Planning changed since the last synchronization." });
+    }
     await auditInitiative(connection.initiativeId!, "jira.export_previewed", { jiraExportRunId: run.id, jiraConnectionId: connection.id, itemCount: items.length, createCount: run.createCount, updateCount: run.updateCount, conflictCount: run.conflictCount });
     return loadJiraExport(run.id);
   });
@@ -124,6 +134,32 @@ async function executeItem(item: Awaited<ReturnType<typeof db.jiraExportItem.fin
   await db.jiraExportItem.update({ where: { id: item.id }, data: { status: "succeeded", externalIssueId: saved.id, externalKey: saved.key, resultSnapshot: snapshot as unknown as Prisma.InputJsonValue, failureMessage: null } });
 }
 
+export async function executeJiraExportItem(itemId: string) {
+  const item = await db.jiraExportItem.findUnique({ where: { id: itemId } });
+  if (!item) throw new BusinessError("Jira export item not found.", 404);
+  if (item.status === "succeeded") return item;
+  if (item.status !== "pending" && item.status !== "failed") throw new BusinessError("This Jira export item is not eligible for execution.", 409);
+  const run = await db.jiraExportRun.findUniqueOrThrow({ where: { id: item.exportRunId } });
+  if (run.status !== "executing") throw new BusinessError("This Jira export is not executing.", 409);
+  const { connection, accessToken } = await accessTokenFor(run.connectionId);
+  if (!connection.cloudId || !connection.projectId) throw new BusinessError("The Jira connection is incomplete.", 422);
+  await executeItem(item, run, { cloudId: connection.cloudId, projectId: connection.projectId }, accessToken);
+  return db.jiraExportItem.findUniqueOrThrow({ where: { id: item.id } });
+}
+
+export async function finalizeJiraExportRun(runId: string) {
+  const run = await db.jiraExportRun.findUnique({ where: { id: runId } });
+  if (!run || run.status !== "executing") return run;
+  const items = await db.jiraExportItem.findMany({ where: { exportRunId: run.id, selected: true } });
+  const jobs = await db.jiraSyncJob.findMany({ where: { jobType: "export_item", payload: { path: ["exportRunId"], equals: run.id } } });
+  if (jobs.some((job) => job.status === "queued" || job.status === "processing")) return run;
+  const failures = items.filter((item) => item.status !== "succeeded").length;
+  const status = failures ? "partial_failure" : "completed";
+  const saved = await db.jiraExportRun.update({ where: { id: run.id }, data: { status, executedAt: new Date(), failureMessage: failures ? `${failures} approved Jira export item(s) require attention.` : null } });
+  await auditInitiative(run.initiativeId, "jira.export_executed", { jiraExportRunId: run.id, approvedCount: items.length, succeededCount: items.length - failures, failedCount: failures });
+  return saved;
+}
+
 export async function executeJiraExport(runId: string, actorUserId: string) {
   const run = await db.jiraExportRun.findUnique({ where: { id: runId } });
   if (!run) throw new BusinessError("Jira export not found.", 404);
@@ -133,17 +169,11 @@ export async function executeJiraExport(runId: string, actorUserId: string) {
   const selectedIds = approval.selectedItemIds.map(String);
   const items = await db.jiraExportItem.findMany({ where: { exportRunId: run.id, id: { in: selectedIds } } });
   if (items.length !== selectedIds.length || approvalHash(items) !== approval.snapshotHash) throw new BusinessError("The approved Jira export snapshot is invalid.", 409);
-  const changed = await db.jiraExportRun.updateMany({ where: { id: run.id, status: "approved" }, data: { status: "executing", executedByUserId: actorUserId } });
-  if (changed.count !== 1) throw new BusinessError("This Jira export is already executing.", 409);
-  const { connection, accessToken } = await accessTokenFor(run.connectionId);
-  if (!connection.cloudId || !connection.projectId) throw new BusinessError("The Jira connection is incomplete.", 422);
-  let failures = 0;
-  for (const item of items) {
-    try { await executeItem(item, run, { cloudId: connection.cloudId, projectId: connection.projectId }, accessToken); }
-    catch (error) { failures += 1; await db.jiraExportItem.update({ where: { id: item.id }, data: { status: error instanceof BusinessError && error.status === 409 ? "conflict" : "failed", failureMessage: error instanceof Error ? error.message.slice(0, 2000) : "Jira export failed." } }); }
-  }
-  const status = failures ? "partial_failure" : "completed";
-  await db.jiraExportRun.update({ where: { id: run.id }, data: { status, executedAt: new Date(), failureMessage: failures ? `${failures} approved Jira export item(s) require attention.` : null } });
-  await auditInitiative(run.initiativeId, "jira.export_executed", { jiraExportRunId: run.id, approvedCount: items.length, succeededCount: items.length - failures, failedCount: failures });
-  return loadJiraExport(run.id);
+  return withTransaction(async () => {
+    const changed = await db.jiraExportRun.updateMany({ where: { id: run.id, status: "approved" }, data: { status: "executing", executedByUserId: actorUserId } });
+    if (changed.count !== 1) throw new BusinessError("This Jira export is already executing.", 409);
+    await db.jiraSyncJob.createMany({ data: items.map((item) => ({ organizationId: run.organizationId, initiativeId: run.initiativeId, connectionId: run.connectionId, jobType: "export_item", payload: { exportRunId: run.id, exportItemId: item.id }, idempotencyKey: jiraHash(`export:${item.id}`) })), skipDuplicates: true });
+    await auditInitiative(run.initiativeId, "jira.export_queued", { jiraExportRunId: run.id, approvedCount: items.length });
+    return loadJiraExport(run.id);
+  });
 }

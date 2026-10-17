@@ -37,4 +37,11 @@ export const jiraExportApprovalSchema = z.object({
 
 export const jiraExportExecuteSchema = z.object({ expectedStatus: z.literal("approved") });
 
+export const jiraWebhookCommandSchema = z.object({ action: z.enum(["register", "renew"]) });
+
+export const jiraConflictResolutionSchema = z.object({
+  resolution: z.enum(["keep_planning", "accept_jira", "manual"]),
+  reason: z.string().trim().min(5).max(1000),
+});
+
 export type JiraProjectInput = z.infer<typeof jiraProjectSchema>;

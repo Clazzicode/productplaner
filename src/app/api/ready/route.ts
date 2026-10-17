@@ -24,7 +24,9 @@ async function GETHandler() {
         AND to_regclass('public."ReleaseReadinessAssessment"') IS NOT NULL
         AND to_regclass('public."FeedbackRecord"') IS NOT NULL
         AND to_regclass('public."JiraConnection"') IS NOT NULL
-        AND to_regclass('public."JiraExportApproval"') IS NOT NULL AS safe
+        AND to_regclass('public."JiraExportApproval"') IS NOT NULL
+        AND to_regclass('public."JiraSyncJob"') IS NOT NULL
+        AND to_regprocedure('app_private.claim_jira_jobs(text,integer,text)') IS NOT NULL AS safe
       FROM pg_roles WHERE rolname = current_user`;
     if (!rows[0]?.safe) throw new Error("Database not ready");
     return Response.json(

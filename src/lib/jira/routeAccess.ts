@@ -31,3 +31,10 @@ export async function jiraExportForUser(user: CurrentUser, runId: string) {
   const access = await requireJiraManager(user, run.initiativeId);
   return access.ok ? { ok: true as const, run } : access;
 }
+
+export async function jiraConflictForUser(user: CurrentUser, conflictId: string) {
+  const conflict = await db.jiraSyncConflict.findFirst({ where: { id: conflictId, organizationId: user.organizationId } });
+  if (!conflict) return { ok: false as const, response: jsonError("Not found.", 404) };
+  const access = await requireJiraManager(user, conflict.initiativeId);
+  return access.ok ? { ok: true as const, conflict } : access;
+}
