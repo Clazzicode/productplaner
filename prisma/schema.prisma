@@ -2310,3 +2310,97 @@ model SprintReviewAiSuggestion {
   @@index([organizationId, createdAt])
   @@index([reviewId, status, createdAt])
 }
+
+// Feature 18: immutable Product Owner validation of delivered story evidence.
+model ProductValidation {
+  id                     String    @id @default(cuid())
+  organizationId         String
+  projectId              String
+  initiativeId           String
+  sprintId               String
+  storyId                String
+  demoItemId             String?
+  sprintReviewId         String?
+  validatorStakeholderId String?
+  validatorNameSnapshot  String    @default("")
+  status                 String    @default("pending") // pending | accepted | rejected | changes_needed
+  storyVersion           Int
+  storySnapshot          Json
+  evidenceNotes          String    @default("")
+  evidenceLinks          Json      @default("[]")
+  decisionReason         String    @default("")
+  sequence               Int
+  revision               Int       @default(1)
+  supersedesValidationId String?
+  createdByUserId        String
+  finalizedByUserId      String?
+  finalizedAt            DateTime?
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
+
+  @@unique([storyId, sprintId, sequence])
+  @@index([organizationId, initiativeId, status])
+  @@index([storyId, createdAt])
+  @@index([sprintId, status])
+}
+
+model ValidationCriterionResult {
+  id                String   @id @default(cuid())
+  organizationId    String
+  validationId      String
+  criterionId       String
+  criterionVersion  Int
+  criterionSnapshot Json
+  result            String   @default("pending") // pending | met | not_met | not_demonstrated | not_applicable
+  reason            String   @default("")
+  evidenceNotes     String   @default("")
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@unique([validationId, criterionId])
+  @@index([organizationId, validationId])
+}
+
+model ProductValidationRevision {
+  id             String   @id @default(cuid())
+  organizationId String
+  validationId   String
+  fromRevision   Int
+  toRevision     Int
+  previousData   Json
+  nextData       Json
+  reason         String
+  actorUserId    String?
+  createdAt      DateTime @default(now())
+
+  @@unique([validationId, toRevision])
+  @@index([organizationId, createdAt])
+}
+
+model ValidationFollowUp {
+  id                String   @id @default(cuid())
+  organizationId    String
+  validationId      String
+  planningRequestId String   @unique
+  createdAt         DateTime @default(now())
+
+  @@index([organizationId, validationId])
+}
+
+model ValidationAiSuggestion {
+  id                String    @id @default(cuid())
+  organizationId    String
+  validationId      String
+  fingerprint       String
+  content           String
+  informationUsed   String    @default("")
+  status            String    @default("proposed") // proposed | used | dismissed | stale
+  model             String    @default("")
+  generatedByUserId String
+  actedByUserId     String?
+  actedAt           DateTime?
+  createdAt         DateTime  @default(now())
+
+  @@unique([validationId, fingerprint])
+  @@index([organizationId, createdAt])
+}
