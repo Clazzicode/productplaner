@@ -5,10 +5,12 @@ import AiAssistPanel from "@/components/ai/AiAssistPanel";
 import CreateReleaseForm from "@/components/workspace/CreateReleaseForm";
 import CreateSprintForm from "@/components/workspace/CreateSprintForm";
 import SprintMoveSelect from "@/components/workspace/SprintMoveSelect";
+import ClarificationBoard from "@/components/workspace/ClarificationBoard";
 import { requireCurrentUser } from "@/lib/auth/session";
 import { db, establishAuthContext } from "@/lib/db";
 import { profileFor } from "@/lib/generation/methodology";
 import { loadCostContext, loadWorkspace } from "@/lib/workspace";
+import { clarificationInclude } from "@/lib/clarifications/service";
 
 export const dynamic = "force-dynamic";
 
@@ -27,13 +29,14 @@ export default async function SprintsPage({
   const isKanban = profile.sprintMode === "continuous_flow";
   const agileFrozen = profile.agileLayerGate === "locked_after_baseline" && ws.prototype.approvedAt != null;
 
-  const [sprints, releases, stories] = await Promise.all([
+  const [sprints, releases, stories, clarifications, clarificationOwners] = await Promise.all([
     db.sprint.findMany({
       where: { prototypeId: ws.prototype.id },
       orderBy: { sprintNumber: "asc" },
       include: {
         stories: { orderBy: { order: "asc" }, select: { id: true, title: true, points: true } },
         release: { select: { name: true } },
+        sprintPlan: { include: { items: { include: { story: { select: { id: true, title: true } }, bug: { include: { request: { select: { data: true } } } } } } } },
       },
     }),
     db.release.findMany({
@@ -48,6 +51,11 @@ export default async function SprintsPage({
         sourceCapabilityId: true,
         sprint: { select: { sprintNumber: true } },
       },
+    }),
+    db.inSprintClarification.findMany({ where: { initiativeId }, include: clarificationInclude, orderBy: [{ status: "asc" }, { createdAt: "desc" }] }),
+    db.user.findMany({
+      where: { status: "active", memberships: { some: { organizationId: ws.initiative.organizationId, status: "active" } } },
+      select: { id: true, name: true, email: true }, orderBy: [{ name: "asc" }, { id: "asc" }],
     }),
   ]);
 
@@ -186,6 +194,19 @@ export default async function SprintsPage({
     weekly: "Weekly", biweekly: "Every two weeks", every_three_weeks: "Every three weeks",
     monthly: "Monthly", quarterly: "Quarterly", custom: ws.initiative.customReleaseCadence || "Custom cadence",
   };
+  const bugTitle = (value: unknown) => typeof value === "object" && value !== null && !Array.isArray(value) && "title" in value ? String(value.title) : "Bug";
+  type ClarificationWorkItem = { key: string; type: "story" | "bug"; id: string; title: string; sprintId: string; sprintNumber: number };
+  const clarificationWorkItems: ClarificationWorkItem[] = [];
+  for (const sprint of sprints) {
+    if (sprint.sprintPlan?.status !== "committed") continue;
+    for (const item of sprint.sprintPlan.items) {
+      if (item.story) clarificationWorkItems.push({ key: `${sprint.id}:story:${item.story.id}`, type: "story", id: item.story.id, title: item.story.title, sprintId: sprint.id, sprintNumber: sprint.sprintNumber });
+      else if (item.bug) clarificationWorkItems.push({ key: `${sprint.id}:bug:${item.bug.id}`, type: "bug", id: item.bug.id, title: bugTitle(item.bug.request.data), sprintId: sprint.id, sprintNumber: sprint.sprintNumber });
+    }
+  }
+  const clarificationStatusRank: Record<string, number> = { open: 0, answered: 1, acknowledged: 2, resolved: 3, withdrawn: 4 };
+  const orderedClarifications = [...clarifications].sort((left, right) =>
+    (clarificationStatusRank[left.status] ?? 99) - (clarificationStatusRank[right.status] ?? 99) || right.createdAt.getTime() - left.createdAt.getTime());
 
   return (
     <div>
@@ -367,6 +388,13 @@ export default async function SprintsPage({
       <div className="mt-8 max-w-xl">
         <AiAssistPanel initiativeId={initiativeId} scope="sprints" />
       </div>
+      {!isKanban ? <ClarificationBoard initiativeId={initiativeId} currentUserId={user.id}
+        canDecide={user.permissionRole === "owner" || user.permissionRole === "admin"}
+        workItems={clarificationWorkItems}
+        owners={clarificationOwners}
+        clarifications={orderedClarifications.map((row) => ({ ...row, createdAt: row.createdAt.toISOString(), dueAt: row.dueAt?.toISOString() ?? null, answeredAt: row.answeredAt?.toISOString() ?? null,
+          acknowledgedAt: row.acknowledgedAt?.toISOString() ?? null, resolvedAt: row.resolvedAt?.toISOString() ?? null,
+          revisions: row.revisions.map((revision) => ({ ...revision, createdAt: revision.createdAt.toISOString() })) }))} /> : null}
     </div>
   );
 }

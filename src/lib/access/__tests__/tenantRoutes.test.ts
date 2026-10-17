@@ -10,6 +10,7 @@ vi.mock("@/lib/db", () => ({
     project: { findUnique: mocks.project },
     artifactLayer: { findUnique: async () => ({ prototypeId: "proto-b", prototype: { initiativeId: "init-b" } }), update: mocks.write },
     capability: { findUnique: async () => ({ intakeAnswerSet: { initiative: { id: "init-b" } } }), update: mocks.write },
+    inSprintClarification: { findUnique: async () => ({ initiativeId: "init-b" }), findMany: mocks.write },
     prototype: { findUnique: mocks.write },
   },
 }));
@@ -22,6 +23,8 @@ import { POST as approve } from "@/app/api/initiatives/[id]/approve-plan/route";
 import { GET as requestsGet, POST as requestsSave } from "@/app/api/initiatives/[id]/requests/route";
 import { GET as backlogGet, POST as backlogSave } from "@/app/api/initiatives/[id]/backlog/route";
 import { POST as storyCreate } from "@/app/api/initiatives/[id]/stories/route";
+import { GET as clarificationsGet, POST as clarificationCreate } from "@/app/api/initiatives/[id]/clarifications/route";
+import { PATCH as clarificationUpdate } from "@/app/api/clarifications/[clarificationId]/route";
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -54,6 +57,12 @@ describe("cross-organization API authorization independent of RLS", () => {
       sourceType: "manual",
     }), { params: Promise.resolve({ id: "init-b" }) });
     expect(response.status).toBe(404);
+    expect(mocks.write).not.toHaveBeenCalled();
+  });
+  it("cannot read, create, or update in-sprint clarifications in another organization", async () => {
+    expect((await clarificationsGet(request("GET"), { params: Promise.resolve({ id: "init-b" }) })).status).toBe(404);
+    expect((await clarificationCreate(request("POST", {}), { params: Promise.resolve({ id: "init-b" }) })).status).toBe(404);
+    expect((await clarificationUpdate(request("PATCH", {}), { params: Promise.resolve({ clarificationId: "clarification-b" }) })).status).toBe(404);
     expect(mocks.write).not.toHaveBeenCalled();
   });
   it("rejects signed-out access to the request workflow", async () => {

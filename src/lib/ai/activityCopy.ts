@@ -56,6 +56,10 @@ interface AssistActionCopy {
 }
 
 export const AI_ASSIST_ACTION_COPY: Record<AiActionKey, AssistActionCopy> = {
+  DRAFT_CLARIFICATION: {
+    title: "Draft clarification answer",
+    explanation: "Uses the committed sprint item, approved criteria, and the recorded question to draft a concise answer for Product Owner review. It never submits or resolves the answer.",
+  },
   ANALYZE_INTAKE: {
     title: "Analyze intake",
     explanation: "Reviews this initiative's intake answers and summarizes them.",

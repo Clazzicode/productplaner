@@ -205,4 +205,28 @@ describe.sequential("migration replay and real PostgreSQL RLS", () => {
     await expect(asUser(authA, () => pg.exec(`UPDATE "SprintReadinessAssessment" SET decision='overridden' WHERE id='readiness-a'`))).rejects.toThrow();
   });
 
+  it("protects in-sprint clarification targets, tenant isolation, and immutable evidence", async () => {
+    await asUser(authA, () => pg.exec(`
+      UPDATE "SprintPlan" SET status='committed', "committedByUserId"='user-org-a', "committedAt"=now() WHERE id='sprint-plan-a';
+      INSERT INTO "InSprintClarification" (id,"organizationId","initiativeId","sprintId","storyId",question,"dedupeKey","requesterUserId","updatedAt")
+      VALUES ('clarification-a','org-a','init-a','sprint-a','story-a','What happens when the provider is unavailable?',repeat('d',64),'user-org-a',now());
+      INSERT INTO "InSprintClarificationRevision" (id,"organizationId","clarificationId","fromRevision","toRevision","previousData","nextData",reason,"actorUserId")
+      VALUES ('clarification-revision-a','org-a','clarification-a',1,2,'{}','{}','PO answered','user-org-a');
+      INSERT INTO "ClarificationAiSuggestion" (id,"organizationId","clarificationId",fingerprint,"draftAnswer","informationUsed","generatedByUserId")
+      VALUES ('clarification-ai-a','org-a','clarification-a',repeat('c',64),'Return the documented unavailable state.','Story and approved criteria','user-org-a');
+    `));
+    expect((await asUser(authB, () => pg.query(`SELECT id FROM "InSprintClarification" WHERE id='clarification-a'`))).rows).toEqual([]);
+    await expect(asUser(authA, () => pg.exec(`
+      INSERT INTO "InSprintClarification" (id,"organizationId","initiativeId","sprintId","storyId",question,"dedupeKey","requesterUserId","updatedAt")
+      VALUES ('clarification-cross','org-a','init-a','sprint-a','artifact-b','Cross-tenant question',repeat('e',64),'user-org-a',now())
+    `))).rejects.toThrow();
+    await expect(asUser(authA, () => pg.exec(`UPDATE "InSprintClarification" SET status='answered' WHERE id='clarification-a'`))).rejects.toThrow();
+    const revisionMutation = await asUser(authA, () => pg.query(`UPDATE "InSprintClarificationRevision" SET reason='Forged' WHERE id='clarification-revision-a' RETURNING id`));
+    expect(revisionMutation.rows).toEqual([]);
+    expect((await asUser(authA, () => pg.query<{ reason: string }>(`SELECT reason FROM "InSprintClarificationRevision" WHERE id='clarification-revision-a'`))).rows[0].reason).toBe("PO answered");
+    await expect(asUser(authA, () => pg.exec(`UPDATE "ClarificationAiSuggestion" SET "draftAnswer"='Forged' WHERE id='clarification-ai-a'`))).rejects.toThrow();
+    await asUser(authA, () => pg.exec(`UPDATE "ClarificationAiSuggestion" SET status='dismissed', "actedByUserId"='user-org-a', "actedAt"=now() WHERE id='clarification-ai-a'`));
+    await expect(asUser(authA, () => pg.exec(`UPDATE "ClarificationAiSuggestion" SET status='used' WHERE id='clarification-ai-a'`))).rejects.toThrow();
+  });
+
 });

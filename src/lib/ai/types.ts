@@ -22,7 +22,8 @@ export type AiActionKey =
   | "RECOMMEND_SPRINTS"
   | "RECOMMEND_STATUS"
   | "REVIEW_REQUIREMENTS"
-  | "RECOMMEND_PRIORITY";
+  | "RECOMMEND_PRIORITY"
+  | "DRAFT_CLARIFICATION";
 
 export interface AiCapabilityConfig {
   action: AiActionKey;
