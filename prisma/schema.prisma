@@ -1071,6 +1071,118 @@ model ReleaseReadinessAiSuggestion {
   @@index([assessmentId, status, createdAt])
 }
 
+// Feature 20: durable feedback intake and human-approved reprioritization.
+// Linked planning records stay authoritative; feedback only proposes changes
+// until an authorized user applies a proposal through the priority service.
+model FeedbackRecord {
+  id               String    @id @default(cuid())
+  organizationId   String
+  projectId        String
+  initiativeId     String
+  title            String
+  details          String
+  source           String // customer | stakeholder | demo | sprint_review | release | meeting | support | jira | manual
+  sourceReference  String?
+  category         String    @default("general") // general | request | quality | usability | scope | delivery | risk
+  status           String    @default("captured") // captured | triaged | actioned | closed
+  summary          String    @default("")
+  dedupeKey        String
+  linkedEntityType String?
+  linkedEntityId   String?
+  revision         Int       @default(1)
+  createdByUserId  String
+  archivedAt       DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  revisions   FeedbackRevision[]
+  followUps   FeedbackFollowUp[]
+  proposals   ReprioritizationProposal[]
+  suggestions FeedbackAiSuggestion[]
+
+  @@unique([initiativeId, dedupeKey])
+  @@index([organizationId, initiativeId, status])
+  @@index([initiativeId, linkedEntityType, linkedEntityId])
+}
+
+model FeedbackRevision {
+  id             String         @id @default(cuid())
+  organizationId String
+  feedbackId     String
+  feedback       FeedbackRecord @relation(fields: [feedbackId], references: [id], onDelete: Cascade)
+  fromRevision   Int
+  toRevision     Int
+  previousData   Json
+  nextData       Json
+  reason         String
+  actorUserId    String?
+  createdAt      DateTime       @default(now())
+
+  @@unique([feedbackId, toRevision])
+  @@index([organizationId, createdAt])
+}
+
+model FeedbackFollowUp {
+  id                String         @id @default(cuid())
+  organizationId    String
+  feedbackId        String
+  feedback          FeedbackRecord @relation(fields: [feedbackId], references: [id], onDelete: Cascade)
+  planningRequestId String         @unique
+  createdByUserId   String
+  createdAt         DateTime       @default(now())
+
+  @@index([organizationId, feedbackId])
+}
+
+model ReprioritizationProposal {
+  id                        String         @id @default(cuid())
+  organizationId            String
+  feedbackId                String
+  feedback                  FeedbackRecord @relation(fields: [feedbackId], references: [id], onDelete: Cascade)
+  entityType                String // request | feature | story
+  entityId                  String
+  expectedEntityRevision    Int
+  currentPrioritySnapshot   Json
+  proposedFactors           Json
+  moscow                    String
+  roadmapLane               String
+  rationale                 String
+  source                    String         @default("manual") // manual | ai
+  status                    String         @default("proposed") // proposed | applied | dismissed
+  decisionReason            String         @default("")
+  appliedPriorityDecisionId String?
+  revision                  Int            @default(1)
+  createdByUserId           String
+  decidedByUserId           String?
+  decidedAt                 DateTime?
+  createdAt                 DateTime       @default(now())
+  updatedAt                 DateTime       @updatedAt
+
+  @@index([organizationId, feedbackId, status])
+  @@index([entityType, entityId, createdAt])
+}
+
+model FeedbackAiSuggestion {
+  id                String         @id @default(cuid())
+  organizationId    String
+  feedbackId        String
+  feedback          FeedbackRecord @relation(fields: [feedbackId], references: [id], onDelete: Cascade)
+  kind              String // summary | reprioritization
+  fingerprint       String
+  content           Json
+  informationUsed   String         @default("")
+  status            String         @default("proposed") // proposed | used | dismissed | stale
+  model             String         @default("")
+  generatedByUserId String
+  actedByUserId     String?
+  actedAt           DateTime?
+  createdAt         DateTime       @default(now())
+
+  @@unique([feedbackId, kind, fingerprint])
+  @@index([organizationId, createdAt])
+  @@index([feedbackId, status, createdAt])
+}
+
 // Jira only — Aha!/Azure DevOps intentionally not modeled (out of scope).
 model SyncConnection {
   id             String     @id @default(cuid())

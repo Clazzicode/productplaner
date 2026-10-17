@@ -19,6 +19,18 @@ import type { ContextLayer } from "./context/types";
 
 const AI_CAPABILITIES: AiCapabilityConfig[] = [
   {
+    action: "SUMMARIZE_FEEDBACK", enabled: true, maxOutputTokens: 1200,
+    userMonthlyLimit: 30, organizationMonthlyLimit: 300,
+    description: "Summarizes supplied feedback and identifies source-grounded themes without creating or changing planning records.",
+    maxContextTokens: 5000, requiredContextLayers: ["task"], optionalContextLayers: ["initiative"], outputType: "feedback_summary", reusable: true,
+  },
+  {
+    action: "RECOMMEND_REPRIORITIZATION", enabled: true, maxOutputTokens: 1500,
+    userMonthlyLimit: 20, organizationMonthlyLimit: 200,
+    description: "Suggests explainable reprioritization for one explicitly linked backlog item; an authorized PO or admin must create and apply any proposal.",
+    maxContextTokens: 6000, requiredContextLayers: ["task"], optionalContextLayers: ["initiative"], outputType: "reprioritization_recommendation", reusable: true,
+  },
+  {
     action: "DRAFT_RELEASE_SUMMARY", enabled: true, maxOutputTokens: 1400,
     userMonthlyLimit: 20, organizationMonthlyLimit: 200,
     description: "Drafts a release-readiness summary and stakeholder communication from frozen deterministic gates without deciding readiness or approval.",

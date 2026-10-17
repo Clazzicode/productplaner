@@ -15,6 +15,8 @@ vi.mock("@/lib/db", () => ({
     sprintReview: { findUnique: async () => ({ initiativeId: "init-b" }), findMany: mocks.write },
     productValidation: { findUnique: async () => ({ initiativeId: "init-b" }), findMany: mocks.write },
     releaseReadinessAssessment: { findUnique: async () => ({ initiativeId: "init-b" }), findMany: mocks.write },
+    feedbackRecord: { findUnique: async () => ({ initiativeId: "init-b" }), findMany: mocks.write },
+    reprioritizationProposal: { findUnique: async () => ({ feedbackId: "feedback-b" }) },
     prototype: { findUnique: mocks.write },
   },
 }));
@@ -38,6 +40,9 @@ import { GET as validationsGet, POST as validationCreate } from "@/app/api/initi
 import { PATCH as validationUpdate } from "@/app/api/validations/[validationId]/route";
 import { GET as readinessGet, POST as readinessCreate } from "@/app/api/initiatives/[id]/release-readiness/route";
 import { PATCH as readinessUpdate } from "@/app/api/release-readiness/[assessmentId]/route";
+import { GET as feedbackGet, POST as feedbackCreate } from "@/app/api/initiatives/[id]/feedback/route";
+import { PATCH as feedbackUpdate } from "@/app/api/feedback/[feedbackId]/route";
+import { PATCH as proposalUpdate } from "@/app/api/reprioritization-proposals/[proposalId]/route";
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -101,6 +106,13 @@ describe("cross-organization API authorization independent of RLS", () => {
     expect((await readinessGet(request("GET"), { params: Promise.resolve({ id: "init-b" }) })).status).toBe(404);
     expect((await readinessCreate(request("POST", {}), { params: Promise.resolve({ id: "init-b" }) })).status).toBe(404);
     expect((await readinessUpdate(request("PATCH", {}), { params: Promise.resolve({ assessmentId: "readiness-b" }) })).status).toBe(404);
+    expect(mocks.write).not.toHaveBeenCalled();
+  });
+  it("cannot read, create, update, or reprioritize feedback in another organization", async () => {
+    expect((await feedbackGet(request("GET"), { params: Promise.resolve({ id: "init-b" }) })).status).toBe(404);
+    expect((await feedbackCreate(request("POST", {}), { params: Promise.resolve({ id: "init-b" }) })).status).toBe(404);
+    expect((await feedbackUpdate(request("PATCH", {}), { params: Promise.resolve({ feedbackId: "feedback-b" }) })).status).toBe(404);
+    expect((await proposalUpdate(request("PATCH", {}), { params: Promise.resolve({ proposalId: "proposal-b" }) })).status).toBe(404);
     expect(mocks.write).not.toHaveBeenCalled();
   });
   it("rejects signed-out access to the request workflow", async () => {

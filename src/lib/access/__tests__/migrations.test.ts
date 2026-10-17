@@ -337,4 +337,26 @@ describe.sequential("migration replay and real PostgreSQL RLS", () => {
     expect((await asUser(authA, () => pg.query(`UPDATE "ReleaseReadinessRevision" SET reason='Forged' WHERE id='release-revision-a' RETURNING id`))).rows).toEqual([]);
   });
 
+  it("isolates feedback, enforces duplicate protection, and preserves reprioritization decisions", async () => {
+    await asUser(authA, () => pg.exec(`
+      INSERT INTO "FeedbackRecord" (id,"organizationId","projectId","initiativeId",title,details,source,category,"dedupeKey","createdByUserId","updatedAt")
+      VALUES ('feedback-a','org-a','project-a','init-a','Reporting feedback','Customers cannot find reports.','customer','usability',repeat('5',64),'user-org-a',now());
+      INSERT INTO "FeedbackRevision" (id,"organizationId","feedbackId","fromRevision","toRevision","previousData","nextData",reason,"actorUserId")
+      VALUES ('feedback-revision-a','org-a','feedback-a',1,2,'{}','{}','Feedback triaged','user-org-a');
+      INSERT INTO "ReprioritizationProposal" (id,"organizationId","feedbackId","entityType","entityId","expectedEntityRevision","currentPrioritySnapshot","proposedFactors",moscow,"roadmapLane",rationale,"createdByUserId","updatedAt")
+      VALUES ('feedback-proposal-a','org-a','feedback-a','feature','capability-a',1,'{}','{"businessValue":5,"urgency":4,"userImpact":5,"dependencyImpact":3,"risk":3,"effort":3,"effortPoints":3,"bugSeverity":"not_applicable"}','must','now','Repeated customer feedback','user-org-a',now());
+      INSERT INTO "FeedbackAiSuggestion" (id,"organizationId","feedbackId",kind,fingerprint,content,"informationUsed",model,"generatedByUserId")
+      VALUES ('feedback-ai-a','org-a','feedback-a','summary',repeat('4',64),'{"summary":"Customers cannot locate reports."}','Feedback details','gpt-test','user-org-a');
+    `));
+    expect((await asUser(authB, () => pg.query(`SELECT id FROM "FeedbackRecord" WHERE id='feedback-a'`))).rows).toEqual([]);
+    await expect(asUser(authA, () => pg.exec(`
+      INSERT INTO "FeedbackRecord" (id,"organizationId","projectId","initiativeId",title,details,source,"dedupeKey","createdByUserId","updatedAt")
+      VALUES ('feedback-duplicate','org-a','project-a','init-a','Duplicate','Duplicate','manual',repeat('5',64),'user-org-a',now())
+    `))).rejects.toThrow();
+    await expect(asUser(authA, () => pg.exec(`INSERT INTO "FeedbackRevision" (id,"organizationId","feedbackId","fromRevision","toRevision","previousData","nextData",reason) VALUES ('feedback-revision-cross','org-b','feedback-a',2,3,'{}','{}','Forged history')`))).rejects.toThrow();
+    await asUser(authA, () => pg.exec(`UPDATE "ReprioritizationProposal" SET status='dismissed', "decisionReason"='PO retained current priority', "decidedByUserId"='user-org-a', "decidedAt"=now(), revision=2 WHERE id='feedback-proposal-a'`));
+    await expect(asUser(authA, () => pg.exec(`UPDATE "ReprioritizationProposal" SET rationale='Changed later' WHERE id='feedback-proposal-a'`))).rejects.toThrow();
+    expect((await asUser(authA, () => pg.query(`UPDATE "FeedbackRevision" SET reason='Forged' WHERE id='feedback-revision-a' RETURNING id`))).rows).toEqual([]);
+  });
+
 });
