@@ -13,6 +13,7 @@ vi.mock("@/lib/db", () => ({
     inSprintClarification: { findUnique: async () => ({ initiativeId: "init-b" }), findMany: mocks.write },
     demoItem: { findUnique: async () => ({ initiativeId: "init-b" }), findMany: mocks.write, create: mocks.write },
     sprintReview: { findUnique: async () => ({ initiativeId: "init-b" }), findMany: mocks.write },
+    productValidation: { findUnique: async () => ({ initiativeId: "init-b" }), findMany: mocks.write },
     prototype: { findUnique: mocks.write },
   },
 }));
@@ -32,6 +33,8 @@ import { PATCH as demoUpdate } from "@/app/api/demos/[demoId]/route";
 import { PATCH as demoReorder } from "@/app/api/initiatives/[id]/demos/reorder/route";
 import { GET as reviewsGet, POST as reviewCreate } from "@/app/api/initiatives/[id]/sprint-reviews/route";
 import { PATCH as reviewUpdate } from "@/app/api/sprint-reviews/[reviewId]/route";
+import { GET as validationsGet, POST as validationCreate } from "@/app/api/initiatives/[id]/validations/route";
+import { PATCH as validationUpdate } from "@/app/api/validations/[validationId]/route";
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -83,6 +86,12 @@ describe("cross-organization API authorization independent of RLS", () => {
     expect((await reviewsGet(request("GET"), { params: Promise.resolve({ id: "init-b" }) })).status).toBe(404);
     expect((await reviewCreate(request("POST", {}), { params: Promise.resolve({ id: "init-b" }) })).status).toBe(404);
     expect((await reviewUpdate(request("PATCH", {}), { params: Promise.resolve({ reviewId: "review-b" }) })).status).toBe(404);
+    expect(mocks.write).not.toHaveBeenCalled();
+  });
+  it("cannot read, create, or update Product Owner validations in another organization", async () => {
+    expect((await validationsGet(request("GET"), { params: Promise.resolve({ id: "init-b" }) })).status).toBe(404);
+    expect((await validationCreate(request("POST", {}), { params: Promise.resolve({ id: "init-b" }) })).status).toBe(404);
+    expect((await validationUpdate(request("PATCH", {}), { params: Promise.resolve({ validationId: "validation-b" }) })).status).toBe(404);
     expect(mocks.write).not.toHaveBeenCalled();
   });
   it("rejects signed-out access to the request workflow", async () => {
