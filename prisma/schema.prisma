@@ -955,24 +955,120 @@ model Sprint {
 }
 
 model Release {
-  id                         String                  @id @default(cuid())
+  id                         String                       @id @default(cuid())
   prototypeId                String
-  prototype                  Prototype               @relation(fields: [prototypeId], references: [id], onDelete: Cascade)
+  prototype                  Prototype                    @relation(fields: [prototypeId], references: [id], onDelete: Cascade)
   name                       String // "Release 1 (MVP)" ...
   phaseNumber                Int
   targetDate                 DateTime
   order                      Int
-  origin                     String                  @default("auto") // auto | manual — see Sprint.origin comment above
+  origin                     String                       @default("auto") // auto | manual — see Sprint.origin comment above
   sprints                    Sprint[]
-  features                   Capability[]            @relation("ReleaseFeatures")
+  features                   Capability[]                 @relation("ReleaseFeatures")
   stakeholderAssignments     StakeholderAssignment[]
-  affectedBugPlanningRecords BugPlanningRecord[]     @relation("BugPlanningRelease")
-  predecessorDependencies    WorkDependency[]        @relation("DependencyPredecessorRelease")
-  dependentDependencies      WorkDependency[]        @relation("DependencyDependentRelease")
+  affectedBugPlanningRecords BugPlanningRecord[]          @relation("BugPlanningRelease")
+  predecessorDependencies    WorkDependency[]             @relation("DependencyPredecessorRelease")
+  dependentDependencies      WorkDependency[]             @relation("DependencyDependentRelease")
   planningBlockers           PlanningBlocker[]
-  createdAt                  DateTime                @default(now())
+  readinessAssessments       ReleaseReadinessAssessment[]
+  createdAt                  DateTime                     @default(now())
 
   @@unique([prototypeId, order])
+}
+
+// Feature 19: a release-level decision record built from frozen planning,
+// delivery, validation, risk, dependency, and quality evidence. AI may draft
+// narrative text, but readiness gates and approval remain deterministic and
+// explicitly controlled by an authorized person.
+model ReleaseReadinessAssessment {
+  id                              String    @id @default(cuid())
+  organizationId                  String
+  projectId                       String
+  initiativeId                    String
+  releaseId                       String
+  release                         Release   @relation(fields: [releaseId], references: [id], onDelete: Restrict)
+  sequence                        Int
+  status                          String    @default("draft") // draft | needs_attention | ready | approved
+  releaseSnapshot                 Json
+  summary                         String    @default("")
+  stakeholderCommunication        String    @default("")
+  communicationOwnerStakeholderId String?
+  communicationOwnerNameSnapshot  String    @default("")
+  communicationStatus             String    @default("not_started") // not_started | drafted | sent
+  decisionReason                  String    @default("")
+  revision                        Int       @default(1)
+  supersedesAssessmentId          String?
+  createdByUserId                 String
+  approvedByUserId                String?
+  approvedAt                      DateTime?
+  createdAt                       DateTime  @default(now())
+  updatedAt                       DateTime  @updatedAt
+
+  checks      ReleaseReadinessCheck[]
+  revisions   ReleaseReadinessRevision[]
+  suggestions ReleaseReadinessAiSuggestion[]
+
+  @@unique([releaseId, sequence])
+  @@index([organizationId, initiativeId, status])
+  @@index([releaseId, createdAt])
+}
+
+model ReleaseReadinessCheck {
+  id                 String                     @id @default(cuid())
+  organizationId     String
+  assessmentId       String
+  assessment         ReleaseReadinessAssessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  checkKey           String
+  label              String
+  status             String // pass | warning | fail | overridden
+  explanation        String
+  evidence           Json                       @default("{}")
+  overrideReason     String                     @default("")
+  overriddenByUserId String?
+  overriddenAt       DateTime?
+  createdAt          DateTime                   @default(now())
+  updatedAt          DateTime                   @updatedAt
+
+  @@unique([assessmentId, checkKey])
+  @@index([organizationId, assessmentId])
+}
+
+model ReleaseReadinessRevision {
+  id             String                     @id @default(cuid())
+  organizationId String
+  assessmentId   String
+  assessment     ReleaseReadinessAssessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  fromRevision   Int
+  toRevision     Int
+  previousData   Json
+  nextData       Json
+  reason         String
+  actorUserId    String?
+  createdAt      DateTime                   @default(now())
+
+  @@unique([assessmentId, toRevision])
+  @@index([organizationId, createdAt])
+}
+
+model ReleaseReadinessAiSuggestion {
+  id                       String                     @id @default(cuid())
+  organizationId           String
+  assessmentId             String
+  assessment               ReleaseReadinessAssessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  fingerprint              String
+  summary                  String
+  stakeholderCommunication String
+  informationUsed          String                     @default("")
+  status                   String                     @default("proposed") // proposed | used | dismissed | stale
+  model                    String                     @default("")
+  generatedByUserId        String
+  actedByUserId            String?
+  actedAt                  DateTime?
+  createdAt                DateTime                   @default(now())
+
+  @@unique([assessmentId, fingerprint])
+  @@index([organizationId, createdAt])
+  @@index([assessmentId, status, createdAt])
 }
 
 // Jira only — Aha!/Azure DevOps intentionally not modeled (out of scope).

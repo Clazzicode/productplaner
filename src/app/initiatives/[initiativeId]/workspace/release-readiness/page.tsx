@@ -1,0 +1,9 @@
+import { notFound } from "next/navigation";
+import ReleaseReadinessBoard from "@/components/workspace/ReleaseReadinessBoard";
+import { requireInitiativeView } from "@/lib/access/guards";
+import { requireCurrentUser } from "@/lib/auth/session";
+import { db,establishAuthContext } from "@/lib/db";
+import { loadReleaseReadiness } from "@/lib/releaseReadiness/service";
+import { loadWorkspace } from "@/lib/workspace";
+export const dynamic="force-dynamic";
+export default async function ReleaseReadinessPage({params}:{params:Promise<{initiativeId:string}>}){const{initiativeId}=await params;const user=await requireCurrentUser();establishAuthContext(user.authUserId);const access=await requireInitiativeView(user,initiativeId);const workspace=await loadWorkspace(initiativeId);if(!workspace)notFound();const[releases,rows,stakeholders]=await Promise.all([db.release.findMany({where:{prototype:{initiativeId}},select:{id:true,name:true,targetDate:true,sprints:{select:{id:true}}},orderBy:{targetDate:"asc"}}),db.releaseReadinessAssessment.findMany({where:{initiativeId},select:{id:true},orderBy:{createdAt:"desc"}}),db.stakeholderContact.findMany({where:{organizationId:workspace.initiative.organizationId,archivedAt:null},select:{id:true,displayName:true},orderBy:{displayName:"asc"}})]);const assessments=(await Promise.all(rows.map(r=>loadReleaseReadiness(r.id)))).filter(Boolean);return <div><h2 className="text-xl font-bold">Release readiness</h2><p className="mt-1 text-sm text-neutral-500">Review frozen release evidence, resolve or explicitly override gates, send the stakeholder update, and record an authorized release decision.</p><div className="mt-6"><ReleaseReadinessBoard initiativeId={initiativeId} releases={JSON.parse(JSON.stringify(releases))} stakeholders={stakeholders} initialAssessments={JSON.parse(JSON.stringify(assessments))} canEdit={access.level==="edit"||access.level==="owner"}/></div></div>}

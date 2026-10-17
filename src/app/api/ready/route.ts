@@ -20,7 +20,8 @@ async function GETHandler() {
         AND to_regclass('public."InSprintClarification"') IS NOT NULL
         AND to_regclass('public."DemoItem"') IS NOT NULL
         AND to_regclass('public."SprintReview"') IS NOT NULL
-        AND to_regclass('public."ProductValidation"') IS NOT NULL AS safe
+        AND to_regclass('public."ProductValidation"') IS NOT NULL
+        AND to_regclass('public."ReleaseReadinessAssessment"') IS NOT NULL AS safe
       FROM pg_roles WHERE rolname = current_user`;
     if (!rows[0]?.safe) throw new Error("Database not ready");
     return Response.json(

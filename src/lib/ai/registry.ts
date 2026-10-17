@@ -19,6 +19,12 @@ import type { ContextLayer } from "./context/types";
 
 const AI_CAPABILITIES: AiCapabilityConfig[] = [
   {
+    action: "DRAFT_RELEASE_SUMMARY", enabled: true, maxOutputTokens: 1400,
+    userMonthlyLimit: 20, organizationMonthlyLimit: 200,
+    description: "Drafts a release-readiness summary and stakeholder communication from frozen deterministic gates without deciding readiness or approval.",
+    maxContextTokens: 6000, requiredContextLayers: ["task"], optionalContextLayers: ["initiative"], outputType: "release_readiness_draft", reusable: true,
+  },
+  {
     action: "DRAFT_VALIDATION_EVIDENCE", enabled: true, maxOutputTokens: 1200,
     userMonthlyLimit: 20, organizationMonthlyLimit: 200,
     description: "Summarizes supplied delivery evidence against immutable story and acceptance-criteria snapshots without making validation decisions.",
