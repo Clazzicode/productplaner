@@ -3,8 +3,8 @@ import type { Prisma } from "@prisma/client";
 import { auditOrganization } from "@/lib/audit";
 import { BusinessError } from "@/lib/businessError";
 import { db, withTransaction } from "@/lib/db";
-import { accessibleJiraResources, decryptedTokens, encryptedTokens, exchangeJiraCode, jiraAuthorizationUrl, listJiraProjects, refreshJiraTokens, type JiraProject, type JiraResource } from "./client";
-import { jiraHash } from "./crypto";
+import { accessibleJiraResources, decryptedTokens, deleteJiraWebhooks, encryptedTokens, exchangeJiraCode, getJiraProjectMetadata, jiraAuthorizationUrl, listJiraProjects, refreshJiraTokens, type JiraProject, type JiraProjectMetadata, type JiraResource } from "./client";
+import { encryptJiraSecret, jiraHash } from "./crypto";
 import type { JiraProjectInput } from "./model";
 
 const STATE_LIFETIME_MS = 10 * 60 * 1000;
@@ -26,7 +26,8 @@ async function mirrorHubConnection(connection: { organizationId: string; initiat
   const provider = await db.integrationProvider.findUnique({ where: { key: "jira" } });
   if (!provider) return;
   const existing = await db.integrationConnection.findFirst({ where: { organizationId: connection.organizationId, initiativeId: connection.initiativeId, providerId: provider.id } });
-  const data = { connectionName: "Jira Cloud", status: connection.status === "connected" ? "sync_ready" : "needs_configuration", mode: "live", workspaceName: connection.siteName, workspaceUrl: connection.siteUrl, projectKey: connection.projectKey, projectName: connection.projectName, configuredByUserId: connection.configuredByUserId, configuredAt: new Date(), isEnabled: true, settingsJson: "{}" };
+  const enabled = connection.status !== "revoked";
+  const data = { connectionName: "Jira Cloud", status: connection.status === "connected" ? "sync_ready" : enabled ? "needs_configuration" : "available", mode: "live", workspaceName: connection.siteName, workspaceUrl: connection.siteUrl, projectKey: connection.projectKey, projectName: connection.projectName, configuredByUserId: connection.configuredByUserId, configuredAt: new Date(), isEnabled: enabled, settingsJson: "{}" };
   if (existing) await db.integrationConnection.update({ where: { id: existing.id }, data });
   else await db.integrationConnection.create({ data: { organizationId: connection.organizationId, initiativeId: connection.initiativeId, providerId: provider.id, ...data } });
 }
@@ -89,16 +90,49 @@ export async function discoverJiraProjects(connectionId: string): Promise<JiraPr
   return listJiraProjects(connection.cloudId, accessToken);
 }
 
+export async function discoverJiraProjectMetadata(connectionId: string, projectId: string): Promise<JiraProjectMetadata> {
+  const { connection, accessToken } = await accessTokenFor(connectionId);
+  if (!connection.cloudId) throw new BusinessError("Choose a Jira site first.", 422);
+  const projects = await listJiraProjects(connection.cloudId, accessToken);
+  const project = projects.find((item) => item.id === projectId);
+  if (!project) throw new BusinessError("Choose a Jira project available to this connection.", 422);
+  return getJiraProjectMetadata({ cloudId: connection.cloudId, accessToken, projectId: project.id, projectKey: project.key });
+}
+
 export async function configureJiraProject(connectionId: string, input: JiraProjectInput) {
   const { connection, accessToken } = await accessTokenFor(connectionId);
   if (!connection.cloudId) throw new BusinessError("Choose a Jira site first.", 422);
   const projects = await listJiraProjects(connection.cloudId, accessToken);
   const project = projects.find((item) => item.id === input.projectId && item.key === input.projectKey);
   if (!project) throw new BusinessError("Choose a Jira project available to this connection.", 422);
-  const changed = await db.jiraConnection.updateMany({ where: { id: connectionId, revision: input.expectedRevision, status: { not: "revoked" } }, data: { projectId: project.id, projectKey: project.key, projectName: project.name, issueTypeMappings: input.issueTypeMappings, fieldMappings: { storyPointsField: input.storyPointsField }, status: "connected", revision: { increment: 1 } } });
+  const changed = await db.jiraConnection.updateMany({ where: { id: connectionId, revision: input.expectedRevision, status: { not: "revoked" } }, data: { projectId: project.id, projectKey: project.key, projectName: project.name, issueTypeMappings: input.issueTypeMappings, fieldMappings: { storyPointsField: input.storyPointsField, statusMappings: input.statusMappings, priorityMappings: input.priorityMappings }, status: "connected", revision: { increment: 1 } } });
   if (changed.count !== 1) throw new BusinessError("The Jira connection changed. Reload and try again.", 409);
   const saved = await db.jiraConnection.findUniqueOrThrow({ where: { id: connectionId } });
   await mirrorHubConnection(saved);
   await auditOrganization({ organizationId: saved.organizationId, actorUserId: saved.configuredByUserId, entityType: "jira_connection", entityId: saved.id, action: "jira.project_configured", metadata: { initiativeId: saved.initiativeId, cloudId: saved.cloudId, projectKey: saved.projectKey } });
   return publicJiraConnection(saved);
+}
+
+export async function disconnectJira(connectionId: string, actorUserId: string) {
+  const current = await db.jiraConnection.findUnique({ where: { id: connectionId } });
+  if (!current || current.status === "revoked") throw new BusinessError("Jira connection not found.", 404);
+  const subscription = await db.jiraWebhookSubscription.findUnique({ where: { connectionId } });
+  let remoteWebhookWarning: string | null = null;
+  if (subscription && current.cloudId) {
+    try {
+      const { accessToken } = await accessTokenFor(connectionId);
+      await deleteJiraWebhooks({ cloudId: current.cloudId, accessToken, webhookIds: [subscription.externalId] });
+    } catch (error) {
+      remoteWebhookWarning = error instanceof Error ? error.message : "The remote Jira webhook could not be removed.";
+    }
+  }
+  const saved = await withTransaction(async () => {
+    await db.jiraWebhookSubscription.updateMany({ where: { connectionId }, data: { status: "disabled" } });
+    await db.jiraSyncJob.updateMany({ where: { connectionId, status: { in: ["queued", "processing"] } }, data: { status: "cancelled", lockedAt: null, lockedBy: null, lastError: "Connection disconnected by an administrator." } });
+    const revoked = await db.jiraConnection.update({ where: { id: connectionId }, data: { status: "revoked", accessTokenCiphertext: encryptJiraSecret(randomBytes(32).toString("base64url")), refreshTokenCiphertext: encryptJiraSecret(randomBytes(32).toString("base64url")), tokenExpiresAt: new Date(), revision: { increment: 1 } } });
+    await auditOrganization({ organizationId: current.organizationId, actorUserId, entityType: "jira_connection", entityId: current.id, action: "jira.disconnected", metadata: { initiativeId: current.initiativeId, remoteWebhookRemoved: !remoteWebhookWarning, remoteWebhookWarning } });
+    return revoked;
+  });
+  await mirrorHubConnection(saved);
+  return { connection: publicJiraConnection(saved), remoteWebhookWarning };
 }

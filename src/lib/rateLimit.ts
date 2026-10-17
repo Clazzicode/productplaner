@@ -26,8 +26,11 @@ const AUTH_POLICIES: Record<string, RateLimitPolicy> = {
  * authorization, and CSRF checks already enforced by withApi().
  */
 export function rateLimitPolicyFor(request: Request): RateLimitPolicy | null {
-  if (!["POST", "PUT", "PATCH", "DELETE"].includes(request.method)) return null;
   const path = new URL(request.url).pathname;
+  if (request.method === "GET" && path === "/api/integrations/jira/oauth/callback") {
+    return { key: "jira.oauth_callback", limit: 20, windowSeconds: 600 };
+  }
+  if (!["POST", "PUT", "PATCH", "DELETE"].includes(request.method)) return null;
   if (AUTH_POLICIES[path]) return AUTH_POLICIES[path];
   if (path === "/api/account/start-over") {
     return { key: "account.start_over", limit: 3, windowSeconds: 3600 };
@@ -46,6 +49,27 @@ export function rateLimitPolicyFor(request: Request): RateLimitPolicy | null {
   }
   if (/^\/api\/(initiatives\/[^/]+\/sync\/jira|integrations\/[^/]+)$/.test(path)) {
     return { key: "integration.sync", limit: 30, windowSeconds: 600 };
+  }
+  if (path === "/api/integrations/jira/oauth/start") {
+    return { key: "jira.oauth_start", limit: 10, windowSeconds: 600 };
+  }
+  if (/^\/api\/integrations\/jira\/(imports|exports)(?:\/.*)?$/.test(path)) {
+    return { key: "jira.transfer", limit: 30, windowSeconds: 600 };
+  }
+  if (/^\/api\/integrations\/jira\/jobs(?:\/.*)?$/.test(path)) {
+    return { key: "jira.job_control", limit: 30, windowSeconds: 600 };
+  }
+  if (/^\/api\/integrations\/jira\/connections\/[^/]+\/webhooks$/.test(path)) {
+    return { key: "jira.webhook_management", limit: 10, windowSeconds: 600 };
+  }
+  if (/^\/api\/integrations\/jira\/connections\/[^/]+$/.test(path) && request.method === "DELETE") {
+    return { key: "jira.disconnect", limit: 5, windowSeconds: 3600 };
+  }
+  if (/^\/api\/integrations\/jira\/conflicts\/[^/]+$/.test(path)) {
+    return { key: "jira.conflict_resolution", limit: 30, windowSeconds: 600 };
+  }
+  if (/^\/api\/integrations\/jira\/webhooks\/[^/]+$/.test(path)) {
+    return { key: "jira.webhook_delivery", limit: 120, windowSeconds: 60 };
   }
   if (path.startsWith("/api/admin/")) {
     return { key: "admin.mutation", limit: 60, windowSeconds: 600 };

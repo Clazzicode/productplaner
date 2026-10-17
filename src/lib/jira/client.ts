@@ -9,6 +9,12 @@ export interface JiraTokens {
 
 export interface JiraResource { id: string; url: string; name: string; scopes: string[] }
 export interface JiraProject { id: string; key: string; name: string; projectTypeKey: string }
+export interface JiraProjectMetadata {
+  issueTypes: { id: string; name: string; subtask: boolean; statuses: { id: string; name: string }[] }[];
+  fields: { id: string; name: string; custom: boolean; number: boolean }[];
+  priorities: { id: string; name: string }[];
+  versions: { id: string; name: string; released: boolean; releaseDate: string | null }[];
+}
 
 export interface JiraIssueSnapshot {
   id: string;
@@ -117,7 +123,29 @@ export async function listJiraProjects(cloudId: string, accessToken: string, fet
   return values.map((value) => object(value)).map((row) => ({ id: text(row.id), key: text(row.key), name: text(row.name), projectTypeKey: text(row.projectTypeKey) })).filter((row) => row.id && row.key);
 }
 
-export function issueSnapshot(value: unknown, storyPointsField: string): JiraIssueSnapshot | null {
+export async function getJiraProjectMetadata(input: { cloudId: string; accessToken: string; projectId: string; projectKey: string }, fetcher: Fetcher = fetch): Promise<JiraProjectMetadata> {
+  const [statusesPayload, fieldsPayload, prioritiesPayload, versionsPayload] = await Promise.all([
+    jiraApi(input.cloudId, input.accessToken, `/rest/api/3/project/${encodeURIComponent(input.projectKey)}/statuses`, {}, fetcher),
+    jiraApi(input.cloudId, input.accessToken, "/rest/api/3/field", {}, fetcher),
+    jiraApi(input.cloudId, input.accessToken, "/rest/api/3/priority", {}, fetcher),
+    jiraApi(input.cloudId, input.accessToken, `/rest/api/3/project/${encodeURIComponent(input.projectId)}/versions`, {}, fetcher),
+  ]);
+  const statuses = Array.isArray(statusesPayload) ? statusesPayload.map(object) : [];
+  const fields = Array.isArray(fieldsPayload) ? fieldsPayload.map(object) : [];
+  const priorities = Array.isArray(prioritiesPayload) ? prioritiesPayload.map(object) : [];
+  const versions = Array.isArray(versionsPayload) ? versionsPayload.map(object) : [];
+  return {
+    issueTypes: statuses.map((row) => ({
+      id: text(row.id), name: text(row.name), subtask: Boolean(row.subtask),
+      statuses: (Array.isArray(row.statuses) ? row.statuses.map(object) : []).map((status) => ({ id: text(status.id), name: text(status.name) })).filter((status) => status.id && status.name),
+    })).filter((row) => row.id && row.name),
+    fields: fields.map((row) => { const schema = object(row.schema); return { id: text(row.id), name: text(row.name), custom: Boolean(row.custom), number: text(schema.type) === "number" }; }).filter((row) => row.id && row.name),
+    priorities: priorities.map((row) => ({ id: text(row.id), name: text(row.name) })).filter((row) => row.id && row.name),
+    versions: versions.map((row) => ({ id: text(row.id), name: text(row.name), released: Boolean(row.released), releaseDate: text(row.releaseDate) || null })).filter((row) => row.id && row.name),
+  };
+}
+
+export function issueSnapshot(value: unknown, storyPointsField: string | null): JiraIssueSnapshot | null {
   const row = object(value);
   const fields = object(row.fields);
   const issueType = object(fields.issuetype);
@@ -141,7 +169,7 @@ export function issueSnapshot(value: unknown, storyPointsField: string): JiraIss
     priority: priority ? { id: text(priority.id), name: text(priority.name) } : null,
     labels: Array.isArray(fields.labels) ? fields.labels.map(text).filter(Boolean) : [],
     parentKey: parent ? text(parent.key) || null : null,
-    storyPoints: number(fields[storyPointsField]),
+    storyPoints: storyPointsField ? number(fields[storyPointsField]) : null,
     sprint: fields.customfield_10020 ?? null,
     fixVersions: fixVersions.map((version) => ({ id: text(version.id), name: text(version.name), releaseDate: text(version.releaseDate) || null })).filter((version) => version.id),
     updated: text(fields.updated) || null,
@@ -151,9 +179,9 @@ export function issueSnapshot(value: unknown, storyPointsField: string): JiraIss
 
 const ISSUE_FIELDS = ["summary","description","issuetype","status","assignee","priority","labels","parent","fixVersions","updated"];
 
-export async function getJiraIssue(input: { cloudId: string; accessToken: string; issueIdOrKey: string; storyPointsField?: string }, fetcher: Fetcher = fetch) {
-  const storyPointsField = input.storyPointsField || "customfield_10016";
-  const fields = [...ISSUE_FIELDS, storyPointsField, "customfield_10020"].join(",");
+export async function getJiraIssue(input: { cloudId: string; accessToken: string; issueIdOrKey: string; storyPointsField?: string | null }, fetcher: Fetcher = fetch) {
+  const storyPointsField = input.storyPointsField === undefined ? "customfield_10016" : input.storyPointsField;
+  const fields = [...ISSUE_FIELDS, ...(storyPointsField ? [storyPointsField] : []), "customfield_10020"].join(",");
   const payload = await jiraApi(input.cloudId, input.accessToken, `/rest/api/3/issue/${encodeURIComponent(input.issueIdOrKey)}?fields=${encodeURIComponent(fields)}`, {}, fetcher);
   const issue = issueSnapshot(payload, storyPointsField);
   if (!issue) throw new Error("Jira returned an invalid issue response.");
@@ -186,9 +214,15 @@ export async function refreshJiraWebhook(input: { cloudId: string; accessToken: 
   return { expiresAt: new Date(expiration) };
 }
 
-export async function searchJiraIssues(input: { cloudId: string; accessToken: string; projectKey: string; nextPageToken?: string; storyPointsField?: string }, fetcher: Fetcher = fetch) {
-  const storyPointsField = input.storyPointsField || "customfield_10016";
-  const body = { jql: `project = \"${input.projectKey.replaceAll('"', '\\"')}\" ORDER BY updated ASC`, maxResults: 100, ...(input.nextPageToken ? { nextPageToken: input.nextPageToken } : {}), fields: [...ISSUE_FIELDS,storyPointsField,"customfield_10020"] };
+export async function deleteJiraWebhooks(input: { cloudId: string; accessToken: string; webhookIds: string[] }, fetcher: Fetcher = fetch) {
+  const webhookIds = input.webhookIds.map(Number).filter(Number.isFinite);
+  if (!webhookIds.length) return;
+  await jiraApi(input.cloudId, input.accessToken, "/rest/api/3/webhook", { method: "DELETE", body: JSON.stringify({ webhookIds }) }, fetcher);
+}
+
+export async function searchJiraIssues(input: { cloudId: string; accessToken: string; projectKey: string; nextPageToken?: string; storyPointsField?: string | null }, fetcher: Fetcher = fetch) {
+  const storyPointsField = input.storyPointsField === undefined ? "customfield_10016" : input.storyPointsField;
+  const body = { jql: `project = \"${input.projectKey.replaceAll('"', '\\"')}\" ORDER BY updated ASC`, maxResults: 100, ...(input.nextPageToken ? { nextPageToken: input.nextPageToken } : {}), fields: [...ISSUE_FIELDS,...(storyPointsField ? [storyPointsField] : []),"customfield_10020"] };
   const payload = object(await jiraApi(input.cloudId, input.accessToken, "/rest/api/3/search/jql", { method: "POST", body: JSON.stringify(body) }, fetcher));
   const issues = Array.isArray(payload.issues) ? payload.issues.map((issue) => issueSnapshot(issue, storyPointsField)).filter((issue): issue is JiraIssueSnapshot => Boolean(issue)) : [];
   return { issues, nextPageToken: text(payload.nextPageToken) || null, isLast: Boolean(payload.isLast) };

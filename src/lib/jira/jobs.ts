@@ -1,10 +1,13 @@
 import { randomUUID } from "node:crypto";
-import { establishAuthContext, db, rawDb } from "@/lib/db";
+import type { Prisma } from "@prisma/client";
+import { establishAuthContext, db, rawDb, withTransaction } from "@/lib/db";
 import { BusinessError } from "@/lib/businessError";
 import { executeJiraExportItem, finalizeJiraExportRun } from "./export";
 import { previewJiraImport } from "./import";
 import { recordExportExecutionConflict } from "./conflicts";
 import { renewWebhook } from "./webhooks";
+import { jiraHash } from "./crypto";
+import { auditInitiative } from "@/lib/audit";
 
 type ClaimedJob = { job_id: string; organization_id: string; connection_id: string; actor_auth_user_id: string };
 const payloadObject = (value: unknown): Record<string, unknown> => value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
@@ -77,4 +80,41 @@ export async function processJiraJobs(limit = 10, workerId = `jira-${randomUUID(
     }
   }
   return result;
+}
+
+export async function manageJiraJob(jobId: string, action: "replay" | "cancel", actorUserId: string) {
+  return withTransaction(async () => {
+    const job = await db.jiraSyncJob.findUnique({ where: { id: jobId } });
+    if (!job) throw new BusinessError("Jira job not found.", 404);
+    if (action === "cancel") {
+      if (job.status !== "queued") throw new BusinessError("Only queued Jira work can be cancelled.", 409);
+      await db.jiraSyncJob.update({ where: { id: job.id }, data: { status: "cancelled", lastError: "Cancelled by an administrator." } });
+      const payload = payloadObject(job.payload);
+      if (job.jobType === "export_item") {
+        const itemId = String(payload.exportItemId ?? "");
+        if (itemId) {
+          await db.jiraExportItem.updateMany({ where: { id: itemId, status: { not: "succeeded" } }, data: { status: "failed", failureMessage: "Cancelled before delivery." } });
+          const item = await db.jiraExportItem.findUnique({ where: { id: itemId } });
+          if (item) await finalizeJiraExportRun(item.exportRunId);
+        }
+      } else if (job.jobType === "webhook_import") {
+        const eventId = String(payload.webhookEventId ?? "");
+        if (eventId) await db.jiraWebhookEvent.updateMany({ where: { id: eventId, status: { not: "processed" } }, data: { status: "ignored", processedAt: new Date(), failureMessage: "Cancelled by an administrator." } });
+      }
+      await auditInitiative(job.initiativeId, "jira.job_cancelled", { jiraJobId: job.id, jobType: job.jobType, actorUserId });
+      return db.jiraSyncJob.findUniqueOrThrow({ where: { id: job.id } });
+    }
+    if (!["failed", "cancelled"].includes(job.status)) throw new BusinessError("Only failed or cancelled Jira work can be replayed.", 409);
+    const replay = await db.jiraSyncJob.create({ data: { organizationId: job.organizationId, initiativeId: job.initiativeId, connectionId: job.connectionId, jobType: job.jobType, payload: (job.payload ?? {}) as Prisma.InputJsonValue, idempotencyKey: jiraHash(`replay:${job.id}:${randomUUID()}`), maxAttempts: job.maxAttempts } });
+    const payload = payloadObject(job.payload);
+    if (job.jobType === "export_item") {
+      const itemId = String(payload.exportItemId ?? "");
+      if (itemId) await db.jiraExportItem.updateMany({ where: { id: itemId, status: "failed" }, data: { status: "pending", failureMessage: null } });
+    } else if (job.jobType === "webhook_import") {
+      const eventId = String(payload.webhookEventId ?? "");
+      if (eventId) await db.jiraWebhookEvent.updateMany({ where: { id: eventId, status: { in: ["failed", "ignored"] } }, data: { status: "queued", processedAt: null, failureMessage: null } });
+    }
+    await auditInitiative(job.initiativeId, "jira.job_replayed", { originalJiraJobId: job.id, jiraJobId: replay.id, jobType: job.jobType, actorUserId });
+    return replay;
+  });
 }

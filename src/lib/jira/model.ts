@@ -16,7 +16,9 @@ export const jiraProjectSchema = z.object({
   projectName: z.string().trim().min(1).max(300),
   expectedRevision: z.number().int().positive(),
   issueTypeMappings: z.record(z.string(), z.enum(["feature", "story", "bug", "skip"])).default({}),
-  storyPointsField: z.string().trim().regex(/^customfield_\d+$/).default("customfield_10016"),
+  storyPointsField: z.string().trim().regex(/^customfield_\d+$/).nullable().default(null),
+  statusMappings: z.record(z.string(), z.enum(["planned", "in_progress", "done", "blocked"])).default({}),
+  priorityMappings: z.record(z.string(), z.enum(["critical", "high", "medium", "low"])).default({}),
 });
 
 export const jiraImportPreviewSchema = z.object({ connectionId: z.string().trim().min(1) });
@@ -38,6 +40,8 @@ export const jiraExportApprovalSchema = z.object({
 export const jiraExportExecuteSchema = z.object({ expectedStatus: z.literal("approved") });
 
 export const jiraWebhookCommandSchema = z.object({ action: z.enum(["register", "renew"]) });
+
+export const jiraJobCommandSchema = z.object({ action: z.enum(["replay", "cancel"]) }).strict();
 
 export const jiraConflictResolutionSchema = z.object({
   resolution: z.enum(["keep_planning", "accept_jira", "manual"]),

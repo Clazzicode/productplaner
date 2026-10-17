@@ -21,6 +21,7 @@ vi.mock("@/lib/db", () => ({
     jiraImportRun: { findFirst: async () => null },
     jiraExportRun: { findFirst: async () => null },
     jiraSyncConflict: { findFirst: async () => null },
+    jiraSyncJob: { findFirst: async () => null },
     prototype: { findUnique: mocks.write },
   },
 }));
@@ -55,6 +56,8 @@ import { GET as jiraExportGet, PATCH as jiraExportApprove } from "@/app/api/inte
 import { POST as jiraExportExecute } from "@/app/api/integrations/jira/exports/[runId]/execute/route";
 import { POST as jiraWebhookConfigure } from "@/app/api/integrations/jira/connections/[connectionId]/webhooks/route";
 import { PATCH as jiraConflictResolve } from "@/app/api/integrations/jira/conflicts/[conflictId]/route";
+import { DELETE as jiraDisconnect } from "@/app/api/integrations/jira/connections/[connectionId]/route";
+import { PATCH as jiraJobUpdate } from "@/app/api/integrations/jira/jobs/[jobId]/route";
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -144,6 +147,11 @@ describe("cross-organization API authorization independent of RLS", () => {
   it("cannot configure webhooks or resolve Jira conflicts for another organization", async () => {
     expect((await jiraWebhookConfigure(request("POST", { action: "register" }), { params: Promise.resolve({ connectionId: "jira-b" }) })).status).toBe(404);
     expect((await jiraConflictResolve(request("PATCH", { resolution: "keep_planning", reason: "Foreign conflict attempt" }), { params: Promise.resolve({ conflictId: "conflict-b" }) })).status).toBe(404);
+    expect(mocks.write).not.toHaveBeenCalled();
+  });
+  it("cannot disconnect connections or replay jobs from another organization", async () => {
+    expect((await jiraDisconnect(request("DELETE"), { params: Promise.resolve({ connectionId: "jira-b" }) })).status).toBe(404);
+    expect((await jiraJobUpdate(request("PATCH", { action: "replay" }), { params: Promise.resolve({ jobId: "job-b" }) })).status).toBe(404);
     expect(mocks.write).not.toHaveBeenCalled();
   });
   it("rejects signed-out access to the request workflow", async () => {

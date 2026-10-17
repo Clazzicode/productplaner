@@ -325,12 +325,19 @@ describe.sequential("migration replay and real PostgreSQL RLS", () => {
       VALUES ('release-revision-a','org-a','release-assessment-a',1,2,'{}','{}','Release evidence reviewed','user-org-a');
       INSERT INTO "ReleaseReadinessAiSuggestion" (id,"organizationId","assessmentId",fingerprint,summary,"stakeholderCommunication","informationUsed",model,"generatedByUserId")
       VALUES ('release-ai-a','org-a','release-assessment-a',repeat('6',64),'Draft summary only.','Draft stakeholder update.','Frozen release checks','gpt-test','user-org-a');
+      INSERT INTO "PlanningRequest" (id,"initiativeId",data,"updatedAt")
+      VALUES ('release-follow-up-request-a','init-a','{"title":"Resolve release quality gate"}',now());
+      INSERT INTO "ReleaseReadinessFollowUp" (id,"organizationId","assessmentId","checkKey","planningRequestId","createdByUserId")
+      VALUES ('release-follow-up-a','org-a','release-assessment-a','quality','release-follow-up-request-a','user-org-a');
     `));
     expect((await asUser(authB, () => pg.query(`SELECT id FROM "ReleaseReadinessAssessment" WHERE id='release-assessment-a'`))).rows).toEqual([]);
+    expect((await asUser(authB, () => pg.query(`SELECT id FROM "ReleaseReadinessFollowUp" WHERE id='release-follow-up-a'`))).rows).toEqual([]);
     await expect(asUser(authA, () => pg.exec(`
       INSERT INTO "ReleaseReadinessCheck" (id,"organizationId","assessmentId","checkKey",label,status,explanation,"updatedAt")
       VALUES ('release-check-cross','org-b','release-assessment-a','cross','Cross tenant','pass','Forged',now())
     `))).rejects.toThrow();
+    await expect(asUser(authA, () => pg.exec(`INSERT INTO "ReleaseReadinessFollowUp" (id,"organizationId","assessmentId","checkKey","planningRequestId","createdByUserId") VALUES ('release-follow-up-cross','org-b','release-assessment-a','cross','release-follow-up-request-a','user-org-a')`))).rejects.toThrow();
+    expect((await asUser(authA, () => pg.query(`UPDATE "ReleaseReadinessFollowUp" SET "checkKey"='changed' WHERE id='release-follow-up-a' RETURNING id`))).rows).toEqual([]);
     await asUser(authA, () => pg.exec(`UPDATE "ReleaseReadinessAssessment" SET status='approved', "decisionReason"='PO approved frozen evidence', "approvedByUserId"='user-org-a', "approvedAt"=now(), revision=2 WHERE id='release-assessment-a'`));
     await expect(asUser(authA, () => pg.exec(`UPDATE "ReleaseReadinessAssessment" SET "decisionReason"='Changed later' WHERE id='release-assessment-a'`))).rejects.toThrow();
     await expect(asUser(authA, () => pg.exec(`UPDATE "ReleaseReadinessCheck" SET status='fail' WHERE id='release-check-a'`))).rejects.toThrow();

@@ -11,6 +11,7 @@ export const releaseReadinessCommandSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("override_check"), expectedRevision: z.number().int().positive(), checkKey: id, overrideReason: z.string().trim().min(5).max(4000), reason }).strict(),
   z.object({ action: z.literal("mark_ready"), expectedRevision: z.number().int().positive(), reason }).strict(),
   z.object({ action: z.literal("approve"), expectedRevision: z.number().int().positive(), decisionReason: z.string().trim().min(3).max(8000), reason }).strict(),
+  z.object({ action: z.literal("create_follow_up"), expectedRevision: z.number().int().positive(), checkKey: id, title: z.string().trim().min(3).max(160), requestedChange: z.string().trim().min(3).max(8000), reason }).strict(),
   z.object({ action: z.literal("reopen"), expectedRevision: z.number().int().positive(), reason }).strict(),
   z.object({ action: z.literal("use_ai"), expectedRevision: z.number().int().positive(), suggestionId: id, summary: z.string().trim().min(3).max(20_000), stakeholderCommunication: z.string().trim().max(20_000), reason }).strict(),
 ]);

@@ -1007,10 +1007,28 @@ model ReleaseReadinessAssessment {
   checks      ReleaseReadinessCheck[]
   revisions   ReleaseReadinessRevision[]
   suggestions ReleaseReadinessAiSuggestion[]
+  followUps    ReleaseReadinessFollowUp[]
 
   @@unique([releaseId, sequence])
   @@index([organizationId, initiativeId, status])
   @@index([releaseId, createdAt])
+}
+
+// Traceable work created from a failed or warning release-readiness gate.
+// The linked PlanningRequest remains the authoritative backlog record.
+model ReleaseReadinessFollowUp {
+  id                String                     @id @default(cuid())
+  organizationId    String
+  assessmentId      String
+  assessment        ReleaseReadinessAssessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  checkKey          String
+  planningRequestId String                     @unique
+  planningRequest   PlanningRequest            @relation(fields: [planningRequestId], references: [id], onDelete: Restrict)
+  createdByUserId   String
+  createdAt         DateTime                   @default(now())
+
+  @@unique([assessmentId, checkKey])
+  @@index([organizationId, createdAt])
 }
 
 model ReleaseReadinessCheck {
@@ -1877,7 +1895,8 @@ model PlanningRequest {
   revisions              RequestRevision[]
   stakeholderAssignments StakeholderAssignment[]
   bugPlanningRecord      BugPlanningRecord?
-  sourceClarifications   InSprintClarification[] @relation("ClarificationFollowUpRequest")
+  sourceClarifications      InSprintClarification[]    @relation("ClarificationFollowUpRequest")
+  releaseReadinessFollowUps ReleaseReadinessFollowUp[]
   createdAt              DateTime                @default(now())
   updatedAt              DateTime                @updatedAt
 

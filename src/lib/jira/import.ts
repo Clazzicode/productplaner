@@ -45,9 +45,30 @@ function targetType(issue: JiraSourceIssue, connection: JiraConnection): TargetT
   return "skip";
 }
 
-function storyPointsField(connection: JiraConnection) {
+function storyPointsField(connection: JiraConnection): string | null {
   const fields = connection.fieldMappings && typeof connection.fieldMappings === "object" && !Array.isArray(connection.fieldMappings) ? connection.fieldMappings as Record<string, unknown> : {};
-  return typeof fields.storyPointsField === "string" ? fields.storyPointsField : "customfield_10016";
+  if (!("storyPointsField" in fields)) return "customfield_10016";
+  return typeof fields.storyPointsField === "string" ? fields.storyPointsField : null;
+}
+
+function configuredFieldMap(connection: JiraConnection, key: "statusMappings" | "priorityMappings"): Record<string, string> {
+  if (!connection.fieldMappings || typeof connection.fieldMappings !== "object" || Array.isArray(connection.fieldMappings)) return {};
+  const value = (connection.fieldMappings as Record<string, unknown>)[key];
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  return Object.fromEntries(Object.entries(value).filter((entry): entry is [string, string] => typeof entry[1] === "string"));
+}
+
+function mappedStatus(issue: JiraSourceIssue, connection: JiraConnection): "planned" | "in_progress" | "done" | "blocked" {
+  const map = configuredFieldMap(connection, "statusMappings");
+  const configured = map[issue.status.id] ?? map[issue.status.name] ?? map[issue.status.name.toLowerCase()];
+  return ["planned", "in_progress", "done", "blocked"].includes(configured) ? configured as "planned" | "in_progress" | "done" | "blocked" : issue.status.category === "done" ? "done" : issue.status.category === "indeterminate" ? "in_progress" : "planned";
+}
+
+function mappedPriority(issue: JiraSourceIssue, connection: JiraConnection): "critical" | "high" | "medium" | "low" {
+  const map = configuredFieldMap(connection, "priorityMappings");
+  const name = issue.priority?.name ?? "";
+  const configured = map[issue.priority?.id ?? ""] ?? map[name] ?? map[name.toLowerCase()];
+  return ["critical", "high", "medium", "low"].includes(configured) ? configured as "critical" | "high" | "medium" | "low" : name.toLowerCase().includes("highest") ? "critical" : name.toLowerCase().includes("high") ? "high" : name.toLowerCase().includes("low") ? "low" : "medium";
 }
 
 export async function currentTargetFingerprint(link: JiraExternalLink) {
@@ -175,7 +196,7 @@ async function importedStory(issue: JiraSourceIssue, connectionId: string, initi
   return db.artifactLayer.create({ data: { prototypeId: epic.prototypeId, type: "story", parentId: epic.id, order, title: issue.summary, body: plainText(issue.description) || `Imported from Jira ${issue.key}.`, points: issue.storyPoints ? Math.min(21, Math.max(1, Math.round(issue.storyPoints))) : null, sourceCapabilityId: capability.id, sourceType: "jira", externalRef: issue.key, dedupeKey: `jira:${issue.id}`, readinessStatus: "needs_refinement", traceNote: `Imported from Jira ${issue.key}.` } });
 }
 
-async function importedBug(issue: JiraSourceIssue, initiativeId: string, actorUserId: string, existingId?: string | null) {
+async function importedBug(issue: JiraSourceIssue, connection: JiraConnection, initiativeId: string, actorUserId: string, existingId?: string | null) {
   const existing = existingId ? await db.bugPlanningRecord.findUnique({ where: { id: existingId }, include: { request: true } }) : null;
   const request = emptyRequest();
   request.title = issue.summary;
@@ -188,7 +209,9 @@ async function importedBug(issue: JiraSourceIssue, initiativeId: string, actorUs
   request.outcome = "The Jira issue is resolved and validated.";
   request.businessRules = "Preserve Jira traceability.";
   request.dependencies = "Review linked Jira work.";
-  request.bug = { severity: issue.priority?.name.toLowerCase().includes("highest") ? "critical" : issue.priority?.name.toLowerCase().includes("high") ? "high" : "medium", affectedArea: issue.labels.join(", ") || "Not specified in Jira", observedBehavior: plainText(issue.description) || "See the Jira issue.", expectedBehavior: "The reported defect no longer occurs.", reproductionDetails: "See the Jira issue.", environment: "Not specified in Jira", status: issue.status.category === "done" ? "resolved" : issue.status.category === "indeterminate" ? "in_progress" : "reported" };
+  const status = mappedStatus(issue, connection);
+  const priority = mappedPriority(issue, connection);
+  request.bug = { severity: priority, affectedArea: issue.labels.join(", ") || "Not specified in Jira", observedBehavior: plainText(issue.description) || "See the Jira issue.", expectedBehavior: "The reported defect no longer occurs.", reproductionDetails: "See the Jira issue.", environment: "Not specified in Jira", status: status === "done" ? "resolved" : status === "in_progress" ? "in_progress" : status === "blocked" ? "confirmed" : "reported" };
   return saveRequest(initiativeId, request, existing ? { id: existing.requestId, revision: existing.request.revision } : undefined, { actorUserId, changeReason: existing ? `Imported Jira update ${issue.key}` : `Imported Jira bug ${issue.key}` });
 }
 
@@ -198,7 +221,8 @@ async function applyItem(item: { id: string; targetType: string; targetId: strin
   if (item.targetType === "feature") target = await importedFeature(issue, run.initiativeId, item.targetId);
   else if (item.targetType === "story") target = await importedStory(issue, run.connectionId, run.initiativeId, item.targetId);
   else if (item.targetType === "bug") {
-    const request = await importedBug(issue, run.initiativeId, actorUserId, item.targetId);
+    const connection = await db.jiraConnection.findUniqueOrThrow({ where: { id: run.connectionId } });
+    const request = await importedBug(issue, connection, run.initiativeId, actorUserId, item.targetId);
     target = await db.bugPlanningRecord.findUniqueOrThrow({ where: { requestId: request.id } });
   } else throw new BusinessError("Skipped Jira items cannot be imported.", 422);
   const linkBase = { organizationId: run.organizationId, initiativeId: run.initiativeId, connectionId: run.connectionId, externalIssueId: item.externalIssueId, externalKey: item.externalKey, issueTypeName: item.issueTypeName, targetType: item.targetType, targetId: target.id, sourceHash: item.sourceHash, targetFingerprint: "", sourceUpdatedAt: issue.updated ? new Date(issue.updated) : null, lastImportedSnapshot: item.sourceSnapshot as Prisma.InputJsonValue };

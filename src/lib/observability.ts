@@ -27,10 +27,12 @@ export function withApi<T extends unknown[]>(handler: (...args: T) => Promise<Re
     try {
       if (!options?.diagnostic) assertEnvironmentIsolation();
       const request = args[0] instanceof Request ? args[0] : null;
-      if (request && !["GET", "HEAD", "OPTIONS"].includes(request.method)) {
-        const origin = request.headers.get("origin");
-        if (origin && origin !== new URL(request.url).origin) {
-          return Response.json({ error: "Cross-origin mutation rejected." }, { status: 403 });
+      if (request) {
+        if (!["GET", "HEAD", "OPTIONS"].includes(request.method)) {
+          const origin = request.headers.get("origin");
+          if (origin && origin !== new URL(request.url).origin) {
+            return Response.json({ error: "Cross-origin mutation rejected." }, { status: 403 });
+          }
         }
         const policy = rateLimitPolicyFor(request);
         if (policy) {

@@ -38,3 +38,10 @@ export async function jiraConflictForUser(user: CurrentUser, conflictId: string)
   const access = await requireJiraManager(user, conflict.initiativeId);
   return access.ok ? { ok: true as const, conflict } : access;
 }
+
+export async function jiraJobForUser(user: CurrentUser, jobId: string) {
+  const job = await db.jiraSyncJob.findFirst({ where: { id: jobId, organizationId: user.organizationId } });
+  if (!job) return { ok: false as const, response: jsonError("Not found.", 404) };
+  const access = await requireJiraManager(user, job.initiativeId);
+  return access.ok ? { ok: true as const, job } : access;
+}
