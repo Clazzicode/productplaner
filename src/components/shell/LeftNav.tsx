@@ -91,6 +91,7 @@ export default function LeftNav(props: { initiatives: NavInitiative[] }) {
             scoped("workspace/features", "Planning Workspace"),
             scoped("workspace/sprints", "Sprints & Releases"),
             scoped("workspace/demos", "Demos"),
+            scoped("workspace/sprint-review", "Sprint Review"),
           ],
         },
         {

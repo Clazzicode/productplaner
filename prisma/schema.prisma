@@ -2156,3 +2156,157 @@ model DemoAiSuggestion {
   @@index([organizationId, createdAt])
   @@index([demoItemId, status, createdAt])
 }
+
+// Shared meeting foundation for Product Owner ceremonies. Existing
+// RefinementSession rows remain authoritative for refinement and are linked
+// through sourceRefinementSessionId rather than destructively replaced.
+model PlanningMeeting {
+  id                        String    @id @default(cuid())
+  organizationId            String
+  projectId                 String
+  initiativeId              String
+  meetingType               String
+  sourceRefinementSessionId String?   @unique
+  sprintId                  String?
+  releaseId                 String?
+  title                     String
+  scheduledAt               DateTime?
+  facilitatorStakeholderId  String?
+  facilitatorNameSnapshot   String    @default("")
+  purpose                   String    @default("")
+  notes                     String    @default("")
+  transcriptText            String    @default("")
+  transcriptDocumentId      String?
+  outcome                   String    @default("")
+  status                    String    @default("draft")
+  createdByUserId           String
+  createdAt                 DateTime  @default(now())
+  updatedAt                 DateTime  @updatedAt
+
+  @@index([organizationId, initiativeId, meetingType])
+  @@index([sprintId])
+  @@index([releaseId])
+  @@index([transcriptDocumentId])
+}
+
+model PlanningMeetingParticipant {
+  id                       String   @id @default(cuid())
+  organizationId           String
+  meetingId                String
+  stakeholderId            String?
+  participantNameSnapshot  String
+  participantEmailSnapshot String?
+  role                     String   @default("participant")
+  createdAt                DateTime @default(now())
+
+  @@unique([meetingId, stakeholderId])
+  @@index([organizationId, meetingId])
+}
+
+model PlanningMeetingWorkItem {
+  id             String   @id @default(cuid())
+  organizationId String
+  meetingId      String
+  storyId        String?
+  bugId          String?
+  demoItemId     String?
+  createdAt      DateTime @default(now())
+
+  @@unique([meetingId, storyId])
+  @@unique([meetingId, bugId])
+  @@unique([meetingId, demoItemId])
+  @@index([organizationId, meetingId])
+}
+
+model PlanningMeetingDecision {
+  id                         String   @id @default(cuid())
+  organizationId             String
+  meetingId                  String
+  title                      String
+  rationale                  String   @default("")
+  decisionMakerStakeholderId String?
+  decisionMakerNameSnapshot  String   @default("")
+  decidedAt                  DateTime @default(now())
+  createdByUserId            String
+  createdAt                  DateTime @default(now())
+
+  @@index([organizationId, meetingId, decidedAt])
+}
+
+model PlanningMeetingAction {
+  id                 String    @id @default(cuid())
+  organizationId     String
+  meetingId          String
+  title              String
+  ownerStakeholderId String?
+  ownerNameSnapshot  String    @default("")
+  dueAt              DateTime?
+  status             String    @default("open")
+  completionNote     String    @default("")
+  completedAt        DateTime?
+  createdByUserId    String
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  @@index([organizationId, meetingId, status])
+}
+
+model SprintReview {
+  id                String    @id @default(cuid())
+  organizationId    String
+  projectId         String
+  initiativeId      String
+  sprintId          String    @unique
+  meetingId         String    @unique
+  status            String    @default("draft")
+  draftSnapshot     Json
+  finalSnapshot     Json?
+  missingWarnings   Json      @default("[]")
+  summary           String    @default("")
+  overrideReason    String    @default("")
+  revision          Int       @default(1)
+  createdByUserId   String
+  finalizedByUserId String?
+  finalizedAt       DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@index([organizationId, initiativeId, status])
+}
+
+model SprintReviewRevision {
+  id             String   @id @default(cuid())
+  organizationId String
+  reviewId       String
+  fromRevision   Int
+  toRevision     Int
+  previousData   Json
+  nextData       Json
+  reason         String
+  actorUserId    String?
+  createdAt      DateTime @default(now())
+
+  @@unique([reviewId, toRevision])
+  @@index([organizationId, createdAt])
+}
+
+model SprintReviewAiSuggestion {
+  id                String    @id @default(cuid())
+  organizationId    String
+  reviewId          String
+  kind              String
+  fingerprint       String
+  ordinal           Int       @default(0)
+  content           String
+  informationUsed   String    @default("")
+  status            String    @default("proposed")
+  model             String    @default("")
+  generatedByUserId String
+  actedByUserId     String?
+  actedAt           DateTime?
+  createdAt         DateTime  @default(now())
+
+  @@unique([reviewId, kind, fingerprint, ordinal])
+  @@index([organizationId, createdAt])
+  @@index([reviewId, status, createdAt])
+}
