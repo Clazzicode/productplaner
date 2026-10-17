@@ -359,4 +359,26 @@ describe.sequential("migration replay and real PostgreSQL RLS", () => {
     expect((await asUser(authA, () => pg.query(`UPDATE "FeedbackRevision" SET reason='Forged' WHERE id='feedback-revision-a' RETURNING id`))).rows).toEqual([]);
   });
 
+  it("isolates Jira credentials and previews while preventing OAuth-state replay", async () => {
+    await asUser(authA, () => pg.exec(`
+      INSERT INTO "JiraConnection" (id,"organizationId","initiativeId","configuredByUserId",status,"cloudId","projectId","projectKey","accessTokenCiphertext","refreshTokenCiphertext","tokenExpiresAt",scopes,"updatedAt")
+      VALUES ('jira-a','org-a','init-a','user-org-a','connected','cloud-a','project-jira','GP','v1:encrypted-access-token-value','v1:encrypted-refresh-token-value',now() + interval '1 hour','read:jira-work',now());
+      INSERT INTO "JiraOAuthState" (id,"stateHash","organizationId","initiativeId","userId","expiresAt")
+      VALUES ('jira-state-a',repeat('a',64),'org-a','init-a','user-org-a',now() + interval '10 minutes');
+      INSERT INTO "JiraImportRun" (id,"organizationId","initiativeId","connectionId",jql,"sourceFingerprint","initiatedByUserId","updatedAt")
+      VALUES ('jira-run-a','org-a','init-a','jira-a','project = GP',repeat('b',64),'user-org-a',now());
+      INSERT INTO "JiraImportItem" (id,"organizationId","importRunId","externalIssueId","externalKey","issueTypeId","issueTypeName","targetType",summary,"sourceSnapshot","sourceHash",action,"updatedAt")
+      VALUES ('jira-item-a','org-a','jira-run-a','10001','GP-1','10000','Story','story','Imported story','{}',repeat('c',64),'create',now());
+    `));
+    expect((await asUser(authB, () => pg.query(`SELECT id FROM "JiraConnection" WHERE id='jira-a'`))).rows).toEqual([]);
+    expect((await asUser(authB, () => pg.query(`SELECT id FROM "JiraImportItem" WHERE id='jira-item-a'`))).rows).toEqual([]);
+    await expect(asUser(authA, () => pg.exec(`
+      INSERT INTO "JiraConnection" (id,"organizationId","initiativeId","configuredByUserId","accessTokenCiphertext","refreshTokenCiphertext","tokenExpiresAt",scopes,"updatedAt")
+      VALUES ('jira-cross','org-a','init-b','user-org-a','v1:encrypted-access-token-value','v1:encrypted-refresh-token-value',now() + interval '1 hour','read:jira-work',now())
+    `))).rejects.toThrow();
+    await asUser(authA, () => pg.exec(`UPDATE "JiraOAuthState" SET "consumedAt"=now() WHERE id='jira-state-a'`));
+    await expect(asUser(authA, () => pg.exec(`UPDATE "JiraOAuthState" SET "returnPath"='/integrations/jira?replay=1' WHERE id='jira-state-a'`))).rejects.toThrow();
+    await expect(asUser(authA, () => pg.exec(`INSERT INTO "JiraImportItem" (id,"organizationId","importRunId","externalIssueId","externalKey","issueTypeId","issueTypeName","targetType",summary,"sourceSnapshot","sourceHash",action,"updatedAt") VALUES ('jira-item-cross','org-b','jira-run-a','10002','GP-2','10000','Story','story','Forged','{}',repeat('d',64),'create',now())`))).rejects.toThrow();
+  });
+
 });

@@ -1233,7 +1233,7 @@ model IntegrationConnection {
   provider           IntegrationProvider  @relation(fields: [providerId], references: [id])
   connectionName     String               @default("")
   status             String               @default("available") // available | needs_configuration | demo_connected | sync_ready | sync_complete | demo_error
-  mode               String               @default("demo") // demo | live_future
+  mode               String               @default("demo") // demo | live
   workspaceName      String?
   workspaceUrl       String?
   projectKey         String?
@@ -1275,6 +1275,126 @@ model IntegrationSyncLog {
   startedAt      DateTime              @default(now())
   finishedAt     DateTime?
   detailsJson    String                @default("{}")
+}
+
+// Feature 21A: live Jira Cloud OAuth and read/import foundation. Tokens are
+// encrypted by the application before persistence; previews are durable and
+// require an explicit apply action before any planning record is changed.
+model JiraConnection {
+  id                     String    @id @default(cuid())
+  organizationId         String
+  initiativeId           String?
+  configuredByUserId     String
+  status                 String    @default("site_selection_required") // site_selection_required | project_selection_required | connected | reauthorization_required | revoked
+  cloudId                String?
+  siteUrl                String?
+  siteName               String?
+  projectId              String?
+  projectKey             String?
+  projectName            String?
+  accessTokenCiphertext  String
+  refreshTokenCiphertext String
+  tokenExpiresAt         DateTime
+  scopes                 String
+  accessibleResources    Json      @default("[]")
+  issueTypeMappings      Json      @default("{}")
+  fieldMappings          Json      @default("{}")
+  revision               Int       @default(1)
+  lastImportedAt         DateTime?
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
+
+  @@index([organizationId, initiativeId, status])
+  @@index([cloudId, projectKey])
+}
+
+model JiraOAuthState {
+  id             String    @id @default(cuid())
+  stateHash      String    @unique
+  organizationId String
+  initiativeId   String?
+  userId         String
+  returnPath     String    @default("/integrations/jira")
+  expiresAt      DateTime
+  consumedAt     DateTime?
+  createdAt      DateTime  @default(now())
+
+  @@index([organizationId, expiresAt])
+}
+
+model JiraImportRun {
+  id                String    @id @default(cuid())
+  organizationId    String
+  initiativeId      String
+  connectionId      String
+  status            String    @default("previewed") // previewed | applying | applied | cancelled | failed
+  jql               String
+  sourceCursor      String?
+  sourceFingerprint String
+  itemCount         Int       @default(0)
+  createCount       Int       @default(0)
+  updateCount       Int       @default(0)
+  conflictCount     Int       @default(0)
+  unchangedCount    Int       @default(0)
+  initiatedByUserId String
+  appliedByUserId   String?
+  appliedAt         DateTime?
+  failureMessage    String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@index([organizationId, initiativeId, createdAt])
+  @@index([connectionId, status, createdAt])
+}
+
+model JiraImportItem {
+  id                String   @id @default(cuid())
+  organizationId    String
+  importRunId       String
+  externalIssueId   String
+  externalKey       String
+  issueTypeId       String
+  issueTypeName     String
+  targetType        String // feature | story | bug | skip
+  targetId          String?
+  parentExternalKey String?
+  summary           String
+  sourceSnapshot    Json
+  sourceHash        String
+  action            String // create | update | unchanged | conflict | skip
+  conflictReason    String?
+  selected          Boolean  @default(true)
+  status            String   @default("previewed") // previewed | imported | skipped | failed
+  failureMessage    String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@unique([importRunId, externalIssueId])
+  @@index([organizationId, importRunId, action])
+  @@index([externalKey])
+}
+
+model JiraExternalLink {
+  id                   String    @id @default(cuid())
+  organizationId       String
+  initiativeId         String
+  connectionId         String
+  externalIssueId      String
+  externalKey          String
+  issueTypeName        String
+  targetType           String // feature | story | bug
+  targetId             String
+  sourceHash           String
+  targetFingerprint    String
+  sourceUpdatedAt      DateTime?
+  lastImportedSnapshot Json
+  lastImportedAt       DateTime  @default(now())
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  @@unique([connectionId, externalIssueId])
+  @@unique([connectionId, targetType, targetId])
+  @@index([organizationId, initiativeId, externalKey])
 }
 
 // Step 8E (docs/V2-DASHBOARD-CONFIGURATION.md). Presentation only — never an

@@ -17,6 +17,8 @@ vi.mock("@/lib/db", () => ({
     releaseReadinessAssessment: { findUnique: async () => ({ initiativeId: "init-b" }), findMany: mocks.write },
     feedbackRecord: { findUnique: async () => ({ initiativeId: "init-b" }), findMany: mocks.write },
     reprioritizationProposal: { findUnique: async () => ({ feedbackId: "feedback-b" }) },
+    jiraConnection: { findFirst: async () => null },
+    jiraImportRun: { findFirst: async () => null },
     prototype: { findUnique: mocks.write },
   },
 }));
@@ -43,6 +45,9 @@ import { PATCH as readinessUpdate } from "@/app/api/release-readiness/[assessmen
 import { GET as feedbackGet, POST as feedbackCreate } from "@/app/api/initiatives/[id]/feedback/route";
 import { PATCH as feedbackUpdate } from "@/app/api/feedback/[feedbackId]/route";
 import { PATCH as proposalUpdate } from "@/app/api/reprioritization-proposals/[proposalId]/route";
+import { POST as jiraOAuthStart } from "@/app/api/integrations/jira/oauth/start/route";
+import { POST as jiraImportPreview } from "@/app/api/integrations/jira/imports/preview/route";
+import { GET as jiraImportGet, PATCH as jiraImportApply } from "@/app/api/integrations/jira/imports/[runId]/route";
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -113,6 +118,13 @@ describe("cross-organization API authorization independent of RLS", () => {
     expect((await feedbackCreate(request("POST", {}), { params: Promise.resolve({ id: "init-b" }) })).status).toBe(404);
     expect((await feedbackUpdate(request("PATCH", {}), { params: Promise.resolve({ feedbackId: "feedback-b" }) })).status).toBe(404);
     expect((await proposalUpdate(request("PATCH", {}), { params: Promise.resolve({ proposalId: "proposal-b" }) })).status).toBe(404);
+    expect(mocks.write).not.toHaveBeenCalled();
+  });
+  it("cannot authorize or import Jira data for another organization", async () => {
+    expect((await jiraOAuthStart(request("POST", { initiativeId: "init-b", returnPath: "/integrations/jira" }))).status).toBe(404);
+    expect((await jiraImportPreview(request("POST", { connectionId: "jira-b" }))).status).toBe(404);
+    expect((await jiraImportGet(request("GET"), { params: Promise.resolve({ runId: "jira-run-b" }) })).status).toBe(404);
+    expect((await jiraImportApply(request("PATCH", { expectedStatus: "previewed", selectedItemIds: ["item-b"], reason: "Foreign import attempt" }), { params: Promise.resolve({ runId: "jira-run-b" }) })).status).toBe(404);
     expect(mocks.write).not.toHaveBeenCalled();
   });
   it("rejects signed-out access to the request workflow", async () => {
