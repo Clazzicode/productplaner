@@ -28,6 +28,7 @@ import { GET as clarificationsGet, POST as clarificationCreate } from "@/app/api
 import { PATCH as clarificationUpdate } from "@/app/api/clarifications/[clarificationId]/route";
 import { GET as demosGet, POST as demoCreate } from "@/app/api/initiatives/[id]/demos/route";
 import { PATCH as demoUpdate } from "@/app/api/demos/[demoId]/route";
+import { PATCH as demoReorder } from "@/app/api/initiatives/[id]/demos/reorder/route";
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -72,6 +73,7 @@ describe("cross-organization API authorization independent of RLS", () => {
     expect((await demosGet(request("GET"), { params: Promise.resolve({ id: "init-b" }) })).status).toBe(404);
     expect((await demoCreate(request("POST", {}), { params: Promise.resolve({ id: "init-b" }) })).status).toBe(404);
     expect((await demoUpdate(request("PATCH", {}), { params: Promise.resolve({ demoId: "demo-b" }) })).status).toBe(404);
+    expect((await demoReorder(request("PATCH", {}), { params: Promise.resolve({ id: "init-b" }) })).status).toBe(404);
     expect(mocks.write).not.toHaveBeenCalled();
   });
   it("rejects signed-out access to the request workflow", async () => {

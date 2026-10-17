@@ -20,6 +20,7 @@ vi.mock("@/lib/db", () => ({
       create: async ({ data }: { data: Record<string, unknown> }) => { const row = { id: `demo-${state.demos.length + 1}`, status: "proposed", purpose: "", presenterStakeholderId: null, presenterNameSnapshot: "", readinessReason: "", blockingReason: "", overrideReason: "", notes: "", completedWork: "", plannedOrder: 0, repeatReason: "", evidenceLinks: [], carryoverSprintId: null, carryoverReason: "", decidedByUserId: null, decidedAt: null, revision: 1, createdAt: new Date(), updatedAt: new Date(), ...data }; state.demos.push(row); return row; },
       findUnique: async ({ where }: { where: { id: string } }) => state.demos.find(row => row.id === where.id) ?? null,
       findUniqueOrThrow: async ({ where }: { where: { id: string } }) => state.demos.find(row => row.id === where.id)!,
+      findMany: async ({ where }: { where: { initiativeId: string; sprintId: string } }) => state.demos.filter(row => row.initiativeId === where.initiativeId && row.sprintId === where.sprintId).sort((a,b) => Number(a.plannedOrder) - Number(b.plannedOrder)),
       updateMany: async ({ where, data }: { where: { id: string; revision: number }; data: Record<string, unknown> }) => {
         const index = state.demos.findIndex(row => row.id === where.id && row.revision === where.revision); if (index < 0) return { count: 0 };
         const next = { ...data }; delete next.revision; state.demos[index] = { ...state.demos[index], ...next, revision: Number(state.demos[index].revision) + 1 }; return { count: 1 };
@@ -33,7 +34,7 @@ vi.mock("@/lib/db", () => ({
 }));
 vi.mock("@/lib/audit", () => ({ auditInitiative: async (_id: string, action: string) => { if (state.auditFails) throw new Error("audit unavailable"); state.audits.push(action); } }));
 
-import { applyDemoCommand, createDemoItem } from "../service";
+import { applyDemoCommand, createDemoItem, reorderDemoAgenda } from "../service";
 
 const createInput = { sprintId: "sprint-a", storyId: "story-a", bugId: null, capabilityId: "feature-a", title: "Show the saved roadmap", purpose: "", presenterStakeholderId: null, notes: "", completedWork: "", plannedOrder: 0, repeatReason: "", evidenceLinks: [] };
 
@@ -77,5 +78,19 @@ describe("demo management service", () => {
     state.auditFails = false;
     await applyDemoCommand("demo-1", { action: "carryover", expectedRevision: 2, reason: "Move unfinished demo", targetSprintId: "sprint-b", carryoverReason: "Demo environment was unavailable." }, "admin-a", true);
     expect(state.demos).toHaveLength(2); expect(state.demos[0].status).toBe("carried_over"); expect(state.demos[1].presenterNameSnapshot).toBe("Taylor Demo");
+  });
+
+  it("reorders the complete agenda atomically and rejects stale revisions", async () => {
+    state.plans.set("sprint-a", { sprintNumber: 1, storyIds: ["story-a", "story-b"], bugIds: [] });
+    await createDemoItem("init-a", createInput, "user-a");
+    await createDemoItem("init-a", { ...createInput, storyId: "story-b", title: "Show validation evidence", plannedOrder: 1 }, "user-a");
+    await reorderDemoAgenda("init-a", { sprintId: "sprint-a", items: [{ id: "demo-2", expectedRevision: 1 }, { id: "demo-1", expectedRevision: 1 }], reason: "Put validation first" }, "admin-a");
+    expect(state.demos.find(row => row.id === "demo-2")?.plannedOrder).toBe(0);
+    expect(state.demos.find(row => row.id === "demo-1")?.plannedOrder).toBe(1);
+    await expect(reorderDemoAgenda("init-a", { sprintId: "sprint-a", items: [{ id: "demo-1", expectedRevision: 1 }, { id: "demo-2", expectedRevision: 1 }], reason: "Stale reorder" }, "admin-a")).rejects.toThrow("changed");
+    state.auditFails = true;
+    await expect(reorderDemoAgenda("init-a", { sprintId: "sprint-a", items: [{ id: "demo-1", expectedRevision: 2 }, { id: "demo-2", expectedRevision: 2 }], reason: "Rollback reorder" }, "admin-a")).rejects.toThrow("audit unavailable");
+    expect(state.demos.find(row => row.id === "demo-2")?.plannedOrder).toBe(0);
+    expect(state.demos.find(row => row.id === "demo-1")?.plannedOrder).toBe(1);
   });
 });

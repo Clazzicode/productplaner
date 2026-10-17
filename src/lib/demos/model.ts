@@ -25,5 +25,15 @@ export const demoCommandSchema = z.discriminatedUnion("action", [
 
 export const demoSuggestionCommandSchema = z.object({ action: z.literal("dismiss") }).strict();
 export const demoDraftSchema = z.object({ kind: z.enum(["purpose", "completed_work"]) }).strict();
+export const demoAgendaReorderSchema = z.object({
+  sprintId: id,
+  items: z.array(z.object({ id, expectedRevision: z.number().int().positive() }).strict()).min(1).max(500),
+  reason: z.string().trim().min(3).max(1000),
+}).strict().superRefine((value, context) => {
+  if (new Set(value.items.map((item) => item.id)).size !== value.items.length) {
+    context.addIssue({ code: "custom", path: ["items"], message: "Each demo item must appear exactly once." });
+  }
+});
 export type DemoCreateInput = z.infer<typeof demoCreateSchema>;
 export type DemoCommandInput = z.infer<typeof demoCommandSchema>;
+export type DemoAgendaReorderInput = z.infer<typeof demoAgendaReorderSchema>;

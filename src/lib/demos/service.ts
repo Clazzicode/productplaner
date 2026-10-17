@@ -2,7 +2,7 @@ import { Prisma, type DemoItem } from "@prisma/client";
 import { auditInitiative } from "@/lib/audit";
 import { BusinessError } from "@/lib/businessError";
 import { db, withTransaction } from "@/lib/db";
-import type { DemoCommandInput, DemoCreateInput } from "./model";
+import type { DemoAgendaReorderInput, DemoCommandInput, DemoCreateInput } from "./model";
 
 export const demoInclude = {
   sprint: { select: { id: true, sprintNumber: true } }, story: { select: { id: true, title: true } },
@@ -131,5 +131,30 @@ export async function dismissDemoSuggestion(id: string, actorUserId: string) {
     const saved = await db.demoAiSuggestion.update({ where: { id }, data: { status: "dismissed", actedByUserId: actorUserId, actedAt: new Date() } });
     await auditInitiative(suggestion.demoItem.initiativeId, "demo.ai_draft_dismissed", { demoItemId: suggestion.demoItemId, suggestionId: id });
     return saved;
+  });
+}
+
+export async function reorderDemoAgenda(initiativeId: string, input: DemoAgendaReorderInput, actorUserId: string) {
+  return withTransaction(async () => {
+    const rows = await db.demoItem.findMany({ where: { initiativeId, sprintId: input.sprintId }, orderBy: [{ plannedOrder: "asc" }, { createdAt: "asc" }] });
+    if (rows.length !== input.items.length || rows.some((row) => !input.items.some((item) => item.id === row.id))) {
+      throw new BusinessError("The demo agenda changed. Reload before reordering it.", 409);
+    }
+    const expected = new Map(input.items.map((item, index) => [item.id, { revision: item.expectedRevision, plannedOrder: index }]));
+    if (rows.some((row) => expected.get(row.id)?.revision !== row.revision)) {
+      throw new BusinessError("The demo agenda changed. Reload before reordering it.", 409);
+    }
+    for (const row of rows) {
+      const nextOrder = expected.get(row.id)!.plannedOrder;
+      if (nextOrder === row.plannedOrder) continue;
+      const nextRevision = row.revision + 1;
+      await db.demoItemRevision.create({ data: { organizationId: row.organizationId, demoItemId: row.id,
+        fromRevision: row.revision, toRevision: nextRevision, previousData: snapshot(row),
+        nextData: { ...snapshot(row), plannedOrder: nextOrder, revision: nextRevision }, reason: input.reason, actorUserId } });
+      const changed = await db.demoItem.updateMany({ where: { id: row.id, revision: row.revision, initiativeId, sprintId: input.sprintId }, data: { plannedOrder: nextOrder, revision: { increment: 1 } } });
+      if (changed.count !== 1) throw new BusinessError("The demo agenda changed. Reload before reordering it.", 409);
+    }
+    await auditInitiative(initiativeId, "demo.agenda_reordered", { sprintId: input.sprintId, orderedDemoItemIds: input.items.map((item) => item.id), reason: input.reason });
+    return db.demoItem.findMany({ where: { initiativeId, sprintId: input.sprintId }, include: demoInclude, orderBy: [{ plannedOrder: "asc" }, { createdAt: "asc" }] });
   });
 }
