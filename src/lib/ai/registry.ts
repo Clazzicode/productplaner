@@ -216,6 +216,19 @@ const AI_CAPABILITIES: AiCapabilityConfig[] = [
     outputType: "demo_content_draft",
     reusable: true,
   },
+  {
+    action: "DRAFT_SPRINT_REVIEW",
+    enabled: true,
+    maxOutputTokens: 1500,
+    userMonthlyLimit: 20,
+    organizationMonthlyLimit: 200,
+    description: "Drafts a sprint-review summary and proposed follow-up items from the recorded agenda, notes, outcomes, decisions, and actions. It cannot finalize the review or create authoritative decisions.",
+    maxContextTokens: 6000,
+    requiredContextLayers: ["task"],
+    optionalContextLayers: ["initiative"],
+    outputType: "sprint_review_draft",
+    reusable: true,
+  },
 ];
 
 function toDbCreateData(c: AiCapabilityConfig) {

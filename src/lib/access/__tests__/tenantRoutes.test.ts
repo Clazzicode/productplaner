@@ -12,6 +12,7 @@ vi.mock("@/lib/db", () => ({
     capability: { findUnique: async () => ({ intakeAnswerSet: { initiative: { id: "init-b" } } }), update: mocks.write },
     inSprintClarification: { findUnique: async () => ({ initiativeId: "init-b" }), findMany: mocks.write },
     demoItem: { findUnique: async () => ({ initiativeId: "init-b" }), findMany: mocks.write, create: mocks.write },
+    sprintReview: { findUnique: async () => ({ initiativeId: "init-b" }), findMany: mocks.write },
     prototype: { findUnique: mocks.write },
   },
 }));
@@ -29,6 +30,8 @@ import { PATCH as clarificationUpdate } from "@/app/api/clarifications/[clarific
 import { GET as demosGet, POST as demoCreate } from "@/app/api/initiatives/[id]/demos/route";
 import { PATCH as demoUpdate } from "@/app/api/demos/[demoId]/route";
 import { PATCH as demoReorder } from "@/app/api/initiatives/[id]/demos/reorder/route";
+import { GET as reviewsGet, POST as reviewCreate } from "@/app/api/initiatives/[id]/sprint-reviews/route";
+import { PATCH as reviewUpdate } from "@/app/api/sprint-reviews/[reviewId]/route";
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -74,6 +77,12 @@ describe("cross-organization API authorization independent of RLS", () => {
     expect((await demoCreate(request("POST", {}), { params: Promise.resolve({ id: "init-b" }) })).status).toBe(404);
     expect((await demoUpdate(request("PATCH", {}), { params: Promise.resolve({ demoId: "demo-b" }) })).status).toBe(404);
     expect((await demoReorder(request("PATCH", {}), { params: Promise.resolve({ id: "init-b" }) })).status).toBe(404);
+    expect(mocks.write).not.toHaveBeenCalled();
+  });
+  it("cannot read, generate, or update sprint reviews in another organization", async () => {
+    expect((await reviewsGet(request("GET"), { params: Promise.resolve({ id: "init-b" }) })).status).toBe(404);
+    expect((await reviewCreate(request("POST", {}), { params: Promise.resolve({ id: "init-b" }) })).status).toBe(404);
+    expect((await reviewUpdate(request("PATCH", {}), { params: Promise.resolve({ reviewId: "review-b" }) })).status).toBe(404);
     expect(mocks.write).not.toHaveBeenCalled();
   });
   it("rejects signed-out access to the request workflow", async () => {

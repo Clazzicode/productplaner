@@ -254,4 +254,34 @@ describe.sequential("migration replay and real PostgreSQL RLS", () => {
     await expect(asUser(authA, () => pg.exec(`UPDATE "DemoAiSuggestion" SET status='used' WHERE id='demo-ai-a'`))).rejects.toThrow();
   });
 
+  it("isolates sprint reviews and protects final snapshots, revisions, and AI evidence", async () => {
+    await asUser(authA, () => pg.exec(`
+      UPDATE "DemoItem" SET purpose='Explain customer value', "presenterNameSnapshot"='Avery', "completedWork"='The story is complete',
+        status='ready', "readinessReason"='Evidence reviewed', "decidedByUserId"='user-org-a', "decidedAt"=now(), revision=2
+      WHERE id='demo-a';
+      INSERT INTO "PlanningMeeting" (id,"organizationId","projectId","initiativeId","meetingType","sprintId",title,purpose,"createdByUserId","updatedAt")
+      VALUES ('review-meeting-a','org-a','project-a','init-a','sprint_review','sprint-a','Sprint 1 Review','Review delivered value','user-org-a',now());
+      INSERT INTO "PlanningMeetingWorkItem" (id,"organizationId","meetingId","demoItemId")
+      VALUES ('review-work-a','org-a','review-meeting-a','demo-a');
+      INSERT INTO "SprintReview" (id,"organizationId","projectId","initiativeId","sprintId","meetingId","draftSnapshot","createdByUserId","updatedAt")
+      VALUES ('review-a','org-a','project-a','init-a','sprint-a','review-meeting-a','{"readyDemos":[{"id":"demo-a"}]}','user-org-a',now());
+      INSERT INTO "SprintReviewRevision" (id,"organizationId","reviewId","fromRevision","toRevision","previousData","nextData",reason,"actorUserId")
+      VALUES ('review-revision-a','org-a','review-a',1,2,'{}','{}','Final review approved','user-org-a');
+      INSERT INTO "SprintReviewAiSuggestion" (id,"organizationId","reviewId",kind,fingerprint,content,"informationUsed","generatedByUserId")
+      VALUES ('review-ai-a','org-a','review-a','summary',repeat('9',64),'The sprint delivered the planned story.','Committed sprint and demo evidence','user-org-a');
+      UPDATE "SprintReview" SET status='finalized', "finalSnapshot"='{"readyDemos":[{"id":"demo-a"}],"summary":"Approved"}', "finalizedByUserId"='user-org-a', "finalizedAt"=now(), revision=2 WHERE id='review-a';
+    `));
+    expect((await asUser(authB, () => pg.query(`SELECT id FROM "SprintReview" WHERE id='review-a'`))).rows).toEqual([]);
+    await expect(asUser(authA, () => pg.exec(`UPDATE "SprintReview" SET "finalSnapshot"='{"forged":true}' WHERE id='review-a'`))).rejects.toThrow();
+    expect((await asUser(authA, () => pg.query(`UPDATE "SprintReviewRevision" SET reason='Forged' WHERE id='review-revision-a' RETURNING id`))).rows).toEqual([]);
+    await expect(asUser(authA, () => pg.exec(`UPDATE "SprintReviewAiSuggestion" SET content='Forged' WHERE id='review-ai-a'`))).rejects.toThrow();
+    await asUser(authA, () => pg.exec(`UPDATE "SprintReviewAiSuggestion" SET status='dismissed', "actedByUserId"='user-org-a', "actedAt"=now() WHERE id='review-ai-a'`));
+    await expect(asUser(authA, () => pg.exec(`UPDATE "SprintReviewAiSuggestion" SET status='used' WHERE id='review-ai-a'`))).rejects.toThrow();
+    await expect(asUser(authA, () => pg.exec(`
+      INSERT INTO "PlanningMeetingWorkItem" (id,"organizationId","meetingId","storyId")
+      VALUES ('review-work-cross','org-a','review-meeting-a','artifact-b')
+    `))).rejects.toThrow();
+    expect((await asUser(authA, () => pg.query(`SELECT "meetingType" FROM "PlanningMeeting" WHERE "sourceRefinementSessionId"='session-a'`))).rows).toEqual([{ meetingType: "refinement" }]);
+  });
+
 });
