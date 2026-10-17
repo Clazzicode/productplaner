@@ -56,6 +56,18 @@ interface AssistActionCopy {
 }
 
 export const AI_ASSIST_ACTION_COPY: Record<AiActionKey, AssistActionCopy> = {
+  SUMMARIZE_FEEDBACK: {
+    title: "Summarize feedback",
+    explanation: "Condenses the supplied feedback into source-grounded themes for review. It cannot create work, close feedback, or change priorities.",
+  },
+  RECOMMEND_REPRIORITIZATION: {
+    title: "Suggest reprioritization",
+    explanation: "Reviews the feedback and its explicitly linked backlog item to suggest priority factors and placement. An authorized Product Owner or administrator must review and apply any change.",
+  },
+  DRAFT_RELEASE_SUMMARY: {
+    title: "Draft release communication",
+    explanation: "Uses the frozen release-readiness checks to draft a summary and stakeholder update for review. It cannot change a gate, mark the release ready, or approve release readiness.",
+  },
   DRAFT_VALIDATION_EVIDENCE: {
     title: "Summarize validation evidence",
     explanation: "Compares supplied delivery evidence with the frozen story and criteria snapshots, identifies missing evidence, and drafts notes for review. It cannot mark criteria or decide acceptance.",
