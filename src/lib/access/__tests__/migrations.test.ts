@@ -229,4 +229,29 @@ describe.sequential("migration replay and real PostgreSQL RLS", () => {
     await expect(asUser(authA, () => pg.exec(`UPDATE "ClarificationAiSuggestion" SET status='used' WHERE id='clarification-ai-a'`))).rejects.toThrow();
   });
 
+  it("protects demo targets, uniqueness, readiness evidence, and immutable history", async () => {
+    await asUser(authA, () => pg.exec(`
+      INSERT INTO "DemoItem" (id,"organizationId","initiativeId","sprintId","storyId",title,"createdByUserId","updatedAt")
+      VALUES ('demo-a','org-a','init-a','sprint-a','story-a','Show the completed story','user-org-a',now());
+      INSERT INTO "DemoItemRevision" (id,"organizationId","demoItemId","fromRevision","toRevision","previousData","nextData",reason,"actorUserId")
+      VALUES ('demo-revision-a','org-a','demo-a',1,2,'{}','{}','Prepared demo','user-org-a');
+      INSERT INTO "DemoAiSuggestion" (id,"organizationId","demoItemId",kind,fingerprint,content,"informationUsed","generatedByUserId")
+      VALUES ('demo-ai-a','org-a','demo-a','purpose',repeat('f',64),'Explain the delivered customer value.','Story and approved criteria','user-org-a');
+    `));
+    await expect(asUser(authA, () => pg.exec(`
+      INSERT INTO "DemoItem" (id,"organizationId","initiativeId","sprintId","storyId",title,"createdByUserId","updatedAt")
+      VALUES ('demo-duplicate','org-a','init-a','sprint-a','story-a','Duplicate agenda item','user-org-a',now())
+    `))).rejects.toThrow();
+    await expect(asUser(authA, () => pg.exec(`UPDATE "DemoItem" SET status='ready' WHERE id='demo-a'`))).rejects.toThrow();
+    await expect(asUser(authA, () => pg.exec(`
+      INSERT INTO "DemoItem" (id,"organizationId","initiativeId","sprintId","storyId",title,"repeatReason","createdByUserId","updatedAt")
+      VALUES ('demo-cross','org-a','init-a','sprint-a','artifact-b','Cross tenant target','Repeat requested','user-org-a',now())
+    `))).rejects.toThrow();
+    expect((await asUser(authB, () => pg.query(`SELECT id FROM "DemoItem" WHERE id='demo-a'`))).rows).toEqual([]);
+    expect((await asUser(authA, () => pg.query(`UPDATE "DemoItemRevision" SET reason='Forged' WHERE id='demo-revision-a' RETURNING id`))).rows).toEqual([]);
+    await expect(asUser(authA, () => pg.exec(`UPDATE "DemoAiSuggestion" SET content='Forged' WHERE id='demo-ai-a'`))).rejects.toThrow();
+    await asUser(authA, () => pg.exec(`UPDATE "DemoAiSuggestion" SET status='dismissed', "actedByUserId"='user-org-a', "actedAt"=now() WHERE id='demo-ai-a'`));
+    await expect(asUser(authA, () => pg.exec(`UPDATE "DemoAiSuggestion" SET status='used' WHERE id='demo-ai-a'`))).rejects.toThrow();
+  });
+
 });

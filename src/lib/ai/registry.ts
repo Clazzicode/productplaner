@@ -203,6 +203,19 @@ const AI_CAPABILITIES: AiCapabilityConfig[] = [
     outputType: "clarification_answer_draft",
     reusable: true,
   },
+  {
+    action: "DRAFT_DEMO_CONTENT",
+    enabled: true,
+    maxOutputTokens: 1000,
+    userMonthlyLimit: 30,
+    organizationMonthlyLimit: 300,
+    description: "Drafts a demo purpose or completed-work summary from committed sprint evidence. It never changes readiness or records a demo outcome.",
+    maxContextTokens: 4000,
+    requiredContextLayers: ["task"],
+    optionalContextLayers: ["initiative"],
+    outputType: "demo_content_draft",
+    reusable: true,
+  },
 ];
 
 function toDbCreateData(c: AiCapabilityConfig) {

@@ -11,6 +11,7 @@ vi.mock("@/lib/db", () => ({
     artifactLayer: { findUnique: async () => ({ prototypeId: "proto-b", prototype: { initiativeId: "init-b" } }), update: mocks.write },
     capability: { findUnique: async () => ({ intakeAnswerSet: { initiative: { id: "init-b" } } }), update: mocks.write },
     inSprintClarification: { findUnique: async () => ({ initiativeId: "init-b" }), findMany: mocks.write },
+    demoItem: { findUnique: async () => ({ initiativeId: "init-b" }), findMany: mocks.write, create: mocks.write },
     prototype: { findUnique: mocks.write },
   },
 }));
@@ -25,6 +26,8 @@ import { GET as backlogGet, POST as backlogSave } from "@/app/api/initiatives/[i
 import { POST as storyCreate } from "@/app/api/initiatives/[id]/stories/route";
 import { GET as clarificationsGet, POST as clarificationCreate } from "@/app/api/initiatives/[id]/clarifications/route";
 import { PATCH as clarificationUpdate } from "@/app/api/clarifications/[clarificationId]/route";
+import { GET as demosGet, POST as demoCreate } from "@/app/api/initiatives/[id]/demos/route";
+import { PATCH as demoUpdate } from "@/app/api/demos/[demoId]/route";
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -63,6 +66,12 @@ describe("cross-organization API authorization independent of RLS", () => {
     expect((await clarificationsGet(request("GET"), { params: Promise.resolve({ id: "init-b" }) })).status).toBe(404);
     expect((await clarificationCreate(request("POST", {}), { params: Promise.resolve({ id: "init-b" }) })).status).toBe(404);
     expect((await clarificationUpdate(request("PATCH", {}), { params: Promise.resolve({ clarificationId: "clarification-b" }) })).status).toBe(404);
+    expect(mocks.write).not.toHaveBeenCalled();
+  });
+  it("cannot read, create, or update demo items in another organization", async () => {
+    expect((await demosGet(request("GET"), { params: Promise.resolve({ id: "init-b" }) })).status).toBe(404);
+    expect((await demoCreate(request("POST", {}), { params: Promise.resolve({ id: "init-b" }) })).status).toBe(404);
+    expect((await demoUpdate(request("PATCH", {}), { params: Promise.resolve({ demoId: "demo-b" }) })).status).toBe(404);
     expect(mocks.write).not.toHaveBeenCalled();
   });
   it("rejects signed-out access to the request workflow", async () => {
