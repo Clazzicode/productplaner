@@ -115,7 +115,13 @@ const requestDb = rawDb.$extends({
 // async operation; concurrent requests never share a transaction client.
 export const db = new Proxy(requestDb, {
   get(target, property) {
-    const client = transactionContext.getStore() ?? target;
+    // Avoid asking TypeScript to structurally compare Prisma's deeply nested
+    // extended-client type with TransactionClient during production builds.
+    // Both expose the same delegates we forward at runtime.
+    const transactionClient = transactionContext.getStore();
+    const client = transactionClient
+      ? (transactionClient as unknown as object)
+      : (target as unknown as object);
     const value = Reflect.get(client, property);
     return typeof value === "function" ? value.bind(client) : value;
   },

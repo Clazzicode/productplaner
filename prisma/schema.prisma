@@ -63,6 +63,9 @@ model Organization {
   inSprintClarifications         InSprintClarification[]
   clarificationRevisions         InSprintClarificationRevision[]
   clarificationAiSuggestions     ClarificationAiSuggestion[]
+  demoItems                      DemoItem[]
+  demoItemRevisions              DemoItemRevision[]
+  demoAiSuggestions              DemoAiSuggestion[]
   requestSourceRecords           RequestSourceRecord[]
   requestRevisions               RequestRevision[]
   priorityDecisions              PriorityDecision[]
@@ -178,6 +181,11 @@ model User {
   clarificationRevisions         InSprintClarificationRevision[] @relation("ClarificationRevisionActor")
   clarificationSuggestionsMade   ClarificationAiSuggestion[]     @relation("ClarificationSuggestionGeneratedBy")
   clarificationSuggestionsActed  ClarificationAiSuggestion[]     @relation("ClarificationSuggestionActedBy")
+  demoItemsCreated               DemoItem[]                      @relation("DemoItemCreatedBy")
+  demoItemsDecided               DemoItem[]                      @relation("DemoItemDecidedBy")
+  demoItemRevisions              DemoItemRevision[]              @relation("DemoItemRevisionActor")
+  demoSuggestionsMade            DemoAiSuggestion[]              @relation("DemoSuggestionGeneratedBy")
+  demoSuggestionsActed           DemoAiSuggestion[]              @relation("DemoSuggestionActedBy")
   createdAt                      DateTime                        @default(now())
 }
 
@@ -591,6 +599,7 @@ model Initiative {
   stakeholderAssignments     StakeholderAssignment[]
   bugPlanningRecords         BugPlanningRecord[]
   inSprintClarifications     InSprintClarification[]
+  demoItems                  DemoItem[]
   createdAt                  DateTime                    @default(now())
   updatedAt                  DateTime                    @updatedAt
 
@@ -656,6 +665,7 @@ model Capability {
   predecessorDependencies    WorkDependency[]        @relation("DependencyPredecessorCapability")
   dependentDependencies      WorkDependency[]        @relation("DependencyDependentCapability")
   planningBlockers           PlanningBlocker[]
+  demoItems                  DemoItem[]
   createdAt                  DateTime                @default(now())
 
   @@unique([intakeAnswerSetId, backlogKey])
@@ -823,6 +833,7 @@ model ArtifactLayer {
   sprintReadinessAssessments SprintReadinessAssessment[]
   sprintPlanningItems        SprintPlanningItem[]
   inSprintClarifications     InSprintClarification[]
+  demoItems                  DemoItem[]
 
   @@unique([prototypeId, type, dedupeKey])
   @@unique([prototypeId, type, externalRef])
@@ -937,6 +948,8 @@ model Sprint {
   createdAt                  DateTime                @default(now())
   sprintPlan                 SprintPlan?
   inSprintClarifications     InSprintClarification[]
+  demoItems                  DemoItem[]              @relation("DemoSprint")
+  carryoverDemoItems         DemoItem[]              @relation("DemoCarryoverSprint")
 
   @@unique([prototypeId, sprintNumber])
 }
@@ -1469,6 +1482,7 @@ model StakeholderContact {
   external       Boolean                 @default(false)
   archivedAt     DateTime?
   assignments    StakeholderAssignment[]
+  demoItems      DemoItem[]
   createdAt      DateTime                @default(now())
   updatedAt      DateTime                @updatedAt
 
@@ -1588,6 +1602,7 @@ model BugPlanningRecord {
   sprintReadinessAssessments SprintReadinessAssessment[]
   sprintPlanningItems        SprintPlanningItem[]
   inSprintClarifications     InSprintClarification[]
+  demoItems                  DemoItem[]
 
   @@index([organizationId, initiativeId, archivedAt])
   @@index([initiativeId, severity, status])
@@ -2044,4 +2059,100 @@ model ClarificationAiSuggestion {
   @@unique([clarificationId, fingerprint])
   @@index([organizationId, createdAt])
   @@index([clarificationId, status, createdAt])
+}
+
+// Feature 16: a controlled demo agenda item projected from committed sprint
+// work. The story or bug remains the source of truth; this record stores only
+// presentation readiness, ownership, outcome, and carryover evidence.
+model DemoItem {
+  id                     String              @id @default(cuid())
+  organizationId         String
+  organization           Organization        @relation(fields: [organizationId], references: [id])
+  initiativeId           String
+  initiative             Initiative          @relation(fields: [initiativeId], references: [id], onDelete: Cascade)
+  sprintId               String
+  sprint                 Sprint              @relation("DemoSprint", fields: [sprintId], references: [id], onDelete: Restrict)
+  storyId                String?
+  story                  ArtifactLayer?      @relation(fields: [storyId], references: [id], onDelete: Restrict)
+  bugId                  String?
+  bug                    BugPlanningRecord?  @relation(fields: [bugId], references: [id], onDelete: Restrict)
+  capabilityId           String?
+  capability             Capability?         @relation(fields: [capabilityId], references: [id], onDelete: SetNull)
+  title                  String
+  purpose                String              @default("")
+  presenterStakeholderId String?
+  presenter              StakeholderContact? @relation(fields: [presenterStakeholderId], references: [id], onDelete: SetNull)
+  presenterNameSnapshot  String              @default("")
+  status                 String              @default("proposed") // proposed | preparing | ready | not_ready | demonstrated | skipped | carried_over
+  readinessReason        String              @default("")
+  blockingReason         String              @default("")
+  overrideReason         String              @default("")
+  notes                  String              @default("")
+  completedWork          String              @default("")
+  plannedOrder           Int                 @default(0)
+  repeatReason           String              @default("")
+  evidenceLinks          Json                @default("[]")
+  carryoverSprintId      String?
+  carryoverSprint        Sprint?             @relation("DemoCarryoverSprint", fields: [carryoverSprintId], references: [id], onDelete: Restrict)
+  carryoverReason        String              @default("")
+  revision               Int                 @default(1)
+  createdByUserId        String
+  createdBy              User                @relation("DemoItemCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  decidedByUserId        String?
+  decidedBy              User?               @relation("DemoItemDecidedBy", fields: [decidedByUserId], references: [id], onDelete: SetNull)
+  decidedAt              DateTime?
+  revisions              DemoItemRevision[]
+  aiSuggestions          DemoAiSuggestion[]
+  createdAt              DateTime            @default(now())
+  updatedAt              DateTime            @updatedAt
+
+  @@index([organizationId, initiativeId, status])
+  @@index([sprintId, status, plannedOrder])
+  @@index([storyId])
+  @@index([bugId])
+  @@index([presenterStakeholderId])
+  @@index([carryoverSprintId])
+}
+
+model DemoItemRevision {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  demoItemId     String
+  demoItem       DemoItem     @relation(fields: [demoItemId], references: [id], onDelete: Cascade)
+  fromRevision   Int
+  toRevision     Int
+  previousData   Json
+  nextData       Json
+  reason         String
+  actorUserId    String?
+  actor          User?        @relation("DemoItemRevisionActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+  createdAt      DateTime     @default(now())
+
+  @@unique([demoItemId, toRevision])
+  @@index([organizationId, createdAt])
+}
+
+model DemoAiSuggestion {
+  id                String       @id @default(cuid())
+  organizationId    String
+  organization      Organization @relation(fields: [organizationId], references: [id])
+  demoItemId        String
+  demoItem          DemoItem     @relation(fields: [demoItemId], references: [id], onDelete: Cascade)
+  kind              String // purpose | completed_work
+  fingerprint       String
+  content           String
+  informationUsed   String       @default("")
+  status            String       @default("proposed") // proposed | used | dismissed | stale
+  model             String       @default("")
+  generatedByUserId String
+  generatedBy       User         @relation("DemoSuggestionGeneratedBy", fields: [generatedByUserId], references: [id], onDelete: Restrict)
+  actedByUserId     String?
+  actedBy           User?        @relation("DemoSuggestionActedBy", fields: [actedByUserId], references: [id], onDelete: SetNull)
+  actedAt           DateTime?
+  createdAt         DateTime     @default(now())
+
+  @@unique([demoItemId, kind, fingerprint])
+  @@index([organizationId, createdAt])
+  @@index([demoItemId, status, createdAt])
 }

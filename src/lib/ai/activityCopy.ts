@@ -56,6 +56,10 @@ interface AssistActionCopy {
 }
 
 export const AI_ASSIST_ACTION_COPY: Record<AiActionKey, AssistActionCopy> = {
+  DRAFT_DEMO_CONTENT: {
+    title: "Draft demo content",
+    explanation: "Uses the committed sprint item and recorded delivery evidence to draft a purpose or completed-work summary for review. It never changes readiness or demo outcomes.",
+  },
   DRAFT_CLARIFICATION: {
     title: "Draft clarification answer",
     explanation: "Uses the committed sprint item, approved criteria, and the recorded question to draft a concise answer for Product Owner review. It never submits or resolves the answer.",
