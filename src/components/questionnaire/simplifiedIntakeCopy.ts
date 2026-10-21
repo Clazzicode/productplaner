@@ -64,9 +64,9 @@ export const BEGINNER_INTAKE_COPY: BeginnerIntakeCopy = {
     hint: "Both optional — but if you know roughly how many people will work on it and what you can spend, sharing it now makes the plan and its timing more realistic. Leave either blank if you're not sure yet.",
   },
   review: {
-    title: "Here's your plan",
-    cta: "Build my plan",
-    busy: "Putting your plan together…",
+    title: "Review your starting answers",
+    cta: "Create initiative & continue",
+    busy: "Creating your initiative…",
   },
 };
 
@@ -109,8 +109,8 @@ export const SOME_EXPERIENCE_INTAKE_COPY: SomeExperienceIntakeCopy = {
     hint: "Optional, but sharpens the capacity and cost estimates in your plan — leave either blank if you don't know yet.",
   },
   review: {
-    title: "Here's your plan",
-    cta: "Build my plan",
-    busy: "Putting your plan together…",
+    title: "Review your starting answers",
+    cta: "Create initiative & continue",
+    busy: "Creating your initiative…",
   },
 };

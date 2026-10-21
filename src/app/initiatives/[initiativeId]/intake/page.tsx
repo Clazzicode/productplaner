@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { FocusedLayout } from "@/components/layout/PageLayouts";
 import PlanningQuestionnaire from "@/components/questionnaire/PlanningQuestionnaire";
+import RoadmapSetupOverview from "@/components/questionnaire/RoadmapSetupOverview";
 import WorkspaceBreadcrumb from "@/components/workspace/WorkspaceBreadcrumb";
 import { requireInitiativeView } from "@/lib/access/guards";
 import { requireCurrentUser } from "@/lib/auth/session";
@@ -72,10 +73,12 @@ export default async function IntakePage({
           .
         </p>
       ) : (
-        <p className="mt-1 mb-8 text-sm text-neutral-500">
-          A planning system progressively building an understanding of your initiative — six
-          sections, and you can come back and edit any of them any time.
-        </p>
+        <>
+          <p className="mt-1 mb-8 text-sm text-neutral-500">
+            Your readiness roadmap is available now. Complete the guided sections to make the detailed product plan more reliable.
+          </p>
+          <RoadmapSetupOverview />
+        </>
       )}
       <PlanningQuestionnaire
         initiativeId={initiative.id}

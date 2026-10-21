@@ -26,6 +26,7 @@ export function isBareRoute(pathname: string, hasProfile: boolean, currentInitia
   if (pathname.startsWith("/welcome")) return true;
   if (pathname.startsWith("/login")) return true;
   if (pathname.startsWith("/onboarding")) return true;
+  if (pathname.startsWith("/workflow-preview")) return true;
   // Guided-activation restructure (reference doc §12): /admin/* renders its
   // own separate administrative environment (AdminShell, via admin/layout.tsx)
   // instead of the standard product chrome.

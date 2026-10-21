@@ -34,14 +34,13 @@ import {
 
 type MethodologyChoice = "agile_scrum" | "waterfall" | "hybrid" | "recommend";
 
-// Guided-activation restructure (reference doc §16): matches genStep, which
-// the real submit() sequence advances as each actual API call starts — not
-// a timer, so a step only ever shows "in progress" while genuinely in flight.
-const GENERATION_STEPS = [
-  "Analyzing your answers",
-  "Organizing features",
-  "Creating roadmap structure",
-  "Preparing delivery plan",
+// These are creation steps, not generation steps. The initiative is saved
+// first, then the user is taken through the full roadmap setup workflow. A
+// roadmap is only generated after that workflow's review and validation step.
+const CREATION_STEPS = [
+  "Creating your initiative",
+  "Saving your starting answers",
+  "Preparing guided roadmap setup",
 ];
 
 const METHODOLOGY_OPTIONS: { value: MethodologyChoice; label: string; hint: string }[] = [
@@ -75,6 +74,19 @@ function ReviewBlock(props: { label: string; items: CapabilityPlanItem[]; onEdit
   );
 }
 
+function RoadmapSetupNotice() {
+  return (
+    <div className="mt-6 rounded-2xl border border-accent/20 bg-accent/[0.05] p-4">
+      <p className="text-sm font-semibold text-text-primary">What happens after you create the initiative</p>
+      <p className="mt-1 text-sm leading-relaxed text-text-secondary">
+        We&apos;ll guide you through the remaining roadmap inputs: measurable outcomes, feature value and
+        priority, dependencies and risks, delivery capacity, execution approach, and a final readiness
+        check. You&apos;ll see a readiness roadmap right away, even if some answers are missing.
+      </p>
+    </div>
+  );
+}
+
 function ProgressHeader(props: { step: number; totalSteps: number; reviewLabel?: string }) {
   const onReview = props.step === props.totalSteps - 1;
   return (
@@ -100,10 +112,11 @@ function ProgressHeader(props: { step: number; totalSteps: number; reviewLabel?:
 
 /**
  * The simplified intake flow for Beginner / Some Experience users, writing
- * into the same Initiative / IntakeAnswerSet / Capability records (via the
- * existing API routes) that the advanced PlanningQuestionnaire produces. No
- * MVP/business-value/risk/dependency/methodology terminology appears
- * anywhere in the Beginner copy.
+ * starting context into the same Initiative / IntakeAnswerSet / Capability
+ * records used by PlanningQuestionnaire. Creating the initiative now hands
+ * off to that full guided roadmap workflow instead of generating immediately.
+ * No MVP/business-value/risk/dependency/methodology terminology appears in
+ * the Beginner copy before that guided handoff explains it.
  *
  * Guided-activation restructure (reference doc §4/§5): Beginner (7 screens:
  * product/audience/features/priority/next/timeline/review) and Some
@@ -189,7 +202,7 @@ export default function SimplifiedIntakeWizard(props: {
   const submit = async () => {
     if (timeline == null) return;
     setSubmitting(true);
-    setGenStep(0); // "Analyzing your answers"
+    setGenStep(0); // "Creating your initiative"
     setError(null);
 
     const onboardingWorkspaceType = readOnboardingState().workspaceType;
@@ -235,6 +248,8 @@ export default function SimplifiedIntakeWizard(props: {
     }
     const { initiativeId } = initRes.data;
 
+    setGenStep(1); // "Saving your starting answers"
+
     if (!isBeginner && methodology && methodology !== "recommend") {
       // Safe to call before generation — it just sets Initiative.methodology
       // and takes effect on first generation (see the route's own comment).
@@ -261,7 +276,7 @@ export default function SimplifiedIntakeWizard(props: {
       return;
     }
 
-    setGenStep(1); // "Organizing features"
+    setGenStep(2); // "Preparing guided roadmap setup"
     for (const item of capabilityPlan) {
       const capRes = await apiFetch(`/api/initiatives/${initiativeId}/capabilities`, {
         method: "POST",
@@ -284,16 +299,7 @@ export default function SimplifiedIntakeWizard(props: {
       }
     }
 
-    setGenStep(2); // "Creating roadmap structure" — the long-running step
-    const genRes = await apiFetch(`/api/initiatives/${initiativeId}/generate`, { method: "POST", body: {} });
-    if (!genRes.ok) {
-      setSubmitting(false);
-      setError(genRes.error ?? "Could not build your plan. Your answers are saved — you can try again from the initiative page.");
-      return;
-    }
-    setGenStep(3); // "Preparing delivery plan"
-
-    router.push(`/initiatives/${initiativeId}/review`);
+    router.push(`/initiatives/${initiativeId}/intake`);
     router.refresh();
   };
 
@@ -474,7 +480,7 @@ export default function SimplifiedIntakeWizard(props: {
             {step === reviewStep && (
               <div>
                 {submitting ? (
-                  <GenerationProgress title="Building your plan" steps={GENERATION_STEPS} currentStep={genStep} />
+                  <GenerationProgress title="Creating your initiative" steps={CREATION_STEPS} currentStep={genStep} />
                 ) : (
                   <>
                     <h2 className="text-2xl font-semibold tracking-tight text-text-primary">{reviewCopy.title}</h2>
@@ -515,6 +521,7 @@ export default function SimplifiedIntakeWizard(props: {
                           {budgetAnswer.trim() ? `$${budgetAnswer.trim()} budget` : "No budget set"}
                         </p>
                       </div>
+                      <RoadmapSetupNotice />
                     </div>
                   </>
                 )}
@@ -665,7 +672,7 @@ export default function SimplifiedIntakeWizard(props: {
             {step === reviewStep && (
               <div>
                 {submitting ? (
-                  <GenerationProgress title="Building your plan" steps={GENERATION_STEPS} currentStep={genStep} />
+                  <GenerationProgress title="Creating your initiative" steps={CREATION_STEPS} currentStep={genStep} />
                 ) : (
                   <>
                     <h2 className="text-2xl font-semibold tracking-tight text-text-primary">{reviewCopy.title}</h2>
@@ -705,6 +712,7 @@ export default function SimplifiedIntakeWizard(props: {
                           {budgetAnswer.trim() ? `$${budgetAnswer.trim()} budget` : "No budget set"}
                         </p>
                       </div>
+                      <RoadmapSetupNotice />
                     </div>
                   </>
                 )}

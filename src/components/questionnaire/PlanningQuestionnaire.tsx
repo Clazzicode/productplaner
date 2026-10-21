@@ -21,6 +21,8 @@ import { ChoiceCard, ChoicePill } from "./Choice";
 import { FIELD_CLASS } from "./fieldStyles";
 import ProductDirectionFields, { type ProductDirectionValues } from "./ProductDirectionFields";
 import DocumentReviewPanel from "@/components/documents/DocumentReviewPanel";
+import RoadmapReadinessPanel from "./RoadmapReadinessPanel";
+import { assessRoadmapReadiness } from "@/lib/questionnaire/roadmapReadiness";
 
 export interface CapabilityView {
   id: string;
@@ -133,6 +135,18 @@ export default function PlanningQuestionnaire(props: {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [validation, setValidation] = useState<{ errors: Flag[]; warnings: Flag[] } | null>(null);
+  const readinessGaps = assessRoadmapReadiness({
+    name: productDirection.name,
+    problemStatement: productDirection.problemStatement,
+    targetCustomer: productDirection.targetCustomer,
+    outcomeStatement: success.outcomeStatement,
+    outcomeMetric: success.outcomeMetric,
+    targetLaunchDate: success.targetLaunchDate,
+    budget: success.budget,
+    capabilities: caps,
+    teamSize: delivery.teamSize,
+    historicalVelocityPoints: delivery.historicalVelocityPoints,
+  });
 
   const refreshValidation = useCallback(async () => {
     const res = await apiFetch<{ errors: Flag[]; warnings: Flag[] }>(`/api/initiatives/${initiativeId}/validate`);
@@ -258,6 +272,7 @@ export default function PlanningQuestionnaire(props: {
   return (
     <div>
       <SectionProgress current={step} onJump={jump} />
+      <RoadmapReadinessPanel gaps={readinessGaps} onNavigate={jump} alreadyGenerated={alreadyGenerated} />
 
       {step === 0 && (
         <Card>
@@ -813,7 +828,7 @@ function ReviewSection(props: {
       <p className="mt-2 text-sm leading-relaxed text-text-secondary">
         {alreadyGenerated
           ? "Your edits are saved as you go — use Recalculate in the workspace to apply them to the live plan."
-          : "Everything below feeds the generator. Edit any section, then generate when ready."}
+          : "Your readiness roadmap is already available above. Review the answers below and resolve the core gaps before building a detailed product plan."}
       </p>
 
       <ReviewBlock title="Product Direction" onEdit={() => onEdit(0)}>
@@ -865,7 +880,7 @@ function ReviewSection(props: {
         <div className="mt-6 space-y-3">
           {validation.errors.length === 0 && validation.warnings.length === 0 && (
             <p className="rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
-              Everything checks out{alreadyGenerated ? "." : ". Ready to generate."}
+              Everything checks out{alreadyGenerated ? "." : ". Ready to build the detailed plan."}
             </p>
           )}
           {validation.errors.map((f, i) => (
@@ -888,7 +903,7 @@ function ReviewSection(props: {
           disabled={!alreadyGenerated && (!validation || validation.errors.length > 0)}
           className="px-6 py-3"
         >
-          {alreadyGenerated ? "Save & view plan →" : "Generate working prototype"}
+          {alreadyGenerated ? "Save & view plan →" : "Build detailed product plan"}
         </ButtonLoader>
       </div>
     </div>
