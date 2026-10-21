@@ -1,6 +1,12 @@
 name: Apply Prisma migrations to staging
 
 on:
+  pull_request:
+    branches:
+      - master
+    types:
+      - labeled
+      - synchronize
   workflow_dispatch:
     inputs:
       confirm_staging:
@@ -19,7 +25,11 @@ concurrency:
 
 jobs:
   migrate:
-    if: ${{ inputs.confirm_staging == 'staging' }}
+    if: >-
+      ${{ (github.event_name == 'workflow_dispatch' && inputs.confirm_staging == 'staging') ||
+      (github.event_name == 'pull_request' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      contains(github.event.pull_request.labels.*.name, 'run-staging-migration')) }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     environment: staging
