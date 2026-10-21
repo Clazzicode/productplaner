@@ -35,6 +35,8 @@ jobs:
     environment: staging
     env:
       APP_ENVIRONMENT: staging
+      NEXT_PUBLIC_SUPABASE_URL: https://${{ secrets.STAGING_SUPABASE_PROJECT_REF }}.supabase.co
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ci-placeholder
       DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
       DIRECT_URL: ${{ secrets.STAGING_DIRECT_URL }}
       STAGING_APP_RW_PASSWORD: ${{ secrets.STAGING_APP_RW_PASSWORD }}
