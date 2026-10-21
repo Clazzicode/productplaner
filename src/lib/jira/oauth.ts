@@ -58,7 +58,7 @@ export async function accessTokenFor(connectionId: string) {
   try {
     const accessToken = await getAtlassianAccessToken(current.organizationId);
     return { connection: current, accessToken };
-  } catch (error) {
+  } catch {
     await db.jiraConnection.updateMany({ where: { organizationId: current.organizationId, status: { not: "revoked" } }, data: { status: "reauthorization_required", revision: { increment: 1 } } });
     throw new BusinessError("Reconnect Atlassian to restore this Jira connection.", 401);
   }

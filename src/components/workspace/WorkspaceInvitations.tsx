@@ -17,7 +17,13 @@ export default function WorkspaceInvitations() {
     const result = await apiFetch<{ invitations: Invitation[] }>("/api/workspace-invitations");
     if (result.ok && result.data) setInvitations(result.data.invitations);
   };
-  useEffect(() => { void refresh(); }, []);
+  useEffect(() => {
+    let cancelled = false;
+    void apiFetch<{ invitations: Invitation[] }>("/api/workspace-invitations").then((result) => {
+      if (!cancelled && result.ok && result.data) setInvitations(result.data.invitations);
+    });
+    return () => { cancelled = true; };
+  }, []);
 
   const createInvitation = async (event: React.FormEvent) => {
     event.preventDefault(); setBusy(true); setMessage(""); setInviteUrl("");

@@ -18,7 +18,8 @@ export default function AcceptWorkspaceInvitation({ email, signedIn }: { email?:
       sessionStorage.setItem("clarivia_workspace_invite", fromFragment);
       window.history.replaceState(null, "", window.location.pathname);
     }
-    setToken(saved);
+    const timer = window.setTimeout(() => setToken(saved), 0);
+    return () => window.clearTimeout(timer);
   }, []);
 
   const accept = async () => {

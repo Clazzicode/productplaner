@@ -46,6 +46,8 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
       - run: npm ci
+      - name: Prepare the staging application connection
+        run: node scripts/prepare-staging-database-url.mjs
       - name: Validate migration inputs and staging target
         run: |
           npm run schema:validate
