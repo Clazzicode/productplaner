@@ -55,6 +55,8 @@ jobs:
           npm run schema:validate
           node scripts/verify-staging-database.mjs --preflight
       - name: Run application quality checks
+        env:
+          APP_ENVIRONMENT: test
         run: |
           npm run typecheck
           npm test
