@@ -55,11 +55,9 @@ jobs:
           npm run schema:validate
           node scripts/verify-staging-database.mjs --preflight
       - name: Run application quality checks
-        env:
-          APP_ENVIRONMENT: test
         run: |
           npm run typecheck
-          npm test
+          env -u APP_ENVIRONMENT -u DATABASE_URL -u DIRECT_URL -u NEXT_PUBLIC_SUPABASE_URL npm test
       - name: Apply the checked-in Prisma migration chain
         run: npx prisma migrate deploy
       - name: Configure the non-bypassing app database role
