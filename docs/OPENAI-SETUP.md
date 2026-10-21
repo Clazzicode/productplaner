@@ -1,4 +1,4 @@
-# OpenAI setup for Guided Planning
+# OpenAI setup for Clarivia
 
 Updated September 26, 2026. This change replaces the Claude SDK with OpenAI
 Responses for the ten existing AI actions. The deterministic planning engine,
@@ -8,7 +8,7 @@ reuse decisions and job workflow remain in place. No database migration is neede
 ## Account and billing
 
 1. Sign in at https://platform.openai.com/ and complete account onboarding.
-2. Create a project named **Guided Planning**. Use separate projects/keys for
+2. Create a project named **Clarivia**. Use separate projects/keys for
    production and staging when those environments are provisioned.
 3. In organization Billing, add a payment method and fund API usage as directed
    by the dashboard. The account owner chooses the amount and any auto-recharge.

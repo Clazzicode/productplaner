@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { apiFetch } from "@/lib/clientApi";
+import { apiFetch, waitForBackgroundJob } from "@/lib/clientApi";
 import { readOnboardingState } from "@/lib/onboarding/tempStateClient";
 import { LEGACY_QUALIFYING_PROFILE_DEFAULTS } from "@/lib/questionnaire/legacyQualifyingDefaults";
 import { MIN_PROBLEM_CHARS } from "@/lib/generation/constants";

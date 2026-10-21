@@ -1,11 +1,17 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { accessibleJiraResources, createJiraIssue, deleteJiraWebhooks, exchangeJiraCode, getJiraProjectMetadata, jiraAuthorizationUrl, refreshJiraWebhook, registerJiraWebhook, searchJiraIssues, updateJiraIssue } from "../client";
 
-const original = { id: process.env.JIRA_CLIENT_ID, secret: process.env.JIRA_CLIENT_SECRET, redirect: process.env.JIRA_REDIRECT_URI };
-beforeEach(() => { process.env.JIRA_CLIENT_ID = "client-a"; process.env.JIRA_CLIENT_SECRET = "secret-a"; process.env.JIRA_REDIRECT_URI = "https://app.example/api/integrations/jira/oauth/callback"; });
-afterEach(() => { for (const [key, value] of [["JIRA_CLIENT_ID",original.id],["JIRA_CLIENT_SECRET",original.secret],["JIRA_REDIRECT_URI",original.redirect]] as const) { if (value === undefined) delete process.env[key]; else process.env[key] = value; } });
+const original = { id: process.env.JIRA_CLIENT_ID, secret: process.env.JIRA_CLIENT_SECRET, redirect: process.env.JIRA_REDIRECT_URI, writes: process.env.JIRA_WRITE_ENABLED };
+beforeEach(() => { process.env.JIRA_CLIENT_ID = "client-a"; process.env.JIRA_CLIENT_SECRET = "secret-a"; process.env.JIRA_REDIRECT_URI = "https://app.example/api/integrations/jira/oauth/callback"; process.env.JIRA_WRITE_ENABLED = "true"; });
+afterEach(() => { for (const [key, value] of [["JIRA_CLIENT_ID",original.id],["JIRA_CLIENT_SECRET",original.secret],["JIRA_REDIRECT_URI",original.redirect],["JIRA_WRITE_ENABLED",original.writes]] as const) { if (value === undefined) delete process.env[key]; else process.env[key] = value; } });
 
 describe("Atlassian OAuth and Jira REST client", () => {
+  it("blocks Jira writes by default before making a provider request", async () => {
+    delete process.env.JIRA_WRITE_ENABLED;
+    const fetcher = vi.fn();
+    await expect(createJiraIssue({ cloudId: "cloud-a", accessToken: "token", fields: { summary: "must not write" } }, fetcher)).rejects.toThrow("Jira write operations are disabled");
+    expect(fetcher).not.toHaveBeenCalled();
+  });
   it("builds a 3LO URL with offline access and an exact callback", () => {
     const url = new URL(jiraAuthorizationUrl("opaque-state"));
     expect(url.origin).toBe("https://auth.atlassian.com");

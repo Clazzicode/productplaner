@@ -30,7 +30,7 @@ export default async function AccountSettingsPage() {
   return (
     <ContainedLayout className="max-w-2xl">
       <PageHeader
-        eyebrow="Guided Product Planning Platform"
+        eyebrow="Clarivia"
         title="Settings"
         description="Change how the platform calibrates guidance for you. These don't change what's asked or how a plan is built."
       />

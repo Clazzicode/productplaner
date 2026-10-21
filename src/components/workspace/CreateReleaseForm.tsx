@@ -33,7 +33,7 @@ export default function CreateReleaseForm(props: { initiativeId: string; availab
 
   return <form onSubmit={submit} className="w-full max-w-md rounded-2xl border border-indigo-200 bg-indigo-50 p-4">
     <h3 className="text-sm font-semibold text-indigo-900">Create a release</h3>
-    <p className="mt-1 text-xs text-indigo-700">Set the team&apos;s release rhythm and the target date. Guided Planning connects the release to the next roadmap group automatically.</p>
+    <p className="mt-1 text-xs text-indigo-700">Set the team&apos;s release rhythm and the target date. Clarivia connects the release to the next roadmap group automatically.</p>
     <div className="mt-3 space-y-3">
       <label className="block text-xs font-medium text-neutral-600">How often do you release?
         <select value={cadence} onChange={(e) => setCadence(e.target.value as Cadence)} className="mt-1 w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm">

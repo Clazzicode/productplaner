@@ -5,8 +5,9 @@ export const emailSchema = z.string().trim().toLowerCase().email("Enter a valid 
 export const passwordSchema = z.string().min(8, "Password must be at least 8 characters.").max(128);
 
 /** Only fixed local destinations; never accept a caller-supplied redirect URL. */
-export function authCallbackUrl(request: Request, recovery = false): string {
+export function authCallbackUrl(request: Request, recovery = false, next?: string): string {
   const url = new URL("/auth/callback", request.url);
   if (recovery) url.searchParams.set("next", "/reset-password");
+  else if (next === "/join") url.searchParams.set("next", "/join");
   return url.toString();
 }

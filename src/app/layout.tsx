@@ -26,7 +26,7 @@ const geistMono = localFont({
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Guided Product Planning Platform",
+  title: "Clarivia",
   description:
     "Methodology-aware planning: from a raw product idea to a connected, execution-ready plan prototype.",
 };

@@ -1,8 +1,17 @@
 import type { NextRequest } from "next/server";
 import { updateSupabaseSession } from "@/lib/supabase/middleware";
+import { applySecurityResponseHeaders, buildContentSecurityPolicy } from "@/lib/securityHeaders";
 
 export async function middleware(request: NextRequest) {
-  return updateSupabaseSession(request);
+  const nonce = Buffer.from(crypto.randomUUID()).toString("base64");
+  const contentSecurityPolicy = buildContentSecurityPolicy(nonce);
+  const requestHeaders = new Headers(request.headers);
+  requestHeaders.set("x-nonce", nonce);
+  requestHeaders.set("content-security-policy", contentSecurityPolicy);
+
+  const response = await updateSupabaseSession(request, requestHeaders);
+  applySecurityResponseHeaders(response, contentSecurityPolicy);
+  return response;
 }
 
 export const config = {

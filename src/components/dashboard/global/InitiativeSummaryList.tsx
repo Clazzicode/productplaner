@@ -29,7 +29,7 @@ export default function InitiativeSummaryList(props: { initiatives: InitiativeOv
       {props.initiatives.length === 0 ? (
         <EmptyState
           title="No initiatives yet"
-          description="Create one and answer the eight guided planning questions to get a working plan."
+          description="Create one and answer the eight planning questions to get a working plan."
           action={
             <Link
               href="/initiatives/new"

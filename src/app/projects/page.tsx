@@ -31,7 +31,7 @@ export default async function ProjectsPage() {
   return (
     <ContainedLayout>
       <PageHeader
-        eyebrow="Guided Product Planning Platform"
+        eyebrow="Clarivia"
         title="Projects"
         description="A Project holds the context shared across its initiatives. Open one to see its initiatives, or resume recent work from the dashboard."
         primaryAction={

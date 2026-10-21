@@ -15,6 +15,7 @@ export default function DashboardHeader(props: {
   releaseTarget: string | null;
   updatedAt: Date;
   baselineApprovedAt: Date | null;
+  planReviewFingerprint: string;
   status: ResolvedStatus;
   /** Step 8C — the initiative-centric path to "Who has access?"
    * (docs/V2-RESOURCE-ACCESS.md §14). Only rendered for an Organization
@@ -50,7 +51,10 @@ export default function DashboardHeader(props: {
                     Baseline approved {props.baselineApprovedAt.toLocaleDateString()}
                   </Badge>
                 ) : props.isOrgAdmin ? (
-                  <ApprovePlanButton initiativeId={props.initiativeId} />
+                  <ApprovePlanButton
+                    initiativeId={props.initiativeId}
+                    expectedPlanFingerprint={props.planReviewFingerprint}
+                  />
                 ) : null}
               </span>
             </>

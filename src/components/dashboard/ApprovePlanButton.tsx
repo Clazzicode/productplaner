@@ -9,7 +9,7 @@ import { ButtonLoader } from "@/components/ui/loading";
  * for the disabled FR-11/12/13 lock ceremony: approving snapshots the
  * current plan as the baseline and makes future full/partial regenerates
  * require explicit confirmation instead of silently rebuilding it. */
-export default function ApprovePlanButton(props: { initiativeId: string }) {
+export default function ApprovePlanButton(props: { initiativeId: string; expectedPlanFingerprint: string }) {
   const router = useRouter();
   const [confirm, setConfirm] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -18,7 +18,10 @@ export default function ApprovePlanButton(props: { initiativeId: string }) {
   const approve = async () => {
     setBusy(true);
     setError(null);
-    const res = await apiFetch(`/api/initiatives/${props.initiativeId}/approve-plan`, { method: "POST" });
+    const res = await apiFetch(`/api/initiatives/${props.initiativeId}/approve-plan`, {
+      method: "POST",
+      body: { expectedPlanFingerprint: props.expectedPlanFingerprint },
+    });
     setBusy(false);
     setConfirm(false);
     if (!res.ok) {
