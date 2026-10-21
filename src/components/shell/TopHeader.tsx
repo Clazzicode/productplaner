@@ -18,11 +18,11 @@ export default function TopHeader(props: {
 }) {
   return (
     <>
-      <header className="no-print sticky top-0 z-30 hidden min-h-[78px] items-center justify-between gap-4 border-b border-border-subtle bg-white/95 px-7 py-2.5 backdrop-blur lg:flex">
+      <header className="no-print sticky top-0 z-30 hidden min-h-[78px] min-w-0 items-center justify-between gap-4 border-b border-border-subtle bg-white/95 px-7 py-2.5 backdrop-blur xl:flex">
         {props.switcherAndNew}
         {props.accountActions}
       </header>
-      <header className="no-print flex items-center gap-3 border-b border-border-subtle bg-panel px-4 py-3 lg:hidden">
+      <header className="no-print flex min-w-0 items-center gap-3 border-b border-border-subtle bg-panel px-4 py-3 xl:hidden">
         <button
           onClick={props.onOpenMenu}
           aria-label="Open menu"

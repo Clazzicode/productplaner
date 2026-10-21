@@ -6,7 +6,16 @@ export const QUESTIONNAIRE_SECTIONS = [
   "Features",
   "Delivery",
   "Execution Preferences",
-  "Review & Generate",
+  "Review & Build",
+] as const;
+
+const SECTION_EXPLANATIONS = [
+  "Define the problem, audience, and product direction the roadmap must support.",
+  "Set the outcome, success measure, target date, and budget that make the roadmap accountable.",
+  "Turn ideas into scoped features, then add MVP priority, value, effort, risk, and dependencies.",
+  "Set team capacity and the planning assumptions used to build a realistic schedule.",
+  "Choose how work should flow so releases and sprints match the way the team operates.",
+  "Use the readiness roadmap at any point; review gaps and assumptions before building the detailed product plan.",
 ] as const;
 
 /** Top-of-flow progress bar — one segment per section, filled up through the
@@ -28,6 +37,9 @@ export default function SectionProgress(props: { current: number; onJump?: (i: n
         </p>
         <p className="text-xs font-semibold tabular-nums text-accent">{percent}%</p>
       </div>
+      <p className="mb-3 max-w-3xl text-sm leading-relaxed text-text-secondary">
+        {SECTION_EXPLANATIONS[props.current]}
+      </p>
       <div
         className="flex gap-1.5"
         role="progressbar"

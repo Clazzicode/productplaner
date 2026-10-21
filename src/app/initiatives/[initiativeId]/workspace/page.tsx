@@ -6,5 +6,5 @@ export default async function WorkspaceIndex({
   params: Promise<{ initiativeId: string }>;
 }) {
   const { initiativeId } = await params;
-  redirect(`/initiatives/${initiativeId}/workspace/roadmap`);
+  redirect(`/initiatives/${initiativeId}/workspace/sprint-preparation`);
 }

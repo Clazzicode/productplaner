@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { FocusedLayout } from "@/components/layout/PageLayouts";
 import PlanningQuestionnaire from "@/components/questionnaire/PlanningQuestionnaire";
+import RoadmapSetupOverview from "@/components/questionnaire/RoadmapSetupOverview";
 import WorkspaceBreadcrumb from "@/components/workspace/WorkspaceBreadcrumb";
 import { requireInitiativeView } from "@/lib/access/guards";
 import { requireCurrentUser } from "@/lib/auth/session";
@@ -9,6 +10,7 @@ import { db, establishAuthContext } from "@/lib/db";
 import { depthFromExperience } from "@/lib/questionnaire/roleGuidance";
 import { readOnboardingStateServer } from "@/lib/onboarding/tempStateServer";
 import { resolveInitiativeEconomics } from "@/lib/projectContext";
+import { resolveWorkingRole } from "@/lib/onboarding/resolveWorkingRole";
 
 export const dynamic = "force-dynamic";
 
@@ -64,7 +66,7 @@ export default async function IntakePage({
           Editable at any time — it&apos;s the living source of your plan, not a one-time form.
           Changes here don&apos;t touch the generated plan until you explicitly{" "}
           <Link
-            href={`/initiatives/${initiative.id}/workspace/roadmap`}
+            href={`/initiatives/${initiative.id}/workspace/sprint-preparation`}
             className="font-medium text-indigo-600 underline"
           >
             recalculate it in the workspace
@@ -72,16 +74,18 @@ export default async function IntakePage({
           .
         </p>
       ) : (
-        <p className="mt-1 mb-8 text-sm text-neutral-500">
-          A planning system progressively building an understanding of your initiative — six
-          sections, and you can come back and edit any of them any time.
-        </p>
+        <>
+          <p className="mt-1 mb-8 text-sm text-neutral-500">
+            Your planning readiness view is available now. Complete the guided sections to prepare the backlog and sprint-planning foundation.
+          </p>
+          <RoadmapSetupOverview />
+        </>
       )}
       <PlanningQuestionnaire
         initiativeId={initiative.id}
         projectId={initiative.projectId}
         experienceLevel={initiative.qualifyingProfile?.experienceLevel ?? null}
-        workingRole={onboarding.workingRole ?? null}
+        workingRole={resolveWorkingRole(user.workingRole, onboarding.workingRole)}
         verbose={verbose}
         alreadyGenerated={alreadyGenerated}
         initialStep={1}

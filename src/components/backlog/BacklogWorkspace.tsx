@@ -168,7 +168,7 @@ export default function BacklogWorkspace({ initiativeId, initialFeatures, initia
   return <div className="space-y-5">
     <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-slate-50 p-3"><div className="flex flex-wrap gap-2">{tab("features", "Features")}{tab("backlog", "Unified backlog")}{tab("roadmap", "Now / Next / Later")}</div>{canEdit && <button onClick={() => { setHistory([]); setEditing("new"); }} className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white">+ Add feature</button>}</div>
     <div className="flex flex-wrap items-center gap-4">
-      <label className="min-w-64 flex-1"><span className="sr-only">Search backlog</span><input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search backlog items or owners…" className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3" /></label>
+      <label className="min-w-0 basis-full flex-1 sm:basis-64"><span className="sr-only">Search backlog</span><input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search backlog items or owners…" className="w-full min-w-0 rounded-xl border border-slate-300 bg-white px-4 py-3" /></label>
       <label className="flex items-center gap-2 text-sm font-medium"><input type="checkbox" checked={showArchived} onChange={e => setShowArchived(e.target.checked)} /> Show archived</label>
     </div>
     {view === "backlog" && <div className="grid gap-2 rounded-xl border bg-slate-50 p-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
@@ -182,7 +182,7 @@ export default function BacklogWorkspace({ initiativeId, initialFeatures, initia
     {view === "backlog" && canEdit && <div className="flex flex-wrap items-end gap-3 rounded-xl border border-indigo-100 bg-indigo-50 p-3">
       <label className="text-sm font-medium">Bulk action<select className={selectClass + " block mt-1"} value={bulkAction} onChange={e => setBulkAction(e.target.value as typeof bulkAction)}><option value="archive">Archive</option><option value="restore">Restore</option><option value="set_lane">Set roadmap placement</option></select></label>
       {bulkAction === "set_lane" && <label className="text-sm font-medium">Placement<select className={selectClass + " block mt-1"} value={bulkLane} onChange={e => setBulkLane(e.target.value as typeof bulkLane)}>{(["unscheduled", "now", "next", "later"] as const).map(value => <option key={value} value={value}>{laneLabels[value]}</option>)}</select></label>}
-      <label className="min-w-64 flex-1 text-sm font-medium">Reason<input className={selectClass + " block w-full mt-1"} value={bulkReason} onChange={e => setBulkReason(e.target.value)} placeholder="Why are these items changing?" /></label>
+      <label className="min-w-0 basis-full flex-1 text-sm font-medium sm:basis-64">Reason<input className={selectClass + " block w-full min-w-0 mt-1"} value={bulkReason} onChange={e => setBulkReason(e.target.value)} placeholder="Why are these items changing?" /></label>
       <button disabled={busy || selected.length === 0} onClick={applyBulkTriage} className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-40">Apply to {selected.length} selected</button>
     </div>}
     {message && <p role="status" className="rounded-lg bg-slate-100 px-4 py-2 text-sm text-slate-700">{message}</p>}
@@ -194,7 +194,32 @@ export default function BacklogWorkspace({ initiativeId, initialFeatures, initia
       {history.length ? <ol className="mt-3 space-y-3">{history.map(item => <li key={item.id} className="border-l-2 border-indigo-200 pl-3 text-sm"><p className="font-medium">{item.reason || item.action}</p><p className="text-slate-500">{new Date(item.createdAt).toLocaleString()} · {item.actor?.name ?? "System"} · revision {item.revision}</p><p className="text-xs text-slate-500">Changed: {Object.keys(item.changes).join(", ") || "record created"}</p></li>)}</ol> : <p className="mt-2 text-sm text-slate-500">No saved changes yet.</p>}
     </section>}
     {view === "features" && <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{visibleFeatures.map(feature => card(feature))}</div>}
-    {view === "backlog" && visibleItems.length > 0 && <div className="overflow-x-auto rounded-xl border bg-white"><table className="w-full min-w-[1050px] text-left text-sm">
+    {view === "backlog" && visibleItems.length > 0 && <div className="grid min-w-0 gap-3 lg:hidden">{visibleItems.map(item => {
+      const key = selectedKey(item);
+      const featureIndex = item.recordType === "feature" ? features.findIndex(feature => feature.id === item.id) : -1;
+      return <article key={key} className="min-w-0 rounded-xl border bg-white p-4 text-sm">
+        <div className="flex min-w-0 items-start gap-3">
+          <input aria-label={`Select ${item.title}`} type="checkbox" checked={selected.includes(key)} onChange={e => setSelected(current => e.target.checked ? [...current, key] : current.filter(value => value !== key))} />
+          <div className="min-w-0 flex-1"><h3 className="break-words font-semibold">{item.key ? `${item.key} · ` : ""}{item.title}</h3>{item.description && <p className="mt-1 break-words text-xs text-slate-500">{item.description}</p>}</div>
+        </div>
+        <dl className="mt-3 grid grid-cols-2 gap-2 text-xs">
+          <div><dt className="text-slate-500">Type / source</dt><dd className="capitalize">{item.workType.replaceAll("_", " ")} · {item.source}</dd></div>
+          <div><dt className="text-slate-500">Owner</dt><dd>{item.owner?.name ?? "Unassigned"}</dd></div>
+          <div><dt className="text-slate-500">Readiness / status</dt><dd className="capitalize">{item.readiness.replaceAll("_", " ")} · {item.status.replaceAll("_", " ")}</dd></div>
+          <div><dt className="text-slate-500">Priority</dt><dd className="capitalize">{item.priorityLabel.replaceAll("_", " ")}{item.priorityScore == null ? "" : ` · ${item.priorityScore}/100`}</dd></div>
+          <div><dt className="text-slate-500">Roadmap</dt><dd>{laneLabels[item.roadmapLane]}</dd></div>
+          {item.archived && <div><dt className="text-slate-500">State</dt><dd>Archived</dd></div>}
+        </dl>
+        {(canPrioritize || (featureIndex >= 0 && canEdit)) && <div className="mt-3 flex flex-wrap items-center gap-2 border-t pt-3">
+          {canPrioritize && !item.archived && <button onClick={() => { setPrioritizing(item); setEditing(null); }} className="rounded-lg border px-3 py-2 text-xs font-semibold text-indigo-700">Set priority</button>}
+          {featureIndex >= 0 && canEdit && <>
+            <button disabled={busy || featureIndex === 0} aria-label={`Move ${item.title} up`} onClick={() => move(featureIndex, -1)} className="rounded-lg border px-3 py-2 disabled:opacity-30">Move up</button>
+            <button disabled={busy || featureIndex === features.length - 1} aria-label={`Move ${item.title} down`} onClick={() => move(featureIndex, 1)} className="rounded-lg border px-3 py-2 disabled:opacity-30">Move down</button>
+          </>}
+        </div>}
+      </article>;
+    })}</div>}
+    {view === "backlog" && visibleItems.length > 0 && <div className="hidden max-w-full min-w-0 overflow-x-auto rounded-xl border bg-white lg:block"><table className="w-full min-w-[1050px] text-left text-sm">
       <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500"><tr><th className="p-3"><span className="sr-only">Select</span></th><th className="p-3">Backlog item</th><th className="p-3">Type / source</th><th className="p-3">Owner</th><th className="p-3">Readiness / status</th><th className="p-3">Priority</th><th className="p-3">Roadmap</th><th className="p-3">Order</th></tr></thead>
       <tbody>{visibleItems.map(item => {
         const key = selectedKey(item); const featureIndex = item.recordType === "feature" ? features.findIndex(feature => feature.id === item.id) : -1;

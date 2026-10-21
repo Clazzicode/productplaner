@@ -4,7 +4,7 @@
 export function Card(props: { children: React.ReactNode; className?: string }) {
   return (
     <section
-      className={`rounded-xl border border-border-subtle bg-white p-5 shadow-[0_8px_28px_rgba(46,71,125,0.06)] ${props.className ?? ""}`}
+      className={`min-w-0 rounded-xl border border-border-subtle bg-white p-5 shadow-[0_8px_28px_rgba(46,71,125,0.06)] ${props.className ?? ""}`}
     >
       {props.children}
     </section>

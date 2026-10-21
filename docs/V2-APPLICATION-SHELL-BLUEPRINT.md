@@ -293,7 +293,7 @@ mode of this one.
 
 ## 12. Responsive Behavior
 
-The existing 2-state model already works and should be kept as-is for Step 6B:
+The original Step 6B two-state model used these thresholds:
 - **`lg:` breakpoint (1024px) and above** (standard laptop through large desktop) — persistent
   expanded sidebar (`w-56`), exactly as today.
 - **Below `lg:`** (narrow laptop/tablet) — off-canvas `MobileNavDrawer`, exactly as today
@@ -304,7 +304,9 @@ The existing 2-state model already works and should be kept as-is for Step 6B:
 ("Expanded → Collapsed → Drawer") describes a reasonable future enhancement for users who want
 more horizontal room at standard laptop widths, but the current 2-state model has no known problem
 to justify adding a third state yet. Documented here as a future option, not a Step 6B deliverable.
-Desktop remains primary; mobile is not designed for as a primary use case.
+This paragraph describes the original rollout, not the current responsive target. The platform-wide
+responsive pass documented in `V2-DESIGN-SYSTEM.md` moves the persistent-sidebar threshold to `xl:`
+(1280px), keeps the drawer below it, and treats phone and tablet layouts as full-use experiences.
 
 ---
 

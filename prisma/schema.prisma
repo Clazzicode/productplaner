@@ -119,12 +119,10 @@ model User {
   // `accessLevel === "org_admin"` checks throughout the codebase keep working
   // unchanged. New code should read OrganizationMember.role directly.
   accessLevel                    String                          @default("org_admin") // standard_user | org_admin
-  // Nullable, no default, deliberately: Working Role has lived only in the
-  // Step 4 onboarding cookie (src/lib/onboarding/tempStateServer.ts) and there
-  // is no truthful value to backfill an existing User row with. Populated
-  // naturally as a user completes/updates onboarding — see docs/V2-USERS-TEAMS.md
-  // "Auth Transition" for the read-persisted-fall-back-to-cookie strategy.
-  workingRole                    String? // product_management | project_manager | product_owner
+  // Product Owner is the only launched working experience. Older nullable
+  // values remain schema-compatible; role resolution maps every account to
+  // Product Owner, and new users are provisioned with that stored value.
+  workingRole                    String? // product_owner; historical values may remain in older environments
   memberType                     String                          @default("internal") // internal | external
   status                         String                          @default("active") // active | disabled | archived
   profiles                       QualifyingProfile[]

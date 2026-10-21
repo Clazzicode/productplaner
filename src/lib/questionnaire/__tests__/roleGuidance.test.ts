@@ -35,7 +35,7 @@ describe("guidanceFor", () => {
     }
   });
 
-  it("falls back to product_management framing when role is null", () => {
-    expect(guidanceFor("capabilities", null)).toBe(guidanceFor("capabilities", "product_management"));
+  it("falls back to product_owner framing when role is null", () => {
+    expect(guidanceFor("capabilities", null)).toBe(guidanceFor("capabilities", "product_owner"));
   });
 });

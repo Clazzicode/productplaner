@@ -1,4 +1,8 @@
+"use client";
+
 import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
 import AdminTopHeader from "./AdminTopHeader";
 import Sidebar from "./Sidebar";
 import type { NavigationItemProps } from "./NavigationItem";
@@ -35,23 +39,76 @@ const ADMIN_GROUPS: { title: string; items: NavigationItemProps[] }[] = [
  * non-admin who lands here directly.
  */
 export default function AdminShell(props: { children: React.ReactNode; userName: string; accessLevel: string }) {
+  const pathname = usePathname() ?? "";
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [previousPathname, setPreviousPathname] = useState(pathname);
+  if (pathname !== previousPathname) {
+    setPreviousPathname(pathname);
+    setMenuOpen(false);
+  }
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setMenuOpen(false);
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [menuOpen]);
+
+  const adminNav = (
+    <Sidebar
+      groups={ADMIN_GROUPS}
+      title="Guided Planning — Administration"
+      titleHref="/admin"
+      footer={
+        <Link
+          href="/home"
+          className="block rounded-lg px-2 py-1.5 text-sm font-medium text-text-inverse-muted transition hover:bg-nav-hover hover:text-text-inverse"
+        >
+          ← Back to Workspace
+        </Link>
+      }
+    />
+  );
+
   return (
-    <div className="flex min-h-screen">
-      <Sidebar
-        groups={ADMIN_GROUPS}
-        title="Guided Planning — Administration"
-        titleHref="/admin"
-        footer={
-          <Link
-            href="/home"
-            className="block rounded-lg px-2 py-1.5 text-sm font-medium text-text-inverse-muted transition hover:bg-nav-hover hover:text-text-inverse"
+    <div className="flex min-h-dvh min-w-0">
+      <div className="hidden xl:contents">{adminNav}</div>
+      {menuOpen && (
+        <>
+          <button
+            type="button"
+            aria-label="Close administration menu"
+            className="fixed inset-0 z-40 bg-black/40 xl:hidden"
+            onClick={() => setMenuOpen(false)}
+          />
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Administration navigation"
+            className="fixed inset-y-0 left-0 z-50 w-[min(20rem,100vw)] xl:hidden [&>nav]:h-full [&>nav]:w-full"
           >
-            ← Back to Workspace
-          </Link>
-        }
-      />
+            <button
+              type="button"
+              aria-label="Close administration menu"
+              onClick={() => setMenuOpen(false)}
+              autoFocus
+              className="absolute right-3 top-3 z-10 rounded-lg bg-nav-hover px-2 py-1 text-text-inverse"
+            >
+              ✕
+            </button>
+            {adminNav}
+          </div>
+        </>
+      )}
       <div className="flex min-w-0 flex-1 flex-col">
-        <AdminTopHeader userName={props.userName} accessLevel={props.accessLevel} />
+        <AdminTopHeader userName={props.userName} accessLevel={props.accessLevel} onOpenMenu={() => setMenuOpen(true)} />
         <main className="min-w-0 flex-1">{props.children}</main>
       </div>
     </div>

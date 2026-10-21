@@ -5,8 +5,7 @@ import { useState } from "react";
 import { apiFetch } from "@/lib/clientApi";
 import { LEGACY_QUALIFYING_PROFILE_DEFAULTS } from "@/lib/questionnaire/legacyQualifyingDefaults";
 import { depthFromExperience, isSimplifiedIntakeExperience } from "@/lib/questionnaire/roleGuidance";
-import { readOnboardingState, writeOnboardingState } from "@/lib/onboarding/tempStateClient";
-import { WORKING_ROLE_META } from "@/lib/onboarding/roleOptions";
+import { readOnboardingState } from "@/lib/onboarding/tempStateClient";
 import { EXPERIENCE_LEVEL_OPTIONS, type SimplifiedExperienceLevel } from "@/lib/onboarding/experienceOptions";
 import type { WorkingRole } from "@/lib/onboarding/types";
 import { ButtonLoader, GenerationProgress } from "@/components/ui/loading";
@@ -31,14 +30,6 @@ const STEPS_NEW_PROFILE = [
 ];
 const STEPS_EXISTING_PROFILE = ["Creating your initiative", "Saving your answers", "Preparing initiative workspace"];
 
-// Guided-activation restructure (reference doc §13): full 6-option Working
-// Role list, matching WorkingRoleSelector — this component's own role
-// question is now only reachable via a direct deep-link to /initiatives/new
-// before onboarding finishes (the normal path always arrives with hasProfile
-// true and a role already set from /onboarding/role), but it must still
-// offer the same real, non-rejecting choices when it is.
-const ROLE_ORDER: WorkingRole[] = ["product_owner", "product_management", "project_manager"];
-
 type StartingPoint = "fresh" | "import" | "use_project_context";
 
 export interface ExistingProjectSummary {
@@ -62,10 +53,7 @@ export default function ProductDirectionBootstrap(props: {
   project?: ExistingProjectSummary | null;
 }) {
   const router = useRouter();
-  const [roleAnswer, setRoleAnswer] = useState<WorkingRole | null>(
-    props.hasProfile ? (props.workingRole ?? "product_management") : props.workingRole,
-  );
-  const passedRoleGate = roleAnswer !== null;
+  const roleAnswer: WorkingRole = "product_owner";
   const [experienceLevel, setExperienceLevel] = useState("some_experience");
   const [values, setValues] = useState<ProductDirectionValues>({
     name: "",
@@ -94,12 +82,6 @@ export default function ProductDirectionBootstrap(props: {
   // Offsets the two steps that only run when there's no profile yet, so the
   // same setStep() calls below work for either list.
   const stepOffset = props.hasProfile ? 0 : 1;
-
-  const pickRole = (value: WorkingRole) => {
-    setRoleAnswer(value);
-    writeOnboardingState({ workingRole: value });
-    void apiFetch("/api/account/working-role", { method: "PATCH", body: { workingRole: value } });
-  };
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -171,31 +153,7 @@ export default function ProductDirectionBootstrap(props: {
       <SectionProgress current={0} />
 
       <form onSubmit={submit} className="rounded-3xl border border-neutral-200 bg-white p-8 shadow-md md:p-10">
-        {!props.hasProfile && !passedRoleGate && (
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-accent">Question 1</p>
-            <h2 className="mt-1.5 text-2xl font-semibold tracking-tight text-text-primary">
-              What&apos;s your role?
-            </h2>
-            <p className="mt-2 max-w-lg text-sm leading-relaxed text-text-secondary">
-              This shapes how guidance is framed throughout the process — not what&apos;s asked or
-              how your plan is built.
-            </p>
-            <div className="mt-6 grid gap-3 sm:grid-cols-2">
-              {ROLE_ORDER.map((value) => (
-                <ChoiceCard
-                  key={value}
-                  selected={false}
-                  onClick={() => pickRole(value)}
-                  label={WORKING_ROLE_META[value].label}
-                  hint={WORKING_ROLE_META[value].description}
-                />
-              ))}
-            </div>
-          </div>
-        )}
-
-        {(props.hasProfile || passedRoleGate) && (
+        {(
           <>
             {!props.hasProfile && (
               <div className="mb-8">
@@ -304,7 +262,7 @@ export default function ProductDirectionBootstrap(props: {
         <div className="mt-6">
           <SimplifiedIntakeWizard
             hasProfile={false}
-            workingRole={roleAnswer as WorkingRole}
+            workingRole={roleAnswer}
             experienceLevel={experienceLevel as SimplifiedExperienceLevel}
           />
         </div>

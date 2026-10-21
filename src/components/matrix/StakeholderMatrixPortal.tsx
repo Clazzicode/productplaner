@@ -85,7 +85,23 @@ export default function StakeholderMatrixPortal({ data }: { data: StakeholderMat
           <h3 id="matrix-heading" className="text-lg font-bold text-text-primary">Planning intelligence matrix</h3>
           <p className="mt-1 text-sm text-text-muted">Each row is calculated from the live plan and links back to its source workspace.</p>
         </div>
-        <div className="overflow-x-auto">
+        <div className="grid gap-3 p-3 md:hidden">
+          {data.rows.map((row) => {
+            const lens = row.cells.find((item) => item.audience === audience)!;
+            return <article key={row.id} className="min-w-0 rounded-xl border border-border-subtle p-4">
+              <div className="flex flex-wrap items-start justify-between gap-2">
+                <h4 className="break-words font-semibold text-text-primary">{row.domain}</h4>
+                <span className={`inline-flex rounded-full px-2 py-0.5 text-[11px] font-bold capitalize ring-1 ${HEALTH_STYLE[row.health]}`}>{row.health}</span>
+              </div>
+              <p className="mt-2 text-2xl font-bold text-text-primary">{row.metric}</p>
+              <p className="text-xs text-text-muted">{row.label}</p>
+              <p className="mt-3 break-words text-sm font-semibold text-text-primary">{lens.headline}</p>
+              <p className="mt-1 break-words text-sm text-text-muted">{lens.detail}</p>
+              <Link href={row.href} className="mt-3 inline-block text-sm font-semibold text-indigo-600 hover:underline">Open source →</Link>
+            </article>;
+          })}
+        </div>
+        <div className="hidden max-w-full overflow-x-auto md:block">
           <table className="w-full min-w-[780px] text-left">
             <thead className="bg-slate-50 text-xs font-bold uppercase tracking-wide text-text-muted">
               <tr>
@@ -132,7 +148,21 @@ export default function StakeholderMatrixPortal({ data }: { data: StakeholderMat
           {data.accountability.length === 0 ? (
             <div className="p-8 text-center text-sm text-text-muted">No stakeholder assignments exist for this initiative yet.</div>
           ) : (
-            <div className="overflow-x-auto">
+            <>
+            <div className="grid gap-3 p-3 md:hidden">
+              {data.accountability.map((person) => <article key={person.id} className="min-w-0 rounded-xl border border-border-subtle p-4 text-sm">
+                <h4 className="break-words font-semibold text-text-primary">{person.name}</h4>
+                <p className="text-xs text-text-muted">{person.external ? person.company || "External stakeholder" : "Organization member"} · {titleCase(person.influence)} influence / {titleCase(person.interest)} interest</p>
+                <div className="mt-2 flex flex-wrap gap-1">{person.roles.map((role) => <span key={role} className="rounded-full bg-indigo-50 px-2 py-1 text-[11px] font-semibold text-indigo-700">{role}</span>)}</div>
+                <dl className="mt-3 grid grid-cols-3 gap-2 text-center text-xs">
+                  <div><dt className="text-text-muted">Planning</dt><dd className="font-semibold">{person.planning}</dd></div>
+                  <div><dt className="text-text-muted">Delivery</dt><dd className="font-semibold">{person.delivery}</dd></div>
+                  <div><dt className="text-text-muted">Governance</dt><dd className="font-semibold">{person.governance}</dd></div>
+                </dl>
+                <p className="mt-3 break-words text-xs text-text-muted">Engagement: {person.engagementExpectation || "Not specified"}</p>
+              </article>)}
+            </div>
+            <div className="hidden max-w-full overflow-x-auto md:block">
               <table className="w-full min-w-[760px] text-left text-sm">
                 <thead className="bg-slate-50 text-xs font-bold uppercase tracking-wide text-text-muted">
                   <tr><th className="px-4 py-3">Person</th><th className="px-4 py-3">Roles</th><th className="px-4 py-3 text-center">Planning</th><th className="px-4 py-3 text-center">Delivery</th><th className="px-4 py-3 text-center">Governance</th><th className="px-4 py-3">Engagement</th></tr>
@@ -151,6 +181,7 @@ export default function StakeholderMatrixPortal({ data }: { data: StakeholderMat
                 </tbody>
               </table>
             </div>
+            </>
           )}
           <div className="border-t border-border-subtle px-5 py-3 text-right"><Link href="/teams" className="text-sm font-semibold text-indigo-600 hover:underline">Manage stakeholders →</Link></div>
         </section>

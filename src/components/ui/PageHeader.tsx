@@ -12,7 +12,7 @@ export default function PageHeader(props: {
   secondaryActions?: React.ReactNode;
 }) {
   return (
-    <div className="relative flex min-h-28 flex-wrap items-start justify-between gap-4 overflow-hidden rounded-2xl border border-[#e5ebfa] bg-[linear-gradient(105deg,#ffffff_0%,#ffffff_58%,#f0f4ff_100%)] px-6 py-5 shadow-[0_8px_28px_rgba(53,79,135,0.05)]">
+    <div className="relative flex min-h-28 min-w-0 flex-col gap-4 rounded-2xl border border-[#e5ebfa] bg-[linear-gradient(105deg,#ffffff_0%,#ffffff_58%,#f0f4ff_100%)] px-4 py-5 shadow-[0_8px_28px_rgba(53,79,135,0.05)] sm:px-6 lg:flex-row lg:flex-wrap lg:items-start lg:justify-between">
       <div aria-hidden className="pointer-events-none absolute inset-y-0 right-0 hidden w-[38%] overflow-hidden md:block">
         <svg viewBox="0 0 520 150" className="h-full w-full" preserveAspectRatio="xMidYMid slice">
           <circle cx="424" cy="26" r="14" fill="#cfd7ff" opacity=".75" />
@@ -29,10 +29,10 @@ export default function PageHeader(props: {
         <h1 className={`break-words text-2xl font-bold tracking-[-0.02em] text-text-primary lg:text-3xl ${props.eyebrow ? "mt-1" : ""}`}>
           {props.title}
         </h1>
-        {props.description && <p className="mt-1 max-w-3xl text-sm text-text-secondary">{props.description}</p>}
+        {props.description && <p className="mt-1 max-w-3xl break-words text-sm text-text-secondary">{props.description}</p>}
       </div>
       {(props.primaryAction || props.secondaryActions) && (
-        <div className="relative z-10 flex items-center gap-3">
+        <div className="relative z-10 flex min-w-0 flex-wrap items-center gap-3">
           {props.secondaryActions}
           {props.primaryAction}
         </div>

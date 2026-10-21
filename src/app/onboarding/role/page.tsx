@@ -9,10 +9,9 @@ export default function OnboardingRolePage() {
         <p className="text-xs font-semibold uppercase tracking-widest text-indigo-600">
           Step 3 of 3 · Working role
         </p>
-        <h1 className="mt-2 text-3xl font-bold">How do you primarily work?</h1>
+        <h1 className="mt-2 text-3xl font-bold">Your Product Owner workspace</h1>
         <p className="mt-3 text-neutral-500">
-          This shapes what your dashboard emphasizes later — it doesn&apos;t change what you can
-          access.
+          Product Owner is the available working experience. Organization access is managed separately.
         </p>
       </div>
       <WorkingRoleSelector />

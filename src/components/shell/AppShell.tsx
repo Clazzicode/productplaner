@@ -15,9 +15,8 @@ import TopHeader from "./TopHeader";
  * skips itself on the pre-qualification screens and the print route so those
  * flows stay full-bleed. No existing routes moved — chrome is purely additive.
  *
- * Below `lg:` the persistent sidebar becomes a hamburger-triggered
- * MobileNavDrawer instead — covers phones and tablet-portrait, where a fixed
- * 224px sidebar would eat over half the screen.
+ * Below `xl:` the persistent sidebar becomes a hamburger-triggered drawer.
+ * This keeps a useful workspace width on tablets and narrow desktop windows.
  */
 export default function AppShell(props: {
   hasProfile: boolean;
@@ -112,8 +111,8 @@ export default function AppShell(props: {
   );
 
   return (
-    <div className="flex min-h-screen bg-surface">
-      <div className="hidden lg:contents">
+    <div className="flex min-h-dvh w-full min-w-0 bg-surface">
+      <div className="hidden xl:contents">
         <LeftNav initiatives={props.initiatives} />
       </div>
       <MobileNavDrawer
@@ -132,7 +131,7 @@ export default function AppShell(props: {
           onOpenMenu={() => setDrawerOpen(true)}
         />
         <main className="min-w-0 flex-1 bg-[radial-gradient(circle_at_82%_0%,#edf1ff_0,transparent_30%)]">
-          <div className="px-6 pt-4">
+          <div className="px-4 pt-4 sm:px-6">
             <AiUsageBanner />
           </div>
           {props.children}

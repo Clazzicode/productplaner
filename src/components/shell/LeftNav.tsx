@@ -87,7 +87,7 @@ export default function LeftNav(props: { initiatives: NavInitiative[] }) {
             { label: "Initiatives", href: "/initiatives" },
             { label: "Requests & Priorities", href: `/initiatives/${current.id}/requests` },
             { label: "Feature Backlog", href: `/initiatives/${current.id}/backlog` },
-            scoped("workspace/roadmap", "Roadmap"),
+            scoped("workspace/sprint-preparation", "Sprint Planning"),
             scoped("workspace/features", "Planning Workspace"),
             scoped("workspace/sprints", "Sprints & Releases"),
             scoped("workspace/demos", "Demos"),

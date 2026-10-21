@@ -27,12 +27,12 @@ export default function RoadmapTimeline(props: { initiativeId: string; phases: T
   return (
     <Card>
       <div className="flex items-center justify-between">
-        <CardTitle>Roadmap overview</CardTitle>
+        <CardTitle>Delivery outlook</CardTitle>
         <Link
-          href={`/initiatives/${props.initiativeId}/workspace/roadmap`}
+          href={`/initiatives/${props.initiativeId}/workspace/sprint-preparation`}
           className="text-xs font-medium text-indigo-600 hover:underline"
         >
-          Open roadmap →
+          Open sprint planning →
         </Link>
       </div>
       <div className="mt-3 grid gap-3 md:grid-cols-3">

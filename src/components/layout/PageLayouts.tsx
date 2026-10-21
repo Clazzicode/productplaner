@@ -10,7 +10,7 @@
 
 export function FocusedLayout(props: { children: React.ReactNode; className?: string }) {
   return (
-    <main className={`mx-auto min-h-screen max-w-2xl px-6 py-12 ${props.className ?? ""}`}>
+    <main className={`mx-auto w-full min-w-0 max-w-2xl px-4 py-8 sm:px-6 sm:py-12 ${props.className ?? ""}`}>
       {props.children}
     </main>
   );
@@ -24,17 +24,17 @@ export function FocusedLayout(props: { children: React.ReactNode; className?: st
  * primitive's concern.
  */
 export function ContainedLayout(props: { children: React.ReactNode; className?: string }) {
-  return <div className={`mx-auto min-h-screen max-w-[1480px] px-5 py-7 sm:px-7 lg:px-8 ${props.className ?? ""}`}>{props.children}</div>;
+  return <div className={`mx-auto w-full min-w-0 max-w-[1480px] px-4 py-6 sm:px-7 lg:px-8 ${props.className ?? ""}`}>{props.children}</div>;
 }
 
 export function DashboardLayout(props: { children: React.ReactNode; className?: string }) {
-  return <div className={`mx-auto max-w-[1480px] px-5 py-7 sm:px-7 lg:px-8 ${props.className ?? ""}`}>{props.children}</div>;
+  return <div className={`mx-auto w-full min-w-0 max-w-[1480px] px-4 py-6 sm:px-7 lg:px-8 ${props.className ?? ""}`}>{props.children}</div>;
 }
 
 export function WideLayout(props: { children: React.ReactNode; className?: string }) {
-  return <div className={`mx-auto max-w-[1680px] px-5 py-7 sm:px-7 lg:px-8 ${props.className ?? ""}`}>{props.children}</div>;
+  return <div className={`mx-auto w-full min-w-0 max-w-[1680px] px-4 py-6 sm:px-7 lg:px-8 ${props.className ?? ""}`}>{props.children}</div>;
 }
 
 export function TableLayout(props: { children: React.ReactNode; className?: string }) {
-  return <div className={`px-6 py-8 ${props.className ?? ""}`}>{props.children}</div>;
+  return <div className={`w-full min-w-0 px-4 py-6 sm:px-6 sm:py-8 ${props.className ?? ""}`}>{props.children}</div>;
 }

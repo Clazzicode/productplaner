@@ -24,7 +24,16 @@ export default async function DecisionsPage() {
     <div className="mt-5 grid gap-3 sm:grid-cols-3"><Metric label="Total decisions" value={decisions.length} /><Metric label="Decided" value={approved.length} /><Metric label="Open for decision" value={decisions.length - approved.length} /></div>
     <Card className="mt-5 p-0">
       <div className="border-b border-border-subtle px-5 py-4"><h2 className="font-semibold">Decision register</h2><p className="text-xs text-text-muted">Recorded across all accessible projects.</p></div>
-      {decisions.length === 0 ? <p className="p-8 text-center text-sm text-text-muted">No decisions have been recorded.</p> : <Table>
+      {decisions.length === 0 ? <p className="p-8 text-center text-sm text-text-muted">No decisions have been recorded.</p> : <>
+        <div className="grid gap-3 p-3 md:hidden">{decisions.map((decision) => <article key={decision.id} className="min-w-0 rounded-xl border border-border-subtle p-4 text-sm">
+          <h3 className="break-words font-semibold">{decision.title}</h3>
+          {decision.description && <p className="mt-1 break-words text-xs text-text-muted">{decision.description}</p>}
+          <div className="mt-2"><Badge variant={decision.decidedAt ? "emerald" : "amber"}>{decision.decidedAt ? "Decided" : "Proposed"}</Badge></div>
+          <p className="mt-3 text-text-secondary">Owner: {decision.decidedByUser?.name ?? "Unassigned"}</p>
+          <p className="break-words">Project: <Link className="font-medium text-accent hover:underline" href={`/projects/${decision.project.id}`}>{decision.project.name}</Link>{decision.initiative && ` · ${decision.initiative.name}`}</p>
+          <p className="mt-1 text-xs text-text-muted">{(decision.decidedAt ?? decision.createdAt).toLocaleDateString()}</p>
+        </article>)}</div>
+        <div className="hidden md:block"><Table>
         <TableHead><TableHeaderCell>Decision</TableHeaderCell><TableHeaderCell>Status</TableHeaderCell><TableHeaderCell>Owner</TableHeaderCell><TableHeaderCell>Project</TableHeaderCell><TableHeaderCell>Date</TableHeaderCell></TableHead>
         <TableBody>{decisions.map((decision) => <TableRow key={decision.id}>
           <TableCell className="min-w-80"><p className="font-semibold">{decision.title}</p>{decision.description && <p className="mt-0.5 line-clamp-2 text-xs text-text-muted">{decision.description}</p>}</TableCell>
@@ -33,7 +42,7 @@ export default async function DecisionsPage() {
           <TableCell><Link className="font-medium text-accent hover:underline" href={`/projects/${decision.project.id}`}>{decision.project.name}</Link>{decision.initiative && <span className="block text-xs text-text-muted">{decision.initiative.name}</span>}</TableCell>
           <TableCell className="whitespace-nowrap text-text-muted">{(decision.decidedAt ?? decision.createdAt).toLocaleDateString()}</TableCell>
         </TableRow>)}</TableBody>
-      </Table>}
+      </Table></div></>}
     </Card>
   </WideLayout>;
 }

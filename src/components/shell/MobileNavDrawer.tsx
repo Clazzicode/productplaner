@@ -4,7 +4,7 @@ import { useEffect, useRef } from "react";
 import LeftNav, { type NavInitiative } from "./LeftNav";
 
 /**
- * Off-canvas nav for phones and tablet-portrait (below `lg:`). Mounts the
+ * Off-canvas nav for constrained viewports (below `xl:`). Mounts the
  * existing, unmodified `LeftNav` — this component owns only the backdrop,
  * slide transform, and close affordances, so nav logic (active-link
  * matching, disabled reasons, initiative derivation) lives in exactly one
@@ -45,7 +45,7 @@ export default function MobileNavDrawer(props: {
       <div
         aria-hidden
         onClick={onClose}
-        className={`fixed inset-0 z-40 bg-black/40 transition-opacity duration-200 lg:hidden ${
+        className={`fixed inset-0 z-40 bg-black/40 transition-opacity duration-200 xl:hidden ${
           open ? "opacity-100" : "pointer-events-none opacity-0"
         }`}
       />
@@ -53,7 +53,9 @@ export default function MobileNavDrawer(props: {
         role="dialog"
         aria-modal="true"
         aria-label="Navigation"
-        className={`fixed inset-y-0 left-0 z-40 flex w-56 transform flex-col overflow-hidden bg-white shadow-xl transition-transform duration-300 ease-in-out lg:hidden ${
+        aria-hidden={!open}
+        inert={!open}
+        className={`fixed inset-y-0 left-0 z-40 flex w-[min(20rem,100vw)] transform flex-col overflow-hidden bg-white shadow-xl transition-transform duration-300 ease-in-out xl:hidden ${
           open ? "translate-x-0" : "-translate-x-full"
         }`}
       >
@@ -73,7 +75,7 @@ export default function MobileNavDrawer(props: {
         {props.topContent && (
           <div className="border-b border-neutral-200 px-3 py-3">{props.topContent}</div>
         )}
-        <div className="min-h-0 flex-1 overflow-y-auto">
+        <div className="min-h-0 min-w-0 flex-1 overflow-y-auto [&>nav]:h-auto [&>nav]:min-h-full [&>nav]:w-full [&>nav]:overflow-visible">
           <LeftNav initiatives={props.initiatives} />
         </div>
         {props.bottomContent && (

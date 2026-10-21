@@ -21,6 +21,8 @@ import { ChoiceCard, ChoicePill } from "./Choice";
 import { FIELD_CLASS } from "./fieldStyles";
 import ProductDirectionFields, { type ProductDirectionValues } from "./ProductDirectionFields";
 import DocumentReviewPanel from "@/components/documents/DocumentReviewPanel";
+import RoadmapReadinessPanel from "./RoadmapReadinessPanel";
+import { assessRoadmapReadiness } from "@/lib/questionnaire/roadmapReadiness";
 
 export interface CapabilityView {
   id: string;
@@ -133,6 +135,18 @@ export default function PlanningQuestionnaire(props: {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [validation, setValidation] = useState<{ errors: Flag[]; warnings: Flag[] } | null>(null);
+  const readinessGaps = assessRoadmapReadiness({
+    name: productDirection.name,
+    problemStatement: productDirection.problemStatement,
+    targetCustomer: productDirection.targetCustomer,
+    outcomeStatement: success.outcomeStatement,
+    outcomeMetric: success.outcomeMetric,
+    targetLaunchDate: success.targetLaunchDate,
+    budget: success.budget,
+    capabilities: caps,
+    teamSize: delivery.teamSize,
+    historicalVelocityPoints: delivery.historicalVelocityPoints,
+  });
 
   const refreshValidation = useCallback(async () => {
     const res = await apiFetch<{ errors: Flag[]; warnings: Flag[] }>(`/api/initiatives/${initiativeId}/validate`);
@@ -238,7 +252,7 @@ export default function PlanningQuestionnaire(props: {
 
   const generate = async () => {
     if (alreadyGenerated) {
-      router.push(`/initiatives/${initiativeId}/workspace/roadmap`);
+      router.push(`/initiatives/${initiativeId}/workspace/sprint-preparation`);
       router.refresh();
       return;
     }
@@ -258,6 +272,7 @@ export default function PlanningQuestionnaire(props: {
   return (
     <div>
       <SectionProgress current={step} onJump={jump} />
+      <RoadmapReadinessPanel gaps={readinessGaps} onNavigate={jump} alreadyGenerated={alreadyGenerated} />
 
       {step === 0 && (
         <Card>
@@ -759,7 +774,7 @@ function CapabilityForm(props: {
             </div>
             <p className="mt-3 text-sm text-text-secondary">
               {!scoringComplete
-                ? "Score all four factors (1–5) — a partial set is not used."
+                ? "Optional: you can save without completing these scores. Partial scores are not used."
                 : `Weighted business value: ${factorScore} out of 5 — sets the level above automatically.`}
             </p>
           </div>
@@ -774,7 +789,7 @@ function CapabilityForm(props: {
           onClick={save}
           loading={busy}
           loadingLabel="Saving"
-          disabled={form.name.trim().length < 3 || (advancedValue && !scoringComplete)}
+          disabled={form.name.trim().length < 3}
         >
           {existing ? "Save changes" : "Add feature"}
         </ButtonLoader>
@@ -813,7 +828,7 @@ function ReviewSection(props: {
       <p className="mt-2 text-sm leading-relaxed text-text-secondary">
         {alreadyGenerated
           ? "Your edits are saved as you go — use Recalculate in the workspace to apply them to the live plan."
-          : "Everything below feeds the generator. Edit any section, then generate when ready."}
+          : "Your planning readiness is available above. Resolve the core gaps to build a backlog foundation, then review story readiness and plan a sprint."}
       </p>
 
       <ReviewBlock title="Product Direction" onEdit={() => onEdit(0)}>
@@ -865,7 +880,7 @@ function ReviewSection(props: {
         <div className="mt-6 space-y-3">
           {validation.errors.length === 0 && validation.warnings.length === 0 && (
             <p className="rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
-              Everything checks out{alreadyGenerated ? "." : ". Ready to generate."}
+              Everything checks out{alreadyGenerated ? "." : ". Ready to build the detailed plan."}
             </p>
           )}
           {validation.errors.map((f, i) => (
@@ -888,7 +903,7 @@ function ReviewSection(props: {
           disabled={!alreadyGenerated && (!validation || validation.errors.length > 0)}
           className="px-6 py-3"
         >
-          {alreadyGenerated ? "Save & view plan →" : "Generate working prototype"}
+          {alreadyGenerated ? "Save & open sprint planning →" : "Prepare backlog for sprint planning"}
         </ButtonLoader>
       </div>
     </div>

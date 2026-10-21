@@ -180,6 +180,7 @@ export async function provisionSoloWorkspace(params: {
         username: params.username,
         usernameNormalized: params.usernameNormalized,
         accessLevel: "org_admin",
+        workingRole: "product_owner",
       },
     });
     // Membership row created BEFORE the ownerUserId update, deliberately:

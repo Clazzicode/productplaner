@@ -368,7 +368,7 @@ export default async function DashboardPage({
   const sections: AccordionSection[] = [
     {
       id: "roadmap",
-      title: "Roadmap & Features",
+      title: "Backlog & Delivery",
       meta: (
         <>
           {broadCapabilityWarnings > 0 && (

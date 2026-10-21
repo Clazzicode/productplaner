@@ -14,11 +14,11 @@ export default function RoadmapSnapshot(props: { primary: PrimaryInitiativeDetai
   const p = props.primary;
   return (
     <Card>
-      <CardTitle>Roadmap Snapshot</CardTitle>
+      <CardTitle>Delivery outlook</CardTitle>
       {!p ? (
         <EmptyState
-          title="No roadmap yet"
-          description="Generate an initiative's plan to see its roadmap here."
+          title="No delivery outlook yet"
+          description="Prepare an initiative's backlog foundation to see delivery context here."
         />
       ) : (
         <div className="mt-3 space-y-2">
@@ -34,10 +34,10 @@ export default function RoadmapSnapshot(props: { primary: PrimaryInitiativeDetai
               : "No releases planned yet."}
           </p>
           <Link
-            href={`/initiatives/${p.id}/workspace/roadmap`}
+            href={`/initiatives/${p.id}/workspace/sprint-preparation`}
             className="inline-block text-xs font-medium text-indigo-600 hover:underline"
           >
-            Open roadmap →
+            Open sprint planning →
           </Link>
         </div>
       )}

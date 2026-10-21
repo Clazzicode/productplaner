@@ -12,6 +12,7 @@
     "start": "next start",
     "lint": "eslint",
     "test": "vitest run",
+    "test:responsive": "node scripts/responsive-audit.mjs",
     "typecheck": "next typegen && tsc --noEmit",
     "test:security": "vitest run src/lib/access/__tests__ src/lib/auth/__tests__",
     "schema:validate": "prisma validate",

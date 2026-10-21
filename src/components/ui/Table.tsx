@@ -5,7 +5,7 @@
 
 export function Table(props: { children: React.ReactNode; className?: string }) {
   return (
-    <div className={`overflow-x-auto ${props.className ?? ""}`}>
+    <div className={`max-w-full min-w-0 overflow-x-auto ${props.className ?? ""}`}>
       <table className="w-full text-left text-sm">{props.children}</table>
     </div>
   );

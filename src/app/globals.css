@@ -76,6 +76,15 @@ body {
   font-family: var(--font-sans), system-ui, sans-serif;
 }
 
+/* Native form controls and their labels can otherwise preserve an intrinsic
+   width larger than a narrow phone's content column (notably date/select). */
+@media (width < 40rem) {
+  input, select, textarea, label {
+    min-width: 0;
+    max-width: 100%;
+  }
+}
+
 ::selection {
   background: #cbdcff;
   color: #0d1b3e;

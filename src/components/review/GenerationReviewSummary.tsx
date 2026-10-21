@@ -28,7 +28,6 @@ export default function GenerationReviewSummary(props: {
 }) {
   const { initiativeId, counts } = props;
   const chain: [string, number][] = [
-    ["Roadmap phases", counts.phases],
     ["Features", counts.features],
     ["Epics", counts.epics],
     ["User stories", counts.stories],
@@ -42,10 +41,11 @@ export default function GenerationReviewSummary(props: {
       <p className="text-xs font-semibold uppercase tracking-widest text-indigo-600">
         Generation complete
       </p>
-      <h1 className="mt-1 text-2xl font-bold">Your connected product plan has been created</h1>
+      <h1 className="mt-1 text-2xl font-bold">Your backlog foundation is ready</h1>
       <p className="mt-2 text-sm text-neutral-500">
-        {props.initiativeName} — every artifact below traces back to an intake answer, and the
-        sprint plan was packed against {props.capacityPoints} points of estimated sprint capacity.
+        {props.initiativeName} — the generated work traces back to your intake answers. Estimated
+        sprint capacity is {props.capacityPoints} points; the Product Owner still needs to assess
+        readiness, select work, and commit a sprint plan.
       </p>
 
       <div className="mt-6 grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-7">
@@ -99,16 +99,16 @@ export default function GenerationReviewSummary(props: {
 
       <div className="mt-6 flex flex-wrap items-center gap-3">
         <Link
-          href={`/initiatives/${initiativeId}/dashboard`}
+          href={`/initiatives/${initiativeId}/workspace/sprint-preparation`}
           className="rounded-lg bg-indigo-600 px-6 py-3 text-sm font-semibold text-white hover:bg-indigo-700"
         >
-          View Dashboard
+          Start guided sprint planning
         </Link>
         <Link
-          href={`/initiatives/${initiativeId}/workspace/roadmap`}
+          href={`/initiatives/${initiativeId}/dashboard`}
           className="rounded-lg border border-neutral-300 px-5 py-3 text-sm font-medium text-neutral-700 hover:bg-neutral-50"
         >
-          Review Roadmap
+          View Dashboard
         </Link>
         <Link
           href={`/initiatives/${initiativeId}/workspace/capacity`}
