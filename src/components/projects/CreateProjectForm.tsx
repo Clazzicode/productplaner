@@ -6,7 +6,7 @@ import { apiFetch } from "@/lib/clientApi";
 import { ButtonLoader, GenerationProgress } from "@/components/ui/loading";
 
 const FIELD_CLASS =
-  "rounded-lg border border-neutral-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none";
+  "min-w-0 w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none";
 
 // Directive item 10: a meaningful checklist, not a generic spinner — but
 // honest about it. Project creation is genuinely one network request today
@@ -72,7 +72,7 @@ export default function CreateProjectForm() {
   }
 
   return (
-    <form onSubmit={submit} className="rounded-3xl border border-neutral-200 bg-white p-8 shadow-md">
+    <form onSubmit={submit} className="min-w-0 rounded-3xl border border-neutral-200 bg-white p-4 shadow-md sm:p-8">
       <div className="grid gap-4 sm:grid-cols-2">
         <label className="flex flex-col gap-1 text-sm font-medium text-neutral-700 sm:col-span-2">
           Project name

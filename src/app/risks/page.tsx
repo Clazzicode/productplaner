@@ -36,7 +36,15 @@ export default async function RisksPage() {
           <div><h2 className="font-semibold">Risk register</h2><p className="text-xs text-text-muted">Organization-wide view of recorded project and initiative risks.</p></div>
         </div>
         {risks.length === 0 ? <p className="p-8 text-center text-sm text-text-muted">No risks have been recorded.</p> : (
-          <Table>
+          <>
+          <div className="grid gap-3 p-3 md:hidden">{risks.map((risk) => <article key={risk.id} className="min-w-0 rounded-xl border border-border-subtle p-4 text-sm">
+            <h3 className="break-words font-semibold">{risk.description}</h3>
+            <div className="mt-2 flex flex-wrap gap-2"><Badge variant={riskBadgeVariant(risk.severity)}>{risk.severity}</Badge><Badge variant={risk.status === "mitigated" || risk.status === "closed" ? "emerald" : "indigo"}>{risk.status}</Badge></div>
+            <p className="mt-3 text-text-secondary">Owner: {risk.owner?.name ?? "Unassigned"}</p>
+            <p className="break-words">Project: <Link className="font-medium text-accent hover:underline" href={`/projects/${risk.project.id}`}>{risk.project.name}</Link>{risk.initiative && ` · ${risk.initiative.name}`}</p>
+            <p className="mt-1 text-xs text-text-muted">Updated {risk.updatedAt.toLocaleDateString()}</p>
+          </article>)}</div>
+          <div className="hidden md:block"><Table>
             <TableHead><TableHeaderCell>Risk / blocker</TableHeaderCell><TableHeaderCell>Severity</TableHeaderCell><TableHeaderCell>Status</TableHeaderCell><TableHeaderCell>Owner</TableHeaderCell><TableHeaderCell>Project</TableHeaderCell><TableHeaderCell>Updated</TableHeaderCell></TableHead>
             <TableBody>{risks.map((risk) => <TableRow key={risk.id}>
               <TableCell className="min-w-72 font-medium">{risk.description}</TableCell>
@@ -46,7 +54,8 @@ export default async function RisksPage() {
               <TableCell><Link className="font-medium text-accent hover:underline" href={`/projects/${risk.project.id}`}>{risk.project.name}</Link>{risk.initiative && <span className="block text-xs text-text-muted">{risk.initiative.name}</span>}</TableCell>
               <TableCell className="whitespace-nowrap text-text-muted">{risk.updatedAt.toLocaleDateString()}</TableCell>
             </TableRow>)}</TableBody>
-          </Table>
+          </Table></div>
+          </>
         )}
       </Card>
     </WideLayout>

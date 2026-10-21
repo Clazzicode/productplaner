@@ -160,12 +160,23 @@ page — see §5 for why `SprintReleaseStatus` specifically wasn't migrated to i
 
 ## 12. Responsive Behavior
 
-Kept the existing, working two-state model exactly as it was: persistent expanded sidebar at
-`lg:` (1024px) and above, off-canvas `MobileNavDrawer` below it (same component, reusing the same
-`Sidebar`/`LeftNav` — verified in this phase's browser pass at 1440px, 1180px, and 820px widths,
-including drawer open/close and Escape-to-close). No icon-only "collapsed" rail was added — the
-current 2-state model has no problem that would justify a third state yet; documented as a future
-option in the approved blueprint, not built here.
+The platform now treats phone, tablet, and narrow desktop widths as full-use layouts. Use available
+CSS viewport width rather than a device-model check: a phone can rotate, a tablet can be split, and
+a desktop browser can be narrow. The persistent navigation sidebar appears at `xl:` (1280px) and
+above; below that width, product and administration navigation use a drawer so the workspace retains
+readable width. Shared page wrappers, cards, and headers must be allowed to shrink and reflow.
+
+At phone widths, forms, headers, actions, and record lists stack vertically. Dense records may use
+labeled cards; comparative tables and the roadmap timeline may scroll horizontally only inside a
+clearly bounded component. The document itself must not scroll sideways. Normal vertical page
+scrolling is expected, but a nested `min-h-screen` under the application header is not. Verify
+the layout down to 320 CSS pixels and with narrow windows or browser zoom, not just preset phones.
+The public-route viewport smoke check is `npm run test:responsive`; it reports document
+overflow at phone, tablet, and desktop widths and can target other routes when a test session is
+available.
+
+The original two-state navigation decision remains (expanded sidebar or drawer, without an icon-only
+rail); this section supersedes the earlier desktop-primary breakpoint in the shell blueprint.
 
 ## 13. Focused-Flow Exclusions
 

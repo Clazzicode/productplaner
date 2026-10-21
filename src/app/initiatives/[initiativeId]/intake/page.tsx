@@ -10,6 +10,7 @@ import { db, establishAuthContext } from "@/lib/db";
 import { depthFromExperience } from "@/lib/questionnaire/roleGuidance";
 import { readOnboardingStateServer } from "@/lib/onboarding/tempStateServer";
 import { resolveInitiativeEconomics } from "@/lib/projectContext";
+import { resolveWorkingRole } from "@/lib/onboarding/resolveWorkingRole";
 
 export const dynamic = "force-dynamic";
 
@@ -65,7 +66,7 @@ export default async function IntakePage({
           Editable at any time — it&apos;s the living source of your plan, not a one-time form.
           Changes here don&apos;t touch the generated plan until you explicitly{" "}
           <Link
-            href={`/initiatives/${initiative.id}/workspace/roadmap`}
+            href={`/initiatives/${initiative.id}/workspace/sprint-preparation`}
             className="font-medium text-indigo-600 underline"
           >
             recalculate it in the workspace
@@ -75,7 +76,7 @@ export default async function IntakePage({
       ) : (
         <>
           <p className="mt-1 mb-8 text-sm text-neutral-500">
-            Your readiness roadmap is available now. Complete the guided sections to make the detailed product plan more reliable.
+            Your planning readiness view is available now. Complete the guided sections to prepare the backlog and sprint-planning foundation.
           </p>
           <RoadmapSetupOverview />
         </>
@@ -84,7 +85,7 @@ export default async function IntakePage({
         initiativeId={initiative.id}
         projectId={initiative.projectId}
         experienceLevel={initiative.qualifyingProfile?.experienceLevel ?? null}
-        workingRole={onboarding.workingRole ?? null}
+        workingRole={resolveWorkingRole(user.workingRole, onboarding.workingRole)}
         verbose={verbose}
         alreadyGenerated={alreadyGenerated}
         initialStep={1}

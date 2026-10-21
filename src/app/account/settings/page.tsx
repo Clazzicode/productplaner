@@ -4,8 +4,6 @@ import PageHeader from "@/components/ui/PageHeader";
 import SettingsForm from "@/components/account/SettingsForm";
 import { requireCurrentUser } from "@/lib/auth/session";
 import { establishAuthContext } from "@/lib/db";
-import { resolveWorkingRole } from "@/lib/onboarding/resolveWorkingRole";
-import { readOnboardingStateServer } from "@/lib/onboarding/tempStateServer";
 import type { SelectableExperienceLevel } from "@/lib/onboarding/experienceOptions";
 
 export const dynamic = "force-dynamic";
@@ -23,9 +21,6 @@ export default async function AccountSettingsPage() {
   const profile = user.profiles[0];
   if (!profile) redirect("/welcome");
 
-  const onboarding = await readOnboardingStateServer();
-  const workingRole = resolveWorkingRole(user.workingRole, onboarding.workingRole);
-
   // "expert" is a retired UI choice, still valid on old rows — treated
   // identically to "experienced" everywhere else (roleGuidance.ts), so it
   // maps to the same choice card here rather than leaving none selected.
@@ -39,7 +34,7 @@ export default async function AccountSettingsPage() {
         title="Settings"
         description="Change how the platform calibrates guidance for you. These don't change what's asked or how a plan is built."
       />
-      <SettingsForm currentExperienceLevel={currentExperienceLevel} currentWorkingRole={workingRole} />
+      <SettingsForm currentExperienceLevel={currentExperienceLevel} />
     </ContainedLayout>
   );
 }

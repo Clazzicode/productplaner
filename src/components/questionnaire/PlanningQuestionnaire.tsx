@@ -252,7 +252,7 @@ export default function PlanningQuestionnaire(props: {
 
   const generate = async () => {
     if (alreadyGenerated) {
-      router.push(`/initiatives/${initiativeId}/workspace/roadmap`);
+      router.push(`/initiatives/${initiativeId}/workspace/sprint-preparation`);
       router.refresh();
       return;
     }
@@ -774,7 +774,7 @@ function CapabilityForm(props: {
             </div>
             <p className="mt-3 text-sm text-text-secondary">
               {!scoringComplete
-                ? "Score all four factors (1–5) — a partial set is not used."
+                ? "Optional: you can save without completing these scores. Partial scores are not used."
                 : `Weighted business value: ${factorScore} out of 5 — sets the level above automatically.`}
             </p>
           </div>
@@ -789,7 +789,7 @@ function CapabilityForm(props: {
           onClick={save}
           loading={busy}
           loadingLabel="Saving"
-          disabled={form.name.trim().length < 3 || (advancedValue && !scoringComplete)}
+          disabled={form.name.trim().length < 3}
         >
           {existing ? "Save changes" : "Add feature"}
         </ButtonLoader>
@@ -828,7 +828,7 @@ function ReviewSection(props: {
       <p className="mt-2 text-sm leading-relaxed text-text-secondary">
         {alreadyGenerated
           ? "Your edits are saved as you go — use Recalculate in the workspace to apply them to the live plan."
-          : "Your readiness roadmap is already available above. Review the answers below and resolve the core gaps before building a detailed product plan."}
+          : "Your planning readiness is available above. Resolve the core gaps to build a backlog foundation, then review story readiness and plan a sprint."}
       </p>
 
       <ReviewBlock title="Product Direction" onEdit={() => onEdit(0)}>
@@ -903,7 +903,7 @@ function ReviewSection(props: {
           disabled={!alreadyGenerated && (!validation || validation.errors.length > 0)}
           className="px-6 py-3"
         >
-          {alreadyGenerated ? "Save & view plan →" : "Build detailed product plan"}
+          {alreadyGenerated ? "Save & open sprint planning →" : "Prepare backlog for sprint planning"}
         </ButtonLoader>
       </div>
     </div>

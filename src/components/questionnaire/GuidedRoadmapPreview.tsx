@@ -91,8 +91,8 @@ export default function GuidedRoadmapPreview() {
         <SectionProgress current={step} onJump={setStep} />
         <RoadmapReadinessPanel gaps={gaps} onNavigate={setStep} />
 
-        <div className="grid gap-6 lg:grid-cols-[1fr_300px]">
-          <section className="rounded-3xl border border-neutral-200 bg-white p-7 shadow-sm md:p-9">
+        <div className="grid min-w-0 gap-6 lg:grid-cols-[minmax(0,1fr)_300px]">
+          <section className="min-w-0 rounded-3xl border border-neutral-200 bg-white p-4 shadow-sm sm:p-7 md:p-9">
             <p className="text-xs font-semibold uppercase tracking-wide text-accent">Section {step + 1} of 6</p>
             <h2 className="mt-2 text-2xl font-semibold text-text-primary">{current.title}</h2>
             <p className="mt-2 text-sm leading-relaxed text-text-secondary"><strong>Why this matters:</strong> {current.why}</p>
@@ -109,9 +109,9 @@ export default function GuidedRoadmapPreview() {
               <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">What this section produces</p>
               <p className="mt-1 text-sm font-medium text-emerald-900">{current.output}</p>
             </div>
-            <div className="mt-7 flex items-center justify-between">
+            <div className="mt-7 flex flex-wrap items-center justify-between gap-3">
               <button type="button" disabled={step === 0} onClick={() => setStep((value) => Math.max(0, value - 1))} className="rounded-xl px-4 py-2.5 text-sm font-semibold text-text-secondary disabled:opacity-30">← Back</button>
-              <button type="button" disabled={step === 5} onClick={() => setStep((value) => Math.min(5, value + 1))} className="rounded-xl bg-accent px-5 py-2.5 text-sm font-semibold text-white shadow-sm disabled:opacity-30">{step === 5 ? "Readiness roadmap available" : `Continue to ${QUESTIONNAIRE_SECTIONS[step + 1]} →`}</button>
+              <button type="button" disabled={step === 5} onClick={() => setStep((value) => Math.min(5, value + 1))} className="max-w-full rounded-xl bg-accent px-5 py-2.5 text-left text-sm font-semibold text-white shadow-sm disabled:opacity-30">{step === 5 ? "Readiness roadmap available" : `Continue to ${QUESTIONNAIRE_SECTIONS[step + 1]} →`}</button>
             </div>
           </section>
 

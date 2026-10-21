@@ -8,7 +8,7 @@ export const BASE_TABS = [
   { slug: "features", label: "Feature Hierarchy" },
   { slug: "epics", label: "Epics & Stories" },
   { slug: "refinement", label: "Refinement" },
-  { slug: "sprint-preparation", label: "Sprint Preparation" },
+  { slug: "sprint-preparation", label: "Sprint Planning" },
   { slug: "sprints", label: "Sprints & Releases" },
   { slug: "demos", label: "Demos" },
   { slug: "sprint-review", label: "Sprint Review" },

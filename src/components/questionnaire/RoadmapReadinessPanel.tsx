@@ -15,9 +15,9 @@ export default function RoadmapReadinessPanel(props: {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <p className="text-xs font-semibold uppercase tracking-wide text-accent">Available from the start</p>
-          <h2 id="roadmap-readiness-title" className="mt-1 text-xl font-semibold text-text-primary">Your readiness roadmap</h2>
+          <h2 id="roadmap-readiness-title" className="mt-1 text-xl font-semibold text-text-primary">Your planning readiness</h2>
           <p className="mt-1 max-w-2xl text-sm leading-relaxed text-text-secondary">
-            This roadmap is created from the information you have now. It updates as you answer and shows what to do next. The detailed product roadmap uses these answers to build scope, dates, and delivery work.
+            This view is created from the information you have now. It updates as you answer and shows what to do next. The answers establish candidate backlog work and capacity assumptions; sprint readiness is checked separately for each story or bug.
           </p>
         </div>
         <div className="min-w-32 rounded-2xl bg-neutral-50 px-4 py-3 text-center">
@@ -46,16 +46,16 @@ export default function RoadmapReadinessPanel(props: {
           tone="recommended"
         />
         <div className="rounded-2xl border border-indigo-200 bg-indigo-50/70 p-4">
-          <p className="text-xs font-semibold uppercase tracking-wide text-indigo-700">03 · Detailed product roadmap</p>
+          <p className="text-xs font-semibold uppercase tracking-wide text-indigo-700">03 · Backlog foundation</p>
           <h3 className="mt-2 text-sm font-semibold text-text-primary">
             {props.alreadyGenerated ? "Detailed plan already exists" : required.length === 0 ? "Review and build the detailed plan" : "Available after the foundation is complete"}
           </h3>
           <p className="mt-2 text-xs leading-relaxed text-text-secondary">
             {props.alreadyGenerated
-              ? "Your live plan stays available while you improve its inputs. Recalculate in the workspace when you want saved changes reflected in that plan."
+              ? "Your backlog foundation is available. Review story readiness and create an editable sprint draft in Sprint Planning."
               : required.length === 0
-              ? "Review the remaining assumptions, then generate phases, prioritized features, and delivery estimates. Any recommendations left open remain visible."
-              : "Your readiness roadmap is available now. Fill the core gaps before treating dates, scope, and delivery estimates as a reliable product plan."}
+              ? "Review the remaining assumptions, then prepare prioritized features, stories, and delivery estimates. Sprint commitment stays a separate decision."
+              : "Planning readiness is available now. Fill the core gaps before treating scope and delivery estimates as reliable."}
           </p>
           <button type="button" onClick={() => props.onNavigate(5)} className="mt-4 text-xs font-semibold text-accent hover:underline">
             Review the plan inputs →

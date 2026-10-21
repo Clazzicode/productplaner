@@ -1,19 +1,19 @@
 const ROADMAP_AREAS = [
   {
     title: "1. Product direction",
-    detail: "Clarify the problem, audience, and product direction the roadmap should support.",
+    detail: "Clarify the problem and audience that backlog items should serve.",
   },
   {
     title: "2. Outcomes & constraints",
-    detail: "Define the result, success metric, target date, and budget.",
+    detail: "Define the result, success signal, target date, and budget guardrails.",
   },
   {
     title: "3. Scope & priorities",
-    detail: "Describe features and add MVP priority, value, effort, risk, and dependencies.",
+    detail: "Describe candidate features and their priority, effort, risk, and dependencies.",
   },
   {
     title: "4. Delivery capacity",
-    detail: "Set the team size and assumptions that make the schedule realistic.",
+    detail: "Set team and capacity assumptions so sprint planning is realistic.",
   },
   {
     title: "5. Ways of working",
@@ -21,7 +21,7 @@ const ROADMAP_AREAS = [
   },
   {
     title: "6. Review & build",
-    detail: "Use the readiness roadmap now, then build the detailed plan when its core inputs are available.",
+    detail: "Review missing context, prepare the backlog, then assess and plan sprint work.",
   },
 ] as const;
 
@@ -30,12 +30,12 @@ export default function RoadmapSetupOverview() {
     <section className="mb-8 rounded-3xl border border-accent/20 bg-accent/[0.04] p-6 md:p-7" aria-labelledby="roadmap-setup-title">
       <p className="text-xs font-semibold uppercase tracking-wide text-accent">Initiative created</p>
       <h2 id="roadmap-setup-title" className="mt-1.5 text-xl font-semibold tracking-tight text-text-primary">
-        Your readiness roadmap starts here
+        Your planning readiness starts here
       </h2>
       <p className="mt-2 max-w-3xl text-sm leading-relaxed text-text-secondary">
-        Your starting answers are saved. The readiness roadmap below shows what is known, what to
-        answer next, and why each gap matters. These six sections help you strengthen it until a
-        prioritized, sequenced, cost-aware product plan can be built.
+        Your starting answers are saved. The readiness view below shows what is known, what to
+        answer next, and why each gap matters. These six sections build the backlog foundation
+        you need before reviewing stories and planning a sprint.
       </p>
       <ol className="mt-5 grid gap-3 md:grid-cols-2">
         {ROADMAP_AREAS.map((area) => (
@@ -46,7 +46,7 @@ export default function RoadmapSetupOverview() {
         ))}
       </ol>
       <p className="mt-4 text-xs font-medium text-accent">
-        The readiness roadmap is available now and changes as you complete the intake.
+        Planning readiness is available now and changes as you complete the intake.
       </p>
     </section>
   );

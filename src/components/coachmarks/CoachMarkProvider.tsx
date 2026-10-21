@@ -12,7 +12,7 @@ import { COACH_MARK_KEYS, type CoachMarkKey } from "@/lib/coachMarks/keys";
 // starting at the first not-yet-dismissed step.
 
 const INITIATIVE_SCOPED_ROUTES: Partial<Record<CoachMarkKey, (initiativeId: string) => string>> = {
-  roadmap: (id) => `/initiatives/${id}/workspace/roadmap`,
+  roadmap: (id) => `/initiatives/${id}/workspace/sprint-preparation`,
   planning_workspace: (id) => `/initiatives/${id}/workspace/features`,
   sprints_releases: (id) => `/initiatives/${id}/workspace/sprints`,
 };

@@ -8,6 +8,8 @@ import SearchInput from "@/components/ui/SearchInput";
 import Select from "@/components/ui/Select";
 import { Table, TableBody, TableCell, TableHead, TableHeaderCell, TableRow } from "@/components/ui/Table";
 import { MEMBER_TYPE_LABELS, PERMISSION_ROLE_LABELS, STATUS_LABELS, WORKING_ROLE_LABELS } from "@/lib/admin/labels";
+import { WORKING_ROLE_ORDER } from "@/lib/onboarding/roleOptions";
+import { resolveWorkingRole } from "@/lib/onboarding/resolveWorkingRole";
 
 export interface UserRow {
   id: string;
@@ -52,7 +54,7 @@ export default function UsersTable(props: { users: UserRow[] }) {
     const q = search.trim().toLowerCase();
     if (q && !u.name.toLowerCase().includes(q) && !u.email.toLowerCase().includes(q)) return false;
     if (status !== ALL && u.status !== status) return false;
-    if (workingRole !== ALL && u.workingRole !== workingRole) return false;
+    if (workingRole !== ALL && resolveWorkingRole(u.workingRole, undefined) !== workingRole) return false;
     if (memberType !== ALL && u.memberType !== memberType) return false;
     if (permissionRole !== ALL && u.permissionRole !== permissionRole) return false;
     if (team !== ALL && !u.teams.includes(team)) return false;
@@ -82,8 +84,8 @@ export default function UsersTable(props: { users: UserRow[] }) {
         </Select>
         <Select value={workingRole} onChange={(e) => setWorkingRole(e.target.value)} className="w-auto">
           <option value={ALL}>All working roles</option>
-          {Object.entries(WORKING_ROLE_LABELS).map(([v, l]) => (
-            <option key={v} value={v}>{l}</option>
+          {WORKING_ROLE_ORDER.map((value) => (
+            <option key={value} value={value}>{WORKING_ROLE_LABELS[value]}</option>
           ))}
         </Select>
         <Select value={memberType} onChange={(e) => setMemberType(e.target.value)} className="w-auto">
@@ -126,7 +128,7 @@ export default function UsersTable(props: { users: UserRow[] }) {
                 <TableCell className="font-medium">{u.name}</TableCell>
                 <TableCell className="text-text-muted">{u.email}</TableCell>
                 <TableCell className="text-text-muted">
-                  {u.workingRole ? WORKING_ROLE_LABELS[u.workingRole] : <span className="italic">Not set</span>}
+                  {WORKING_ROLE_LABELS[resolveWorkingRole(u.workingRole, undefined)]}
                 </TableCell>
                 <TableCell>
                   <Badge variant={PERMISSION_ROLE_VARIANT[u.permissionRole]}>

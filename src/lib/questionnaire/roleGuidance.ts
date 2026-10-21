@@ -78,7 +78,7 @@ const EMPHASIS: Record<QuestionnaireSection, Record<WorkingRole, string>> = {
 };
 
 export function guidanceFor(section: QuestionnaireSection, role: WorkingRole | null): string {
-  return EMPHASIS[section][role ?? "product_management"];
+  return EMPHASIS[section][role ?? "product_owner"];
 }
 
 /** first_time/some_experience → longer, example-bearing help text (mirrors the depth the

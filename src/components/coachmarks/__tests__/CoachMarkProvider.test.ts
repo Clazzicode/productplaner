@@ -22,7 +22,7 @@ describe("buildTourSteps", () => {
   it("routes each initiative-scoped step to that specific initiative's sub-page", () => {
     const steps = buildTourSteps("init-42");
     const byKey = Object.fromEntries(steps.map((s) => [s.key, s.href]));
-    expect(byKey.roadmap).toBe("/initiatives/init-42/workspace/roadmap");
+    expect(byKey.roadmap).toBe("/initiatives/init-42/workspace/sprint-preparation");
     expect(byKey.planning_workspace).toBe("/initiatives/init-42/workspace/features");
     expect(byKey.sprints_releases).toBe("/initiatives/init-42/workspace/sprints");
   });

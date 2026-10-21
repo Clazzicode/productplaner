@@ -12,7 +12,6 @@ import {
   MEMBER_TYPE_LABELS,
   PERMISSION_ROLE_LABELS,
   STATUS_LABELS,
-  WORKING_ROLE_LABELS,
 } from "@/lib/admin/labels";
 
 interface UserDetail {
@@ -31,7 +30,6 @@ interface TeamRef {
   name: string;
 }
 
-const EMPTY = "__unset__";
 
 /**
  * Every field here writes through PATCH /api/admin/users/[userId], which is
@@ -185,20 +183,9 @@ export default function UserDetailForm(props: {
       <Card>
         <CardTitle>Working Role</CardTitle>
         <p className="mt-1 text-xs text-text-muted">
-          Changes dashboard emphasis only — never access. Left unset until this person completes
-          onboarding, rather than assigning a role that isn&apos;t truthful yet.
+          Product Owner is the active experience for every account. Organization permissions are managed separately.
         </p>
-        <Select
-          className="mt-2 max-w-xs"
-          value={user.workingRole ?? EMPTY}
-          disabled={pending}
-          onChange={(e) => patchUser({ workingRole: e.target.value === EMPTY ? null : e.target.value })}
-        >
-          <option value={EMPTY}>Not set</option>
-          {Object.entries(WORKING_ROLE_LABELS).map(([v, l]) => (
-            <option key={v} value={v}>{l}</option>
-          ))}
-        </Select>
+        <p className="mt-2 text-sm font-medium text-text-primary">Product Owner</p>
       </Card>
 
       <Card>

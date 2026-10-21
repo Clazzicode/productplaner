@@ -40,7 +40,7 @@ type MethodologyChoice = "agile_scrum" | "waterfall" | "hybrid" | "recommend";
 const CREATION_STEPS = [
   "Creating your initiative",
   "Saving your starting answers",
-  "Preparing guided roadmap setup",
+  "Preparing the guided planning intake",
 ];
 
 const METHODOLOGY_OPTIONS: { value: MethodologyChoice; label: string; hint: string }[] = [
@@ -79,9 +79,10 @@ function RoadmapSetupNotice() {
     <div className="mt-6 rounded-2xl border border-accent/20 bg-accent/[0.05] p-4">
       <p className="text-sm font-semibold text-text-primary">What happens after you create the initiative</p>
       <p className="mt-1 text-sm leading-relaxed text-text-secondary">
-        We&apos;ll guide you through the remaining roadmap inputs: measurable outcomes, feature value and
-        priority, dependencies and risks, delivery capacity, execution approach, and a final readiness
-        check. You&apos;ll see a readiness roadmap right away, even if some answers are missing.
+        We&apos;ll guide you through the context needed to form a useful backlog: the desired outcome,
+        feature priorities, dependencies, delivery capacity, and a final readiness check. You can see
+        what is missing right away. Once the backlog foundation exists, you&apos;ll review sprint readiness
+        and create an editable sprint plan.
       </p>
     </div>
   );

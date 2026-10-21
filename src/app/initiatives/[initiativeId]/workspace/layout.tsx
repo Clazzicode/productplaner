@@ -14,6 +14,7 @@ import { db, establishAuthContext } from "@/lib/db";
 import { hasRoadmapDrifted } from "@/lib/generation/fingerprint";
 import { profileFor, resolveMethodology } from "@/lib/generation/methodology";
 import { loadWorkspace } from "@/lib/workspace";
+import { WORKING_ROLE_ORDER } from "@/lib/onboarding/roleOptions";
 
 export const dynamic = "force-dynamic";
 
@@ -85,8 +86,8 @@ export default async function WorkspaceLayout({
               </>
             }
             primaryAction={
-              <div className="flex items-center gap-2">
-                <RoadmapVersionPanel initiativeId={initiativeId} />
+              <div className="flex flex-wrap items-center gap-2">
+                {WORKING_ROLE_ORDER.includes("product_management") && user.workingRole === "product_management" && <RoadmapVersionPanel initiativeId={initiativeId} />}
                 <JiraSyncPanel
                   initiativeId={initiativeId}
                   status={ws.jira?.status ?? "not_connected"}
@@ -107,7 +108,7 @@ export default async function WorkspaceLayout({
           <NavTabs initiativeId={initiativeId} methodology={methodology} />
         </div>
       </header>
-      <main className="mt-4 rounded-xl border border-border-subtle bg-white p-6 shadow-[0_8px_28px_rgba(46,71,125,0.06)] print:border-0 print:shadow-none">
+      <main className="mt-4 min-w-0 rounded-xl border border-border-subtle bg-white p-3 shadow-[0_8px_28px_rgba(46,71,125,0.06)] sm:p-6 print:border-0 print:shadow-none">
         {children}
       </main>
     </ContainedLayout>
