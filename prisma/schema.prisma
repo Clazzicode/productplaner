@@ -1493,6 +1493,8 @@ model JiraConnection {
   fieldMappings          Json      @default("{}")
   revision               Int       @default(1)
   lastImportedAt         DateTime?
+  lastSyncAt             DateTime?
+  lastSyncStatus         String?   // read_complete | read_failed | applied
   createdAt              DateTime  @default(now())
   updatedAt              DateTime  @updatedAt
 
@@ -1516,6 +1518,7 @@ model JiraOAuthState {
 
 model JiraImportRun {
   id                String    @id @default(cuid())
+  sourceJobId       String?   @unique
   organizationId    String
   initiativeId      String
   connectionId      String
@@ -1523,6 +1526,8 @@ model JiraImportRun {
   jql               String
   sourceCursor      String?
   sourceFingerprint String
+  readStartedAt     DateTime?
+  readCompletedAt   DateTime?
   itemCount         Int       @default(0)
   createCount       Int       @default(0)
   updateCount       Int       @default(0)
@@ -1581,6 +1586,7 @@ model JiraExternalLink {
   sourceUpdatedAt      DateTime?
   lastImportedSnapshot Json
   lastImportedAt       DateTime  @default(now())
+  lastSyncStatus       String    @default("imported") // imported | unchanged | update_available | conflict | skipped
   createdAt            DateTime  @default(now())
   updatedAt            DateTime  @updatedAt
 
@@ -1698,7 +1704,7 @@ model JiraSyncJob {
   organizationId String
   initiativeId   String
   connectionId   String
-  jobType        String // webhook_import | export_item | renew_webhook
+  jobType        String // import_preview | webhook_import | export_item | renew_webhook
   payload        Json
   idempotencyKey String    @unique
   status         String    @default("queued") // queued | processing | completed | failed | cancelled

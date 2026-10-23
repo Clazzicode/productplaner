@@ -88,7 +88,28 @@ export function sourceSnapshot(issue: JiraSourceIssue) {
   return { ...issue, descriptionText: plainText(issue.description).trim() };
 }
 
-export async function previewJiraImport(connectionId: string, actorUserId: string) {
+export function deduplicateJiraIssues(issues: JiraSourceIssue[]) {
+  const byId = new Map<string, JiraSourceIssue>();
+  const byKey = new Map<string, string>();
+  for (const issue of issues) {
+    const priorId = byKey.get(issue.key);
+    if (priorId && priorId !== issue.id) throw new BusinessError(`Jira returned two issue IDs for ${issue.key}. No import preview was saved.`, 409);
+    const prior = byId.get(issue.id);
+    if (prior && (prior.key !== issue.key || fingerprint(sourceSnapshot(prior)) !== fingerprint(sourceSnapshot(issue)))) {
+      throw new BusinessError(`Jira returned conflicting copies of issue ${issue.id}. No import preview was saved.`, 409);
+    }
+    byId.set(issue.id, issue);
+    byKey.set(issue.key, issue.id);
+  }
+  return [...byId.values()];
+}
+
+export async function previewJiraImport(connectionId: string, actorUserId: string, sourceJobId?: string) {
+  if (sourceJobId) {
+    const existing = await db.jiraImportRun.findUnique({ where: { sourceJobId } });
+    if (existing) return loadJiraImport(existing.id);
+  }
+  const readStartedAt = new Date();
   const { connection, accessToken } = await accessTokenFor(connectionId);
   if (connection.status !== "connected" || !connection.initiativeId || !connection.cloudId || !connection.projectKey) throw new BusinessError("Finish selecting a Jira site, project, and initiative before importing.", 422);
   const issues: JiraSourceIssue[] = [];
@@ -100,10 +121,12 @@ export async function previewJiraImport(connectionId: string, actorUserId: strin
     nextPageToken = result.nextPageToken;
   }
   if (nextPageToken) throw new BusinessError("This Jira project has more than 2,000 matching issues. Narrow the import before continuing.", 422);
+  const readCompletedAt = new Date();
+  const uniqueIssues = deduplicateJiraIssues(issues);
   const links = await db.jiraExternalLink.findMany({ where: { connectionId } });
   const byIssue = new Map(links.map((link) => [link.externalIssueId, link]));
   const items: PreviewItem[] = [];
-  for (const issue of issues) {
+  for (const issue of uniqueIssues) {
     const snapshot = sourceSnapshot(issue);
     const sourceHash = fingerprint(snapshot);
     const link = byIssue.get(issue.id);
@@ -119,23 +142,34 @@ export async function previewJiraImport(connectionId: string, actorUserId: strin
     items.push({ organizationId: connection.organizationId, externalIssueId: issue.id, externalKey: issue.key, issueTypeId: issue.issueType.id, issueTypeName: issue.issueType.name, targetType: mappedTarget, targetId: link?.targetId ?? null, parentExternalKey: issue.parentKey, summary: issue.summary, sourceSnapshot: snapshot as unknown as Prisma.InputJsonValue, sourceHash, action, conflictReason, selected: action === "create" || action === "update" });
   }
   const sourceFingerprint = fingerprint(items.map((item) => ({ externalIssueId: item.externalIssueId, sourceHash: item.sourceHash, action: item.action })));
-  return withTransaction(async () => {
-    const run = await db.jiraImportRun.create({ data: { organizationId: connection.organizationId, initiativeId: connection.initiativeId!, connectionId, status: "previewed", jql: `project = \"${connection.projectKey}\" ORDER BY updated ASC`, sourceCursor: null, sourceFingerprint, itemCount: items.length, createCount: items.filter((item) => item.action === "create").length, updateCount: items.filter((item) => item.action === "update").length, conflictCount: items.filter((item) => item.action === "conflict").length, unchangedCount: items.filter((item) => item.action === "unchanged").length, initiatedByUserId: actorUserId } });
+  try { return await withTransaction(async () => {
+    const run = await db.jiraImportRun.create({ data: { organizationId: connection.organizationId, initiativeId: connection.initiativeId!, connectionId, sourceJobId, status: "previewed", jql: `project = \"${connection.projectKey}\" ORDER BY updated ASC`, sourceCursor: null, sourceFingerprint, readStartedAt, readCompletedAt, itemCount: items.length, createCount: items.filter((item) => item.action === "create").length, updateCount: items.filter((item) => item.action === "update").length, conflictCount: items.filter((item) => item.action === "conflict").length, unchangedCount: items.filter((item) => item.action === "unchanged").length, initiatedByUserId: actorUserId } });
     if (items.length) await db.jiraImportItem.createMany({ data: items.map((item) => ({ ...item, importRunId: run.id })) });
+    for (const [action, lastSyncStatus] of [["unchanged", "unchanged"], ["update", "update_available"], ["conflict", "conflict"], ["skip", "skipped"]] as const) {
+      const externalIssueIds = items.filter((item) => item.action === action && byIssue.has(item.externalIssueId)).map((item) => item.externalIssueId);
+      if (externalIssueIds.length) await db.jiraExternalLink.updateMany({ where: { connectionId, externalIssueId: { in: externalIssueIds } }, data: { lastSyncStatus } });
+    }
     const conflictItems = await db.jiraImportItem.findMany({ where: { importRunId: run.id, action: "conflict" } });
     for (const item of conflictItems) {
-      const link = links.find((candidate) => candidate.externalIssueId === item.externalIssueId);
+      const link = byIssue.get(item.externalIssueId);
       if (!link) continue;
       const planningFingerprint = await currentTargetFingerprint(link);
       if (!planningFingerprint) continue;
       const existing = await db.jiraSyncConflict.findFirst({ where: { connectionId: connection.id, externalIssueId: item.externalIssueId, jiraFingerprint: item.sourceHash, planningFingerprint, status: "open" } });
-      const conflictUpdate = { importItemId: item.id, explanation: item.conflictReason ?? "Jira and Guided Planning changed since the last synchronization." };
+      const conflictUpdate = { importItemId: item.id, explanation: item.conflictReason ?? "Jira and Clarivia changed since the last synchronization." };
       if (existing) await db.jiraSyncConflict.update({ where: { id: existing.id }, data: conflictUpdate });
       else await db.jiraSyncConflict.create({ data: { organizationId: connection.organizationId, initiativeId: connection.initiativeId!, connectionId: connection.id, externalLinkId: link.id, targetType: link.targetType, targetId: link.targetId, externalIssueId: link.externalIssueId, externalKey: link.externalKey, baselineSourceHash: link.sourceHash, baselineTargetHash: link.targetFingerprint, jiraFingerprint: item.sourceHash, planningFingerprint, jiraSnapshot: item.sourceSnapshot as Prisma.InputJsonValue, ...conflictUpdate } });
     }
-    await auditInitiative(connection.initiativeId!, "jira.import_previewed", { jiraImportRunId: run.id, jiraConnectionId: connection.id, itemCount: items.length, createCount: run.createCount, updateCount: run.updateCount, conflictCount: run.conflictCount, unchangedCount: run.unchangedCount });
+    await db.jiraConnection.update({ where: { id: connection.id }, data: { lastSyncAt: readCompletedAt, lastSyncStatus: "read_complete" } });
+    await auditInitiative(connection.initiativeId!, "jira.import_previewed", { jiraImportRunId: run.id, jiraJobId: sourceJobId ?? null, jiraConnectionId: connection.id, workspaceId: connection.organizationId, source: "jira", cloudId: connection.cloudId, projectKey: connection.projectKey, readStartedAt: readStartedAt.toISOString(), readCompletedAt: readCompletedAt.toISOString(), receivedCount: issues.length, duplicateCount: issues.length - uniqueIssues.length, itemCount: items.length, createCount: run.createCount, updateCount: run.updateCount, conflictCount: run.conflictCount, unchangedCount: run.unchangedCount });
     return loadJiraImport(run.id);
-  });
+  }); } catch (error) {
+    if (sourceJobId && typeof error === "object" && error !== null && "code" in error && error.code === "P2002") {
+      const existing = await db.jiraImportRun.findUnique({ where: { sourceJobId } });
+      if (existing) return loadJiraImport(existing.id);
+    }
+    throw error;
+  }
 }
 
 export async function loadJiraImport(runId: string) {
@@ -225,7 +259,7 @@ async function applyItem(item: { id: string; targetType: string; targetId: strin
     const request = await importedBug(issue, connection, run.initiativeId, actorUserId, item.targetId);
     target = await db.bugPlanningRecord.findUniqueOrThrow({ where: { requestId: request.id } });
   } else throw new BusinessError("Skipped Jira items cannot be imported.", 422);
-  const linkBase = { organizationId: run.organizationId, initiativeId: run.initiativeId, connectionId: run.connectionId, externalIssueId: item.externalIssueId, externalKey: item.externalKey, issueTypeName: item.issueTypeName, targetType: item.targetType, targetId: target.id, sourceHash: item.sourceHash, targetFingerprint: "", sourceUpdatedAt: issue.updated ? new Date(issue.updated) : null, lastImportedSnapshot: item.sourceSnapshot as Prisma.InputJsonValue };
+  const linkBase = { organizationId: run.organizationId, initiativeId: run.initiativeId, connectionId: run.connectionId, externalIssueId: item.externalIssueId, externalKey: item.externalKey, issueTypeName: item.issueTypeName, targetType: item.targetType, targetId: target.id, sourceHash: item.sourceHash, targetFingerprint: "", sourceUpdatedAt: issue.updated ? new Date(issue.updated) : null, lastImportedSnapshot: item.sourceSnapshot as Prisma.InputJsonValue, lastSyncStatus: "imported" };
   const temporary = { ...linkBase, id: "", createdAt: new Date(), updatedAt: new Date(), lastImportedAt: new Date() } as JiraExternalLink;
   linkBase.targetFingerprint = (await currentTargetFingerprint(temporary)) ?? fingerprint({ id: target.id });
   await db.jiraExternalLink.upsert({ where: { connectionId_externalIssueId: { connectionId: run.connectionId, externalIssueId: item.externalIssueId } }, create: linkBase, update: { ...linkBase, lastImportedAt: new Date() } });
@@ -245,8 +279,8 @@ export async function applyJiraImport(runId: string, selectedItemIds: string[], 
     for (const item of selected) await applyItem(item, run, actorUserId);
     await db.jiraImportItem.updateMany({ where: { importRunId: run.id, status: "previewed" }, data: { status: "skipped", selected: false } });
     await db.jiraImportRun.update({ where: { id: run.id }, data: { status: "applied", appliedByUserId: actorUserId, appliedAt: new Date() } });
-    await db.jiraConnection.update({ where: { id: run.connectionId }, data: { lastImportedAt: new Date() } });
-    await auditInitiative(run.initiativeId, "jira.import_applied", { jiraImportRunId: run.id, selectedItemIds, importedCount: selected.length, reason });
+    await db.jiraConnection.update({ where: { id: run.connectionId }, data: { lastImportedAt: new Date(), lastSyncAt: new Date(), lastSyncStatus: "applied" } });
+    await auditInitiative(run.initiativeId, "jira.import_applied", { jiraImportRunId: run.id, jiraConnectionId: run.connectionId, workspaceId: run.organizationId, source: "jira", selectedItemIds, importedCount: selected.length, reason });
     return loadJiraImport(run.id);
   }, { timeout: 30_000 });
 }

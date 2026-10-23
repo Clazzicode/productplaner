@@ -513,6 +513,21 @@ describe.sequential("migration replay and real PostgreSQL RLS", () => {
     await expect(asUser(authA, () => pg.exec(`UPDATE "JiraSyncConflict" SET explanation='Forged later' WHERE id='jira-conflict-a'`))).rejects.toThrow();
   });
 
+  it("allows only one active import read and exhausts crashed worker leases", async () => {
+    await asUser(authA, () => pg.exec(`INSERT INTO "JiraSyncJob" (id,"organizationId","initiativeId","connectionId","jobType",payload,"idempotencyKey","maxAttempts","updatedAt")
+      VALUES ('jira-read-a','org-a','init-a','jira-a','import_preview','{"actorUserId":"user-org-a"}',repeat('6',64),2,now())`));
+    await expect(asUser(authA, () => pg.exec(`INSERT INTO "JiraSyncJob" (id,"organizationId","initiativeId","connectionId","jobType",payload,"idempotencyKey","updatedAt")
+      VALUES ('jira-read-duplicate','org-a','init-a','jira-a','import_preview','{}',repeat('7',64),now())`))).rejects.toThrow();
+    await asUser(authA, () => pg.query(`SELECT * FROM app_private.claim_jira_jobs('read-worker-a',10,'org-a')`));
+    expect((await pg.query<{ attemptCount: number }>(`SELECT "attemptCount" FROM "JiraSyncJob" WHERE id='jira-read-a'`)).rows[0].attemptCount).toBe(1);
+    await pg.exec(`UPDATE "JiraSyncJob" SET "lockedAt"=now()-interval '11 minutes' WHERE id='jira-read-a'`);
+    await asUser(authA, () => pg.query(`SELECT * FROM app_private.claim_jira_jobs('read-worker-b',10,'org-a')`));
+    expect((await pg.query<{ attemptCount: number }>(`SELECT "attemptCount" FROM "JiraSyncJob" WHERE id='jira-read-a'`)).rows[0].attemptCount).toBe(2);
+    await pg.exec(`UPDATE "JiraSyncJob" SET "lockedAt"=now()-interval '11 minutes' WHERE id='jira-read-a'`);
+    await asUser(authA, () => pg.query(`SELECT * FROM app_private.claim_jira_jobs('read-worker-c',10,'org-a')`));
+    expect((await pg.query<{ status: string }>(`SELECT status FROM "JiraSyncJob" WHERE id='jira-read-a'`)).rows[0].status).toBe("failed");
+  });
+
   it("isolates, claims, and completes durable jobs without duplicate attempts", async () => {
     await asUser(authA, () => pg.exec(`
       INSERT INTO "BackgroundJob" (id,"organizationId","initiatedByUserId","initiatedByAuthUserId",type,payload,"idempotencyKey","updatedAt")

@@ -11,5 +11,5 @@ async function handler(request: Request) {
   if (!authorized(request)) return Response.json({ error: "Unauthorized." }, { status: 401 });
   return Response.json(await processJiraJobs(25));
 }
-export const GET = withApi(handler, { diagnostic: true });
-export const POST = withApi(handler, { diagnostic: true });
+export const GET = withApi(handler);
+export const POST = withApi(handler);
