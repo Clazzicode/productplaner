@@ -14,6 +14,27 @@ ALTER TABLE "JiraImportRun"
 ALTER TABLE "JiraImportRun"
   ADD CONSTRAINT "JiraImportRun_sourceEventId_fkey" FOREIGN KEY ("sourceEventId") REFERENCES "JiraWebhookEvent"("id") ON DELETE SET NULL;
 
+CREATE FUNCTION validate_jira_import_source() RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE job_org TEXT;job_connection TEXT;job_type TEXT;job_event TEXT;event_org TEXT;event_connection TEXT;
+BEGIN
+  IF NEW."sourceJobId" IS NOT NULL THEN
+    SELECT j."organizationId",j."connectionId",j."jobType",j.payload->>'webhookEventId'
+      INTO job_org,job_connection,job_type,job_event FROM "JiraSyncJob" j WHERE j.id=NEW."sourceJobId";
+    IF job_org IS NULL OR job_org<>NEW."organizationId" OR job_connection<>NEW."connectionId"
+      THEN RAISE EXCEPTION 'Jira import source job tenant mismatch'; END IF;
+  END IF;
+  IF NEW."sourceEventId" IS NOT NULL THEN
+    SELECT e."organizationId",e."connectionId" INTO event_org,event_connection
+      FROM "JiraWebhookEvent" e WHERE e.id=NEW."sourceEventId";
+    IF event_org IS NULL OR event_org<>NEW."organizationId" OR event_connection<>NEW."connectionId"
+       OR job_type IS DISTINCT FROM 'webhook_import' OR job_event IS DISTINCT FROM NEW."sourceEventId"
+      THEN RAISE EXCEPTION 'Jira import source event tenant mismatch'; END IF;
+  END IF;
+  RETURN NEW;
+END $$;
+CREATE TRIGGER jira_import_source_parent BEFORE INSERT OR UPDATE ON "JiraImportRun"
+  FOR EACH ROW EXECUTE FUNCTION validate_jira_import_source();
+
 ALTER TABLE "JiraExternalLink"
   ADD COLUMN "lastSyncStatus" TEXT NOT NULL DEFAULT 'imported';
 ALTER TABLE "JiraExternalLink" ADD CONSTRAINT "JiraExternalLink_lastSyncStatus_check"
