@@ -4,11 +4,15 @@ ALTER TABLE "JiraConnection"
 
 ALTER TABLE "JiraImportRun"
   ADD COLUMN "sourceJobId" TEXT,
+  ADD COLUMN "sourceEventId" TEXT,
   ADD COLUMN "readStartedAt" TIMESTAMP(3),
   ADD COLUMN "readCompletedAt" TIMESTAMP(3);
 CREATE UNIQUE INDEX "JiraImportRun_sourceJobId_key" ON "JiraImportRun"("sourceJobId");
+CREATE UNIQUE INDEX "JiraImportRun_sourceEventId_key" ON "JiraImportRun"("sourceEventId");
 ALTER TABLE "JiraImportRun"
   ADD CONSTRAINT "JiraImportRun_sourceJobId_fkey" FOREIGN KEY ("sourceJobId") REFERENCES "JiraSyncJob"("id") ON DELETE SET NULL;
+ALTER TABLE "JiraImportRun"
+  ADD CONSTRAINT "JiraImportRun_sourceEventId_fkey" FOREIGN KEY ("sourceEventId") REFERENCES "JiraWebhookEvent"("id") ON DELETE SET NULL;
 
 ALTER TABLE "JiraExternalLink"
   ADD COLUMN "lastSyncStatus" TEXT NOT NULL DEFAULT 'imported';
@@ -21,6 +25,26 @@ ALTER TABLE "JiraSyncJob" ADD CONSTRAINT "JiraSyncJob_jobType_check"
 CREATE UNIQUE INDEX "JiraSyncJob_active_import_preview_key"
   ON "JiraSyncJob"("connectionId")
   WHERE "jobType"='import_preview' AND status IN ('queued','processing');
+
+-- A retry with the same delivery ID must have the same payload. Silently
+-- accepting an altered payload would make the audit record misleading.
+CREATE OR REPLACE FUNCTION app_private.enqueue_jira_webhook(p_connection_id TEXT,p_secret_hash TEXT,p_external_event_id TEXT,p_event_type TEXT,p_issue_id TEXT,p_issue_key TEXT,p_payload_hash TEXT,p_payload JSONB)
+RETURNS TABLE(event_id TEXT,created BOOLEAN) LANGUAGE plpgsql SECURITY DEFINER SET search_path=public,pg_temp AS $$
+DECLARE v_org TEXT;v_initiative TEXT;v_event TEXT;v_existing_hash TEXT;v_created BOOLEAN:=false;
+BEGIN
+  SELECT c."organizationId",c."initiativeId" INTO v_org,v_initiative FROM "JiraConnection" c JOIN "JiraWebhookSubscription" s ON s."connectionId"=c.id WHERE c.id=p_connection_id AND c.status='connected' AND s.status='active' AND s."callbackSecretHash"=p_secret_hash;
+  IF v_org IS NULL OR v_initiative IS NULL THEN RAISE EXCEPTION 'Invalid Jira webhook'; END IF;
+  INSERT INTO "JiraWebhookEvent" (id,"organizationId","connectionId","externalEventId","eventType","externalIssueId","externalKey","payloadHash",payload,status)
+  VALUES (gen_random_uuid()::text,v_org,p_connection_id,p_external_event_id,p_event_type,p_issue_id,p_issue_key,p_payload_hash,p_payload,'queued') ON CONFLICT ("connectionId","externalEventId") DO NOTHING RETURNING id INTO v_event;
+  IF v_event IS NOT NULL THEN
+    v_created:=true;
+    INSERT INTO "JiraSyncJob" (id,"organizationId","initiativeId","connectionId","jobType",payload,"idempotencyKey",status,"updatedAt") VALUES (gen_random_uuid()::text,v_org,v_initiative,p_connection_id,'webhook_import',jsonb_build_object('webhookEventId',v_event),md5('webhook:'||v_event)||md5('webhook:2:'||v_event),'queued',now());
+  ELSE
+    SELECT id,"payloadHash" INTO v_event,v_existing_hash FROM "JiraWebhookEvent" WHERE "connectionId"=p_connection_id AND "externalEventId"=p_external_event_id;
+    IF v_existing_hash<>p_payload_hash THEN RAISE EXCEPTION 'Conflicting Jira webhook delivery'; END IF;
+  END IF;
+  RETURN QUERY SELECT v_event,v_created;
+END $$;
 
 -- Reclaims consume an attempt too. Otherwise a repeatedly crashed worker can
 -- reclaim one job forever without ever reaching maxAttempts.

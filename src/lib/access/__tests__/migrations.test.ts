@@ -503,7 +503,11 @@ describe.sequential("migration replay and real PostgreSQL RLS", () => {
     const duplicate = await asUser(authA, () => pg.query(`SELECT * FROM app_private.enqueue_jira_webhook('jira-a',repeat('a',64),'event-1','jira:issue_updated','10010','GP-10',repeat('f',64),'{}')`)) as unknown as { rows: { created: boolean }[] };
     expect(first.rows[0]?.created).toBe(true);
     expect(duplicate.rows[0]?.created).toBe(false);
+    await expect(asUser(authA, () => pg.query(`SELECT * FROM app_private.enqueue_jira_webhook('jira-a',repeat('a',64),'event-1','jira:issue_updated','10010','GP-10',repeat('0',64),'{}')`))).rejects.toThrow();
     expect((await asUser(authA, () => pg.query(`SELECT id FROM "JiraSyncJob" WHERE "connectionId"='jira-a' AND "jobType"='webhook_import'`))).rows).toHaveLength(1);
+    const eventId = (await pg.query<{ id: string }>(`SELECT id FROM "JiraWebhookEvent" WHERE "connectionId"='jira-a' AND "externalEventId"='event-1'`)).rows[0].id;
+    await asUser(authA, () => pg.query(`UPDATE "JiraImportRun" SET "sourceEventId"=$1 WHERE id='jira-run-a'`, [eventId]));
+    await expect(asUser(authA, () => pg.query(`INSERT INTO "JiraImportRun" (id,"organizationId","initiativeId","connectionId",jql,"sourceFingerprint","sourceEventId","initiatedByUserId","updatedAt") VALUES ('jira-replayed-preview','org-a','init-a','jira-a','project = GP',repeat('1',64),$1,'user-org-a',now())`, [eventId]))).rejects.toThrow();
     await expect(asUser(authA, () => pg.query(`SELECT * FROM app_private.enqueue_jira_webhook('jira-a',repeat('0',64),'event-2','jira:issue_updated',NULL,NULL,repeat('1',64),'{}')`))).rejects.toThrow();
     const claimed = await asUser(authA, () => pg.query(`SELECT * FROM app_private.claim_jira_jobs('worker-a',10,'org-a')`)) as unknown as { rows: { connection_id: string; actor_auth_user_id: string }[] };
     expect(claimed.rows.some((row) => row.connection_id === 'jira-a' && row.actor_auth_user_id === authA)).toBe(true);

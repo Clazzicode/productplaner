@@ -36,7 +36,7 @@ async function perform(job: { id: string; jobType: string; payload: unknown; con
     if (!event) throw new BusinessError("The webhook event no longer exists.", 404);
     if (event.status === "processed" || event.status === "ignored") return;
     const connection = await db.jiraConnection.findUniqueOrThrow({ where: { id: job.connectionId } });
-    await previewJiraImport(job.connectionId, connection.configuredByUserId, job.id);
+    await previewJiraImport(job.connectionId, connection.configuredByUserId, job.id, event.id);
     await db.jiraWebhookEvent.update({ where: { id: event.id }, data: { status: "processed", processedAt: new Date(), failureMessage: null } });
     return;
   }

@@ -104,7 +104,11 @@ export function deduplicateJiraIssues(issues: JiraSourceIssue[]) {
   return [...byId.values()];
 }
 
-export async function previewJiraImport(connectionId: string, actorUserId: string, sourceJobId?: string) {
+export async function previewJiraImport(connectionId: string, actorUserId: string, sourceJobId?: string, sourceEventId?: string) {
+  if (sourceEventId) {
+    const existing = await db.jiraImportRun.findUnique({ where: { sourceEventId } });
+    if (existing) return loadJiraImport(existing.id);
+  }
   if (sourceJobId) {
     const existing = await db.jiraImportRun.findUnique({ where: { sourceJobId } });
     if (existing) return loadJiraImport(existing.id);
@@ -143,7 +147,7 @@ export async function previewJiraImport(connectionId: string, actorUserId: strin
   }
   const sourceFingerprint = fingerprint(items.map((item) => ({ externalIssueId: item.externalIssueId, sourceHash: item.sourceHash, action: item.action })));
   try { return await withTransaction(async () => {
-    const run = await db.jiraImportRun.create({ data: { organizationId: connection.organizationId, initiativeId: connection.initiativeId!, connectionId, sourceJobId, status: "previewed", jql: `project = \"${connection.projectKey}\" ORDER BY updated ASC`, sourceCursor: null, sourceFingerprint, readStartedAt, readCompletedAt, itemCount: items.length, createCount: items.filter((item) => item.action === "create").length, updateCount: items.filter((item) => item.action === "update").length, conflictCount: items.filter((item) => item.action === "conflict").length, unchangedCount: items.filter((item) => item.action === "unchanged").length, initiatedByUserId: actorUserId } });
+    const run = await db.jiraImportRun.create({ data: { organizationId: connection.organizationId, initiativeId: connection.initiativeId!, connectionId, sourceJobId, sourceEventId, status: "previewed", jql: `project = \"${connection.projectKey}\" ORDER BY updated ASC`, sourceCursor: null, sourceFingerprint, readStartedAt, readCompletedAt, itemCount: items.length, createCount: items.filter((item) => item.action === "create").length, updateCount: items.filter((item) => item.action === "update").length, conflictCount: items.filter((item) => item.action === "conflict").length, unchangedCount: items.filter((item) => item.action === "unchanged").length, initiatedByUserId: actorUserId } });
     if (items.length) await db.jiraImportItem.createMany({ data: items.map((item) => ({ ...item, importRunId: run.id })) });
     for (const [action, lastSyncStatus] of [["unchanged", "unchanged"], ["update", "update_available"], ["conflict", "conflict"], ["skip", "skipped"]] as const) {
       const externalIssueIds = items.filter((item) => item.action === action && byIssue.has(item.externalIssueId)).map((item) => item.externalIssueId);
@@ -161,11 +165,11 @@ export async function previewJiraImport(connectionId: string, actorUserId: strin
       else await db.jiraSyncConflict.create({ data: { organizationId: connection.organizationId, initiativeId: connection.initiativeId!, connectionId: connection.id, externalLinkId: link.id, targetType: link.targetType, targetId: link.targetId, externalIssueId: link.externalIssueId, externalKey: link.externalKey, baselineSourceHash: link.sourceHash, baselineTargetHash: link.targetFingerprint, jiraFingerprint: item.sourceHash, planningFingerprint, jiraSnapshot: item.sourceSnapshot as Prisma.InputJsonValue, ...conflictUpdate } });
     }
     await db.jiraConnection.update({ where: { id: connection.id }, data: { lastSyncAt: readCompletedAt, lastSyncStatus: "read_complete" } });
-    await auditInitiative(connection.initiativeId!, "jira.import_previewed", { jiraImportRunId: run.id, jiraJobId: sourceJobId ?? null, jiraConnectionId: connection.id, workspaceId: connection.organizationId, source: "jira", cloudId: connection.cloudId, projectKey: connection.projectKey, readStartedAt: readStartedAt.toISOString(), readCompletedAt: readCompletedAt.toISOString(), receivedCount: issues.length, duplicateCount: issues.length - uniqueIssues.length, itemCount: items.length, createCount: run.createCount, updateCount: run.updateCount, conflictCount: run.conflictCount, unchangedCount: run.unchangedCount });
+    await auditInitiative(connection.initiativeId!, "jira.import_previewed", { jiraImportRunId: run.id, jiraJobId: sourceJobId ?? null, jiraWebhookEventId: sourceEventId ?? null, jiraConnectionId: connection.id, workspaceId: connection.organizationId, source: "jira", cloudId: connection.cloudId, projectKey: connection.projectKey, readStartedAt: readStartedAt.toISOString(), readCompletedAt: readCompletedAt.toISOString(), receivedCount: issues.length, duplicateCount: issues.length - uniqueIssues.length, itemCount: items.length, createCount: run.createCount, updateCount: run.updateCount, conflictCount: run.conflictCount, unchangedCount: run.unchangedCount });
     return loadJiraImport(run.id);
   }); } catch (error) {
-    if (sourceJobId && typeof error === "object" && error !== null && "code" in error && error.code === "P2002") {
-      const existing = await db.jiraImportRun.findUnique({ where: { sourceJobId } });
+    if ((sourceJobId || sourceEventId) && typeof error === "object" && error !== null && "code" in error && error.code === "P2002") {
+      const existing = sourceEventId ? await db.jiraImportRun.findUnique({ where: { sourceEventId } }) : await db.jiraImportRun.findUnique({ where: { sourceJobId: sourceJobId! } });
       if (existing) return loadJiraImport(existing.id);
     }
     throw error;

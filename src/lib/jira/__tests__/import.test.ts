@@ -45,3 +45,10 @@ it("reuses the saved preview on a retried job without rereading Jira", async () 
   expect(saved?.id).toBe("run-a");
   expect(accessTokenFor).not.toHaveBeenCalled();
 });
+
+it("reuses one preview when a webhook is replayed under a new job ID", async () => {
+  const { accessTokenFor } = await import("../oauth");
+  const saved = await previewJiraImport("connection-a", "user-a", "replay-job", "event-a");
+  expect(saved?.id).toBe("run-a");
+  expect(accessTokenFor).not.toHaveBeenCalled();
+});

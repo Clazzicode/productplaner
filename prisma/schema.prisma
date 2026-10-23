@@ -1519,6 +1519,7 @@ model JiraOAuthState {
 model JiraImportRun {
   id                String    @id @default(cuid())
   sourceJobId       String?   @unique
+  sourceEventId     String?   @unique
   organizationId    String
   initiativeId      String
   connectionId      String
