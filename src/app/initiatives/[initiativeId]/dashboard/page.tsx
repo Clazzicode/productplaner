@@ -34,6 +34,7 @@ import { resolveInitiativeEconomics } from "@/lib/projectContext";
 import { getResolvedStatus } from "@/lib/roadmapStatus/service";
 import { readOnboardingStateServer } from "@/lib/onboarding/tempStateServer";
 import { deriveRoleRoadmapView, type RoleRoadmapCapability, type RoleRoadmapInput } from "@/lib/roadmap/roleRoadmapView";
+import { computeLivePlanFingerprint } from "@/lib/generation/versioning";
 
 const parseContentJson = (raw: string): Record<string, unknown> => {
   try {
@@ -76,6 +77,7 @@ export default async function DashboardPage({
 
   const intakeRow = initiative.intakeAnswerSet;
   const prototype = initiative.prototype;
+  const planReviewFingerprint = await computeLivePlanFingerprint(prototype.id);
   const capabilities = intakeRow.capabilities;
   const profile = profileFor(initiative.methodology);
 
@@ -477,6 +479,7 @@ export default async function DashboardPage({
         }
         updatedAt={initiative.updatedAt}
         baselineApprovedAt={prototype.approvedAt}
+        planReviewFingerprint={planReviewFingerprint}
         status={initiativeStatus}
         isOrgAdmin={user.accessLevel === "org_admin"}
       />

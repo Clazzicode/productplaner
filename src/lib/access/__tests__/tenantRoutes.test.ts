@@ -6,7 +6,7 @@ vi.mock("@/lib/db", () => ({
   establishAuthContext: vi.fn(), currentAuthUserId: () => "auth-a",
   withTransaction: async (fn: () => Promise<unknown>) => fn(),
   db: {
-    initiative: { findUnique: mocks.initiative },
+    initiative: { findUnique: mocks.initiative, findFirst: async () => null },
     project: { findUnique: mocks.project },
     artifactLayer: { findUnique: async () => ({ prototypeId: "proto-b", prototype: { initiativeId: "init-b" } }), update: mocks.write },
     capability: { findUnique: async () => ({ intakeAnswerSet: { initiative: { id: "init-b" } } }), update: mocks.write },

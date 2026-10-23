@@ -18,7 +18,7 @@ async function GETHandler(request: Request) {
       await ensureAuthenticatedWorkspace(data.user);
       await clearActiveOrganizationCookie();
       await clearOnboardingStateServer();
-      return NextResponse.redirect(new URL("/", url.origin));
+      return NextResponse.redirect(new URL(url.searchParams.get("next") === "/join" ? "/join" : "/", url.origin));
     }
   }
   return NextResponse.redirect(new URL("/login?authError=link", url.origin));

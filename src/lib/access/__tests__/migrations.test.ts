@@ -6,10 +6,12 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 const pg = new PGlite();
 const authA = "00000000-0000-0000-0000-000000000001";
 const authB = "00000000-0000-0000-0000-000000000002";
+const authMember = "00000000-0000-0000-0000-000000000003";
+const authInvitee = "00000000-0000-0000-0000-000000000004";
 
 beforeAll(async () => {
   await pg.exec(`CREATE ROLE anon; CREATE ROLE authenticated; CREATE ROLE service_role BYPASSRLS;
-    CREATE SCHEMA auth; CREATE TABLE auth.users (id uuid PRIMARY KEY);
+    CREATE SCHEMA auth; CREATE TABLE auth.users (id uuid PRIMARY KEY, email text, email_confirmed_at timestamptz);
     CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE AS $$
       SELECT (NULLIF(current_setting('request.jwt.claims', true), '')::jsonb->>'sub')::uuid
     $$;`);
@@ -44,6 +46,11 @@ describe.sequential("migration replay and real PostgreSQL RLS", () => {
   it("replays all migrations and preserves atomic signup under app_rw", async () => {
     await bootstrap("org-a",authA);
     await bootstrap("org-b",authB);
+    await pg.query('INSERT INTO "User" (id,"organizationId","authUserId",name,email) VALUES (\'user-member\',\'org-a\',$1,\'Org A Member\',\'member@test.local\')', [authMember]);
+    await asUser(authA, async () => {
+      await pg.query('INSERT INTO "OrganizationMember" (id,"organizationId","authUserId",role,"updatedAt") VALUES (\'member-extra-org-a\',\'org-a\',$1,\'member\',now())', [authMember]);
+    });
+    await pg.exec(`INSERT INTO "IntegrationProvider" (id,key,name,category) VALUES ('provider-a','jira','Jira','execution')`);
     for (const suffix of ["a", "b"]) {
       await pg.exec(`INSERT INTO "Project" (id,"organizationId","createdByUserId",name,"updatedAt") VALUES ('project-${suffix}','org-${suffix}','user-org-${suffix}','Project',now());
         INSERT INTO "Initiative" (id,"organizationId","userId",name,"projectId","updatedAt") VALUES ('init-${suffix}','org-${suffix}','user-org-${suffix}','Initiative','project-${suffix}',now());
@@ -53,6 +60,82 @@ describe.sequential("migration replay and real PostgreSQL RLS", () => {
   });
   it("blocks arbitrary self-enrollment with a known organization ID", async () => {
     await expect(asUser(authA, () => pg.query('INSERT INTO "OrganizationMember" (id,"organizationId","authUserId",role,"updatedAt") VALUES (\'attack\',\'org-b\',$1,\'owner\',now())', [authA]))).rejects.toThrow();
+  });
+  it("accepts an email-bound workspace invitation once and never grants elevated role", async () => {
+    await bootstrap("org-c", authInvitee);
+    await pg.query(`INSERT INTO auth.users (id,email,email_confirmed_at) VALUES
+      ($1,'owner@test.local',now()),($2,'outsider@test.local',now()),($3,'member@test.local',now()),($4,'invitee@test.local',now())`, [authA, authB, authMember, authInvitee]);
+    const tokenHash = "a".repeat(64);
+    await asUser(authA, () => pg.query(`INSERT INTO "OrganizationInvitation"
+      (id,"organizationId","normalizedEmail",role,"tokenHash","invitedByAuthUserId","expiresAt")
+      VALUES ('invite-test','org-a','invitee@test.local','member',$1,$2,now()+interval '1 day')`, [tokenHash, authA]));
+    expect((await asUser(authMember, () => pg.query(`SELECT id FROM "OrganizationInvitation" WHERE id='invite-test'`))).rows).toEqual([]);
+    expect((await asUser(authB, () => pg.query(`SELECT id FROM "OrganizationInvitation" WHERE id='invite-test'`))).rows).toEqual([]);
+    await expect(asUser(authMember, () => pg.exec(`INSERT INTO "OrganizationInvitation"
+      (id,"organizationId","normalizedEmail",role,"tokenHash","invitedByAuthUserId","expiresAt")
+      VALUES ('invite-non-admin','org-a','x@test.local','member','${"c".repeat(64)}','${authMember}',now()+interval '1 day')`))).rejects.toThrow();
+
+    const result = await asUser(authInvitee, () => pg.query<{ organizationId: string }>(
+      `SELECT app_private.accept_organization_invitation($1) AS "organizationId"`, [tokenHash],
+    ));
+    expect(result.rows).toEqual([{ organizationId: "org-a" }]);
+    expect((await pg.query<{ role: string }>(`SELECT role FROM "OrganizationMember" WHERE "organizationId"='org-a' AND "authUserId"=$1`, [authInvitee])).rows).toEqual([{ role: "member" }]);
+    await expect(asUser(authInvitee, () => pg.query(`SELECT app_private.accept_organization_invitation($1)`, [tokenHash]))).rejects.toThrow();
+  });
+  it("rejects an invitation when the authenticated email does not match", async () => {
+    const tokenHash = "b".repeat(64);
+    await asUser(authA, () => pg.query(`INSERT INTO "OrganizationInvitation"
+      (id,"organizationId","normalizedEmail",role,"tokenHash","invitedByAuthUserId","expiresAt")
+      VALUES ('invite-wrong-email','org-a','somebody-else@test.local','member',$1,$2,now()+interval '1 day')`, [tokenHash, authA]));
+    await expect(asUser(authB, () => pg.query(`SELECT app_private.accept_organization_invitation($1)`, [tokenHash]))).rejects.toThrow();
+  });
+  it("binds integration connections to a workspace and configuring actor, with admin-only writes", async () => {
+    await asUser(authA, () => pg.query(`
+      INSERT INTO "IntegrationConnection" (id,"organizationId","providerId","configuredByUserId","updatedAt")
+      VALUES ('connection-a','org-a','provider-a','user-org-a',now())
+    `));
+
+    expect((await asUser(authMember, () => pg.query(`SELECT id FROM "IntegrationConnection" WHERE id='connection-a'`))).rows)
+      .toEqual([{ id: "connection-a" }]);
+    expect((await asUser(authB, () => pg.query(`SELECT id FROM "IntegrationConnection" WHERE id='connection-a'`))).rows)
+      .toEqual([]);
+
+    await expect(asUser(authMember, () => pg.exec(`
+      INSERT INTO "IntegrationConnection" (id,"organizationId","providerId","configuredByUserId","updatedAt")
+      VALUES ('connection-member','org-a','provider-a','user-member',now())
+    `))).rejects.toThrow();
+    await expect(asUser(authB, () => pg.exec(`
+      INSERT INTO "IntegrationConnection" (id,"organizationId","providerId","configuredByUserId","updatedAt")
+      VALUES ('connection-cross-tenant','org-a','provider-a','user-org-b',now())
+    `))).rejects.toThrow();
+
+    await expect(asUser(authA, () => pg.exec(`
+      INSERT INTO "IntegrationConnection" (id,"organizationId","providerId","configuredByUserId","updatedAt")
+      VALUES ('connection-forged-actor','org-a','provider-a','user-org-b',now())
+    `))).rejects.toThrow();
+
+    expect((await asUser(authMember, () => pg.query(`UPDATE "IntegrationConnection" SET "isEnabled"=false WHERE id='connection-a' RETURNING id`))).rows)
+      .toEqual([]);
+    await expect(asUser(authA, () => pg.exec(`UPDATE "IntegrationConnection" SET "organizationId"='org-b' WHERE id='connection-a'`)))
+      .rejects.toThrow(/immutable/);
+    await asUser(authA, () => pg.exec(`UPDATE "IntegrationConnection" SET "isEnabled"=false WHERE id='connection-a'`));
+  });
+  it("keeps integration sync history readable in-workspace and append-only", async () => {
+    await asUser(authA, () => pg.exec(`
+      INSERT INTO "IntegrationSyncLog" (id,"connectionId","syncType",status,message)
+      VALUES ('sync-log-a','connection-a','read','success','Read-only sync test')
+    `));
+    expect((await asUser(authMember, () => pg.query(`SELECT id FROM "IntegrationSyncLog" WHERE id='sync-log-a'`))).rows)
+      .toEqual([{ id: "sync-log-a" }]);
+    expect((await asUser(authB, () => pg.query(`SELECT id FROM "IntegrationSyncLog" WHERE id='sync-log-a'`))).rows)
+      .toEqual([]);
+    await expect(asUser(authMember, () => pg.exec(`
+      INSERT INTO "IntegrationSyncLog" (id,"connectionId","syncType",status,message) VALUES ('sync-log-member','connection-a','write','success','test')
+    `))).rejects.toThrow();
+    expect((await asUser(authA, () => pg.query(`UPDATE "IntegrationSyncLog" SET message='rewritten' WHERE id='sync-log-a' RETURNING id`))).rows)
+      .toEqual([]);
+    expect((await asUser(authA, () => pg.query(`DELETE FROM "IntegrationSyncLog" WHERE id='sync-log-a' RETURNING id`))).rows)
+      .toEqual([]);
   });
   it("hides another organization's exact ID", async () => {
     const result = await asUser(authA, () => pg.query('SELECT id FROM "Organization" WHERE id=\'org-b\''));
@@ -420,7 +503,13 @@ describe.sequential("migration replay and real PostgreSQL RLS", () => {
     const duplicate = await asUser(authA, () => pg.query(`SELECT * FROM app_private.enqueue_jira_webhook('jira-a',repeat('a',64),'event-1','jira:issue_updated','10010','GP-10',repeat('f',64),'{}')`)) as unknown as { rows: { created: boolean }[] };
     expect(first.rows[0]?.created).toBe(true);
     expect(duplicate.rows[0]?.created).toBe(false);
+    await expect(asUser(authA, () => pg.query(`SELECT * FROM app_private.enqueue_jira_webhook('jira-a',repeat('a',64),'event-1','jira:issue_updated','10010','GP-10',repeat('0',64),'{}')`))).rejects.toThrow();
     expect((await asUser(authA, () => pg.query(`SELECT id FROM "JiraSyncJob" WHERE "connectionId"='jira-a' AND "jobType"='webhook_import'`))).rows).toHaveLength(1);
+    const eventId = (await pg.query<{ id: string }>(`SELECT id FROM "JiraWebhookEvent" WHERE "connectionId"='jira-a' AND "externalEventId"='event-1'`)).rows[0].id;
+    const webhookJobId = (await pg.query<{ id: string }>(`SELECT id FROM "JiraSyncJob" WHERE "connectionId"='jira-a' AND "jobType"='webhook_import'`)).rows[0].id;
+    await asUser(authA, () => pg.query(`UPDATE "JiraImportRun" SET "sourceEventId"=$1,"sourceJobId"=$2 WHERE id='jira-run-a'`, [eventId, webhookJobId]));
+    await asUser(authA, () => pg.query(`INSERT INTO "JiraSyncJob" (id,"organizationId","initiativeId","connectionId","jobType",payload,"idempotencyKey","updatedAt") VALUES ('jira-webhook-replay','org-a','init-a','jira-a','webhook_import',jsonb_build_object('webhookEventId',$1::text),repeat('7',64),now())`, [eventId]));
+    await expect(asUser(authA, () => pg.query(`INSERT INTO "JiraImportRun" (id,"organizationId","initiativeId","connectionId",jql,"sourceFingerprint","sourceJobId","sourceEventId","initiatedByUserId","updatedAt") VALUES ('jira-replayed-preview','org-a','init-a','jira-a','project = GP',repeat('1',64),'jira-webhook-replay',$1,'user-org-a',now())`, [eventId]))).rejects.toThrow();
     await expect(asUser(authA, () => pg.query(`SELECT * FROM app_private.enqueue_jira_webhook('jira-a',repeat('0',64),'event-2','jira:issue_updated',NULL,NULL,repeat('1',64),'{}')`))).rejects.toThrow();
     const claimed = await asUser(authA, () => pg.query(`SELECT * FROM app_private.claim_jira_jobs('worker-a',10,'org-a')`)) as unknown as { rows: { connection_id: string; actor_auth_user_id: string }[] };
     expect(claimed.rows.some((row) => row.connection_id === 'jira-a' && row.actor_auth_user_id === authA)).toBe(true);
@@ -428,6 +517,172 @@ describe.sequential("migration replay and real PostgreSQL RLS", () => {
     await expect(asUser(authA, () => pg.exec(`INSERT INTO "JiraWebhookEvent" (id,"organizationId","connectionId","externalEventId","eventType","payloadHash",payload) VALUES ('jira-event-cross','org-b','jira-a','cross','updated',repeat('2',64),'{}')`))).rejects.toThrow();
     await asUser(authA, () => pg.exec(`UPDATE "JiraSyncConflict" SET status='resolved',resolution='keep_planning',"resolutionReason"='PO retained the planning version.',"resolvedByUserId"='user-org-a',"resolvedAt"=now() WHERE id='jira-conflict-a'`));
     await expect(asUser(authA, () => pg.exec(`UPDATE "JiraSyncConflict" SET explanation='Forged later' WHERE id='jira-conflict-a'`))).rejects.toThrow();
+  });
+
+  it("allows only one active import read and exhausts crashed worker leases", async () => {
+    await asUser(authA, () => pg.exec(`INSERT INTO "JiraSyncJob" (id,"organizationId","initiativeId","connectionId","jobType",payload,"idempotencyKey","maxAttempts","updatedAt")
+      VALUES ('jira-read-a','org-a','init-a','jira-a','import_preview','{"actorUserId":"user-org-a"}',repeat('6',64),2,now())`));
+    await expect(asUser(authA, () => pg.exec(`UPDATE "JiraImportRun" SET "sourceJobId"='jira-read-a' WHERE id='jira-run-a'`))).rejects.toThrow();
+    await expect(asUser(authA, () => pg.exec(`INSERT INTO "JiraSyncJob" (id,"organizationId","initiativeId","connectionId","jobType",payload,"idempotencyKey","updatedAt")
+      VALUES ('jira-read-duplicate','org-a','init-a','jira-a','import_preview','{}',repeat('7',64),now())`))).rejects.toThrow();
+    await asUser(authA, () => pg.query(`SELECT * FROM app_private.claim_jira_jobs('read-worker-a',10,'org-a')`));
+    expect((await pg.query<{ attemptCount: number }>(`SELECT "attemptCount" FROM "JiraSyncJob" WHERE id='jira-read-a'`)).rows[0].attemptCount).toBe(1);
+    await pg.exec(`UPDATE "JiraSyncJob" SET "lockedAt"=now()-interval '11 minutes' WHERE id='jira-read-a'`);
+    await asUser(authA, () => pg.query(`SELECT * FROM app_private.claim_jira_jobs('read-worker-b',10,'org-a')`));
+    expect((await pg.query<{ attemptCount: number }>(`SELECT "attemptCount" FROM "JiraSyncJob" WHERE id='jira-read-a'`)).rows[0].attemptCount).toBe(2);
+    await pg.exec(`UPDATE "JiraSyncJob" SET "lockedAt"=now()-interval '11 minutes' WHERE id='jira-read-a'`);
+    await asUser(authA, () => pg.query(`SELECT * FROM app_private.claim_jira_jobs('read-worker-c',10,'org-a')`));
+    expect((await pg.query<{ status: string }>(`SELECT status FROM "JiraSyncJob" WHERE id='jira-read-a'`)).rows[0].status).toBe("failed");
+  });
+
+  it("isolates, claims, and completes durable jobs without duplicate attempts", async () => {
+    await asUser(authA, () => pg.exec(`
+      INSERT INTO "BackgroundJob" (id,"organizationId","initiatedByUserId","initiatedByAuthUserId",type,payload,"idempotencyKey","updatedAt")
+      VALUES ('job-a','org-a','user-org-a','${authA}','plan.generate','{"initiativeId":"init-a","mode":"full","confirmApprovedImpact":false}','request-a',now());
+      INSERT INTO "OutboxEvent" (id,"organizationId","backgroundJobId","eventType","aggregateType","aggregateId","deduplicationKey",payload)
+      VALUES ('outbox-a','org-a','job-a','background_job.requested','initiative','init-a','request-a','{"jobId":"job-a"}');
+    `));
+    expect((await asUser(authB, () => pg.query(`SELECT id FROM "BackgroundJob" WHERE id='job-a'`))).rows).toEqual([]);
+
+    const claimed = await asUser(authA, () => pg.query<{ id: string; status: string; attemptCount: number }>(
+      `SELECT id,status,"attemptCount" FROM app_private.claim_background_job('test-worker',120)`,
+    ));
+    expect(claimed.rows).toEqual([{ id: "job-a", status: "running", attemptCount: 1 }]);
+    expect((await pg.query(`SELECT id FROM "BackgroundJobAttempt" WHERE "jobId"='job-a'`)).rows).toHaveLength(1);
+    expect((await pg.query<{ status: string }>(`SELECT status FROM "OutboxEvent" WHERE id='outbox-a'`)).rows[0].status).toBe("published");
+
+    const completed = await asUser(authA, () => pg.query<{ completed: boolean }>(
+      `SELECT app_private.complete_background_job('job-a','test-worker','{"prototypeId":"proto-a"}'::jsonb) AS completed`,
+    ));
+    expect(completed.rows[0].completed).toBe(true);
+    expect((await pg.query<{ status: string }>(`SELECT status FROM "BackgroundJob" WHERE id='job-a'`)).rows[0].status).toBe("completed");
+    expect((await asUser(authA, () => pg.query(`SELECT id FROM app_private.claim_background_job('test-worker',120)`))).rows).toEqual([]);
+  });
+
+  it("records verified Forge installations only through the narrow server function", async () => {
+    await expect(asUser(authA, () => pg.exec(`
+      INSERT INTO "AtlassianInstallation" (id,"forgeInstallationId","forgeAppId","apiBaseUrl","updatedAt")
+      VALUES ('direct','install-direct','app-a','https://api.atlassian.com/ex/jira/cloud-a',now())
+    `))).rejects.toThrow();
+
+    const registered = await asUser(authA, () => pg.query<{ id: string; status: string; organization_id: string | null }>(`
+      SELECT * FROM app_private.upsert_atlassian_installation(
+        'forge-row-a','install-a','app-a','cloud-a',
+        'https://api.atlassian.com/ex/jira/cloud-a',(now() + interval '2 hours')::timestamp
+      )
+    `));
+    expect(registered.rows).toEqual([{ id: "forge-row-a", status: "pending_link", organization_id: null }]);
+    expect((await asUser(authA, () => pg.query(`SELECT id FROM "AtlassianInstallation" WHERE id='forge-row-a'`))).rows).toEqual([]);
+  });
+
+  it("pairs a verified Forge installation once and enforces Jira mapping tenant boundaries", async () => {
+    const expiry = "now() + interval '10 minutes'";
+    await asUser(authA, () => pg.exec(`
+      INSERT INTO "AtlassianPairingCode" (id,"organizationId","codeHash","createdByUserId","expiresAt")
+      VALUES ('pair-code-a','org-a',repeat('a',64),'user-org-a',${expiry});
+      SELECT * FROM app_private.upsert_atlassian_installation(
+        'forge-row-pair','install-pair','app-a','cloud-pair',
+        'https://api.atlassian.com/ex/jira/cloud-pair',(now() + interval '2 hours')::timestamp
+      );
+      SELECT * FROM app_private.consume_atlassian_pairing_code(repeat('a',64),'install-pair','app-a');
+    `));
+    expect((await pg.query<{ organizationId: string; status: string }>(
+      `SELECT "organizationId",status FROM "AtlassianInstallation" WHERE id='forge-row-pair'`,
+    )).rows[0]).toEqual({ organizationId: "org-a", status: "active" });
+
+    await asUser(authA, () => pg.exec(`
+      INSERT INTO "JiraProjectBinding" (id,"organizationId","installationId","initiativeId","jiraProjectId","jiraProjectKey","jiraProjectName","updatedAt")
+      VALUES ('jira-binding-a','org-a','forge-row-pair','init-a','10001','PLAN','Planning',now());
+      INSERT INTO "JiraIssueTypeMapping" (id,"projectBindingId","localType","jiraIssueTypeId","jiraIssueTypeName","updatedAt")
+      VALUES ('jira-type-story','jira-binding-a','story','10003','Story',now());
+      INSERT INTO "JiraFieldMapping" (id,"projectBindingId","localEntityType","localField","jiraFieldId","jiraFieldName",direction,"conflictOwner","updatedAt")
+      VALUES ('jira-field-title','jira-binding-a','story','title','summary','Summary','bidirectional','require_review',now());
+      INSERT INTO "JiraStatusMapping" (id,"projectBindingId","jiraStatusId","jiraStatusName","localStatus","updatedAt")
+      VALUES ('jira-status-in-progress','jira-binding-a','3','In Progress','in_progress',now());
+      INSERT INTO "JiraWorkItemMap" (id,"organizationId","projectBindingId","artifactId","jiraIssueId","jiraIssueKey","updatedAt")
+      VALUES ('jira-work-item-a','org-a','jira-binding-a','artifact-a','issue-10001','PLAN-1',now());
+    `));
+
+    const syncContext = await asUser(authA, () => pg.query<{
+      organization_id: string; project_binding_id: string; jira_project_key: string;
+      mapped_issues: Array<{ jiraIssueId: string; jiraIssueKey: string }>;
+    }>(`SELECT * FROM app_private.get_jira_status_sync_context('install-pair','app-a','cloud-pair','jira-binding-a')`));
+    expect(syncContext.rows[0]).toMatchObject({
+      organization_id: "org-a",
+      project_binding_id: "jira-binding-a",
+      jira_project_key: "PLAN",
+      mapped_issues: [{ jiraIssueId: "issue-10001", jiraIssueKey: "PLAN-1" }],
+    });
+    const wrongCloudContext = await asUser(authA, () => pg.query(
+      `SELECT * FROM app_private.get_jira_status_sync_context('install-pair','app-a','wrong-cloud','jira-binding-a')`,
+    ));
+    expect(wrongCloudContext.rows).toEqual([]);
+
+    const observation = JSON.stringify([{
+      jiraIssueId: "issue-10001", jiraIssueKey: "PLAN-1", statusId: "3",
+      statusName: "In Progress", updatedAt: "2026-10-18T16:00:00.000Z", snapshotHash: "a".repeat(64),
+    }]);
+    const firstRefresh = await asUser(authA, () => pg.query<{ matched_count: number; changed_count: number }>(
+      `SELECT * FROM app_private.apply_jira_status_snapshot('install-pair','app-a','cloud-pair','jira-binding-a','${observation}'::jsonb)`,
+    ));
+    expect(firstRefresh.rows[0]).toEqual({ matched_count: 1, changed_count: 1 });
+    const jiraState = await asUser(authA, () => pg.query<{ lastJiraStatusName: string; lastJiraMappedStatus: string; lastJiraHash: string }>(
+      `SELECT "lastJiraStatusName","lastJiraMappedStatus","lastJiraHash" FROM "JiraWorkItemMap" WHERE id='jira-work-item-a'`,
+    ));
+    expect(jiraState.rows[0]).toEqual({ lastJiraStatusName: "In Progress", lastJiraMappedStatus: "in_progress", lastJiraHash: "a".repeat(64) });
+    const repeatedRefresh = await asUser(authA, () => pg.query<{ matched_count: number; changed_count: number }>(
+      `SELECT * FROM app_private.apply_jira_status_snapshot('install-pair','app-a','cloud-pair','jira-binding-a','${observation}'::jsonb)`,
+    ));
+    expect(repeatedRefresh.rows[0]).toEqual({ matched_count: 1, changed_count: 0 });
+    await expect(asUser(authA, () => pg.query(
+      `SELECT * FROM app_private.apply_jira_status_snapshot('install-pair','app-a','wrong-cloud','jira-binding-a','${observation}'::jsonb)`,
+    ))).rejects.toThrow();
+    await expect(asUser(authA, () => pg.query(
+      `SELECT * FROM app_private.apply_jira_status_snapshot('install-pair','app-a','cloud-pair','jira-binding-a','${JSON.stringify([...JSON.parse(observation), ...JSON.parse(observation)])}'::jsonb)`,
+    ))).rejects.toThrow();
+
+    await expect(asUser(authB, () => pg.exec(`
+      INSERT INTO "JiraProjectBinding" (id,"organizationId","installationId","initiativeId","jiraProjectId","jiraProjectKey","jiraProjectName","updatedAt")
+      VALUES ('jira-binding-cross','org-b','forge-row-pair','init-b','20001','OTHER','Other',now())
+    `))).rejects.toThrow();
+    await expect(asUser(authA, () => pg.exec(`
+      INSERT INTO "JiraWorkItemMap" (id,"organizationId","projectBindingId","artifactId","jiraIssueId","jiraIssueKey","updatedAt")
+      VALUES ('jira-work-item-cross','org-a','jira-binding-a','artifact-b','issue-foreign','PLAN-2',now())
+    `))).rejects.toThrow();
+    await expect(asUser(authA, () => pg.exec(`
+      SELECT * FROM app_private.consume_atlassian_pairing_code(repeat('b',64),'install-pair','app-a')
+    `))).rejects.toThrow();
+    expect((await asUser(authB, () => pg.query(`SELECT id FROM "JiraProjectBinding" WHERE id='jira-binding-a'`))).rows).toEqual([]);
+    expect((await asUser(authA, () => pg.query(`SELECT id FROM "JiraWorkItemMap" WHERE id='jira-work-item-a'`))).rows).toHaveLength(1);
+  });
+
+  it("keeps Atlassian OAuth ciphertext private and exposes only safe status to workspace members", async () => {
+    await asUser(authA, () => pg.exec(`
+      INSERT INTO app_private."AtlassianOAuthConnection" (
+        id,"organizationId","connectedByUserId","resourceMetadata","grantedScopes",
+        "tokenCiphertext","accessTokenExpiresAt","status"
+      ) VALUES (
+        'oauth-a','org-a','user-org-a','[{"id":"00000000-0000-0000-0000-000000000099","name":"Workspace Jira","url":"https://example.atlassian.net","scopes":["read:jira-work"]}]'::jsonb,
+        ARRAY['read:jira-work','offline_access'],'v1.encrypted-not-a-token',now() + interval '1 hour','connected'
+      )
+    `));
+
+    const safeStatus = await asUser(authMember, () => pg.query<{ status: string; granted_scopes: string[] }>(
+      `SELECT status,granted_scopes FROM app_private.atlassian_oauth_status('org-a')`,
+    ));
+    expect(safeStatus.rows).toEqual([{ status: "connected", granted_scopes: ["read:jira-work", "offline_access"] }]);
+
+    const hiddenCredential = await asUser(authMember, () => pg.query(
+      `SELECT "tokenCiphertext" FROM app_private."AtlassianOAuthConnection" WHERE "organizationId"='org-a'`,
+    ));
+    expect(hiddenCredential.rows).toEqual([]);
+    expect((await asUser(authB, () => pg.query(`SELECT * FROM app_private.atlassian_oauth_status('org-a')`))).rows).toEqual([]);
+    expect((await asUser(authA, () => pg.query<{ tokenCiphertext: string }>(
+      `SELECT "tokenCiphertext" FROM app_private."AtlassianOAuthConnection" WHERE "organizationId"='org-a'`,
+    ))).rows).toEqual([{ tokenCiphertext: "v1.encrypted-not-a-token" }]);
+    expect((await asUser(authMember, () => pg.query(
+      `DELETE FROM app_private."AtlassianOAuthConnection" WHERE "organizationId"='org-a' RETURNING id`,
+    ))).rows).toEqual([]);
   });
 
 });

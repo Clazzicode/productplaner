@@ -3,9 +3,10 @@ import type { Prisma } from "@prisma/client";
 import { auditOrganization } from "@/lib/audit";
 import { BusinessError } from "@/lib/businessError";
 import { db, withTransaction } from "@/lib/db";
-import { accessibleJiraResources, decryptedTokens, deleteJiraWebhooks, encryptedTokens, exchangeJiraCode, getJiraProjectMetadata, jiraAuthorizationUrl, listJiraProjects, refreshJiraTokens, type JiraProject, type JiraProjectMetadata, type JiraResource } from "./client";
+import { accessibleJiraResources, encryptedTokens, exchangeJiraCode, getJiraProjectMetadata, jiraAuthorizationUrl, listJiraProjects, type JiraProject, type JiraProjectMetadata, type JiraResource } from "./client";
 import { encryptJiraSecret, jiraHash } from "./crypto";
 import type { JiraProjectInput } from "./model";
+import { getAtlassianAccessToken } from "@/lib/atlassian/credentials";
 
 const STATE_LIFETIME_MS = 10 * 60 * 1000;
 
@@ -54,16 +55,12 @@ export async function completeJiraOAuth(input: { state: string; code: string; us
 export async function accessTokenFor(connectionId: string) {
   const current = await db.jiraConnection.findUnique({ where: { id: connectionId } });
   if (!current || current.status === "revoked") throw new BusinessError("Jira connection not found.", 404);
-  const tokens = decryptedTokens(current);
-  if (current.tokenExpiresAt.getTime() > Date.now() + 60_000) return { connection: current, accessToken: tokens.accessToken };
   try {
-    const refreshed = await refreshJiraTokens(tokens.refreshToken);
-    const update = await db.jiraConnection.updateMany({ where: { id: current.id, revision: current.revision, status: { not: "revoked" } }, data: { ...encryptedTokens(refreshed), revision: { increment: 1 } } });
-    if (update.count !== 1) return accessTokenFor(connectionId);
-    return { connection: await db.jiraConnection.findUniqueOrThrow({ where: { id: current.id } }), accessToken: refreshed.accessToken };
-  } catch (error) {
-    await db.jiraConnection.updateMany({ where: { id: current.id, status: { not: "revoked" } }, data: { status: "reauthorization_required", revision: { increment: 1 } } });
-    throw new BusinessError(error instanceof Error ? `Reconnect Jira: ${error.message}` : "Reconnect Jira.", 401);
+    const accessToken = await getAtlassianAccessToken(current.organizationId);
+    return { connection: current, accessToken };
+  } catch {
+    await db.jiraConnection.updateMany({ where: { organizationId: current.organizationId, status: { not: "revoked" } }, data: { status: "reauthorization_required", revision: { increment: 1 } } });
+    throw new BusinessError("Reconnect Atlassian to restore this Jira connection.", 401);
   }
 }
 
@@ -117,19 +114,17 @@ export async function disconnectJira(connectionId: string, actorUserId: string) 
   const current = await db.jiraConnection.findUnique({ where: { id: connectionId } });
   if (!current || current.status === "revoked") throw new BusinessError("Jira connection not found.", 404);
   const subscription = await db.jiraWebhookSubscription.findUnique({ where: { connectionId } });
-  let remoteWebhookWarning: string | null = null;
-  if (subscription && current.cloudId) {
-    try {
-      const { accessToken } = await accessTokenFor(connectionId);
-      await deleteJiraWebhooks({ cloudId: current.cloudId, accessToken, webhookIds: [subscription.externalId] });
-    } catch (error) {
-      remoteWebhookWarning = error instanceof Error ? error.message : "The remote Jira webhook could not be removed.";
-    }
-  }
+  const remoteWebhookWarning = subscription?.status === "active"
+    ? "Clarivia disconnected locally. Remove the existing webhook in Atlassian if you no longer want it to send events."
+    : null;
   const saved = await withTransaction(async () => {
     await db.jiraWebhookSubscription.updateMany({ where: { connectionId }, data: { status: "disabled" } });
     await db.jiraSyncJob.updateMany({ where: { connectionId, status: { in: ["queued", "processing"] } }, data: { status: "cancelled", lockedAt: null, lockedBy: null, lastError: "Connection disconnected by an administrator." } });
     const revoked = await db.jiraConnection.update({ where: { id: connectionId }, data: { status: "revoked", accessTokenCiphertext: encryptJiraSecret(randomBytes(32).toString("base64url")), refreshTokenCiphertext: encryptJiraSecret(randomBytes(32).toString("base64url")), tokenExpiresAt: new Date(), revision: { increment: 1 } } });
+    const remainingConnections = await db.jiraConnection.count({ where: { organizationId: current.organizationId, status: { not: "revoked" } } });
+    if (remainingConnections === 0) {
+      await db.$executeRaw`DELETE FROM app_private."AtlassianOAuthConnection" WHERE "organizationId" = ${current.organizationId}`;
+    }
     await auditOrganization({ organizationId: current.organizationId, actorUserId, entityType: "jira_connection", entityId: current.id, action: "jira.disconnected", metadata: { initiativeId: current.initiativeId, remoteWebhookRemoved: !remoteWebhookWarning, remoteWebhookWarning } });
     return revoked;
   });

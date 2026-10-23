@@ -1,0 +1,68 @@
+name: Apply Prisma migrations to staging
+
+on:
+  pull_request:
+    branches:
+      - master
+    types:
+      - labeled
+      - synchronize
+  workflow_dispatch:
+    inputs:
+      confirm_staging:
+        description: Confirm the target is the independent staging Supabase project
+        required: true
+        type: choice
+        options:
+          - staging
+
+permissions:
+  contents: read
+
+concurrency:
+  group: staging-prisma-migrations
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    if: >-
+      ${{ (github.event_name == 'workflow_dispatch' && inputs.confirm_staging == 'staging') ||
+      (github.event_name == 'pull_request' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      contains(github.event.pull_request.labels.*.name, 'run-staging-migration')) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: staging
+    env:
+      APP_ENVIRONMENT: staging
+      NEXT_PUBLIC_SUPABASE_URL: https://${{ secrets.STAGING_SUPABASE_PROJECT_REF }}.supabase.co
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ci-placeholder
+      DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
+      DIRECT_URL: ${{ secrets.STAGING_DIRECT_URL }}
+      STAGING_APP_RW_PASSWORD: ${{ secrets.STAGING_APP_RW_PASSWORD }}
+      STAGING_SUPABASE_PROJECT_REF: ${{ secrets.STAGING_SUPABASE_PROJECT_REF }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - name: Prepare the staging application connection
+        run: node scripts/prepare-staging-database-url.mjs
+      - name: Validate migration inputs and staging target
+        run: |
+          npm run schema:validate
+          node scripts/verify-staging-database.mjs --preflight
+      - name: Run application quality checks
+        run: |
+          npm run typecheck
+          env -u APP_ENVIRONMENT -u DATABASE_URL -u DIRECT_URL -u NEXT_PUBLIC_SUPABASE_URL npm test
+      - name: Apply the checked-in Prisma migration chain
+        run: npx prisma migrate deploy
+      - name: Configure the non-bypassing app database role
+        run: node scripts/set-staging-app-role-password.mjs
+      - name: Verify migration status
+        run: npx prisma migrate status
+      - name: Verify staging role, schema, and RLS
+        run: node scripts/verify-staging-database.mjs

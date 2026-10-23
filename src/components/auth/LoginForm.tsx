@@ -7,7 +7,7 @@ import { apiFetch } from "@/lib/clientApi";
 import { AuthenticationLoader, ButtonLoader } from "@/components/ui/loading";
 
 type Mode = "sign-in" | "sign-up" | "forgot-password";
-export default function LoginForm({ linkError = false }: { linkError?: boolean }) {
+export default function LoginForm({ linkError = false, nextPath = "/" }: { linkError?: boolean; nextPath?: "/" | "/join" }) {
   const router = useRouter();
   const [mode, setMode] = useState<Mode>("sign-in");
   const [busy, setBusy] = useState(false);
@@ -44,7 +44,7 @@ export default function LoginForm({ linkError = false }: { linkError?: boolean }
       body: mode === "sign-in"
         ? { identifier: identity, password }
         : mode === "sign-up"
-          ? { username, email: identity, password, name }
+          ? { username, email: identity, password, name, next: nextPath === "/join" ? "/join" : undefined }
           : { email: identity },
     });
     if (!res.ok) {
@@ -59,7 +59,7 @@ export default function LoginForm({ linkError = false }: { linkError?: boolean }
       setMessage(res.data?.message ?? "Check your email.");
       return;
     }
-    router.push("/");
+    router.push(nextPath);
     router.refresh();
   };
 

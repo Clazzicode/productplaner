@@ -4,7 +4,7 @@ import SidebarSection from "./SidebarSection";
 
 /**
  * `title`/`titleHref`/`footer` default to the standard product shell's
- * "Guided Planning" -> /home. AdminShell (Block 6) passes its own title and a
+ * "Clarivia" -> /home. AdminShell (Block 6) passes its own title and a
  * "Back to Workspace" footer instead of duplicating this whole nav column.
  */
 export default function Sidebar(props: {
@@ -20,7 +20,7 @@ export default function Sidebar(props: {
           <span className="ml-0.5 h-0 w-0 border-y-[6px] border-l-[9px] border-y-transparent border-l-white" />
         </span>
         <span className="text-sm font-bold uppercase tracking-[0.08em] text-text-inverse">
-          {props.title ?? "Guided Planning"}
+          {props.title ?? "Clarivia"}
         </span>
       </Link>
       {props.groups.map((group) => (

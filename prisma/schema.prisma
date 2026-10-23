@@ -38,6 +38,7 @@ model Organization {
   // in OrganizationMember below.
   homeUsers                      User[]                          @relation("OrganizationHomeUsers")
   members                        OrganizationMember[]
+  invitations                    OrganizationInvitation[]
   teams                          Team[]
   initiatives                    Initiative[]
   projects                       Project[]
@@ -76,6 +77,12 @@ model Organization {
   bugPlanningRevisions           BugPlanningRevision[]
   auditEvents                    AuditEvent[]
   planApprovals                  PlanApproval[]
+  backgroundJobs                 BackgroundJob[]
+  outboxEvents                   OutboxEvent[]
+  webhookInboxEvents             WebhookInboxEvent[]
+  atlassianInstallations         AtlassianInstallation[]
+  atlassianPairingCodes          AtlassianPairingCode[]
+  jiraProjectBindings            JiraProjectBinding[]
   createdAt                      DateTime                        @default(now())
 }
 
@@ -97,7 +104,9 @@ model User {
   homeOrganizationId             String                          @map("organizationId")
   homeOrganization               Organization                    @relation("OrganizationHomeUsers", fields: [homeOrganizationId], references: [id])
   ownedOrganizations             Organization[]                  @relation("OrganizationOwner")
+  atlassianPairingCodes          AtlassianPairingCode[]
   memberships                    OrganizationMember[]
+  sentWorkspaceInvitations       OrganizationInvitation[] @relation("WorkspaceInvitationInviter")
   name                           String
   email                          String                          @unique
   // User-facing sign-in name. Authentication still belongs to Supabase Auth;
@@ -184,6 +193,7 @@ model User {
   demoItemRevisions              DemoItemRevision[]              @relation("DemoItemRevisionActor")
   demoSuggestionsMade            DemoAiSuggestion[]              @relation("DemoSuggestionGeneratedBy")
   demoSuggestionsActed           DemoAiSuggestion[]              @relation("DemoSuggestionActedBy")
+  backgroundJobsInitiated        BackgroundJob[]                 @relation("BackgroundJobInitiatedBy")
   createdAt                      DateTime                        @default(now())
 }
 
@@ -218,6 +228,27 @@ model OrganizationMember {
 
   @@unique([organizationId, authUserId])
   @@index([authUserId])
+}
+
+// Workspace invitation links store only a digest of the high-entropy token.
+// The recipient must authenticate with a provider-confirmed email matching
+// normalizedEmail before the database's one-use accept function grants access.
+model OrganizationInvitation {
+  id                    String       @id @default(cuid())
+  organizationId        String
+  organization          Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  normalizedEmail       String
+  role                  String       @default("member")
+  tokenHash             String       @unique
+  invitedByAuthUserId   String       @db.Uuid
+  invitedBy             User         @relation("WorkspaceInvitationInviter", fields: [invitedByAuthUserId], references: [authUserId], onDelete: Cascade)
+  expiresAt             DateTime
+  acceptedAt            DateTime?
+  revokedAt             DateTime?
+  createdAt             DateTime     @default(now())
+
+  @@index([organizationId, createdAt])
+  @@index([normalizedEmail, expiresAt])
 }
 
 // Step 8B (docs/V2-USERS-TEAMS.md, docs/V2-ORG-ADMIN-IA.md §6-7). Flat — no
@@ -585,6 +616,7 @@ model Initiative {
   documents                  Document[]
   contextItems               ContextItem[]
   roadmapVersions            RoadmapVersion[]
+  jiraProjectBindings        JiraProjectBinding[]
   aiAssistItems              AiAssistItem[]
   refinementFindings         RefinementFinding[]
   refinementSessions         RefinementSession[]
@@ -732,6 +764,7 @@ model RoadmapVersion {
   // ensureApprovedVersionArchived's legacy-data path, where the true
   // at-time-of-approval fingerprint is genuinely unrecoverable.
   inputsFingerprint String?
+  reviewFingerprint String?
   approvedAt        DateTime?
   approvedByUserId  String?
   approvedByUser    User?          @relation(fields: [approvedByUserId], references: [id], onDelete: SetNull)
@@ -744,17 +777,18 @@ model RoadmapVersion {
 }
 
 model PlanApproval {
-  id             String         @id @default(cuid())
-  organizationId String
-  organization   Organization   @relation(fields: [organizationId], references: [id])
-  initiativeId   String
-  projectId      String?
-  planVersionId  String         @unique
-  planVersion    RoadmapVersion @relation(fields: [planVersionId], references: [id], onDelete: Restrict)
-  status         String         @default("approved")
-  approvedBy     String?
-  approvedAt     DateTime       @default(now())
-  metadata       Json           @default("{}")
+  id                String         @id @default(cuid())
+  organizationId    String
+  organization      Organization   @relation(fields: [organizationId], references: [id])
+  initiativeId      String
+  projectId         String?
+  planVersionId     String         @unique
+  planVersion       RoadmapVersion @relation(fields: [planVersionId], references: [id], onDelete: Restrict)
+  status            String         @default("approved")
+  approvedBy        String?
+  approvedAt        DateTime       @default(now())
+  reviewFingerprint String?
+  metadata          Json           @default("{}")
 
   @@index([organizationId, initiativeId, approvedAt])
 }
@@ -832,6 +866,7 @@ model ArtifactLayer {
   sprintPlanningItems        SprintPlanningItem[]
   inSprintClarifications     InSprintClarification[]
   demoItems                  DemoItem[]
+  jiraWorkItemMappings       JiraWorkItemMap[]
 
   @@unique([prototypeId, type, dedupeKey])
   @@unique([prototypeId, type, externalRef])
@@ -1214,6 +1249,147 @@ model SyncConnection {
   @@unique([initiativeId, tool])
 }
 
+// Canonical Forge installation identity. Unlike the two demo connection
+// models below, this row represents a cryptographically verified Atlassian
+// installation. It starts unclaimed because Forge lifecycle requests do not
+// carry a Clarivia organization identity. A separate, authenticated
+// pairing flow will associate it with an organization before Jira data can be
+// imported or published.
+model AtlassianInstallation {
+  id                      String                 @id @default(cuid())
+  forgeInstallationId     String                 @unique
+  forgeAppId              String
+  cloudId                 String?
+  apiBaseUrl              String
+  organizationId          String?
+  organization            Organization?          @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  status                  String                 @default("pending_link") // pending_link | active | disabled | uninstalled
+  installedAt             DateTime               @default(now())
+  lastSeenAt              DateTime               @default(now())
+  lastInvocationExpiresAt DateTime?
+  createdAt               DateTime               @default(now())
+  updatedAt               DateTime               @updatedAt
+  pairingCodes            AtlassianPairingCode[]
+  projectBindings         JiraProjectBinding[]
+
+  @@index([organizationId, status])
+  @@index([cloudId])
+}
+
+// Short-lived, one-use proof that an organization administrator intends to
+// link one Forge installation to this workspace. Only the hash is persisted;
+// the plaintext is returned once by the authenticated pairing-start route.
+model AtlassianPairingCode {
+  id              String                 @id @default(cuid())
+  organizationId  String
+  organization    Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  codeHash        String                 @unique
+  createdByUserId String
+  createdBy       User                   @relation(fields: [createdByUserId], references: [id], onDelete: Restrict)
+  expiresAt       DateTime
+  consumedAt      DateTime?
+  installationId  String?
+  installation    AtlassianInstallation? @relation(fields: [installationId], references: [id], onDelete: SetNull)
+  createdAt       DateTime               @default(now())
+
+  @@index([organizationId, expiresAt])
+}
+
+// A Jira project is deliberately bound to one local initiative at a time.
+// Field direction and conflict ownership are explicit mapping rows so the
+// two systems never silently overwrite the same value.
+model JiraProjectBinding {
+  id                String                 @id @default(cuid())
+  organizationId    String
+  organization      Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  installationId    String
+  installation      AtlassianInstallation  @relation(fields: [installationId], references: [id], onDelete: Cascade)
+  initiativeId      String
+  initiative        Initiative             @relation(fields: [initiativeId], references: [id], onDelete: Cascade)
+  jiraProjectId     String
+  jiraProjectKey    String
+  jiraProjectName   String
+  enabled           Boolean                @default(true)
+  issueTypeMappings JiraIssueTypeMapping[]
+  fieldMappings     JiraFieldMapping[]
+  statusMappings    JiraStatusMapping[]
+  workItems         JiraWorkItemMap[]
+  createdAt         DateTime               @default(now())
+  updatedAt         DateTime               @updatedAt
+
+  @@unique([installationId, jiraProjectId])
+  @@unique([initiativeId, installationId])
+  @@index([organizationId, initiativeId])
+}
+
+model JiraIssueTypeMapping {
+  id                String             @id @default(cuid())
+  projectBindingId  String
+  projectBinding    JiraProjectBinding @relation(fields: [projectBindingId], references: [id], onDelete: Cascade)
+  localType         String // epic | story
+  jiraIssueTypeId   String
+  jiraIssueTypeName String
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+
+  @@unique([projectBindingId, localType])
+  @@unique([projectBindingId, jiraIssueTypeId])
+}
+
+model JiraFieldMapping {
+  id               String             @id @default(cuid())
+  projectBindingId String
+  projectBinding   JiraProjectBinding @relation(fields: [projectBindingId], references: [id], onDelete: Cascade)
+  localEntityType  String // epic | story
+  localField       String
+  jiraFieldId      String
+  jiraFieldName    String
+  direction        String // planner_to_jira | jira_to_planner | bidirectional
+  conflictOwner    String // planner | jira | require_review
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+
+  @@unique([projectBindingId, localEntityType, localField])
+  @@unique([projectBindingId, jiraFieldId])
+}
+
+model JiraStatusMapping {
+  id               String             @id @default(cuid())
+  projectBindingId String
+  projectBinding   JiraProjectBinding @relation(fields: [projectBindingId], references: [id], onDelete: Cascade)
+  jiraStatusId     String
+  jiraStatusName   String
+  localStatus      String
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+
+  @@unique([projectBindingId, jiraStatusId])
+}
+
+model JiraWorkItemMap {
+  id                   String             @id @default(cuid())
+  organizationId       String
+  projectBindingId     String
+  projectBinding       JiraProjectBinding @relation(fields: [projectBindingId], references: [id], onDelete: Cascade)
+  artifactId           String
+  artifact             ArtifactLayer      @relation(fields: [artifactId], references: [id], onDelete: Cascade)
+  jiraIssueId          String
+  jiraIssueKey         String
+  lastPlannerHash      String?
+  lastJiraHash         String?
+  lastJiraStatusId     String?
+  lastJiraStatusName   String?
+  lastJiraMappedStatus String?
+  lastJiraUpdatedAt    DateTime?
+  lastSyncedAt         DateTime?
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+
+  @@unique([projectBindingId, artifactId])
+  @@unique([projectBindingId, jiraIssueId])
+  @@index([organizationId, jiraIssueKey])
+}
+
 // ---------- Integrations Hub (Demo Mode) — Product platform spec §2.7 ----------
 // Generic provider registry; coexists deliberately with the legacy Jira-only
 // SyncConnection above (which the workspace JiraSyncPanel still uses).
@@ -1317,6 +1493,8 @@ model JiraConnection {
   fieldMappings          Json      @default("{}")
   revision               Int       @default(1)
   lastImportedAt         DateTime?
+  lastSyncAt             DateTime?
+  lastSyncStatus         String?   // read_complete | read_failed | applied
   createdAt              DateTime  @default(now())
   updatedAt              DateTime  @updatedAt
 
@@ -1340,6 +1518,8 @@ model JiraOAuthState {
 
 model JiraImportRun {
   id                String    @id @default(cuid())
+  sourceJobId       String?   @unique
+  sourceEventId     String?   @unique
   organizationId    String
   initiativeId      String
   connectionId      String
@@ -1347,6 +1527,8 @@ model JiraImportRun {
   jql               String
   sourceCursor      String?
   sourceFingerprint String
+  readStartedAt     DateTime?
+  readCompletedAt   DateTime?
   itemCount         Int       @default(0)
   createCount       Int       @default(0)
   updateCount       Int       @default(0)
@@ -1405,6 +1587,7 @@ model JiraExternalLink {
   sourceUpdatedAt      DateTime?
   lastImportedSnapshot Json
   lastImportedAt       DateTime  @default(now())
+  lastSyncStatus       String    @default("imported") // imported | unchanged | update_available | conflict | skipped
   createdAt            DateTime  @default(now())
   updatedAt            DateTime  @updatedAt
 
@@ -1522,7 +1705,7 @@ model JiraSyncJob {
   organizationId String
   initiativeId   String
   connectionId   String
-  jobType        String // webhook_import | export_item | renew_webhook
+  jobType        String // import_preview | webhook_import | export_item | renew_webhook
   payload        Json
   idempotencyKey String    @unique
   status         String    @default("queued") // queued | processing | completed | failed | cancelled
@@ -2919,4 +3102,104 @@ model ValidationAiSuggestion {
 
   @@unique([validationId, fingerprint])
   @@index([organizationId, createdAt])
+}
+
+// Durable, at-least-once background work. A short database transaction claims
+// a row; external work happens after the claim commits. Expired leases make a
+// crashed worker's work recoverable without relying on process memory.
+model BackgroundJob {
+  id                    String                 @id @default(cuid())
+  organizationId        String
+  organization          Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  initiatedByUserId     String?
+  initiatedByUser       User?                  @relation("BackgroundJobInitiatedBy", fields: [initiatedByUserId], references: [id], onDelete: SetNull)
+  initiatedByAuthUserId String?                @db.Uuid
+  type                  String
+  status                String                 @default("queued") // queued | running | completed | failed | dead_letter | cancelled
+  payload               Json
+  result                Json?
+  idempotencyKey        String
+  priority              Int                    @default(100)
+  attemptCount          Int                    @default(0)
+  maxAttempts           Int                    @default(5)
+  availableAt           DateTime               @default(now())
+  leaseOwner            String?
+  leaseExpiresAt        DateTime?
+  startedAt             DateTime?
+  completedAt           DateTime?
+  lastErrorCode         String?
+  lastErrorMessage      String?
+  attempts              BackgroundJobAttempt[]
+  outboxEvents          OutboxEvent[]
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+
+  @@unique([organizationId, type, idempotencyKey])
+  @@index([status, availableAt, priority, createdAt])
+  @@index([organizationId, createdAt])
+  @@index([initiatedByUserId, createdAt])
+}
+
+model BackgroundJobAttempt {
+  id            String        @id @default(cuid())
+  jobId         String
+  job           BackgroundJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  attemptNumber Int
+  workerId      String
+  status        String        @default("running") // running | completed | failed
+  errorCode     String?
+  errorMessage  String?
+  startedAt     DateTime      @default(now())
+  finishedAt    DateTime?
+
+  @@unique([jobId, attemptNumber])
+  @@index([status, startedAt])
+}
+
+// Written in the same transaction as the job/business change. It is durable
+// evidence that a side effect was requested even if a process exits before a
+// worker is notified.
+model OutboxEvent {
+  id               String         @id @default(cuid())
+  organizationId   String
+  organization     Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  backgroundJobId  String?
+  backgroundJob    BackgroundJob? @relation(fields: [backgroundJobId], references: [id], onDelete: SetNull)
+  eventType        String
+  aggregateType    String
+  aggregateId      String
+  deduplicationKey String
+  payload          Json
+  status           String         @default("pending") // pending | published | failed
+  attemptCount     Int            @default(0)
+  availableAt      DateTime       @default(now())
+  publishedAt      DateTime?
+  lastErrorMessage String?
+  createdAt        DateTime       @default(now())
+
+  @@unique([organizationId, eventType, deduplicationKey])
+  @@index([status, availableAt, createdAt])
+  @@index([organizationId, createdAt])
+  @@index([backgroundJobId])
+}
+
+// Provider events are persisted before processing so duplicate, delayed, or
+// out-of-order deliveries can be reconciled without losing the original fact.
+model WebhookInboxEvent {
+  id               String       @id @default(cuid())
+  organizationId   String
+  organization     Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  provider         String
+  externalEventId  String
+  eventType        String
+  payload          Json
+  status           String       @default("received") // received | processing | processed | failed | dead_letter
+  attemptCount     Int          @default(0)
+  receivedAt       DateTime     @default(now())
+  processedAt      DateTime?
+  lastErrorMessage String?
+
+  @@unique([provider, externalEventId])
+  @@index([status, receivedAt])
+  @@index([organizationId, receivedAt])
 }

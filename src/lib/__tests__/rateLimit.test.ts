@@ -11,7 +11,13 @@ describe("rateLimitPolicyFor", () => {
     expect(rateLimitPolicyFor(request("/api/initiatives/i1/ai-assist/features"))?.key).toBe("ai.request");
     expect(rateLimitPolicyFor(request("/api/documents/d1/analyze"))?.key).toBe("document.analyze");
     expect(rateLimitPolicyFor(request("/api/initiatives/i1/sync/jira"))?.key).toBe("integration.sync");
+    expect(rateLimitPolicyFor(request("/api/atlassian/forge/installation"))?.key).toBe("atlassian.forge_remote");
+    expect(rateLimitPolicyFor(request("/api/atlassian/oauth/start"))?.key).toBe("atlassian.oauth_start");
+    expect(rateLimitPolicyFor(request("/api/atlassian/oauth/disconnect", "DELETE"))?.key).toBe("atlassian.oauth_disconnect");
+    expect(rateLimitPolicyFor(request("/api/atlassian/oauth/verify"))?.key).toBe("atlassian.oauth_verify");
     expect(rateLimitPolicyFor(request("/api/account/start-over"))?.key).toBe("account.start_over");
+    expect(rateLimitPolicyFor(request("/api/workspace-invitations"))?.key).toBe("workspace.invitation.create");
+    expect(rateLimitPolicyFor(request("/api/workspace-invitations/accept"))?.key).toBe("workspace.invitation.accept");
   });
 
   it("limits every sensitive Jira integration operation", () => {

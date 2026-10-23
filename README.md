@@ -1,4 +1,4 @@
-# Guided Product Planning Platform — Functional Prototype
+# Clarivia — Functional Prototype
 
 A working prototype of the platform specified in `../Week 3 combined v2.pdf`: a
 methodology-aware planning system that takes a raw product idea through a guided intake and

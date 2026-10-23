@@ -11,10 +11,18 @@ async function GETHandler() {
         { status: 503, headers: { "cache-control": "no-store" } },
       );
     }
+    if (!process.env.BACKGROUND_WORKER_SECRET && !process.env.CRON_SECRET) {
+      return Response.json(
+        { status: "unavailable", checks: { database: "unknown", environmentIsolation: "ready", backgroundWorker: "failed" } },
+        { status: 503, headers: { "cache-control": "no-store" } },
+      );
+    }
     const rows = await rawDb.$queryRaw<{ safe: boolean }[]>`
       SELECT NOT (rolsuper OR rolbypassrls) AND current_user = 'app_rw'
         AND to_regclass('public."PlanApproval"') IS NOT NULL
+        AND to_regclass('public."BackgroundJob"') IS NOT NULL
         AND to_regprocedure('app_private.check_rate_limit(text,text,integer,integer)') IS NOT NULL
+        AND to_regprocedure('app_private.claim_background_job(text,integer)') IS NOT NULL
         AND to_regclass('public."AuditEvent"') IS NOT NULL
         AND to_regclass('public."StakeholderContact"') IS NOT NULL
         AND to_regclass('public."InSprintClarification"') IS NOT NULL
@@ -30,12 +38,12 @@ async function GETHandler() {
       FROM pg_roles WHERE rolname = current_user`;
     if (!rows[0]?.safe) throw new Error("Database not ready");
     return Response.json(
-      { status: "ready", checks: { database: "ready", environmentIsolation: "ready" } },
+      { status: "ready", checks: { database: "ready", environmentIsolation: "ready", backgroundWorker: "ready" } },
       { headers: { "cache-control": "no-store" } },
     );
   } catch {
     return Response.json(
-      { status: "unavailable", checks: { database: "failed", environmentIsolation: "unknown" } },
+      { status: "unavailable", checks: { database: "failed", environmentIsolation: "unknown", backgroundWorker: "unknown" } },
       { status: 503, headers: { "cache-control": "no-store" } },
     );
   }

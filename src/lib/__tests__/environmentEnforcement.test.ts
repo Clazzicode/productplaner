@@ -35,6 +35,27 @@ describe("environment enforcement at execution boundaries", () => {
     expect(response.status).toBe(503);
     expect(mocks.client).not.toHaveBeenCalled();
   });
+  it("allows a foreign Origin only for explicitly opted-in Forge remote routes", async () => {
+    vi.stubEnv("VERCEL_ENV", "production");
+    mocks.rateLimit.mockResolvedValue({ allowed: true, remaining: 10 });
+    const foreign = new Request("https://preview.example/api/atlassian/forge/pair", {
+      method: "POST", headers: { origin: "https://example.atlassian.net" },
+    });
+    const forgeHandler = vi.fn(async (request: Request) => { void request; return Response.json({ ok: true }); });
+    expect((await withApi(forgeHandler, { forgeRemote: true })(foreign)).status).toBe(200);
+    expect(forgeHandler).toHaveBeenCalledOnce();
+
+    const nonForgeHandler = vi.fn(async (request: Request) => { void request; return Response.json({ ok: true }); });
+    expect((await withApi(nonForgeHandler, { forgeRemote: true })(new Request("https://preview.example/api/ordinary/mutate", {
+      method: "POST", headers: { origin: "https://example.atlassian.net" },
+    }))).status).toBe(403);
+    expect(nonForgeHandler).not.toHaveBeenCalled();
+  });
+  it("skips cookie refresh for Forge Remote calls before the API verifies its signed invocation", async () => {
+    const response = await updateSupabaseSession(new NextRequest("https://preview.example/api/atlassian/forge/pair", { method: "POST" }));
+    expect(response.status).toBe(200);
+    expect(mocks.client).not.toHaveBeenCalled();
+  });
   it("blocks both server client factories before contacting Supabase", async () => {
     await expect(createSupabaseServerClient()).rejects.toThrow("production Supabase");
     expect(() => createSupabaseServiceClient()).toThrow("production Supabase");
