@@ -12,6 +12,11 @@ describe("Atlassian OAuth and Jira REST client", () => {
     await expect(createJiraIssue({ cloudId: "cloud-a", accessToken: "token", fields: { summary: "must not write" } }, fetcher)).rejects.toThrow("Jira write operations are disabled");
     expect(fetcher).not.toHaveBeenCalled();
   });
+  it("requests read-only Jira scopes by default", () => {
+    delete process.env.JIRA_WRITE_ENABLED;
+    const url = new URL(jiraAuthorizationUrl("opaque-state"));
+    expect(url.searchParams.get("scope")?.split(" ").sort()).toEqual(["offline_access", "read:jira-work"]);
+  });
   it("builds a 3LO URL with offline access and an exact callback", () => {
     const url = new URL(jiraAuthorizationUrl("opaque-state"));
     expect(url.origin).toBe("https://auth.atlassian.com");
