@@ -79,7 +79,7 @@ Customer-data and audit-event retention periods remain a business decision. Orga
 
 - Set `CRON_SECRET` in the production Vercel environment to a random value of at least 16 characters. Vercel sends it as `Authorization: Bearer <value>` to the configured cron endpoint.
 - `BACKGROUND_WORKER_SECRET` may be set for a separately deployed worker; do not expose either value to the browser.
-- The recovery cron calls `/api/internal/background-jobs/run` every minute. User-triggered plan generation also starts a post-response worker attempt, while the durable database row remains available for cron recovery after a crash or timeout.
+- The recovery cron calls `/api/internal/background-jobs/run` every five minutes. User-triggered plan generation also starts a post-response worker attempt, while the durable database row remains available for cron recovery after a crash or timeout.
 - Alert on `BackgroundJob.status = 'dead_letter'`, jobs whose `availableAt` is old, repeated failed attempts, and a growing queued count.
 - `/api/ready` intentionally returns 503 when worker authentication or the durable-job migration is absent.
 
