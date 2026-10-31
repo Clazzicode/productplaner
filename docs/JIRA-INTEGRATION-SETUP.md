@@ -9,7 +9,7 @@ Feature 21 uses an Atlassian OAuth 2.0 (3LO) app. It does not accept customer AP
    - local: `http://localhost:3000/api/integrations/jira/oauth/callback`
    - staging: `https://<staging-host>/api/integrations/jira/oauth/callback`
    - production: `https://<production-host>/api/integrations/jira/oauth/callback`
-3. Grant classic scopes `read:jira-work`, `write:jira-work`, `read:jira-user`, and `manage:jira-webhook`. Enable offline access so rotating refresh tokens are issued.
+3. For the current read-only rollout, grant classic scope `read:jira-work` and enable offline access so rotating refresh tokens are issued. Request `write:jira-work`, `read:jira-user`, and `manage:jira-webhook` only for a separately approved write-enabled rollout.
 4. Keep staging and production app credentials separate.
 
 ## Environment variables
@@ -47,6 +47,6 @@ CRON_SECRET=
 14. Use **Disconnect Jira**. Confirm the remote webhook is removed where Atlassian permits it, queued work is cancelled, the local connection is revoked, and stored credential ciphertext no longer contains usable tokens.
 15. Revoke the Atlassian grant and confirm the UI requires reconnection after the next token refresh.
 
-Existing connections must reconnect once to grant `write:jira-work` and `manage:jira-webhook`. Guided Planning never treats AI output as approval and no AI route can execute an export, resolve a conflict, or apply a webhook-generated preview.
+Steps 7–15 describe a future write-enabled rollout. Do not run them during the current read-only rollout. Existing read-only connections need to reconnect only if a later approved rollout requires additional scopes. Clarivia never treats AI output as approval, and no AI route can execute an export, resolve a conflict, or apply a webhook-generated preview.
 
 The implementation follows Atlassian's current [OAuth 2.0 3LO guidance](https://developer.atlassian.com/cloud/jira/platform/oauth-2-3lo-apps/) and [Jira REST API v3](https://developer.atlassian.com/cloud/jira/platform/rest/v3/).
