@@ -70,7 +70,9 @@ export function jiraAuthorizationUrl(state: string) {
   const params = new URLSearchParams({
     audience: "api.atlassian.com",
     client_id: clientId,
-    scope: "read:jira-work write:jira-work read:jira-user manage:jira-webhook offline_access",
+    scope: process.env.JIRA_WRITE_ENABLED === "true"
+      ? "read:jira-work write:jira-work read:jira-user manage:jira-webhook offline_access"
+      : "read:jira-work offline_access",
     redirect_uri: redirectUri,
     state,
     response_type: "code",
