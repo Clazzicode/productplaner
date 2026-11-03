@@ -7,7 +7,15 @@ async function GETHandler() {
     const environment = environmentIsolation();
     if (!environment.isolated) {
       return Response.json(
-        { status: "unavailable", checks: { database: "unknown", environmentIsolation: "failed" } },
+        {
+          status: "unavailable",
+          checks: { database: "unknown", environmentIsolation: "failed" },
+          isolationIssue: environment.reason?.includes("production Supabase")
+            ? "production-project-reference"
+            : environment.reason?.includes("could not be verified")
+              ? "unverifiable-project-reference"
+              : "project-reference-mismatch",
+        },
         { status: 503, headers: { "cache-control": "no-store" } },
       );
     }
