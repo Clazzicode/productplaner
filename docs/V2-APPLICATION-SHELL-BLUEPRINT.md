@@ -21,7 +21,7 @@ What's being carried forward from the screenshot, and what isn't:
 | Muted colored tags (Enterprise, Upsell, Renewal…) | Already close to what exists: `ui/Badge` already renders light-bg/dark-text chips, not solid bright fills. Extend it with health-semantic variants (green/yellow/orange/red) rather than inventing a new chip component. |
 | Compact rows, small avatars, inline metadata | Carried forward as the target density for future table pages — explicitly avoiding today's card-heavy, generously-spaced list style for anything list-shaped. |
 | Top bar: workspace switcher, search, notification bell, avatar | Architecture for a `TopHeader` that can hold title/breadcrumbs/search/notifications/org-context/avatar/primary-action — **no search or notification functionality built**, slots only. |
-| "Sales CRM / Company pipeline" product identity block | Temporary neutral identity already supported by the codebase: reuse the existing "GUIDED PLANNING" wordmark treatment from `LeftNav.tsx` (indigo, uppercase, small-caps) rather than inventing new permanent branding. |
+| "Sales CRM / Company pipeline" product identity block | Use the Clarivia wordmark in the existing indigo, uppercase, small-caps treatment from `LeftNav.tsx`. |
 | Nearly-black overall app | **Explicitly rejected** — only navigation/chrome is dark; the main workspace surface stays a light neutral so dense tables and forms stay readable, per the user's own instruction. |
 
 ---

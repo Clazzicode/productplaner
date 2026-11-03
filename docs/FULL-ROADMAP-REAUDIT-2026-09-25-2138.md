@@ -1,4 +1,4 @@
-# Guided Planning - Full Roadmap Re-audit
+# Clarivia - Full Roadmap Re-audit
 
 Date: September 25, 2026, 9:38 PM EDT (America/New_York, UTC-04:00)
 

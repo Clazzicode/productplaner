@@ -36,6 +36,12 @@ export interface JiraIssueSnapshot {
 
 type Fetcher = typeof fetch;
 
+function assertJiraWritesEnabled() {
+  if (process.env.JIRA_WRITE_ENABLED !== "true") {
+    throw new Error("Jira write operations are disabled for this deployment.");
+  }
+}
+
 function config() {
   const clientId = process.env.JIRA_CLIENT_ID?.trim();
   const clientSecret = process.env.JIRA_CLIENT_SECRET?.trim();
@@ -64,7 +70,9 @@ export function jiraAuthorizationUrl(state: string) {
   const params = new URLSearchParams({
     audience: "api.atlassian.com",
     client_id: clientId,
-    scope: "read:jira-work write:jira-work read:jira-user manage:jira-webhook offline_access",
+    scope: process.env.JIRA_WRITE_ENABLED === "true"
+      ? "read:jira-work write:jira-work read:jira-user manage:jira-webhook offline_access"
+      : "read:jira-work offline_access",
     redirect_uri: redirectUri,
     state,
     response_type: "code",
@@ -189,6 +197,7 @@ export async function getJiraIssue(input: { cloudId: string; accessToken: string
 }
 
 export async function createJiraIssue(input: { cloudId: string; accessToken: string; fields: Record<string, unknown> }, fetcher: Fetcher = fetch) {
+  assertJiraWritesEnabled();
   const payload = object(await jiraApi(input.cloudId, input.accessToken, "/rest/api/3/issue", { method: "POST", body: JSON.stringify({ fields: input.fields }) }, fetcher));
   const id = text(payload.id); const key = text(payload.key);
   if (!id || !key) throw new Error("Jira created the issue but did not return its identity.");
@@ -196,10 +205,12 @@ export async function createJiraIssue(input: { cloudId: string; accessToken: str
 }
 
 export async function updateJiraIssue(input: { cloudId: string; accessToken: string; issueIdOrKey: string; fields: Record<string, unknown> }, fetcher: Fetcher = fetch) {
+  assertJiraWritesEnabled();
   await jiraApi(input.cloudId, input.accessToken, `/rest/api/3/issue/${encodeURIComponent(input.issueIdOrKey)}`, { method: "PUT", body: JSON.stringify({ fields: input.fields }) }, fetcher);
 }
 
 export async function registerJiraWebhook(input: { cloudId: string; accessToken: string; callbackUrl: string; projectKey: string }, fetcher: Fetcher = fetch) {
+  assertJiraWritesEnabled();
   const payload = object(await jiraApi(input.cloudId, input.accessToken, "/rest/api/3/webhook", { method: "POST", body: JSON.stringify({ url: input.callbackUrl, webhooks: [{ events: ["jira:issue_created", "jira:issue_updated", "jira:issue_deleted"], jqlFilter: `project = \"${input.projectKey.replaceAll('"', '\\"')}\"` }] }) }, fetcher));
   const rows = Array.isArray(payload.webhookRegistrationResult) ? payload.webhookRegistrationResult.map(object) : [];
   const id = rows.map((row) => number(row.createdWebhookId)).find((value): value is number => value !== null);
@@ -208,6 +219,7 @@ export async function registerJiraWebhook(input: { cloudId: string; accessToken:
 }
 
 export async function refreshJiraWebhook(input: { cloudId: string; accessToken: string; webhookId: string }, fetcher: Fetcher = fetch) {
+  assertJiraWritesEnabled();
   const payload = object(await jiraApi(input.cloudId, input.accessToken, "/rest/api/3/webhook/refresh", { method: "PUT", body: JSON.stringify({ webhookIds: [Number(input.webhookId)] }) }, fetcher));
   const expiration = text(payload.expirationDate);
   if (!expiration || Number.isNaN(new Date(expiration).getTime())) throw new Error("Jira did not return the renewed webhook expiration.");
@@ -215,6 +227,7 @@ export async function refreshJiraWebhook(input: { cloudId: string; accessToken: 
 }
 
 export async function deleteJiraWebhooks(input: { cloudId: string; accessToken: string; webhookIds: string[] }, fetcher: Fetcher = fetch) {
+  assertJiraWritesEnabled();
   const webhookIds = input.webhookIds.map(Number).filter(Number.isFinite);
   if (!webhookIds.length) return;
   await jiraApi(input.cloudId, input.accessToken, "/rest/api/3/webhook", { method: "DELETE", body: JSON.stringify({ webhookIds }) }, fetcher);

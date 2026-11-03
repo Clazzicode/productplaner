@@ -52,7 +52,7 @@ export default function AppShell(props: {
     return props.children;
   }
 
-  const currentName = currentInitiative?.name ?? "Guided Planning";
+  const currentName = currentInitiative?.name ?? "Clarivia";
 
   const switchInitiative = (id: string) => {
     const target = props.initiatives.find((i) => i.id === id);

@@ -1,4 +1,4 @@
-# Guided Planning Post Merge Reassessment
+# Clarivia Post Merge Reassessment
 
 Date: September 25, 2026
 

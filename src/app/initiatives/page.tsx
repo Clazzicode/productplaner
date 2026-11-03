@@ -53,7 +53,7 @@ export default async function InitiativesPage() {
   return (
     <ContainedLayout>
       <PageHeader
-        eyebrow="Guided Product Planning Platform"
+        eyebrow="Clarivia"
         title="Your initiatives"
         description="Plan structural status at a glance. Live plan-health against delivery actuals arrives with the v1.1 living-plan release."
         primaryAction={
@@ -71,7 +71,7 @@ export default async function InitiativesPage() {
         <div className="mt-12 rounded-2xl border border-dashed border-neutral-300 bg-white p-12 text-center">
           <h2 className="text-lg font-semibold">No initiatives yet</h2>
           <p className="mx-auto mt-2 max-w-md text-sm text-neutral-500">
-            Create one, answer the eight guided planning questions, and get a working
+            Create one, answer the eight planning questions, and get a working
             prototype of a complete product plan — roadmap to stories for PO review.
           </p>
           <Link

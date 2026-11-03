@@ -21,7 +21,7 @@ export const jiraProjectSchema = z.object({
   priorityMappings: z.record(z.string(), z.enum(["critical", "high", "medium", "low"])).default({}),
 });
 
-export const jiraImportPreviewSchema = z.object({ connectionId: z.string().trim().min(1) });
+export const jiraImportPreviewSchema = z.object({ connectionId: z.string().trim().min(1), idempotencyKey: z.string().uuid().optional() });
 
 export const jiraImportApplySchema = z.object({
   expectedStatus: z.literal("previewed"),

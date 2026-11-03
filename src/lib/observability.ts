@@ -21,19 +21,19 @@ export function serverLog(event: string, fields: { status?: number; durationMs?:
   else console.log(payload);
 }
 
-export function withApi<T extends unknown[]>(handler: (...args: T) => Promise<Response>, options?: { diagnostic?: boolean }) {
+export function withApi<T extends unknown[]>(handler: (...args: T) => Promise<Response>, options?: { diagnostic?: boolean; forgeRemote?: boolean }) {
   return async (...args: T): Promise<Response> => context.run({ requestId: randomUUID() }, async () => {
     const started = Date.now();
     try {
       if (!options?.diagnostic) assertEnvironmentIsolation();
       const request = args[0] instanceof Request ? args[0] : null;
-      if (request) {
-        if (!["GET", "HEAD", "OPTIONS"].includes(request.method)) {
+      if (request && !["GET", "HEAD", "OPTIONS"].includes(request.method)) {
           const origin = request.headers.get("origin");
-          if (origin && origin !== new URL(request.url).origin) {
+          const pathname = new URL(request.url).pathname;
+          const forgeRemoteRoute = options?.forgeRemote === true && pathname.startsWith("/api/atlassian/forge/");
+          if (origin && origin !== new URL(request.url).origin && !forgeRemoteRoute) {
             return Response.json({ error: "Cross-origin mutation rejected." }, { status: 403 });
           }
-        }
         const policy = rateLimitPolicyFor(request);
         if (policy) {
           const result = await checkRateLimit(request, policy);

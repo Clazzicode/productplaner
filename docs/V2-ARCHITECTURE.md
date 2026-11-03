@@ -8,7 +8,7 @@ file is the source of truth that future phases will implement against, one phase
 
 ## 1. Purpose
 
-Prototype 2 builds on the existing Guided Product Planning Platform (Prototype 1) by adding an
+Prototype 2 builds on the existing Clarivia platform (Prototype 1) by adding an
 organizational layer around it: user access levels, working-role-driven experience defaults, an
 organization admin surface, and (eventually) a platform-wide super admin console. The planning
 engine itself — intake, generation, roadmap, features/epics/stories, sprints/releases, capacity,

@@ -1,4 +1,4 @@
-# Guided Planning - full roadmap audit
+# Clarivia - full roadmap audit
 
 Date: September 25, 2026
 

@@ -1,0 +1,145 @@
+name: Apply Prisma migrations to staging
+
+on:
+  pull_request:
+    branches:
+      - master
+    types:
+      - labeled
+      - synchronize
+  workflow_dispatch:
+    inputs:
+      confirm_staging:
+        description: Confirm the target is the independent staging Supabase project
+        required: true
+        type: choice
+        options:
+          - staging
+
+permissions:
+  contents: read
+
+concurrency:
+  group: staging-prisma-migrations
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    if: >-
+      ${{ (github.event_name == 'workflow_dispatch' && inputs.confirm_staging == 'staging') ||
+      (github.event_name == 'pull_request' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      contains(github.event.pull_request.labels.*.name, 'run-staging-migration')) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: staging
+    env:
+      APP_ENVIRONMENT: staging
+      NEXT_PUBLIC_SUPABASE_URL: https://${{ secrets.STAGING_SUPABASE_PROJECT_REF }}.supabase.co
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ci-placeholder
+      DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
+      DIRECT_URL: ${{ secrets.STAGING_DIRECT_URL }}
+      STAGING_APP_RW_PASSWORD: ${{ secrets.STAGING_APP_RW_PASSWORD }}
+      STAGING_SUPABASE_PROJECT_REF: ${{ secrets.STAGING_SUPABASE_PROJECT_REF }}
+    steps:
+      - name: Probe staging Postgres without migrations
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import os
+          import shutil
+          import subprocess
+          import sys
+          from urllib.parse import unquote, urlsplit
+          
+          def fail(message):
+              print("Staging connection probe: " + message)
+              sys.exit(1)
+          
+          uri = os.environ.get("DIRECT_URL", "")
+          ref = os.environ.get("STAGING_SUPABASE_PROJECT_REF", "")
+          if not uri:
+              fail("STAGING_DIRECT_URL is empty.")
+          if uri != uri.strip():
+              fail("Remove leading or trailing whitespace from STAGING_DIRECT_URL.")
+          if uri[0] in ("'", '"'):
+              fail("Remove surrounding quote marks from STAGING_DIRECT_URL.")
+          try:
+              parsed = urlsplit(uri)
+              host = parsed.hostname or ""
+              port = parsed.port
+              user = unquote(parsed.username or "")
+              password = unquote(parsed.password or "")
+          except ValueError:
+              fail("STAGING_DIRECT_URL is not a valid PostgreSQL URI.")
+          if parsed.scheme not in ("postgres", "postgresql"):
+              fail("STAGING_DIRECT_URL must start with postgresql://.")
+          if parsed.fragment:
+              fail("The URI has a fragment; percent-encode special characters in the password.")
+          if host == "db." + ref + ".supabase.co":
+              expected_user = "postgres"
+          elif host.endswith(".pooler.supabase.com"):
+              expected_user = "postgres." + ref
+          else:
+              fail("The database host is not the configured staging project or a Supabase pooler.")
+          if user != expected_user:
+              fail("The database username does not match the staging postgres role.")
+          if port != 5432:
+              fail("Use port 5432 for the staging migration connection.")
+          if parsed.path != "/postgres":
+              fail("The database name must be postgres.")
+          if not password or password == "[YOUR-PASSWORD]":
+              fail("The staging database password is missing or still a placeholder.")
+          print("Staging URI format and project binding passed.")
+          if not shutil.which("psql"):
+              fail("PostgreSQL client is unavailable on this runner.")
+          env = os.environ.copy()
+          env.pop("DIRECT_URL", None)
+          env.update(PGHOST=host, PGPORT=str(port), PGUSER=user,
+                     PGPASSWORD=password, PGDATABASE="postgres",
+                     PGSSLMODE="require", PGCONNECT_TIMEOUT="10")
+          try:
+              result = subprocess.run(
+                  ["psql", "-X", "-A", "-t", "-v", "ON_ERROR_STOP=1",
+                   "-c", "SELECT current_database() = 'postgres' AND current_user = 'postgres'"],
+                  env=env, capture_output=True, text=True, timeout=25
+              )
+          except subprocess.TimeoutExpired:
+              fail("PostgreSQL connection timed out.")
+          if result.returncode:
+              error = result.stderr.lower()
+              if "password authentication failed" in error or "sasl" in error:
+                  fail("PostgreSQL rejected the staging database password.")
+              if "could not translate host name" in error:
+                  fail("The staging database hostname could not be resolved.")
+              if "timeout" in error:
+                  fail("The staging database connection timed out.")
+              fail("PostgreSQL connection failed; verify the staging URI and database availability.")
+          if result.stdout.strip() != "t":
+              fail("Connected, but the database or role was not the expected staging postgres identity.")
+          print("Staging postgres login and read-only SELECT passed.")
+          PY
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - name: Prepare the staging application connection
+        run: node scripts/prepare-staging-database-url.mjs
+      - name: Validate migration inputs and staging target
+        run: |
+          npm run schema:validate
+          node scripts/verify-staging-database.mjs --preflight
+      - name: Run application quality checks
+        run: |
+          npm run typecheck
+          env -u APP_ENVIRONMENT -u DATABASE_URL -u DIRECT_URL -u NEXT_PUBLIC_SUPABASE_URL npm test
+      - name: Apply the checked-in Prisma migration chain
+        run: npx prisma migrate deploy
+      - name: Configure the non-bypassing app database role
+        run: node scripts/set-staging-app-role-password.mjs
+      - name: Verify migration status
+        run: npx prisma migrate status
+      - name: Verify staging role, schema, and RLS
+        run: node scripts/verify-staging-database.mjs
