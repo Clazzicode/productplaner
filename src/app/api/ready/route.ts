@@ -26,7 +26,11 @@ async function GETHandler() {
                 }
               })(),
           isolationInputs: {
-            database: environment.databaseProjectRef === "qbogvclmehvrtuwiktos" ? "staging" : "other",
+            database: environment.databaseProjectRef === null
+              ? "unverifiable"
+              : environment.databaseProjectRef === "qbogvclmehvrtuwiktos"
+                ? "staging"
+                : "other-project",
             publicUrl: (() => {
               try {
                 return new URL(process.env.NEXT_PUBLIC_SUPABASE_URL ?? "").hostname === "qbogvclmehvrtuwiktos.supabase.co"
@@ -39,9 +43,9 @@ async function GETHandler() {
             directUrlPresent: Boolean(process.env.DIRECT_URL),
             productionRefOverridePresent: Boolean(process.env.PRODUCTION_SUPABASE_PROJECT_REF),
           },
-          isolationIssue: environment.reason?.includes("production Supabase")
+          isolationIssue: environment.reason === "Non-production deployment is connected to the production Supabase project."
             ? "production-project-reference"
-            : environment.reason?.includes("could not be verified")
+            : environment.reason === "Non-production Supabase connection could not be verified."
               ? "unverifiable-project-reference"
               : "project-reference-mismatch",
         },
