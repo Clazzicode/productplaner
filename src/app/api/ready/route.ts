@@ -10,7 +10,13 @@ async function GETHandler() {
         {
           status: "unavailable",
           checks: { database: "unknown", environmentIsolation: "failed" },
-          isolationSource: environment.databaseProjectRef === "hzsrdpbdbfqaicropsha" ? "database-url" : "public-or-direct-url",
+          isolationSource: environment.databaseProjectRef === "hzsrdpbdbfqaicropsha"
+            ? "database-url"
+            : process.env.NEXT_PUBLIC_SUPABASE_URL === "https://hzsrdpbdbfqaicropsha.supabase.co"
+              ? "public-supabase-url"
+              : process.env.DIRECT_URL
+                ? "direct-url"
+                : "other-configuration",
           isolationIssue: environment.reason?.includes("production Supabase")
             ? "production-project-reference"
             : environment.reason?.includes("could not be verified")
