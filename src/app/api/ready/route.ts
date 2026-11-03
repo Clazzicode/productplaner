@@ -6,49 +6,13 @@ async function GETHandler() {
   try {
     const environment = environmentIsolation();
     if (!environment.isolated) {
+      const isolationIssue = environment.reason === "Non-production deployment is connected to the production Supabase project."
+        ? "production-project-reference"
+        : environment.reason === "Non-production Supabase connection could not be verified."
+          ? "unverifiable-project-reference"
+          : "project-reference-mismatch";
       return Response.json(
-        {
-          status: "unavailable",
-          checks: { database: "unknown", environmentIsolation: "failed" },
-          isolationSource: environment.databaseProjectRef === "hzsrdpbdbfqaicropsha"
-            ? "database-url"
-            : (() => {
-                try {
-                  return new URL(process.env.NEXT_PUBLIC_SUPABASE_URL ?? "").hostname === "hzsrdpbdbfqaicropsha.supabase.co"
-                    ? "public-supabase-url"
-                    : process.env.DIRECT_URL
-                      ? "direct-url"
-                      : process.env.PRODUCTION_SUPABASE_PROJECT_REF
-                        ? "production-ref-override"
-                        : "other-configuration";
-                } catch {
-                  return "public-supabase-url-unverifiable";
-                }
-              })(),
-          isolationInputs: {
-            database: environment.databaseProjectRef === null
-              ? "unverifiable"
-              : environment.databaseProjectRef === "qbogvclmehvrtuwiktos"
-                ? "staging"
-                : "other-project",
-            publicUrl: (() => {
-              try {
-                return new URL(process.env.NEXT_PUBLIC_SUPABASE_URL ?? "").hostname === "qbogvclmehvrtuwiktos.supabase.co"
-                  ? "staging"
-                  : "other";
-              } catch {
-                return "unverifiable";
-              }
-            })(),
-            directUrlPresent: Boolean(process.env.DIRECT_URL),
-            productionRefOverridePresent: Boolean(process.env.PRODUCTION_SUPABASE_PROJECT_REF),
-          },
-          isolationIssue: environment.reason === "Non-production deployment is connected to the production Supabase project."
-            ? "production-project-reference"
-            : environment.reason === "Non-production Supabase connection could not be verified."
-              ? "unverifiable-project-reference"
-              : "project-reference-mismatch",
-        },
+        { status: "unavailable", checks: { database: "unknown", environmentIsolation: "failed" }, isolationIssue },
         { status: 503, headers: { "cache-control": "no-store" } },
       );
     }
