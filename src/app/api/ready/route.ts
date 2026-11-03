@@ -10,6 +10,7 @@ async function GETHandler() {
         {
           status: "unavailable",
           checks: { database: "unknown", environmentIsolation: "failed" },
+          isolationSource: environment.databaseProjectRef === "hzsrdpbdbfqaicropsha" ? "database-url" : "public-or-direct-url",
           isolationIssue: environment.reason?.includes("production Supabase")
             ? "production-project-reference"
             : environment.reason?.includes("could not be verified")
