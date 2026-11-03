@@ -12,11 +12,33 @@ async function GETHandler() {
           checks: { database: "unknown", environmentIsolation: "failed" },
           isolationSource: environment.databaseProjectRef === "hzsrdpbdbfqaicropsha"
             ? "database-url"
-            : process.env.NEXT_PUBLIC_SUPABASE_URL?.includes("hzsrdpbdbfqaicropsha")
-              ? "public-supabase-url"
-              : process.env.DIRECT_URL
-                ? "direct-url"
-                : "other-configuration",
+            : (() => {
+                try {
+                  return new URL(process.env.NEXT_PUBLIC_SUPABASE_URL ?? "").hostname === "hzsrdpbdbfqaicropsha.supabase.co"
+                    ? "public-supabase-url"
+                    : process.env.DIRECT_URL
+                      ? "direct-url"
+                      : process.env.PRODUCTION_SUPABASE_PROJECT_REF
+                        ? "production-ref-override"
+                        : "other-configuration";
+                } catch {
+                  return "public-supabase-url-unverifiable";
+                }
+              })(),
+          isolationInputs: {
+            database: environment.databaseProjectRef === "qbogvclmehvrtuwiktos" ? "staging" : "other",
+            publicUrl: (() => {
+              try {
+                return new URL(process.env.NEXT_PUBLIC_SUPABASE_URL ?? "").hostname === "qbogvclmehvrtuwiktos.supabase.co"
+                  ? "staging"
+                  : "other";
+              } catch {
+                return "unverifiable";
+              }
+            })(),
+            directUrlPresent: Boolean(process.env.DIRECT_URL),
+            productionRefOverridePresent: Boolean(process.env.PRODUCTION_SUPABASE_PROJECT_REF),
+          },
           isolationIssue: environment.reason?.includes("production Supabase")
             ? "production-project-reference"
             : environment.reason?.includes("could not be verified")
