@@ -12,7 +12,7 @@ async function GETHandler() {
           checks: { database: "unknown", environmentIsolation: "failed" },
           isolationSource: environment.databaseProjectRef === "hzsrdpbdbfqaicropsha"
             ? "database-url"
-            : process.env.NEXT_PUBLIC_SUPABASE_URL === "https://hzsrdpbdbfqaicropsha.supabase.co"
+            : process.env.NEXT_PUBLIC_SUPABASE_URL?.includes("hzsrdpbdbfqaicropsha")
               ? "public-supabase-url"
               : process.env.DIRECT_URL
                 ? "direct-url"
