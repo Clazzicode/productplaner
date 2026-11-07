@@ -78,7 +78,8 @@ async function GETHandler(request: Request) {
     const resourceMetadata = resources.map(({ id, name, url, scopes }) => ({ id, name, url, scopes }));
     const tokenCiphertext = encryptAtlassianTokens(actor.organizationId, tokens);
     const accessTokenExpiresAt = new Date(Date.now() + tokens.expiresIn * 1000);
-    const jiraConnectionId = randomUUID();
+    let jiraConnectionId: string = randomUUID();
+    let reconnected = false;
     await withTransaction(async (tx) => {
       await tx.$executeRaw`
         INSERT INTO app_private."AtlassianOAuthConnection" (
@@ -98,25 +99,67 @@ async function GETHandler(request: Request) {
           "connectedAt" = now(),
           "updatedAt" = now()
       `;
+      // The private grant is workspace-wide. Connections to sites omitted from
+      // the new resource-level grant must fail closed instead of trying its token.
       await tx.jiraConnection.updateMany({
+        where: { organizationId: actor.organizationId, status: { not: "revoked" }, cloudId: { notIn: resources.map((resource) => resource.id) } },
+        data: { status: "reauthorization_required", revision: { increment: 1 } },
+      });
+
+      const activeConnections = await tx.jiraConnection.findMany({
         where: { organizationId: actor.organizationId, initiativeId: pending[0].initiativeId, status: { not: "revoked" } },
-        data: { status: "revoked", accessTokenCiphertext: `vault-reference:${actor.organizationId}`, refreshTokenCiphertext: `vault-reference:${actor.organizationId}`, tokenExpiresAt: new Date(), revision: { increment: 1 } },
+        orderBy: { createdAt: "desc" },
       });
-      await tx.jiraConnection.create({
-        data: {
-          id: jiraConnectionId,
-          organizationId: actor.organizationId,
-          initiativeId: pending[0].initiativeId,
-          configuredByUserId: actor.id,
-          status: resources.length === 1 ? "project_selection_required" : "site_selection_required",
-          ...(resources.length === 1 ? { cloudId: resources[0].id, siteUrl: resources[0].url, siteName: resources[0].name } : {}),
-          accessTokenCiphertext: `vault-reference:${actor.organizationId}`,
-          refreshTokenCiphertext: `vault-reference:${actor.organizationId}`,
-          tokenExpiresAt: accessTokenExpiresAt,
-          scopes: tokens.scopes.join(" "),
-          accessibleResources: resourceMetadata,
-        },
-      });
+      const existing = activeConnections.find((connection) => connection.cloudId && resources.some((resource) => resource.id === connection.cloudId))
+        ?? activeConnections.find((connection) => !connection.cloudId);
+      const supersededIds = activeConnections.filter((connection) => connection.id !== existing?.id).map((connection) => connection.id);
+      if (supersededIds.length) {
+        await tx.jiraConnection.updateMany({
+          where: { id: { in: supersededIds } },
+          data: { status: "revoked", accessTokenCiphertext: `vault-reference:${actor.organizationId}`, refreshTokenCiphertext: `vault-reference:${actor.organizationId}`, tokenExpiresAt: new Date(), revision: { increment: 1 } },
+        });
+      }
+
+      if (existing) {
+        const selectedResource = resources.find((resource) => resource.id === existing.cloudId)
+          ?? (resources.length === 1 ? resources[0] : null);
+        const keepProject = selectedResource?.id === existing.cloudId && Boolean(existing.projectId && existing.projectKey);
+        jiraConnectionId = existing.id;
+        reconnected = true;
+        await tx.jiraConnection.update({
+          where: { id: existing.id },
+          data: {
+            configuredByUserId: actor.id,
+            status: keepProject ? "connected" : selectedResource ? "project_selection_required" : "site_selection_required",
+            cloudId: selectedResource?.id ?? null,
+            siteUrl: selectedResource?.url ?? null,
+            siteName: selectedResource?.name ?? null,
+            ...(keepProject ? {} : { projectId: null, projectKey: null, projectName: null, issueTypeMappings: {}, fieldMappings: {} }),
+            accessTokenCiphertext: `vault-reference:${actor.organizationId}`,
+            refreshTokenCiphertext: `vault-reference:${actor.organizationId}`,
+            tokenExpiresAt: accessTokenExpiresAt,
+            scopes: tokens.scopes.join(" "),
+            accessibleResources: resourceMetadata,
+            revision: { increment: 1 },
+          },
+        });
+      } else {
+        await tx.jiraConnection.create({
+          data: {
+            id: jiraConnectionId,
+            organizationId: actor.organizationId,
+            initiativeId: pending[0].initiativeId,
+            configuredByUserId: actor.id,
+            status: resources.length === 1 ? "project_selection_required" : "site_selection_required",
+            ...(resources.length === 1 ? { cloudId: resources[0].id, siteUrl: resources[0].url, siteName: resources[0].name } : {}),
+            accessTokenCiphertext: `vault-reference:${actor.organizationId}`,
+            refreshTokenCiphertext: `vault-reference:${actor.organizationId}`,
+            tokenExpiresAt: accessTokenExpiresAt,
+            scopes: tokens.scopes.join(" "),
+            accessibleResources: resourceMetadata,
+          },
+        });
+      }
       await tx.auditEvent.create({
         data: {
           id: randomUUID(),
@@ -124,13 +167,13 @@ async function GETHandler(request: Request) {
           actorUserId: actor.id,
           entityType: "integration",
           entityId: jiraConnectionId,
-          action: "atlassian.oauth.connected",
+          action: reconnected ? "atlassian.oauth.reconnected" : "atlassian.oauth.connected",
           metadata: { siteCount: resourceMetadata.length, scopes: tokens.scopes, initiativeId: pending[0].initiativeId },
           requestId: currentRequestId(),
         },
       });
     });
-    return resultRedirect(returnOrigin, "connected", returnPath, jiraConnectionId);
+    return resultRedirect(returnOrigin, reconnected ? "reconnected" : "connected", returnPath, jiraConnectionId);
   } catch (error) {
     if (error instanceof AtlassianOAuthError && error.code === "TOKEN_ENCRYPTION_NOT_CONFIGURED") {
       return resultRedirect(returnOrigin, "setup_required", returnPath);

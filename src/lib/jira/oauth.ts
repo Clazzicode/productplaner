@@ -126,7 +126,15 @@ export async function disconnectJira(connectionId: string, actorUserId: string) 
       await db.$executeRaw`DELETE FROM app_private."AtlassianOAuthConnection" WHERE "organizationId" = ${current.organizationId}`;
     }
     await auditOrganization({ organizationId: current.organizationId, actorUserId, entityType: "jira_connection", entityId: current.id, action: "jira.disconnected", metadata: { initiativeId: current.initiativeId, remoteWebhookRemoved: !remoteWebhookWarning, remoteWebhookWarning } });
-    await db.$queryRaw`SELECT app_private.purge_jira_source_data(${connectionId})`;
+    // Earlier reconnects could leave source caches on hidden revoked rows for
+    // the same initiative. Disconnect must erase those caches too.
+    const revokedConnections = await db.jiraConnection.findMany({
+      where: { organizationId: current.organizationId, initiativeId: current.initiativeId, status: "revoked" },
+      select: { id: true },
+    });
+    for (const connection of revokedConnections) {
+      await db.$queryRaw`SELECT app_private.purge_jira_source_data(${connection.id})`;
+    }
     return revoked;
   });
   await mirrorHubConnection(saved);
