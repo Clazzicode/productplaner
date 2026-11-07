@@ -39,16 +39,17 @@ function approvalHash(items: { id: string; targetFingerprint: string; requestPay
 }
 
 export async function loadJiraExport(runId: string) {
-  const run = await db.jiraExportRun.findUnique({ where: { id: runId } });
+  const run = await db.jiraExportRun.findUnique({ where: { id: runId }, select: { id: true, connectionId: true, status: true, itemCount: true, createCount: true, updateCount: true, conflictCount: true, unchangedCount: true, executedAt: true, createdAt: true, updatedAt: true } });
   if (!run) return null;
   const [items, approval] = await Promise.all([
-    db.jiraExportItem.findMany({ where: { exportRunId: run.id }, orderBy: [{ action: "asc" }, { summary: "asc" }] }),
-    db.jiraExportApproval.findUnique({ where: { exportRunId: run.id } }),
+    db.jiraExportItem.findMany({ where: { exportRunId: run.id }, orderBy: [{ action: "asc" }, { summary: "asc" }], select: { id: true, externalKey: true, targetType: true, summary: true, action: true, conflictReason: true, selected: true, status: true, failureMessage: true, createdAt: true, updatedAt: true } }),
+    db.jiraExportApproval.findUnique({ where: { exportRunId: run.id }, select: { id: true, approvedAt: true, approvedByUserId: true } }),
   ]);
   return { ...run, items, approval };
 }
 
 export async function previewJiraExport(connectionId: string, actorUserId: string) {
+  if (process.env.JIRA_WRITE_ENABLED !== "true") throw new BusinessError("Jira exports are disabled while this connection is read-only.", 403);
   const { connection, accessToken } = await accessTokenFor(connectionId);
   if (connection.status !== "connected" || !connection.initiativeId || !connection.cloudId || !connection.projectId) throw new BusinessError("Finish selecting a Jira site, project, and initiative before exporting.", 422);
   if (!connection.scopes.split(/\s+/).includes("write:jira-work")) throw new BusinessError("Reconnect Jira and grant write access before creating an export preview.", 422);
@@ -84,7 +85,7 @@ export async function previewJiraExport(connectionId: string, actorUserId: strin
     for (const item of conflictItems) {
       const evidence = conflictEvidence.get(item.targetId);
       if (!evidence) continue;
-      await recordJiraConflict({ link: evidence.link, jiraSnapshot: evidence.snapshot, jiraFingerprint: evidence.jiraFingerprint, planningFingerprint: item.targetFingerprint, exportItemId: item.id, explanation: item.conflictReason ?? "Jira and Guided Planning changed since the last synchronization." });
+      await recordJiraConflict({ link: evidence.link, jiraSnapshot: evidence.snapshot, jiraFingerprint: evidence.jiraFingerprint, planningFingerprint: item.targetFingerprint, exportItemId: item.id, explanation: item.conflictReason ?? "Jira and Clarivia changed since the last synchronization." });
     }
     await auditInitiative(connection.initiativeId!, "jira.export_previewed", { jiraExportRunId: run.id, jiraConnectionId: connection.id, itemCount: items.length, createCount: run.createCount, updateCount: run.updateCount, conflictCount: run.conflictCount });
     return loadJiraExport(run.id);
@@ -92,6 +93,7 @@ export async function previewJiraExport(connectionId: string, actorUserId: strin
 }
 
 export async function approveJiraExport(runId: string, selectedItemIds: string[], reason: string, actorUserId: string) {
+  if (process.env.JIRA_WRITE_ENABLED !== "true") throw new BusinessError("Jira exports are disabled while this connection is read-only.", 403);
   return withTransaction(async () => {
     const run = await db.jiraExportRun.findUnique({ where: { id: runId } });
     if (!run) throw new BusinessError("Jira export preview not found.", 404);
@@ -130,11 +132,12 @@ async function executeItem(item: Awaited<ReturnType<typeof db.jiraExportItem.fin
   const saved = await getJiraIssue({ cloudId: connection.cloudId, accessToken, issueIdOrKey: identity.id });
   const snapshot = sourceSnapshot(saved);
   const sourceHash = fingerprint(snapshot);
-  await db.jiraExternalLink.upsert({ where: { connectionId_targetType_targetId: { connectionId: run.connectionId, targetType: item.targetType, targetId: item.targetId } }, create: { organizationId: run.organizationId, initiativeId: run.initiativeId, connectionId: run.connectionId, externalIssueId: saved.id, externalKey: saved.key, issueTypeName: saved.issueType.name, targetType: item.targetType, targetId: item.targetId, sourceHash, targetFingerprint: item.targetFingerprint, sourceUpdatedAt: saved.updated ? new Date(saved.updated) : null, lastImportedSnapshot: snapshot as unknown as Prisma.InputJsonValue }, update: { externalIssueId: saved.id, externalKey: saved.key, issueTypeName: saved.issueType.name, sourceHash, targetFingerprint: item.targetFingerprint, sourceUpdatedAt: saved.updated ? new Date(saved.updated) : null, lastImportedSnapshot: snapshot as unknown as Prisma.InputJsonValue, lastImportedAt: new Date() } });
+  await db.jiraExternalLink.upsert({ where: { connectionId_targetType_targetId: { connectionId: run.connectionId, targetType: item.targetType, targetId: item.targetId } }, create: { organizationId: run.organizationId, initiativeId: run.initiativeId, connectionId: run.connectionId, externalIssueId: saved.id, externalKey: saved.key, issueTypeName: saved.issueType.name, targetType: item.targetType, targetId: item.targetId, sourceHash, targetFingerprint: item.targetFingerprint, sourceUpdatedAt: saved.updated ? new Date(saved.updated) : null, lastImportedSnapshot: {} }, update: { externalIssueId: saved.id, externalKey: saved.key, issueTypeName: saved.issueType.name, sourceHash, targetFingerprint: item.targetFingerprint, sourceUpdatedAt: saved.updated ? new Date(saved.updated) : null, lastImportedSnapshot: {}, lastImportedAt: new Date() } });
   await db.jiraExportItem.update({ where: { id: item.id }, data: { status: "succeeded", externalIssueId: saved.id, externalKey: saved.key, resultSnapshot: snapshot as unknown as Prisma.InputJsonValue, failureMessage: null } });
 }
 
 export async function executeJiraExportItem(itemId: string) {
+  if (process.env.JIRA_WRITE_ENABLED !== "true") throw new BusinessError("Jira exports are disabled while this connection is read-only.", 403);
   const item = await db.jiraExportItem.findUnique({ where: { id: itemId } });
   if (!item) throw new BusinessError("Jira export item not found.", 404);
   if (item.status === "succeeded") return item;
@@ -161,6 +164,7 @@ export async function finalizeJiraExportRun(runId: string) {
 }
 
 export async function executeJiraExport(runId: string, actorUserId: string) {
+  if (process.env.JIRA_WRITE_ENABLED !== "true") throw new BusinessError("Jira exports are disabled while this connection is read-only.", 403);
   const run = await db.jiraExportRun.findUnique({ where: { id: runId } });
   if (!run) throw new BusinessError("Jira export not found.", 404);
   if (run.status !== "approved") throw new BusinessError("Approve this Jira export before executing it.", 409);

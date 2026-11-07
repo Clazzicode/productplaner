@@ -38,10 +38,16 @@ describe("Atlassian OAuth and Jira REST client", () => {
   it("uses enhanced JQL search and preserves planning fields", async () => {
     const fetcher = vi.fn().mockResolvedValue(new Response(JSON.stringify({ isLast: true, issues: [{ id: "10001", key: "GP-1", fields: { summary: "Login fails", description: { type: "doc", content: [] }, issuetype: { id: "bug", name: "Bug", subtask: false }, status: { id: "open", name: "Open", statusCategory: { key: "new" } }, assignee: { accountId: "acct", displayName: "Avery" }, priority: { id: "1", name: "High" }, labels: ["auth"], parent: { key: "GP-EPIC" }, fixVersions: [{ id: "v1", name: "Release 1", releaseDate: "2026-11-01" }], updated: "2026-10-17T12:00:00.000Z", customfield_10016: 5, customfield_10020: [{ id: 7, name: "Sprint 1" }] } }] }), { status: 200 }));
     const result = await searchJiraIssues({ cloudId: "cloud-a", accessToken: "token", projectKey: "GP" }, fetcher);
-    expect(result.issues[0]).toMatchObject({ key: "GP-1", storyPoints: 5, parentKey: "GP-EPIC", assignee: { displayName: "Avery" }, fixVersions: [{ name: "Release 1" }] });
+    expect(result.issues[0]).toMatchObject({ key: "GP-1", storyPoints: 5, parentKey: "GP-EPIC" });
+    expect(result.issues[0]).not.toHaveProperty("assignee");
+    expect(result.issues[0]).not.toHaveProperty("fixVersions");
+    expect(result.issues[0]).not.toHaveProperty("rawFields");
     expect(fetcher.mock.calls[0][0]).toContain("/rest/api/3/search/jql");
     const body = JSON.parse(String(fetcher.mock.calls[0][1]?.body));
     expect(body.jql).toContain("project = \"GP\"");
+    expect(body.fields).not.toContain("assignee");
+    expect(body.fields).not.toContain("fixVersions");
+    expect(body.fields).not.toContain("customfield_10020");
   });
   it("does not request or infer story points when an administrator disables that mapping", async () => {
     const fetcher = vi.fn().mockResolvedValue(new Response(JSON.stringify({ isLast: true, issues: [{ id: "10001", key: "GP-1", fields: { summary: "Story", issuetype: { id: "1", name: "Story" }, status: { id: "1", name: "To Do", statusCategory: { key: "new" } }, customfield_10016: 8 } }] }), { status: 200 }));
@@ -49,6 +55,11 @@ describe("Atlassian OAuth and Jira REST client", () => {
     const body = JSON.parse(String(fetcher.mock.calls[0][1]?.body));
     expect(body.fields).not.toContain("customfield_10016");
     expect(result.issues[0].storyPoints).toBeNull();
+  });
+  it("reports revoked Jira read access without returning provider details", async () => {
+    const fetcher = vi.fn().mockResolvedValue(new Response(JSON.stringify({ error: "private provider detail" }), { status: 403 }));
+    await expect(searchJiraIssues({ cloudId: "cloud-a", accessToken: "token", projectKey: "GP" }, fetcher)).rejects.toMatchObject({ status: 403, message: expect.stringContaining("Reconnect Atlassian") });
+    expect(fetcher).toHaveBeenCalledTimes(1);
   });
   it("creates and updates Jira issues only through explicit write calls", async () => {
     const fetcher = vi.fn()

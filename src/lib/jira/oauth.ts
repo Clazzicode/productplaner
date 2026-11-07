@@ -120,12 +120,13 @@ export async function disconnectJira(connectionId: string, actorUserId: string) 
   const saved = await withTransaction(async () => {
     await db.jiraWebhookSubscription.updateMany({ where: { connectionId }, data: { status: "disabled" } });
     await db.jiraSyncJob.updateMany({ where: { connectionId, status: { in: ["queued", "processing"] } }, data: { status: "cancelled", lockedAt: null, lockedBy: null, lastError: "Connection disconnected by an administrator." } });
-    const revoked = await db.jiraConnection.update({ where: { id: connectionId }, data: { status: "revoked", accessTokenCiphertext: encryptJiraSecret(randomBytes(32).toString("base64url")), refreshTokenCiphertext: encryptJiraSecret(randomBytes(32).toString("base64url")), tokenExpiresAt: new Date(), revision: { increment: 1 } } });
+    const revoked = await db.jiraConnection.update({ where: { id: connectionId }, data: { status: "revoked", accessTokenCiphertext: encryptJiraSecret(randomBytes(32).toString("base64url")), refreshTokenCiphertext: encryptJiraSecret(randomBytes(32).toString("base64url")), tokenExpiresAt: new Date(), cloudId: null, siteUrl: null, siteName: null, projectId: null, projectKey: null, projectName: null, accessibleResources: [], issueTypeMappings: {}, fieldMappings: {}, revision: { increment: 1 } } });
     const remainingConnections = await db.jiraConnection.count({ where: { organizationId: current.organizationId, status: { not: "revoked" } } });
     if (remainingConnections === 0) {
       await db.$executeRaw`DELETE FROM app_private."AtlassianOAuthConnection" WHERE "organizationId" = ${current.organizationId}`;
     }
     await auditOrganization({ organizationId: current.organizationId, actorUserId, entityType: "jira_connection", entityId: current.id, action: "jira.disconnected", metadata: { initiativeId: current.initiativeId, remoteWebhookRemoved: !remoteWebhookWarning, remoteWebhookWarning } });
+    await db.$queryRaw`SELECT app_private.purge_jira_source_data(${connectionId})`;
     return revoked;
   });
   await mirrorHubConnection(saved);

@@ -94,7 +94,7 @@ export async function processJiraJobs(limit = 10, workerId = `jira-${randomUUID(
       result.completed += 1;
     } catch (error) {
       const message = safeJobError(error);
-      const terminal = error instanceof BusinessError && [404, 409, 422].includes(error.status) || job.attemptCount >= job.maxAttempts;
+      const terminal = error instanceof BusinessError && [401, 403, 404, 409, 422].includes(error.status) || job.attemptCount >= job.maxAttempts;
       const updated = await withTransaction(async () => {
         const changed = await db.jiraSyncJob.updateMany({ where: { id: job.id, status: "processing", lockedBy: workerId, attemptCount: job.attemptCount }, data: terminal ? { status: "failed", lockedAt: null, lockedBy: null, lastError: message } : { status: "queued", availableAt: new Date(Date.now() + Math.min(60 * 60 * 1000, 2 ** job.attemptCount * 30_000)), lockedAt: null, lockedBy: null, lastError: message } });
         if (changed.count === 1) await db.jiraSyncAttempt.createMany({ data: [{ organizationId: job.organizationId, jobId: job.id, attemptNumber: job.attemptCount, status: terminal ? "failed" : "retry_scheduled", errorMessage: message, startedAt, finishedAt: new Date() }], skipDuplicates: true });
@@ -117,7 +117,7 @@ export async function processJiraJobs(limit = 10, workerId = `jira-${randomUUID(
         await db.jiraWebhookSubscription.updateMany({ where: { connectionId: job.connectionId, status: { not: "disabled" } }, data: { status: "renewal_required" } });
       }
       if (job.jobType === "import_preview" || job.jobType === "webhook_import") {
-        await db.jiraConnection.update({ where: { id: job.connectionId }, data: { lastSyncAt: new Date(), lastSyncStatus: "read_failed" } });
+        await db.jiraConnection.update({ where: { id: job.connectionId }, data: { lastSyncAt: new Date(), lastSyncStatus: "read_failed", ...(error instanceof BusinessError && [401, 403].includes(error.status) ? { status: "reauthorization_required", revision: { increment: 1 } } : {}) } });
         await auditInitiative(job.initiativeId, "jira.import_read_failed", { jiraJobId: job.id, jiraConnectionId: job.connectionId, workspaceId: job.organizationId, attempt: job.attemptCount, terminal, occurredAt: new Date().toISOString() });
       }
       if (terminal) result.failed += 1; else result.retried += 1;

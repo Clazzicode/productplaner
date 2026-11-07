@@ -535,6 +535,18 @@ describe.sequential("migration replay and real PostgreSQL RLS", () => {
     expect((await pg.query<{ status: string }>(`SELECT status FROM "JiraSyncJob" WHERE id='jira-read-a'`)).rows[0].status).toBe("failed");
   });
 
+  it("purges cached Jira data only after an administrator disconnects their own workspace", async () => {
+    await expect(asUser(authA, () => pg.query(`SELECT app_private.purge_jira_source_data('jira-a')`))).rejects.toThrow();
+    await asUser(authA, () => pg.exec(`UPDATE "JiraConnection" SET status='revoked' WHERE id='jira-a'`));
+    await expect(asUser(authB, () => pg.query(`SELECT app_private.purge_jira_source_data('jira-a')`))).rejects.toThrow();
+    await asUser(authA, () => pg.query(`SELECT app_private.purge_jira_source_data('jira-a')`));
+    expect((await pg.query(`SELECT id FROM "JiraImportRun" WHERE "connectionId"='jira-a'`)).rows).toHaveLength(0);
+    expect((await pg.query(`SELECT id FROM "JiraExternalLink" WHERE "connectionId"='jira-a'`)).rows).toHaveLength(0);
+    expect((await pg.query(`SELECT id FROM "JiraWebhookEvent" WHERE "connectionId"='jira-a'`)).rows).toHaveLength(0);
+    expect((await pg.query(`SELECT id FROM "JiraSyncJob" WHERE "connectionId"='jira-a'`)).rows).toHaveLength(0);
+    expect((await pg.query(`SELECT id FROM "JiraExportApproval" WHERE "exportRunId"='jira-export-a'`)).rows).toHaveLength(1);
+  });
+
   it("isolates, claims, and completes durable jobs without duplicate attempts", async () => {
     await asUser(authA, () => pg.exec(`
       INSERT INTO "BackgroundJob" (id,"organizationId","initiatedByUserId","initiatedByAuthUserId",type,payload,"idempotencyKey","updatedAt")

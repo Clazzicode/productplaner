@@ -15,7 +15,7 @@ vi.mock("@/lib/requests/service", () => ({ saveRequest: vi.fn() }));
 vi.mock("../oauth", () => ({ accessTokenFor: vi.fn() }));
 vi.mock("../client", () => ({ searchJiraIssues: vi.fn() }));
 
-import { applyJiraImport, deduplicateJiraIssues, previewJiraImport } from "../import";
+import { applyJiraImport, deduplicateJiraIssues, previewJiraImport, sourceSnapshot } from "../import";
 
 describe("Jira import approval boundary", () => {
   it("never applies a selected conflict automatically", async () => {
@@ -37,6 +37,21 @@ describe("Jira read deduplication", () => {
   it("rejects one external key mapped to two IDs", () => {
     expect(() => deduplicateJiraIssues([issue, { ...issue, id: "101" }])).toThrow(/two issue IDs/);
   });
+});
+
+it("stores only the approved Jira issue fields and plain text description", () => {
+  const issue = {
+    id: "100", key: "ABC-1", summary: "Login fails",
+    description: { type: "doc", content: [{ type: "paragraph", content: [{ type: "text", text: "Error" }] }] },
+    issueType: { id: "bug", name: "Bug", subtask: false },
+    status: { id: "open", name: "Open", category: "new" },
+    priority: null, labels: [], parentKey: null, storyPoints: null, updated: null,
+    assignee: { displayName: "Private person" }, rawFields: { secret: "never store" },
+  };
+  const snapshot = sourceSnapshot(issue);
+  expect(snapshot.description).toBe("Error");
+  expect(snapshot).not.toHaveProperty("assignee");
+  expect(snapshot).not.toHaveProperty("rawFields");
 });
 
 it("reuses the saved preview on a retried job without rereading Jira", async () => {

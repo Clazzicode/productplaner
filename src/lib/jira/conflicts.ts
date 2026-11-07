@@ -43,10 +43,10 @@ export async function resolveJiraConflict(conflictId: string, resolution: "keep_
   if (resolution !== "manual" && (currentPlanning !== conflict.planningFingerprint || currentJira !== conflict.jiraFingerprint)) throw new BusinessError("Jira or the planning record changed again. Create a fresh preview before resolving.", 409);
   return withTransaction(async () => {
     const linkData = resolution === "keep_planning"
-      ? { sourceHash: currentJira, lastImportedSnapshot: remoteSnapshot, sourceUpdatedAt: remote.updated ? new Date(remote.updated) : null }
+      ? { sourceHash: currentJira, lastImportedSnapshot: {}, sourceUpdatedAt: remote.updated ? new Date(remote.updated) : null }
       : resolution === "accept_jira"
         ? { targetFingerprint: currentPlanning }
-        : { sourceHash: currentJira, targetFingerprint: currentPlanning, lastImportedSnapshot: remoteSnapshot, sourceUpdatedAt: remote.updated ? new Date(remote.updated) : null };
+        : { sourceHash: currentJira, targetFingerprint: currentPlanning, lastImportedSnapshot: {}, sourceUpdatedAt: remote.updated ? new Date(remote.updated) : null };
     await db.jiraExternalLink.update({ where: { id: link.id }, data: { ...linkData, lastImportedAt: new Date() } });
     const changed = await db.jiraSyncConflict.updateMany({ where: { id: conflict.id, status: "open" }, data: { status: "resolved", resolution, resolutionReason: reason, resolvedByUserId: actorUserId, resolvedAt: new Date() } });
     if (changed.count !== 1) throw new BusinessError("This Jira conflict changed. Reload and try again.", 409);

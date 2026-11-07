@@ -1,4 +1,5 @@
 import { decryptJiraSecret, encryptJiraSecret } from "./crypto";
+import { BusinessError } from "@/lib/businessError";
 
 export interface JiraTokens {
   accessToken: string;
@@ -23,15 +24,11 @@ export interface JiraIssueSnapshot {
   description: unknown;
   issueType: { id: string; name: string; subtask: boolean };
   status: { id: string; name: string; category: string };
-  assignee: { accountId: string; displayName: string } | null;
   priority: { id: string; name: string } | null;
   labels: string[];
   parentKey: string | null;
   storyPoints: number | null;
-  sprint: unknown;
-  fixVersions: { id: string; name: string; releaseDate: string | null }[];
   updated: string | null;
-  rawFields: Record<string, unknown>;
 }
 
 type Fetcher = typeof fetch;
@@ -122,6 +119,9 @@ async function jiraApi(cloudId: string, accessToken: string, path: string, init:
     ...init,
     headers: { authorization: `Bearer ${accessToken}`, accept: "application/json", ...(init.body ? { "content-type": "application/json" } : {}), ...init.headers },
   });
+  if (response.status === 401 || response.status === 403) {
+    throw new BusinessError("Jira access was revoked or this project is no longer permitted. Reconnect Atlassian or review Jira access.", response.status);
+  }
   return jsonResponse(response);
 }
 
@@ -159,10 +159,8 @@ export function issueSnapshot(value: unknown, storyPointsField: string | null): 
   const issueType = object(fields.issuetype);
   const status = object(fields.status);
   const statusCategory = object(status.statusCategory);
-  const assignee = fields.assignee ? object(fields.assignee) : null;
   const priority = fields.priority ? object(fields.priority) : null;
   const parent = fields.parent ? object(fields.parent) : null;
-  const fixVersions = Array.isArray(fields.fixVersions) ? fields.fixVersions.map((item) => object(item)) : [];
   const id = text(row.id);
   const key = text(row.key);
   if (!id || !key) return null;
@@ -173,23 +171,19 @@ export function issueSnapshot(value: unknown, storyPointsField: string | null): 
     description: fields.description ?? null,
     issueType: { id: text(issueType.id), name: text(issueType.name), subtask: Boolean(issueType.subtask) },
     status: { id: text(status.id), name: text(status.name), category: text(statusCategory.key) },
-    assignee: assignee ? { accountId: text(assignee.accountId), displayName: text(assignee.displayName) } : null,
     priority: priority ? { id: text(priority.id), name: text(priority.name) } : null,
     labels: Array.isArray(fields.labels) ? fields.labels.map(text).filter(Boolean) : [],
     parentKey: parent ? text(parent.key) || null : null,
     storyPoints: storyPointsField ? number(fields[storyPointsField]) : null,
-    sprint: fields.customfield_10020 ?? null,
-    fixVersions: fixVersions.map((version) => ({ id: text(version.id), name: text(version.name), releaseDate: text(version.releaseDate) || null })).filter((version) => version.id),
     updated: text(fields.updated) || null,
-    rawFields: fields,
   };
 }
 
-const ISSUE_FIELDS = ["summary","description","issuetype","status","assignee","priority","labels","parent","fixVersions","updated"];
+const ISSUE_FIELDS = ["summary","description","issuetype","status","priority","labels","parent","updated"];
 
 export async function getJiraIssue(input: { cloudId: string; accessToken: string; issueIdOrKey: string; storyPointsField?: string | null }, fetcher: Fetcher = fetch) {
   const storyPointsField = input.storyPointsField === undefined ? "customfield_10016" : input.storyPointsField;
-  const fields = [...ISSUE_FIELDS, ...(storyPointsField ? [storyPointsField] : []), "customfield_10020"].join(",");
+  const fields = [...ISSUE_FIELDS, ...(storyPointsField ? [storyPointsField] : [])].join(",");
   const payload = await jiraApi(input.cloudId, input.accessToken, `/rest/api/3/issue/${encodeURIComponent(input.issueIdOrKey)}?fields=${encodeURIComponent(fields)}`, {}, fetcher);
   const issue = issueSnapshot(payload, storyPointsField);
   if (!issue) throw new Error("Jira returned an invalid issue response.");
@@ -235,7 +229,7 @@ export async function deleteJiraWebhooks(input: { cloudId: string; accessToken: 
 
 export async function searchJiraIssues(input: { cloudId: string; accessToken: string; projectKey: string; nextPageToken?: string; storyPointsField?: string | null }, fetcher: Fetcher = fetch) {
   const storyPointsField = input.storyPointsField === undefined ? "customfield_10016" : input.storyPointsField;
-  const body = { jql: `project = \"${input.projectKey.replaceAll('"', '\\"')}\" ORDER BY updated ASC`, maxResults: 100, ...(input.nextPageToken ? { nextPageToken: input.nextPageToken } : {}), fields: [...ISSUE_FIELDS,...(storyPointsField ? [storyPointsField] : []),"customfield_10020"] };
+  const body = { jql: `project = \"${input.projectKey.replaceAll('"', '\\"')}\" ORDER BY updated ASC`, maxResults: 100, ...(input.nextPageToken ? { nextPageToken: input.nextPageToken } : {}), fields: [...ISSUE_FIELDS,...(storyPointsField ? [storyPointsField] : [])] };
   const payload = object(await jiraApi(input.cloudId, input.accessToken, "/rest/api/3/search/jql", { method: "POST", body: JSON.stringify(body) }, fetcher));
   const issues = Array.isArray(payload.issues) ? payload.issues.map((issue) => issueSnapshot(issue, storyPointsField)).filter((issue): issue is JiraIssueSnapshot => Boolean(issue)) : [];
   return { issues, nextPageToken: text(payload.nextPageToken) || null, isLast: Boolean(payload.isLast) };

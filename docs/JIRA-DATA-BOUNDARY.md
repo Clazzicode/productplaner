@@ -1,0 +1,18 @@
+# Clarivia external data boundary
+
+## Jira, current read-only release
+
+- An organization administrator connects an Atlassian account through OAuth 2.0. Clarivia requests `read:jira-work` and `offline_access`; the chosen site, project, initiative, and connection belong to one Clarivia workspace. Credentials remain encrypted in the private connection store. Jira writes and dynamic webhook registration stay disabled until the product owner explicitly approves a separate scope change.
+- A refresh is an administrator-initiated import preview. It reads up to 2,000 issues from the selected Jira project, with only issue ID/key, summary, description, type, status, priority, labels, parent key, configured story points, and update time. It does not request assignee, sprint, release version, comments, attachments, or user profiles. Duplicate issue IDs are collapsed or rejected before a preview is saved.
+- A refresh records when the read started and completed, the project and connection, counts, outcome, and a fingerprint. Changed Jira issues appear as `update` or `conflict` in a new preview. Existing Clarivia planning records change only after an administrator selects items and records a reason. A failed or revoked connection requires reconnect; it cannot silently reuse an old token or apply a stale preview.
+- Import preview items and their limited source snapshots expire after 30 days. Webhook metadata, if enabled in a separately approved future release, is reduced to event identity and issue identity; completed/failed events expire after 7 days. Terminal sync jobs and attempts expire after 90 days. Source snapshots on links and conflicts are empty or scrubbed after 30 days; IDs, fingerprints, sync status, and timestamps remain while the connection exists to detect duplicates and changes.
+- Disconnect revokes local access, cancels outstanding work, and erases cached import runs, links, conflict records, webhook records, and jobs for that connection. It does not alter Jira. Imported Clarivia planning records remain until users delete them through Clarivia planning controls. Connection tombstones and organization audit events remain for accountability until workspace deletion. Approved export evidence, if any exists from an earlier authorized release, is immutable and retained with the workspace; it is not part of the source cache erase.
+- An Atlassian administrator may also revoke Clarivia in Atlassian. That is the way to revoke the remote grant. Clarivia marks the local connection as requiring reauthorization when refresh fails. A prior remote webhook, if one existed, may need removal in Atlassian because this read-only release cannot call Jira's webhook deletion API.
+
+## Future provider contract
+
+Notion and Slack are not connected by this release. Each future connector must declare its exact read scopes and field allowlist, bind every credential and external ID to a Clarivia workspace, use a provider-specific deduplication key, expose refresh and disconnect, enforce finite source-cache retention, and show users which changes require approval before they affect planning. Each provider gets independent approval before any write scope is requested. Provider data must never be copied into another workspace or into logs.
+
+## Verification boundary
+
+Unit and database tests can prove field minimization, workspace scoping, idempotency, retention, revoked access, and the absence of Jira write calls. A complete live test additionally requires a signed-in staging user, a staging Atlassian OAuth consent, a Jira site/project that the test user may read, and a matching registered callback URL. That test should compare Jira issue count and update timestamps before and after; no Jira mutation is part of the test.

@@ -17,6 +17,8 @@ vi.mock("../import", () => ({ currentTargetFingerprint: vi.fn(), fingerprint: vi
 
 import { approveJiraExport } from "../export";
 
+vi.stubEnv("JIRA_WRITE_ENABLED", "true");
+
 describe("Jira export approval boundary", () => {
   it("never approves a conflict for execution", async () => {
     await expect(approveJiraExport("run-a", ["item-a"], "Reviewed export", "user-a")).rejects.toMatchObject({ status: 422 });

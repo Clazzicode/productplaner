@@ -12,7 +12,7 @@ async function handler(request: Request, { params }: { params: Promise<{ connect
   const row = object(payload); const issue = object(row.issue);
   const externalEventId = request.headers.get("x-atlassian-webhook-identifier") || jiraHash(raw);
   try {
-    const queued = await enqueueWebhook({ connectionId, token, externalEventId, eventType: String(row.webhookEvent ?? "unknown"), issueId: issue.id ? String(issue.id) : null, issueKey: issue.key ? String(issue.key) : null, payload: payload as Prisma.InputJsonValue, payloadHash: jiraHash(raw) });
+    const queued = await enqueueWebhook({ connectionId, token, externalEventId, eventType: String(row.webhookEvent ?? "unknown"), issueId: issue.id ? String(issue.id) : null, issueKey: issue.key ? String(issue.key) : null, payload: { webhookEvent: String(row.webhookEvent ?? "unknown"), issueId: issue.id ? String(issue.id) : null, issueKey: issue.key ? String(issue.key) : null } as Prisma.InputJsonValue, payloadHash: jiraHash(raw) });
     return Response.json({ accepted: true, duplicate: !queued.created }, { status: queued.created ? 202 : 200 });
   } catch (error) { return Response.json({ error: error instanceof BusinessError ? error.message : "Invalid Jira webhook." }, { status: error instanceof BusinessError ? error.status : 401 }); }
 }

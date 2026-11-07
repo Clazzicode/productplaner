@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-const mocks = vi.hoisted(() => ({ attempt: vi.fn(), updateJob: vi.fn().mockResolvedValue({ count: 1 }), updateItem: vi.fn(), establish: vi.fn(), jobType: "export_item", payload: { exportItemId: "item-a" } as Record<string, string> }));
+const mocks = vi.hoisted(() => ({ attempt: vi.fn(), updateJob: vi.fn().mockResolvedValue({ count: 1 }), updateItem: vi.fn(), updateConnection: vi.fn(), establish: vi.fn(), jobType: "export_item", payload: { exportItemId: "item-a" } as Record<string, string> }));
 vi.mock("@/lib/db", () => ({
   establishAuthContext: mocks.establish,
   withTransaction: async (fn: () => Promise<unknown>) => fn(),
@@ -10,14 +10,17 @@ vi.mock("@/lib/db", () => ({
     jiraSyncAttempt: { createMany: mocks.attempt },
     jiraExportItem: { updateMany: mocks.updateItem, findUnique: async () => ({ id: "item-a", exportRunId: "run-a" }) },
     jiraWebhookEvent: { updateMany: vi.fn() },
+    jiraConnection: { update: mocks.updateConnection },
   },
 }));
+vi.mock("@/lib/audit", () => ({ auditInitiative: vi.fn() }));
 vi.mock("../export", () => ({ executeJiraExportItem: vi.fn().mockRejectedValue(new Error("Temporary Jira outage")), finalizeJiraExportRun: vi.fn() }));
 vi.mock("../conflicts", () => ({ recordExportExecutionConflict: vi.fn() }));
 vi.mock("../import", () => ({ previewJiraImport: vi.fn() }));
 vi.mock("../webhooks", () => ({ renewWebhook: vi.fn() }));
 
 import { processJiraJobs } from "../jobs";
+import { BusinessError } from "@/lib/businessError";
 
 describe("durable Jira job processing", () => {
   it("persists temporary failures and schedules exponential retry", async () => {
@@ -41,5 +44,14 @@ describe("durable Jira job processing", () => {
     const { previewJiraImport } = await import("../import");
     expect(previewJiraImport).toHaveBeenCalledWith("connection-a", "user-a", "job-a");
     expect(result.completed).toBe(1);
+  });
+  it("stops retries and flags reconnect when Jira denies a read", async () => {
+    mocks.jobType = "import_preview";
+    mocks.payload = { actorUserId: "user-a" };
+    const { previewJiraImport } = await import("../import");
+    vi.mocked(previewJiraImport).mockRejectedValueOnce(new BusinessError("Jira access was revoked. Reconnect Atlassian.", 403));
+    const result = await processJiraJobs(10, "worker-a", "org-a");
+    expect(result).toEqual({ claimed: 1, completed: 0, retried: 0, failed: 1 });
+    expect(mocks.updateConnection).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ status: "reauthorization_required", lastSyncStatus: "read_failed" }) }));
   });
 });
