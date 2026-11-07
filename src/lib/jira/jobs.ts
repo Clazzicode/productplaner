@@ -67,7 +67,8 @@ export async function enqueueJiraImportPreview(connection: JiraConnection, actor
 }
 
 async function claim(workerId: string, limit: number, organizationId?: string) {
-  return rawDb.$queryRaw<ClaimedJob[]>`SELECT * FROM app_private.claim_jira_jobs(${workerId},${limit},${organizationId ?? null})`;
+  // Prisma binds JavaScript numbers as bigint; the SQL function takes integer.
+  return rawDb.$queryRaw<ClaimedJob[]>`SELECT * FROM app_private.claim_jira_jobs(${workerId},${limit}::integer,${organizationId ?? null})`;
 }
 
 export async function processJiraJobs(limit = 10, workerId = `jira-${randomUUID()}`, organizationId?: string) {
