@@ -12,7 +12,7 @@ dashboard and demo integrations hub.
 | App deployment | Supabase project | Accounts and data |
 | --- | --- | --- |
 | Vercel Production | `productplaner` (`hzsrdpbdbfqaicropsha`) | Real Clarivia accounts and production data. |
-| Vercel Preview | `Clarivia Staging` (`qbogvclmehvrtuwiktos`) | Test accounts and disposable test data only. |
+| Vercel Preview | `Clarivia TEST ONLY - Staging` (`qbogvclmehvrtuwiktos`) | Test accounts and disposable test data only. |
 
 The two projects have separate Auth user lists and passwords. A Production login does not
 sign in to Preview. Preview displays a **TEST ENVIRONMENT** banner and uses test-account
