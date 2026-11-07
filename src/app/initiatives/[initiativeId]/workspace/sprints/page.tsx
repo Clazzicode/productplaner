@@ -1,4 +1,4 @@
-import { format } from "date-fns";
+import { formatCalendarDate } from "@/lib/calendarDate";
 import { notFound } from "next/navigation";
 import CoachMark from "@/components/coachmarks/CoachMark";
 import AiAssistPanel from "@/components/ai/AiAssistPanel";
@@ -245,7 +245,7 @@ export default async function SprintsPage({
               {isKanban
                 ? "Forecasted"
                 : `Sprint${rel.sprints.length === 1 ? "" : "s"} ${rel.sprints.map((s) => s.sprintNumber).join(", ") || "none yet"}`}{" "}
-              · ships {format(rel.targetDate, "MMM d, yyyy")}
+              · ships {formatCalendarDate(rel.targetDate, { month: "short", day: "numeric", year: "numeric" })}
             </p>
             {ws.initiative.releaseCadence && <p className="mt-0.5 text-xs text-emerald-700">Cadence: {cadenceLabels[ws.initiative.releaseCadence] ?? ws.initiative.releaseCadence}</p>}
             {!isKanban && rel.origin === "manual" && !agileFrozen && (
@@ -332,7 +332,7 @@ export default async function SprintsPage({
                 <div className="flex items-baseline justify-between">
                   <h3 className="font-semibold">Sprint {sprint.sprintNumber}</h3>
                   <span className="text-xs text-neutral-400">
-                    {format(sprint.startDate, "MMM d")} – {format(sprint.endDate, "MMM d")}
+                    {formatCalendarDate(sprint.startDate, { month: "short", day: "numeric" })} – {formatCalendarDate(sprint.endDate, { month: "short", day: "numeric" })}
                   </span>
                 </div>
                 <p className="mt-0.5 text-xs text-neutral-500">

@@ -7,6 +7,7 @@ import PageHeader from "@/components/ui/PageHeader";
 import { requireCurrentUser } from "@/lib/auth/session";
 import { db, establishAuthContext } from "@/lib/db";
 import { getResolvedStatuses } from "@/lib/roadmapStatus/service";
+import { formatCalendarDate } from "@/lib/calendarDate";
 
 export const dynamic = "force-dynamic";
 
@@ -20,6 +21,7 @@ export default async function ProjectsPage() {
   const user = await requireCurrentUser();
   establishAuthContext(user.authUserId);
   if (user.profiles.length === 0) redirect("/welcome");
+  const canCreateProject = user.permissionRole === "owner" || user.permissionRole === "admin";
 
   const projects = await db.project.findMany({
     where: { organizationId: user.organizationId },
@@ -34,14 +36,14 @@ export default async function ProjectsPage() {
         eyebrow="Clarivia"
         title="Projects"
         description="A Project holds the context shared across its initiatives. Open one to see its initiatives, or resume recent work from the dashboard."
-        primaryAction={
+        primaryAction={canCreateProject ? (
           <Link
             href="/projects/new"
             className="rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700"
           >
             + New project
           </Link>
-        }
+        ) : undefined}
         secondaryActions={
           <Link
             href="/home"
@@ -57,15 +59,16 @@ export default async function ProjectsPage() {
         <div className="mt-12 rounded-2xl border border-dashed border-neutral-300 bg-white p-12 text-center">
           <h2 className="text-lg font-semibold">No projects yet</h2>
           <p className="mx-auto mt-2 max-w-md text-sm text-neutral-500">
-            Create a Project to hold the shared context — budget, team, constraints — for one or
-            more initiatives.
+            {canCreateProject
+              ? "Create a Project to hold the shared context — budget, team, constraints — for one or more initiatives."
+              : "An organization owner or admin can create a project for this workspace."}
           </p>
-          <Link
+          {canCreateProject && <Link
             href="/projects/new"
             className="mt-6 inline-block rounded-lg bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700"
           >
             Create your first project
-          </Link>
+          </Link>}
         </div>
       ) : (
         <ul className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -94,7 +97,7 @@ export default async function ProjectsPage() {
                 <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-neutral-500">
                   {project.budget != null && <span>Budget: ${project.budget.toLocaleString()}</span>}
                   {project.targetLaunchDate && (
-                    <span>Target: {project.targetLaunchDate.toLocaleDateString()}</span>
+                    <span>Target: {formatCalendarDate(project.targetLaunchDate)}</span>
                   )}
                   {project.lastOpenedAt && (
                     <span>Last opened: {project.lastOpenedAt.toLocaleDateString()}</span>

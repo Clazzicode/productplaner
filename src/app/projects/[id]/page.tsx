@@ -11,6 +11,7 @@ import StatusBadge from "@/components/roadmapStatus/StatusBadge";
 import { requireCurrentUser } from "@/lib/auth/session";
 import { db, establishAuthContext } from "@/lib/db";
 import { getResolvedStatus, getResolvedStatuses } from "@/lib/roadmapStatus/service";
+import { formatCalendarDate } from "@/lib/calendarDate";
 
 export const dynamic = "force-dynamic";
 
@@ -75,7 +76,7 @@ export default async function ProjectHomePage({ params }: { params: Promise<{ id
         <Stat label="Goal" value={project.goal || "—"} />
         <Stat label="Budget" value={project.budget != null ? `$${project.budget.toLocaleString()}` : "Not set"} />
         <Stat label="Avg. hourly rate" value={project.averageHourlyRate != null ? `$${project.averageHourlyRate}/hr` : "Not set"} />
-        <Stat label="Target go-live" value={project.targetLaunchDate ? project.targetLaunchDate.toLocaleDateString() : "Not set"} />
+        <Stat label="Target go-live" value={project.targetLaunchDate ? formatCalendarDate(project.targetLaunchDate) : "Not set"} />
       </div>
       {project.planningApproach && (
         <p className="mt-3 text-xs text-neutral-500">Planning approach: {project.planningApproach}</p>
