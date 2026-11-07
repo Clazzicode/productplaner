@@ -1,9 +1,11 @@
 import LoginForm from "@/components/auth/LoginForm";
+import { isTestEnvironment } from "@/lib/environment";
 
 export const dynamic = "force-dynamic";
 
 export default async function LoginPage({ searchParams }: { searchParams: Promise<{ authError?: string; next?: string }> }) {
   const { authError, next } = await searchParams;
+  const testEnvironment = isTestEnvironment();
   return (
     <main className="min-h-screen px-6 py-12">
       <div className="mx-auto mb-10 max-w-xl text-center">
@@ -12,10 +14,12 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
         </p>
         <h1 className="mt-2 text-3xl font-bold">Your Clarivia account</h1>
         <p className="mt-3 text-neutral-500">
-          Sign in to your workspace, or create an account to get your own personal workspace.
+          {testEnvironment
+            ? "This Preview uses separate test accounts and test data. Your Production login will not work here."
+            : "Sign in to your workspace, or create an account to get your own personal workspace."}
         </p>
       </div>
-      <LoginForm linkError={authError === "link"} nextPath={next === "/join" ? "/join" : "/"} />
+      <LoginForm linkError={authError === "link"} nextPath={next === "/join" ? "/join" : "/"} testEnvironment={testEnvironment} />
     </main>
   );
 }

@@ -7,6 +7,20 @@ epics → user stories → acceptance criteria, with a sprint plan, release plan
 forecast, cost forecast, and executive presentation computed beneath, then surfaced on a
 dashboard and demo integrations hub.
 
+## Deployed environments
+
+| App deployment | Supabase project | Accounts and data |
+| --- | --- | --- |
+| Vercel Production | `productplaner` (`hzsrdpbdbfqaicropsha`) | Real Clarivia accounts and production data. |
+| Vercel Preview | `Clarivia Staging` (`qbogvclmehvrtuwiktos`) | Test accounts and disposable test data only. |
+
+The two projects have separate Auth user lists and passwords. A Production login does not
+sign in to Preview. Preview displays a **TEST ENVIRONMENT** banner and uses test-account
+wording on its sign-in page. The server checks that Preview Auth and Postgres target the
+same non-production Supabase project before handling requests. Do not copy Production
+database URLs or keys into Preview. See `docs/JIRA-DATA-BOUNDARY.md` for Jira's read-only
+staging policy.
+
 ## Scope of this prototype
 
 **In:** real guided intake (5 qualifying + 8 planning questions, extended with risk/cost/budget

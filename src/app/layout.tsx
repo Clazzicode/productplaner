@@ -5,6 +5,7 @@ import { CoachMarkProvider } from "@/components/coachmarks/CoachMarkProvider";
 import { listAuthorizedInitiativeIds } from "@/lib/access/initiativeAccess";
 import { getCurrentUser } from "@/lib/auth/session";
 import { db, establishAuthContext } from "@/lib/db";
+import { isTestEnvironment } from "@/lib/environment";
 import "./globals.css";
 
 const geistSans = localFont({
@@ -69,6 +70,7 @@ export default async function RootLayout({
   // route to — reuse the initiative list already loaded above rather than a
   // second query.
   const generatedInitiativeId = initiatives.find((i) => i.status === "generated")?.id ?? null;
+  const testEnvironment = isTestEnvironment();
 
   return (
     <html
@@ -76,6 +78,11 @@ export default async function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
+        {testEnvironment && (
+          <aside aria-label="Test environment" className="no-print z-50 border-b border-amber-300 bg-amber-100 px-4 py-2 text-center text-sm font-semibold text-amber-950">
+            CLARIVIA TEST ENVIRONMENT · Use test accounts only · Separate from Production
+          </aside>
+        )}
         <CoachMarkProvider
           signedIn={user != null}
           autoActive={autoActive}

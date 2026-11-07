@@ -6,6 +6,12 @@ export interface EnvironmentIsolation {
   isolated: boolean;
   reason: string | null;
 }
+
+export function isTestEnvironment(): boolean {
+  return process.env.VERCEL_ENV === "preview"
+    || ["staging", "preview", "test"].includes(process.env.APP_ENVIRONMENT ?? "")
+    || (process.env.VERCEL_TARGET_ENV !== undefined && !["production", "development"].includes(process.env.VERCEL_TARGET_ENV));
+}
 function projectRef(value: string | undefined, database = false): string | null {
   if (!value) return null;
   try {
@@ -33,9 +39,7 @@ function projectRef(value: string | undefined, database = false): string | null 
 export function environmentIsolation(): EnvironmentIsolation {
   const deploymentEnvironment = process.env.VERCEL_ENV ?? process.env.APP_ENVIRONMENT ?? "development";
   const databaseProjectRef = projectRef(process.env.DATABASE_URL, true);
-  const requiresIsolation = deploymentEnvironment === "preview"
-    || ["staging", "preview", "test"].includes(process.env.APP_ENVIRONMENT ?? "")
-    || (process.env.VERCEL_TARGET_ENV !== undefined && !["production", "development"].includes(process.env.VERCEL_TARGET_ENV));
+  const requiresIsolation = isTestEnvironment();
   let reason: string | null = null;
   if (requiresIsolation) {
     const refs = [projectRef(process.env.NEXT_PUBLIC_SUPABASE_URL), databaseProjectRef];
