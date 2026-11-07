@@ -25,7 +25,7 @@ export const jiraImportPreviewSchema = z.object({ connectionId: z.string().trim(
 
 export const jiraImportApplySchema = z.object({
   expectedStatus: z.literal("previewed"),
-  selectedItemIds: z.array(z.string().trim().min(1)).max(1000),
+  selectedItemIds: z.array(z.string().trim().min(1)).min(1).max(1000),
   reason: z.string().trim().min(5).max(1000),
 });
 

@@ -155,7 +155,7 @@ export async function previewJiraImport(connectionId: string, actorUserId: strin
       if (!current) { action = "conflict"; conflictReason = "The linked planning record no longer exists."; }
       else if (current !== link.targetFingerprint) { action = "conflict"; conflictReason = "Both Jira and the planning record changed since the last import."; }
     }
-    items.push({ organizationId: connection.organizationId, externalIssueId: issue.id, externalKey: issue.key, issueTypeId: issue.issueType.id, issueTypeName: issue.issueType.name, targetType: mappedTarget, targetId: link?.targetId ?? null, parentExternalKey: issue.parentKey, summary: issue.summary, sourceSnapshot: snapshot as unknown as Prisma.InputJsonValue, sourceHash, action, conflictReason, selected: action === "create" || action === "update" });
+    items.push({ organizationId: connection.organizationId, externalIssueId: issue.id, externalKey: issue.key, issueTypeId: issue.issueType.id, issueTypeName: issue.issueType.name, targetType: mappedTarget, targetId: link?.targetId ?? null, parentExternalKey: issue.parentKey, summary: issue.summary, sourceSnapshot: snapshot as unknown as Prisma.InputJsonValue, sourceHash, action, conflictReason, selected: false });
   }
   const sourceFingerprint = fingerprint(items.map((item) => ({ externalIssueId: item.externalIssueId, sourceHash: item.sourceHash, action: item.action })));
   try { return await withTransaction(async () => {
