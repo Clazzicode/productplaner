@@ -13,6 +13,8 @@
 // only compares against `OrganizationMember.authUserId` / `User.authUserId`,
 // never against a real Supabase `auth.users` row.
 
+import { writeFile, mkdir } from "node:fs/promises";
+import { GET as readinessProbe } from "@/app/api/ready/route";
 import { createHash, randomUUID } from "node:crypto";
 import { AsyncResource } from "node:async_hooks";
 import { PrismaClient } from "@prisma/client";
@@ -328,6 +330,8 @@ describe("RLS isolation (real Postgres connection, not mocked)", () => {
 
   it("records failed worker stages, signals consecutive failures, and recovers readiness", async () => {
     const log = vi.spyOn(console, "error");
+    const previousRelease = process.env.VERCEL_GIT_COMMIT_SHA;
+    process.env.VERCEL_GIT_COMMIT_SHA = "a".repeat(40);
     const idle = async () => ({ data: null, counts: { processed: 0, completed: 0, retried: 0, failed: 0 } });
     try {
       for (let cycle = 0; cycle < 2; cycle++) {
@@ -337,12 +341,25 @@ describe("RLS isolation (real Postgres connection, not mocked)", () => {
         })).rejects.toThrow("Synthetic staging health failure");
       }
       expect((await loadWorkerReadiness()).jira).toBe("failed");
+      const previousSecret = process.env.BACKGROUND_WORKER_SECRET;
+      process.env.BACKGROUND_WORKER_SECRET = "synthetic-readiness-test-only";
+      const response = await readinessProbe();
+      if (previousSecret === undefined) delete process.env.BACKGROUND_WORKER_SECRET; else process.env.BACKGROUND_WORKER_SECRET = previousSecret;
+      expect(response.status).toBe(503);
+      const evidence = await response.json();
+      expect(evidence.workers.jira).toBe("failed");
+      expect(evidence.workerObservation).toHaveLength(2);
+      expect(evidence.workerObservation.every((row: { coverageComplete: boolean }) => !row.coverageComplete)).toBe(true);
+      expect(evidence.workerSignals.find((row: { worker: string }) => row.worker === "jira").consecutiveFailures).toBeGreaterThanOrEqual(2);
+      await mkdir(".tmp-tests", { recursive: true });
+      await writeFile(".tmp-tests/staging-worker-alert.json", JSON.stringify({ ...evidence, observedAt: new Date().toISOString(), synthetic: true }));
       expect(log.mock.calls.some(([line]) => String(line).includes('"event":"worker.alert.consecutive_failures"'))).toBe(true);
     } finally {
       log.mockRestore();
       await observeWorker("jira", idle);
       await observeWorker("jira", idle);
       await observeWorker("background", idle);
+      if (previousRelease === undefined) delete process.env.VERCEL_GIT_COMMIT_SHA; else process.env.VERCEL_GIT_COMMIT_SHA=previousRelease;
     }
     expect(await loadWorkerReadiness()).toEqual({ jira: "ready", background: "ready" });
   }, 20_000);
@@ -455,6 +472,7 @@ describe("RLS isolation (real Postgres connection, not mocked)", () => {
         Object.assign(requestInput.bug, { severity: "critical", affectedArea: "Human area", observedBehavior: "Old observed", expectedBehavior: "Human expected", reproductionDetails: "Human steps", environment: "Human environment", status: "confirmed" });
         const request = await saveRequest(initiativeA1Id, requestInput, undefined, { actorUserId: orgA.ownerUserId });
         const bug = await db.bugPlanningRecord.findUniqueOrThrow({ where: { requestId: request.id } });
+        await db.bugPlanningRecord.update({ where: { id: bug.id }, data: { status: "in_progress", priority: "high", environment: "Triage environment" } });
         const issue = sourceSnapshot({ id: randomUUID(), key: "FIXTURE-2", summary: "Remote bug title", description: "Remote bug body", issueType: { id: "bug", name: "Bug", subtask: false }, status: { id: "done", name: "Done", category: "done" }, priority: { id: "low", name: "Lowest" }, labels: [], parentKey: null, storyPoints: null, updated: null });
         const target = { targetType: "bug", targetId: bug.id };
         const baseline = await currentTargetFingerprint(target);
@@ -469,7 +487,8 @@ describe("RLS isolation (real Postgres connection, not mocked)", () => {
         await applyJiraImport(run.id, [item.id], "Reviewed fixture", orgA.ownerUserId);
         const saved = await db.planningRequest.findUniqueOrThrow({ where: { id: request.id } });
         expect(saved.data).toMatchObject({ title: "Remote bug title", problem: "Remote bug body", requestedChange: "Human requested change", dependencies: "Human dependency", bug: { observedBehavior: "Remote bug body", severity: "critical", status: "confirmed", expectedBehavior: "Human expected", environment: "Human environment", reproductionDetails: "Human steps" } });
-        expect(await db.jiraExternalLink.findUnique({ where: { id: link.id } })).toMatchObject({ targetId: bug.id, lastImportedSnapshot: {}, fieldBaselines: fieldBaselines(issue, "bug", { request: saved.data, status: bug.status }) });
+        expect(await db.jiraExternalLink.findUnique({ where: { id: link.id } })).toMatchObject({ targetId: bug.id, lastImportedSnapshot: {}, fieldBaselines: fieldBaselines(issue, "bug", { request: saved.data, status: "in_progress" }) });
+        expect(await db.bugPlanningRecord.findUnique({ where: { id: bug.id } })).toMatchObject({ status: "in_progress", priority: "high", environment: "Triage environment" });
         await expect(applyJiraImport(run.id, [item.id], "Repeated", orgA.ownerUserId)).rejects.toThrow("already been finalized");
         expect(network).not.toHaveBeenCalled();
         throw new Error("rollback Jira review fixture");

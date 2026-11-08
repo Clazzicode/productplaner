@@ -246,7 +246,7 @@ async function importedBug(issue: JiraSourceIssue, initiativeId: string, actorUs
     request.title = issue.summary;
     request.problem = plainText(issue.description) || `Bug reported in Jira as ${issue.key}.`;
     request.bug.observedBehavior = plainText(issue.description) || "See the Jira issue.";
-    return saveRequest(initiativeId, request, { id: existing.requestId, revision: existing.request.revision }, { actorUserId, changeReason: `Imported Jira update ${issue.key}` });
+    return saveRequest(initiativeId, request, { id: existing.requestId, revision: existing.request.revision }, { actorUserId, preserveBugPlanningDecisions: true, changeReason: `Imported Jira update ${issue.key}` });
   }
   const request = emptyRequest();
   request.title = issue.summary;

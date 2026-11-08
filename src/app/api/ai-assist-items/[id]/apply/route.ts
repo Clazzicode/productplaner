@@ -1,3 +1,5 @@
+import { BusinessError } from "@/lib/businessError";
+import { assertSuggestionFresh } from "@/lib/ai/assist/freshness";
 import { withAuthenticatedApi } from "@/lib/auth/entryPoints";
 import { validateApplyTargets } from "@/lib/ai/assist/apply/validateTargets";
 import { archiveWorkingVersion } from "@/lib/generation/versioning";
@@ -54,6 +56,9 @@ async function POSTHandler(request: Request, { params }: { params: Promise<{ id:
         : await requireInitiativeApiAccess(user, item.targetId ?? "", "edit");
       if (!targetGuard.ok) return targetGuard.response;
       return withTransaction(async () => {
+      await assertSuggestionFresh(item);
+      const claimed = await db.aiAssistItem.updateMany({ where: { id, status: "proposed" }, data: { status: nextStatus } });
+      if (claimed.count !== 1) throw new BusinessError("Suggestion already settled.", 409);
       const applied = await applyStatusRecommendation({
         organizationId: item.organizationId,
         entityType: targetType,
@@ -82,6 +87,7 @@ async function POSTHandler(request: Request, { params }: { params: Promise<{ id:
     }
 
     const { updated, applied } = await withTransaction(async (tx) => {
+      await assertSuggestionFresh(item);
       await validateApplyTargets(tx, item, content);
       // Detect a concurrent Apply before any content is changed.
       const claimed = await tx.aiAssistItem.updateMany({ where: { id, status: { in: ["proposed", "stale"] } }, data: { status: nextStatus } });
@@ -111,6 +117,7 @@ async function POSTHandler(request: Request, { params }: { params: Promise<{ id:
 
     return NextResponse.json({ item: updated, applied });
   } catch (err) {
+    if (err instanceof BusinessError) return jsonError(err.message, err.status);
     if (err instanceof AiAssistApplyBlockedError) {
       return NextResponse.json(
         { error: err.message, requiresApprovedImpactConfirmation: true, reason: err.reason },

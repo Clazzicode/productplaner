@@ -780,7 +780,7 @@
     "path": "src/app/api/ready/route.ts",
     "classification": "diagnostic",
     "reason": "Non-content readiness query and explicitly scoped service worker-health read; no tenant data returned.",
-    "sourceFingerprint": "555714dcd9b9d189226231f0196d8e563663c7cbe3f85446a46fbb384202ef4c"
+    "sourceFingerprint": "349d6e0c2784dff5926bb09d56d6ae8827c262d05c5fed48cfb69094b16e071d"
   },
   {
     "path": "src/app/api/refinement-findings/[findingId]/route.ts",

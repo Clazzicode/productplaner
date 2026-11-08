@@ -1,3 +1,5 @@
+import { BusinessError } from "@/lib/businessError";
+import { syncDraftFeature } from "@/lib/planning/draftWorkspace";
 import type { Prisma } from "@prisma/client";
 import { parseBudgetNumber } from "./conflictDetection";
 import { capabilityUpsertSchema, riskCreateSchema } from "@/lib/validation/schemas";
@@ -62,6 +64,7 @@ function requireInitiativeId(item: CrystallizeTarget): string {
 // write an approved ContextItem does, so an AI-Assisted feature/risk behaves
 // identically to a document-derived one. No parallel implementation.
 export async function crystallizeFeature(tx: Tx, initiativeId: string, chosenValueJson: string): Promise<string> {
+  if ((await tx.prototype.findUnique({ where: { initiativeId }, select: { approvedAt: true } }))?.approvedAt) throw new BusinessError("Reopen the approved plan before accepting a feature suggestion.", 409);
   const raw = safeParseJsonObject(chosenValueJson);
   const fields = capabilityCrystallizeSchema.parse({
     name: raw.name,
@@ -80,6 +83,7 @@ export async function crystallizeFeature(tx: Tx, initiativeId: string, chosenVal
     data: { intakeAnswerSetId: intake.id, ...fields, order: nextOrder },
     select: { id: true },
   });
+  await syncDraftFeature(initiativeId, { id: created.id, name: fields.name });
   return created.id;
 }
 

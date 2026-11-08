@@ -52,6 +52,14 @@ describe.sequential("migration replay and real PostgreSQL RLS", () => {
     await expect(pg.exec(`BEGIN; SET LOCAL ROLE anon; SELECT * FROM app_private."WorkerHealth";`)).rejects.toThrow();
     await pg.exec("ROLLBACK");
   });
+  it("retains private immutable worker cycle evidence without exposing it to signed-in users", async () => {
+    await pg.exec(`BEGIN; SET LOCAL ROLE app_rw; SELECT set_config('request.jwt.claims','{"sub":null,"role":"authenticated"}',true);
+      INSERT INTO app_private."WorkerExecution" ("runId",worker,"startedAt",stage) VALUES ('evidence-run','jira',now(),'start');
+      UPDATE app_private."WorkerExecution" SET outcome='succeeded',"finishedAt"=now(),processed=0,completed=0,retried=0,failed=0,stage='finish' WHERE "runId"='evidence-run'; COMMIT;`);
+    expect((await asUser(authA, () => pg.query(`SELECT "runId" FROM app_private."WorkerExecution"`))).rows).toEqual([]);
+    await expect(pg.exec(`UPDATE app_private."WorkerExecution" SET outcome='failed' WHERE "runId"='evidence-run'`)).rejects.toThrow(/immutable/);
+    await expect(pg.exec(`DELETE FROM app_private."WorkerExecution" WHERE "runId"='evidence-run'`)).rejects.toThrow(/retained/);
+  });
   it("replays all migrations and preserves atomic signup under app_rw", async () => {
     await bootstrap("org-a",authA);
     await bootstrap("org-b",authB);

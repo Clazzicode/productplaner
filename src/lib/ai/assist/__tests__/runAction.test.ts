@@ -188,3 +188,23 @@ describe("runAssistAction — reuse gate (existing, no meaningful change)", () =
     expect(release).toHaveBeenCalledTimes(1);
   });
 });
+
+
+describe("monitored AI failure controls", () => {
+  it("records provider timeout, releases the request lock and creates no proposal", async () => {
+    resolveReuseDecision.mockResolvedValueOnce({ decision: "generate_new", existingItem: null });
+    const release = vi.fn();
+    assertAiActionAllowed.mockResolvedValueOnce({ capability: { maxOutputTokens: 1024 }, release, jobId: "timeout-job" });
+    messagesCreate.mockRejectedValueOnce(Object.assign(new Error("Controlled provider timeout"), { name: "APIConnectionTimeoutError" }));
+    await expect(runAssistAction(baseParams)).rejects.toThrow("Controlled provider timeout");
+    expect(recordAiUsage).toHaveBeenCalledWith(expect.objectContaining({ aiJobId: "timeout-job", success: false }));
+    expect(withTransaction).not.toHaveBeenCalled();
+    expect(release).toHaveBeenCalledOnce();
+  });
+  it("stops an exhausted budget before context assembly or provider calls", async () => {
+    resolveReuseDecision.mockResolvedValueOnce({ decision: "generate_new", existingItem: null });
+    assertAiActionAllowed.mockRejectedValueOnce(new Error("Controlled exhausted budget"));
+    await expect(runAssistAction(baseParams)).rejects.toThrow("Controlled exhausted budget");
+    expect(messagesCreate).not.toHaveBeenCalled(); expect(assembleAiContext).not.toHaveBeenCalled(); expect(withTransaction).not.toHaveBeenCalled();
+  });
+});
