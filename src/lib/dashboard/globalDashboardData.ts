@@ -25,16 +25,16 @@ import { PHASE_NAMES } from "@/lib/generation/constants";
 import { loadIntakeInput } from "@/lib/generation/engine";
 import { scheduleHealth, type HealthStatus } from "@/lib/generation/health";
 import { LAYER_LABELS, type LayerType } from "@/lib/generation/types";
-import { resolveLifecycleState, STAGE_LABEL, STAGE_PROGRESS_PERCENT } from "@/lib/lifecycle/resolveLifecycleState";
+import { resolveLifecycleState, STAGE_LABEL } from "@/lib/lifecycle/resolveLifecycleState";
 import { validateIntake } from "@/lib/generation/validateIntake";
 import { resolveTargetLaunchDate } from "@/lib/projectContext";
+import { loadPlanningEvidence, type PlanningEvidence } from "@/lib/planning/readiness";
 
 export interface InitiativeOverview {
   id: string;
   name: string;
   status: string;
   updatedAt: Date;
-  progressPercent: number;
   stageLabel: string;
   isPrimary: boolean;
 }
@@ -50,9 +50,10 @@ export interface TimelineEntry {
 }
 
 export interface PrimaryInitiativeDetail {
+  forecastKnown?: boolean;
+  planningEvidence?: PlanningEvidence;
   id: string;
   name: string;
-  completionPercent: number;
   stageLabel: string;
   scheduleHealth: HealthStatus;
   currentPhaseName: string;
@@ -149,7 +150,6 @@ export async function loadGlobalDashboardData(
       name: i.name,
       status: i.status,
       updatedAt: i.updatedAt,
-      progressPercent: STAGE_PROGRESS_PERCENT[resolution.stage],
       stageLabel: STAGE_LABEL[resolution.stage],
       isPrimary: primaryInitiative?.id === i.id,
     };
@@ -157,21 +157,21 @@ export async function loadGlobalDashboardData(
 
   // ---------- primary initiative detail ----------
   let primary: PrimaryInitiativeDetail | null = null;
-  if (primaryInitiative && primaryInitiative.status === "generated" && primaryInitiative.prototype) {
+  if (primaryInitiative && primaryInitiative.prototype && primaryInitiative.intakeAnswerSet) {
     const prototype = primaryInitiative.prototype;
     const [sprints, releases, stories] = await Promise.all([
       db.sprint.findMany({
         where: { prototypeId: prototype.id },
         orderBy: { sprintNumber: "asc" },
-        include: { stories: { select: { points: true } } },
+        include: { stories: { select: { points: true } }, sprintPlan: { select: { status: true } } },
       }),
       db.release.findMany({
         where: { prototypeId: prototype.id },
         orderBy: { order: "asc" },
-        include: { sprints: { select: { sprintNumber: true }, orderBy: { sprintNumber: "asc" } } },
+        include: { sprints: { select: { sprintNumber: true }, orderBy: { sprintNumber: "asc" } }, readinessAssessments: { orderBy: { sequence: "desc" }, select: { status: true }, take: 1 } },
       }),
       db.artifactLayer.findMany({
-        where: { prototypeId: prototype.id, type: "story" },
+        where: { prototypeId: prototype.id, type: "story", archivedAt: null },
         orderBy: { order: "asc" },
         select: { id: true, title: true, points: true, sprintId: true, createdAt: true },
       }),
@@ -188,7 +188,6 @@ export async function loadGlobalDashboardData(
       manualReleaseCount: releases.filter((r) => r.origin === "manual").length,
       manualSprintCount: sprints.filter((s) => s.origin === "manual").length,
     });
-    const completionPercent = STAGE_PROGRESS_PERCENT[primaryResolution.stage];
 
     const forecast = computeCapacityForecast(sprints);
     const overAllocated = forecast.filter((f) => f.status === "over-allocated");
@@ -202,6 +201,7 @@ export async function loadGlobalDashboardData(
     const currentSprint: SprintSummaryView | null = currentSprintRow
       ? {
           sprintNumber: currentSprintRow.sprintNumber,
+          committed: currentSprintRow.sprintPlan?.status === "committed",
           plannedPoints: currentSprintRow.stories.reduce((n, s) => n + (s.points ?? 1), 0),
           capacityPoints: currentSprintRow.capacityPoints,
           storyCount: currentSprintRow.stories.length,
@@ -217,6 +217,7 @@ export async function loadGlobalDashboardData(
       const capacity = relForecast.reduce((n, f) => n + f.capacityPoints, 0);
       return {
         name: r.name,
+        approved: r.readinessAssessments[0]?.status === "approved",
         sprintRange: nums.length > 1 ? `${nums[0]}–${nums[nums.length - 1]}` : `${nums[0] ?? "—"}`,
         points,
         targetDate: r.targetDate,
@@ -310,9 +311,10 @@ export async function loadGlobalDashboardData(
     later.push({ label: "Run an integration sync", href: "/integrations" });
 
     primary = {
+      forecastKnown: sprints.length > 0 && totalCapacity > 0 && stories.every(row => row.points !== null),
+      planningEvidence: await loadPlanningEvidence(primaryInitiative.id),
       id: primaryInitiative.id,
       name: primaryInitiative.name,
-      completionPercent,
       stageLabel: STAGE_LABEL[primaryResolution.stage],
       scheduleHealth: overallSchedule,
       currentPhaseName,
@@ -354,7 +356,7 @@ export async function loadGlobalDashboardData(
       const init = prototypeToInitiative.get(s.prototypeId)!;
       return {
         date: s.startDate,
-        label: `Sprint ${s.sprintNumber} starts`,
+        label: `Sprint ${s.sprintNumber} planning date (check commitment)`,
         kind: "sprint" as const,
         initiativeName: multiInitiative ? init.name : null,
         href: `/initiatives/${init.id}/workspace/sprints`,
@@ -364,7 +366,7 @@ export async function loadGlobalDashboardData(
       const init = prototypeToInitiative.get(r.prototypeId)!;
       return {
         date: r.targetDate,
-        label: `${r.name} target`,
+        label: `${r.name} forecast target`,
         kind: "release" as const,
         initiativeName: multiInitiative ? init.name : null,
         href: `/initiatives/${init.id}/workspace/sprints`,

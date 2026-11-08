@@ -19,7 +19,7 @@ import SummaryCards from "@/components/dashboard/SummaryCards";
 import UpcomingActions, { type UpcomingAction } from "@/components/dashboard/UpcomingActions";
 import { requireInitiativeView } from "@/lib/access/guards";
 import { requireCurrentUser } from "@/lib/auth/session";
-import { resolveLifecycleState, STAGE_LABEL, STAGE_PROGRESS_PERCENT } from "@/lib/lifecycle/resolveLifecycleState";
+import { resolveLifecycleState, STAGE_LABEL } from "@/lib/lifecycle/resolveLifecycleState";
 import { db, establishAuthContext } from "@/lib/db";
 import { PHASE_NAMES } from "@/lib/generation/constants";
 import { computeCapacityForecast } from "@/lib/generation/capacityForecast";
@@ -36,6 +36,7 @@ import { getResolvedStatus } from "@/lib/roadmapStatus/service";
 import { readOnboardingStateServer } from "@/lib/onboarding/tempStateServer";
 import { deriveRoleRoadmapView, type RoleRoadmapCapability, type RoleRoadmapInput } from "@/lib/roadmap/roleRoadmapView";
 import { computeLivePlanFingerprint } from "@/lib/generation/versioning";
+import { loadPlanningEvidence, planningLabel, commitmentLabel } from "@/lib/planning/readiness";
 
 const parseContentJson = (raw: string): Record<string, unknown> => {
   try {
@@ -74,7 +75,8 @@ async function DashboardPage({
     },
   });
   if (!initiative || !initiative.intakeAnswerSet) notFound();
-  if (!initiative.prototype) redirect(`/initiatives/${initiativeId}/intake`);
+  if (!initiative.prototype) redirect(`/initiatives/${initiativeId}/overview`);
+  const planningEvidence = await loadPlanningEvidence(initiativeId);
 
   const intakeRow = initiative.intakeAnswerSet;
   const prototype = initiative.prototype;
@@ -86,15 +88,15 @@ async function DashboardPage({
     db.sprint.findMany({
       where: { prototypeId: prototype.id },
       orderBy: { sprintNumber: "asc" },
-      include: { stories: { select: { points: true } } },
+      include: { stories: { select: { points: true } }, sprintPlan: { select: { status: true } } },
     }),
     db.release.findMany({
       where: { prototypeId: prototype.id },
       orderBy: { order: "asc" },
-      include: { sprints: { select: { sprintNumber: true }, orderBy: { sprintNumber: "asc" } } },
+      include: { sprints: { select: { sprintNumber: true }, orderBy: { sprintNumber: "asc" } }, readinessAssessments: { orderBy: { sequence: "desc" }, select: { status: true }, take: 1 } },
     }),
     db.artifactLayer.findMany({
-      where: { prototypeId: prototype.id, type: "story" },
+      where: { prototypeId: prototype.id, type: "story", archivedAt: null },
       select: {
         points: true,
         sourceCapabilityId: true,
@@ -152,7 +154,6 @@ async function DashboardPage({
     manualReleaseCount: releases.filter((r) => r.origin === "manual").length,
     manualSprintCount: sprints.filter((s) => s.origin === "manual").length,
   });
-  const completionPercent = STAGE_PROGRESS_PERCENT[lifecycleResolution.stage];
 
   // ---------- overall schedule / cost health ----------
   const overAllocated = forecast.filter((f) => f.status === "over-allocated");
@@ -257,6 +258,7 @@ async function DashboardPage({
   const currentSprint: SprintSummaryView | null = currentSprintRow
     ? {
         sprintNumber: currentSprintRow.sprintNumber,
+        committed: currentSprintRow.sprintPlan?.status === "committed",
         plannedPoints: currentSprintRow.stories.reduce((n, s) => n + (s.points ?? 1), 0),
         capacityPoints: currentSprintRow.capacityPoints,
         storyCount: currentSprintRow.stories.length,
@@ -271,6 +273,7 @@ async function DashboardPage({
     const capacity = relForecast.reduce((n, f) => n + f.capacityPoints, 0);
     return {
       name: r.name,
+      approved: r.readinessAssessments[0]?.status === "approved",
       sprintRange: nums.length > 1 ? `${nums[0]}–${nums[nums.length - 1]}` : `${nums[0] ?? "—"}`,
       points,
       targetDate: r.targetDate,
@@ -489,11 +492,12 @@ async function DashboardPage({
         <div className="min-w-0 space-y-4">
           <SummaryCards
             completion={{
-              percent: completionPercent,
+              planningLabel: planningLabel(planningEvidence),
+              commitmentLabel: commitmentLabel(planningEvidence),
               stageLabel: STAGE_LABEL[lifecycleResolution.stage],
               nextAction:
                 lifecycleResolution.stage === "active_execution"
-                  ? "Planning setup complete"
+                  ? "Review the next delivery decision"
                   : lifecycleResolution.nextAction.label,
             }}
             scope={{
@@ -503,6 +507,7 @@ async function DashboardPage({
               baselineApprovedAt: prototype.approvedAt,
             }}
             forecast={{
+              known: sprints.length > 0 && totalCapacity > 0 && stories.every(row => row.points !== null),
               sprints: sprints.length,
               releaseDate: releases[releases.length - 1]?.targetDate ?? null,
               totalPoints: totalPlannedPoints,
@@ -513,6 +518,7 @@ async function DashboardPage({
               health: overallSchedule,
             }}
             cost={{
+              known: intakeRow.teamSize != null && economics.averageHourlyRate != null && stories.length > 0 && stories.every(row => row.points !== null),
               total: model.estimatedInitiativeCost,
               perSprint: model.sprintLaborCost,
               perPoint: model.costPerStoryPoint,

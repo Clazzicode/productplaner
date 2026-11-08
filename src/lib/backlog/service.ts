@@ -2,6 +2,7 @@ import type { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { auditInitiative } from "@/lib/audit";
 import { BusinessError } from "@/lib/businessError";
+import { syncDraftFeature } from "@/lib/planning/draftWorkspace";
 import { withPlanningMutation } from "@/lib/generation/mutation";
 import { featureRecord, featureSchema, type FeatureHistoryRecord, type FeatureInput } from "./model";
 
@@ -100,6 +101,7 @@ export async function saveFeature(
       await db.capabilityDependency.createMany({ data: data.dependsOnIds.map(toCapabilityId => ({ fromCapabilityId: row.id, toCapabilityId })) });
     }
     const savedRow = await db.capability.findUniqueOrThrow({ where: { id: row.id }, include: featureInclude });
+    if (!previous) await syncDraftFeature(initiativeId, savedRow);
     const saved = featureRecord(savedRow);
     const before = previous ? snapshot(featureRecord(previous)) : null;
     const action = previous

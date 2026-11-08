@@ -1,6 +1,5 @@
 import { withAuthenticatedPage } from "@/lib/auth/entryPoints";
 import Link from "next/link";
-import { redirect } from "next/navigation";
 import CoachMark from "@/components/coachmarks/CoachMark";
 import { ContainedLayout } from "@/components/layout/PageLayouts";
 import StatusBadge from "@/components/roadmapStatus/StatusBadge";
@@ -33,7 +32,6 @@ const STATUS_META: Record<string, { label: string; variant: BadgeVariant }> = {
 async function InitiativesPage() {
   const user = await requireCurrentUser();
   establishAuthContext(user.authUserId);
-  if (user.profiles.length === 0) redirect("/welcome");
   const authorizedInitiativeIds = await listAuthorizedInitiativeIds(user);
 
   const initiatives = await db.initiative.findMany({

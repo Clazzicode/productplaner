@@ -1,5 +1,5 @@
 import { withAuthenticatedPage } from "@/lib/auth/entryPoints";
-import { redirect } from "next/navigation";
+import Link from "next/link";
 import { DashboardLayout } from "@/components/layout/PageLayouts";
 import DecisionsRequiredPanel from "@/components/dashboard/DecisionsRequiredPanel";
 import RecentActivity from "@/components/dashboard/RecentActivity";
@@ -12,7 +12,6 @@ import PlanHealthSummary from "@/components/dashboard/global/PlanHealthSummary";
 import RoadmapSnapshot from "@/components/dashboard/global/RoadmapSnapshot";
 import UpcomingTimeline from "@/components/dashboard/global/UpcomingTimeline";
 import ActivationHome from "@/components/home/ActivationHome";
-import LifecycleDashboard from "@/components/home/LifecycleDashboard";
 import { listAuthorizedInitiativeIds } from "@/lib/access/initiativeAccess";
 import { requireCurrentUser } from "@/lib/auth/session";
 import { establishAuthContext } from "@/lib/db";
@@ -39,7 +38,6 @@ export const dynamic = "force-dynamic";
 async function HomePage() {
   const user = await requireCurrentUser();
   establishAuthContext(user.authUserId);
-  if (user.profiles.length === 0) redirect("/welcome");
 
   const authorizedInitiativeIds = await listAuthorizedInitiativeIds(user);
   const lifecycle = await loadLifecycleDashboardData(user.id, authorizedInitiativeIds);
@@ -47,19 +45,6 @@ async function HomePage() {
   if (lifecycle.resolution.stage === "no_initiative") {
     return <ActivationHome userName={user.name} greeting={lifecycle.greeting} />;
   }
-  if (lifecycle.resolution.stage !== "active_execution") {
-    // initiativeSummary is always populated once an initiative exists —
-    // every non-"no_initiative"/"active_execution" stage requires one.
-    return (
-      <LifecycleDashboard
-        greeting={lifecycle.greeting}
-        userName={user.name}
-        resolution={lifecycle.resolution}
-        initiativeSummary={lifecycle.initiativeSummary!}
-      />
-    );
-  }
-
   const onboarding = await readOnboardingStateServer();
   const workingRole = resolveWorkingRole(user.workingRole, onboarding.workingRole);
 
@@ -80,6 +65,7 @@ async function HomePage() {
       case "plan_health":
         return <PlanHealthSummary primary={data.primary} />;
       case "current_sprint":
+        if (!data.primary) return <p className="rounded border p-4">No delivery commitments yet. Your planning work remains available.</p>;
         return (
           <SprintReleaseStatus
             initiativeId={data.primary!.id}
@@ -108,6 +94,7 @@ async function HomePage() {
     <DashboardLayout>
       <GlobalDashboardHeader userName={user.name} greeting={data.greeting} operationalSummary={data.operationalSummary} />
 
+      <p className="mt-4 text-sm">Suggested next action: <Link className="text-indigo-700 underline" href={lifecycle.resolution.nextAction.href}>{lifecycle.resolution.nextAction.label}</Link>. All authorized planning sections remain available.</p>
       <div className="mt-6">
         {/* Large desktop / standard laptop: two columns, timeline in the right rail —
             or one column when the timeline widget is configured off. */}

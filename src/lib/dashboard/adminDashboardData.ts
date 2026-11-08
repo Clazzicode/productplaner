@@ -11,7 +11,6 @@
 import { db } from "@/lib/db";
 import { computeCapacityForecast } from "@/lib/generation/capacityForecast";
 import { scheduleHealth, type HealthStatus } from "@/lib/generation/health";
-import { resolveLifecycleState, STAGE_PROGRESS_PERCENT } from "@/lib/lifecycle/resolveLifecycleState";
 import { resolveTargetLaunchDate } from "@/lib/projectContext";
 
 export interface AdminOrgSummary {
@@ -260,22 +259,14 @@ export async function loadAdminDashboardData(organizationId: string): Promise<Ad
     const accessCoverage = grants.length;
 
     let health: HealthStatus | null = null;
-    let deliveryPercent: number | null = null;
+    const deliveryPercent: number | null = null;
     let nextMilestone: { label: string; date: Date } | null = null;
 
     if (init.status === "generated" && init.prototype) {
       const protoSprints = sprintsByPrototype.get(init.prototype.id) ?? [];
       const protoReleases = releasesByPrototype.get(init.prototype.id) ?? [];
-      // Delivery progress used to be "X of 5 waterfall layers locked" — that
-      // ceremony has been removed platform-wide, so this now reads the same
-      // activation-stage progress every other dashboard shows.
-      const initResolution = resolveLifecycleState({
-        initiative: { id: init.id, status: init.status },
-        manualReleaseCount: protoReleases.filter((r) => r.origin === "manual").length,
-        manualSprintCount: protoSprints.filter((s) => s.origin === "manual").length,
-      });
-      deliveryPercent = STAGE_PROGRESS_PERCENT[initResolution.stage];
-
+      // Delivery completion is not measured by creating setup records.
+      // Leave this value unknown until completion evidence is available.
       const forecast = computeCapacityForecast(protoSprints);
       const overAllocated = forecast.filter((f) => f.status === "over-allocated");
       overAllocatedSprints += overAllocated.length;

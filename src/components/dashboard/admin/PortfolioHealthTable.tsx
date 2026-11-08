@@ -67,7 +67,7 @@ export default function PortfolioHealthTable(props: { rows: PortfolioRow[] }) {
                     <TableCell className="text-text-muted">
                       {row.teamAccessCount > 0 ? `${row.teamAccessCount} team${row.teamAccessCount === 1 ? "" : "s"}` : "—"}
                     </TableCell>
-                    <TableCell className="text-text-muted">{row.deliveryPercent != null ? `${row.deliveryPercent}%` : "—"}</TableCell>
+                    <TableCell className="text-text-muted">{row.deliveryPercent != null ? `${row.deliveryPercent}%` : "Unknown"}</TableCell>
                     <TableCell className="text-text-muted">
                       {row.nextMilestone ? (
                         <>

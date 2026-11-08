@@ -4,6 +4,7 @@ export interface ApiResult<T = Record<string, unknown>> {
   ok: boolean;
   data?: T;
   error?: string;
+  status?: number;
 }
 
 export async function apiFetch<T = Record<string, unknown>>(
@@ -18,7 +19,7 @@ export async function apiFetch<T = Record<string, unknown>>(
     });
     const body = (await res.json().catch(() => ({}))) as T & { error?: string };
     if (!res.ok) {
-      return { ok: false, error: body.error ?? `Request failed (${res.status})`, data: body };
+      return { ok: false, error: body.error ?? `Request failed (${res.status})`, data: body, status: res.status };
     }
     return { ok: true, data: body };
   } catch {

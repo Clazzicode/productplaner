@@ -2,7 +2,7 @@ import Link from "next/link";
 import { Badge, healthTokenVariant } from "@/components/ui/Badge";
 import { Card, CardTitle } from "@/components/ui/Card";
 import EmptyState from "@/components/ui/EmptyState";
-import { ProgressBar } from "@/components/ui/ProgressBar";
+import { planningLabel, commitmentLabel } from "@/lib/planning/readiness";
 import { HEALTH_LABELS } from "@/lib/generation/health";
 import type { PrimaryInitiativeDetail } from "@/lib/dashboard/globalDashboardData";
 
@@ -16,17 +16,17 @@ export default function PlanHealthSummary(props: { primary: PrimaryInitiativeDet
       <CardTitle>Plan Health</CardTitle>
       {!p ? (
         <EmptyState
-          title="No generated plan yet"
-          description="Plan health appears once an initiative's guided intake is generated."
+          title="No planning workspace yet"
+          description="Save an initiative draft or open an existing initiative to start planning."
         />
       ) : (
         <div className="mt-3">
           <div className="flex items-center justify-between">
-            <Badge variant={healthTokenVariant(p.scheduleHealth)}>{HEALTH_LABELS[p.scheduleHealth]}</Badge>
-            <span className="text-xs text-neutral-500">{p.completionPercent}% planning setup</span>
+            {p.forecastKnown ? <Badge variant={healthTokenVariant(p.scheduleHealth)}>{HEALTH_LABELS[p.scheduleHealth]}</Badge> : <Badge variant="neutral">Forecast unknown</Badge>}
           </div>
-          <ProgressBar percent={p.completionPercent} className="mt-2" />
-          <p className="mt-2 text-xs text-neutral-500">{p.stageLabel}</p>
+          <p className="mt-2 text-sm">Planning: {p.planningEvidence ? planningLabel(p.planningEvidence) : "Evidence unknown"}</p>
+          <p className="mt-2 text-sm">Delivery: {p.planningEvidence ? commitmentLabel(p.planningEvidence) : "Commitments unknown"}</p>
+          {p.planningEvidence && <p className="mt-2 text-xs text-neutral-500">{p.planningEvidence.missingContext.length ? `Context to develop: ${p.planningEvidence.missingContext.join(", ")}.` : "Problem, customer and outcome recorded."} Generation is optional; readiness checks apply when you request an action.</p>}
           <Link
             href={`/initiatives/${p.id}/dashboard`}
             className="mt-3 inline-block text-xs font-medium text-indigo-600 hover:underline"

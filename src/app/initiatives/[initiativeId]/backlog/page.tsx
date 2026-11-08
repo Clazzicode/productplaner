@@ -30,7 +30,7 @@ async function BacklogPage({ params }: { params: Promise<{ initiativeId: string 
       <h1 className="text-3xl font-bold">Product feature backlog</h1>
       <p className="text-slate-500">Maintain work, apply explainable priority decisions, and organize features, requests, bugs, and stories for delivery.</p>
     </div>
-    <BacklogWorkspace initiativeId={initiativeId} initialFeatures={features.map(featureRecord)} initialItems={items} owners={owners} canEdit={access.level === "edit" || access.level === "owner"} canPrioritize={(access.level === "edit" || access.level === "owner") && (user.permissionRole === "owner" || user.permissionRole === "admin")} />
+    <BacklogWorkspace initiativeId={initiativeId} initialFeatures={features.map(featureRecord)} initialItems={items} owners={owners} canEdit={access.level === "edit" || access.level === "owner"} canPrioritize={(access.level === "edit" || access.level === "owner") && user.memberType === "internal"} />
   </ContainedLayout>;
 }
 

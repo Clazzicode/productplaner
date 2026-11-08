@@ -23,6 +23,9 @@ import { processJiraJobs } from "@/lib/jira/jobs";
 import { ensureFeatureProjection } from "@/lib/planning/featureIdentity";
 import { createRegenerationProposal, applyRegenerationProposal } from "@/lib/generation/proposals";
 import type { ReconciliationItem } from "@/lib/generation/reconciliation";
+import { saveGeneralIntake } from "@/lib/planning/saveGeneralIntake";
+import { loadPlanningEvidence } from "@/lib/planning/readiness";
+import { saveFeature } from "@/lib/backlog/service";
 
 // These tests create isolated fixtures. Never run them against Production.
 const stagingRef = "qbogvclmehvrtuwiktos";
@@ -154,6 +157,34 @@ afterAll(async () => {
 }, 30_000);
 
 describe("RLS isolation (real Postgres connection, not mocked)", () => {
+  it("saves and resumes incomplete intake and develops a feature without experience, AI, generation or delivery records", async () => {
+    const draftId = randomUUID();
+    const network = vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("No AI or provider request is permitted in manual planning"));
+    try {
+      await expect(withAuthenticatedDatabaseContext({ authUserId: orgA.ownerAuthUserId, organizationId: orgA.orgId }, async () => await withTransaction(async () => {
+        const user = await db.user.findUniqueOrThrow({ where: { id: orgA.ownerUserId } });
+        const actor = { ...user, organizationId: orgA.orgId };
+        const first = await saveGeneralIntake(actor, draftId, { name: "Minimal manual planning fixture" });
+        const retry = await saveGeneralIntake(actor, draftId, { name: "Minimal manual planning fixture" });
+        expect(retry).toEqual(first);
+        expect(await db.initiative.count({ where: { id: draftId } })).toBe(1);
+        const prototype = await db.prototype.findUniqueOrThrow({ where: { initiativeId: draftId } });
+        expect(prototype.status).toBe("draft");
+        expect(await db.artifactLayer.count({ where: { prototypeId: prototype.id, type: "story" } })).toBe(0);
+        const feature = await saveFeature(draftId, { name: "A manually entered feature", description: "An incomplete draft can develop real planning work", backlogLane: "now", backlogStatus: "planned", ownerUserId: null, isMvp: true, businessValue: "high", riskLevel: "medium", dependsOnIds: [] });
+        expect(await db.artifactLayer.count({ where: { prototypeId: prototype.id, type: "feature", sourceCapabilityId: feature.id } })).toBe(1);
+        expect(await db.artifactLayer.count({ where: { prototypeId: prototype.id, type: "epic", sourceCapabilityId: feature.id } })).toBe(1);
+        expect(await loadPlanningEvidence(draftId)).toMatchObject({ featureCount: 1, storyCount: 0, criteriaCount: 0, generationReady: false, missingContext: ["problem", "customer", "outcome"], committedSprintCount: 0, approvedReleaseCount: 0 });
+        expect(await db.sprint.count({ where: { prototypeId: prototype.id } })).toBe(0);
+        expect(await db.release.count({ where: { prototypeId: prototype.id } })).toBe(0);
+        await expect(saveGeneralIntake(actor, draftId, { name: "Conflicting tab edit", expectedUpdatedAt: new Date(0).toISOString() })).rejects.toThrow("another tab");
+        expect(network).not.toHaveBeenCalled();
+        throw new Error("rollback manual planning acceptance fixture");
+      }, { timeout: 60_000 }))).rejects.toThrow("rollback manual planning acceptance fixture");
+    } finally { network.mockRestore(); }
+    expect(await adminDb.initiative.findUnique({ where: { id: draftId } })).toBeNull();
+  }, 70_000);
+
   it("reuses one canonical feature projection across concurrent requests and preserves editorial edits", async () => {
     const intake = await adminDb.intakeAnswerSet.create({ data: { initiativeId: initiativeA1Id } });
     const capability = await adminDb.capability.create({ data: {

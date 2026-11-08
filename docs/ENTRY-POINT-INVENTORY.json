@@ -1145,5 +1145,20 @@
     "path": "src/app/initiatives/[initiativeId]/workspace/regeneration/page.tsx",
     "classification": "authenticated-page",
     "reason": "Verified identity and initiative editing action required; reviewed regeneration evidence remains inside its initiative boundary."
+  },
+  {
+    "path": "src/app/api/planning-drafts/[id]/route.ts",
+    "classification": "authenticated-api",
+    "reason": "Verified user/workspace context; draft edits and explicit workspace initialization require current initiative editing authority."
+  },
+  {
+    "path": "src/app/api/planning-drafts/[id]/workspace/route.ts",
+    "classification": "authenticated-api",
+    "reason": "Verified user/workspace context; draft edits and explicit workspace initialization require current initiative editing authority."
+  },
+  {
+    "path": "src/app/initiatives/[initiativeId]/overview/page.tsx",
+    "classification": "authenticated-page",
+    "reason": "Verified user/workspace context; draft edits and explicit workspace initialization require current initiative editing authority."
   }
 ]

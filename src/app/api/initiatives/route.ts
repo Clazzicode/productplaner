@@ -1,8 +1,11 @@
 import { withAuthenticatedApi } from "@/lib/auth/entryPoints";
 import { NextResponse } from "next/server";
 import { jsonError, zodMessage } from "@/lib/api";
-import { getActiveProfile, requireCurrentUserApi } from "@/lib/auth/session";
-import { db, establishAuthContext } from "@/lib/db";
+import { requireCurrentUserApi } from "@/lib/auth/session";
+import { db, establishAuthContext, withTransaction } from "@/lib/db";
+import { ensureDraftWorkspace } from "@/lib/planning/draftWorkspace";
+import { auditInitiative } from "@/lib/audit";
+import { randomUUID } from "node:crypto";
 import { initiativeCreateSchema } from "@/lib/validation/schemas";
 
 async function POSTHandler(request: Request) {
@@ -13,11 +16,9 @@ async function POSTHandler(request: Request) {
   if (!authGuard.ok) return authGuard.response;
   const user = authGuard.user;
   establishAuthContext(user.authUserId);
-  const profile = await getActiveProfile();
-  if (!profile) {
-    return jsonError("Complete the qualifying questions before creating an initiative.", 403);
-  }
-
+  if (user.memberType !== "internal") return jsonError("Only internal workspace members can create planning work.", 403);
+  if (!["owner", "admin"].includes(user.permissionRole)) return jsonError("A workspace owner or administrator must create the initiative.", 403);
+  return withTransaction(async tx => {
   // Never trust a client-supplied projectId on its own (directive: the
   // application decides tenancy, not the request) — it must resolve to a
   // real Project in the actor's own organization, same "resolve from the DB
@@ -49,24 +50,28 @@ async function POSTHandler(request: Request) {
     projectId = project.id;
   }
 
-  const initiative = await db.initiative.create({
+  const initiativeId = randomUUID();
+  await db.initiative.createMany({
     data: {
+      id: initiativeId,
       organizationId: user.organizationId,
       projectId,
       userId: user.id,
-      qualifyingProfileId: profile.id,
       name: parsed.data.name,
       description: parsed.data.description,
       intakeMethod: parsed.data.intakeMethod ?? null,
       status: "intake_in_progress",
-      intakeAnswerSet: { create: {} },
       // Formalizes the creator's existing implicit ownership as a real Owner
       // grant (docs/V2-ACCESS-TEAMS-VISIBILITY.md §19) — the same backfill
       // Step 8C applied to the two pre-existing initiatives.
-      initiativeAccess: { create: { userId: user.id, permission: "owner" } },
     },
   });
-  return NextResponse.json({ initiativeId: initiative.id });
+  await db.initiativeAccess.create({ data: { initiativeId, userId: user.id, permission: "owner" } });
+  await db.intakeAnswerSet.create({ data: { initiativeId } });
+  await ensureDraftWorkspace(tx, initiativeId);
+  await auditInitiative(initiativeId, "intake.draft_created");
+  return NextResponse.json({ initiativeId });
+  });
 }
 
 export const POST = withAuthenticatedApi(POSTHandler);
