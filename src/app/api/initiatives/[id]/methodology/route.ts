@@ -38,8 +38,8 @@ async function POSTHandler(
   }
 
   try {
-    const { prototypeId } = await generatePrototype(id);
-    return NextResponse.json({ ok: true, regenerated: true, prototypeId });
+    const result = await generatePrototype(id);
+    return NextResponse.json({ ok: true, regenerated: !result.proposalId, ...result });
   } catch (err) {
     if (err instanceof IntakeInvalidError) {
       return NextResponse.json(

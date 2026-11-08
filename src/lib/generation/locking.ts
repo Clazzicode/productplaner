@@ -75,6 +75,8 @@ async function lockLayerInternal(prototypeId: string, layerType: LayerType): Pro
   if (lock.everLocked) {
     // Re-lock after an unlock: propagate downstream (full regenerate-and-replace).
     regenerated = await regenerateBelow(prototypeId, layerType);
+    // A proposal is a review request, not permission to lock changed content.
+    if (regenerated.proposalId) return { regenerated };
   }
 
   await db.layerLock.update({

@@ -21,6 +21,8 @@ import { db, establishAuthContext, rawDb, withAuthenticatedDatabaseContext, with
 import { loadWorkerReadiness, observeWorker } from "@/lib/jobs/executionHealth";
 import { processJiraJobs } from "@/lib/jira/jobs";
 import { ensureFeatureProjection } from "@/lib/planning/featureIdentity";
+import { createRegenerationProposal, applyRegenerationProposal } from "@/lib/generation/proposals";
+import type { ReconciliationItem } from "@/lib/generation/reconciliation";
 
 // These tests create isolated fixtures. Never run them against Production.
 const stagingRef = "qbogvclmehvrtuwiktos";
@@ -363,4 +365,45 @@ describe("RLS isolation (real Postgres connection, not mocked)", () => {
       expect(await db.jiraSyncJob.findUnique({ where: { id: job.id } })).toMatchObject({ status: "failed", attemptCount: 1 });
     });
   }, 20_000);
+
+  it("applies reviewed additions atomically while retaining edited records, commitments and Jira links; rejects stale and repeated applications", async () => {
+    const scope = { authUserId: orgA.ownerAuthUserId, organizationId: orgA.orgId };
+    let proposalId = "";
+    await expect(withAuthenticatedDatabaseContext(scope, async () => await withTransaction(async () => {
+      const prototype = await db.prototype.findUniqueOrThrow({ where: { initiativeId: initiativeA1Id } });
+      const feature = await db.artifactLayer.findFirstOrThrow({ where: { prototypeId: prototype.id, type: "feature" } });
+      await db.intakeAnswerSet.update({ where: { initiativeId: initiativeA1Id }, data: {
+        problemStatement: "Planning records must retain every human edit and delivery commitment.",
+        targetCustomer: "Product owners and their delivery teams", outcomeStatement: "Preserve reviewed planning work through regeneration", teamSize: 3,
+      } });
+      const release = await db.release.create({ data: { prototypeId: prototype.id, name: "Human release", phaseNumber: 1, targetDate: new Date("2027-01-15"), order: 1, origin: "manual" } });
+      const sprint = await db.sprint.create({ data: { prototypeId: prototype.id, sprintNumber: 1, phaseNumber: 1, startDate: new Date("2027-01-01"), endDate: new Date("2027-01-14"), capacityPoints: 10, origin: "manual", releaseId: release.id } });
+      await db.capability.update({ where: { id: feature.sourceCapabilityId! }, data: { releaseId: release.id } });
+      const epic = await db.artifactLayer.create({ data: { prototypeId: prototype.id, parentId: feature.id, type: "epic", title: "Human epic", sourceCapabilityId: feature.sourceCapabilityId, sourceType: "manual" } });
+      const story = await db.artifactLayer.create({ data: { prototypeId: prototype.id, parentId: epic.id, type: "story", title: "Human story", body: "Hand-edited delivery work", sprintId: sprint.id, sourceCapabilityId: feature.sourceCapabilityId, sourceType: "manual", generationKey: "legacy-missing-source" } });
+      const criterion = await db.artifactLayer.create({ data: { prototypeId: prototype.id, parentId: story.id, type: "acceptance_criterion", title: "Manual criterion", body: "Given a human edit, it survives", sourceType: "manual", sourceCapabilityId: feature.sourceCapabilityId } });
+      const connection = await db.jiraConnection.findFirstOrThrow({ where: { initiativeId: initiativeA1Id } });
+      const link = await db.jiraExternalLink.create({ data: { organizationId: orgA.orgId, initiativeId: initiativeA1Id, connectionId: connection.id, targetType: "story", targetId: story.id, externalIssueId: randomUUID(), externalKey: "FIXTURE-1", issueTypeName: "Story", sourceHash: "a".repeat(64), targetFingerprint: "b".repeat(64), lastImportedSnapshot: {} } });
+      const first = await createRegenerationProposal(initiativeA1Id);
+      await db.artifactLayer.update({ where: { id: feature.id }, data: { body: "Newer human edit" } });
+      const stale = await db.regenerationProposal.findUniqueOrThrow({ where: { id: first.proposalId } });
+      await expect(applyRegenerationProposal(initiativeA1Id, stale.id, stale.recordFingerprint, [])).rejects.toThrow("The plan or source changed");
+      const fresh = await createRegenerationProposal(initiativeA1Id);
+      proposalId = fresh.proposalId;
+      const proposal = await db.regenerationProposal.findUniqueOrThrow({ where: { id: proposalId } });
+      const items = (proposal.payload as unknown as { items: ReconciliationItem[] }).items;
+      expect(items.some(item => item.kind === "mapping_required")).toBe(true);
+      const decisions = items.map(item => ({ key: item.key, action: item.kind === "add" && ["roadmap", "roadmap_phase"].includes(item.proposed?.type ?? "") ? "apply" as const : "keep" as const }));
+      const result = await applyRegenerationProposal(initiativeA1Id, proposalId, proposal.recordFingerprint, decisions);
+      expect(result.prototypeId).toBe(prototype.id);
+      expect(await db.artifactLayer.findUnique({ where: { id: story.id } })).toMatchObject({ body: "Hand-edited delivery work", sprintId: sprint.id, parentId: epic.id, generationReviewStatus: "source_missing_review" });
+      expect(await db.artifactLayer.findUnique({ where: { id: criterion.id } })).toMatchObject({ body: "Given a human edit, it survives", parentId: story.id });
+      expect(await db.capability.findUnique({ where: { id: feature.sourceCapabilityId! } })).toMatchObject({ releaseId: release.id });
+      expect(await db.jiraExternalLink.findUnique({ where: { id: link.id } })).toMatchObject({ targetId: story.id });
+      expect(await db.regenerationProposal.findUnique({ where: { id: proposalId } })).toMatchObject({ status: "applied", resultingMapping: result.mapping });
+      await expect(applyRegenerationProposal(initiativeA1Id, proposalId, proposal.recordFingerprint, decisions)).rejects.toThrow("already applied");
+      throw new Error("rollback regeneration acceptance fixture");
+    }, { timeout: 60_000 }))).rejects.toThrow("rollback regeneration acceptance fixture");
+    expect(await adminDb.regenerationProposal.findUnique({ where: { id: proposalId } })).toBeNull();
+  }, 70_000);
 });

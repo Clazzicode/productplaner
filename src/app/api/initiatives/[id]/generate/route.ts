@@ -4,7 +4,7 @@ import { randomUUID } from "node:crypto";
 import { requireInitiativeApiAccess } from "@/lib/access/guards";
 import { jsonError, zodMessage } from "@/lib/api";
 import { requireCurrentUserApi } from "@/lib/auth/session";
-import { db, establishAuthContext } from "@/lib/db";
+import { establishAuthContext } from "@/lib/db";
 import { enqueueBackgroundJob, idempotencyKeyFromRequest } from "@/lib/jobs/queue";
 import { runBackgroundWorkerBatch } from "@/lib/jobs/worker";
 import { generateSchema } from "@/lib/validation/schemas";
@@ -27,16 +27,6 @@ async function POSTHandler(
 
   const parsed = generateSchema.safeParse(await request.json().catch(() => ({})));
   if (!parsed.success) return jsonError(zodMessage(parsed.error), 422);
-
-  if (!parsed.data.confirmApprovedImpact) {
-    const existing = await db.prototype.findUnique({ where: { initiativeId: id }, select: { approvedAt: true } });
-    if (existing?.approvedAt) {
-      return NextResponse.json({
-        error: `This initiative has an approved baseline (approved ${existing.approvedAt.toLocaleDateString()}). Full regenerate replaces the entire plan. Confirm to proceed anyway.`,
-        requiresApprovedImpactConfirmation: true,
-      }, { status: 409 });
-    }
-  }
 
   const job = await enqueueBackgroundJob({
     organizationId: user.organizationId,

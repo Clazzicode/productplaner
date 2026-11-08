@@ -2,20 +2,13 @@ import { randomUUID } from "crypto";
 import type { Prisma, PrismaClient } from "@prisma/client";
 import { db, withTransaction } from "@/lib/db";
 import { buildPlan, packContinuousFlow, packSprints } from "./buildPlan";
-import { EPIC_NAME_SUFFIXES, PHASE_NAMES, RELEASE_NAMES } from "./constants";
-import {
-  buildEpicSeeds,
-  buildNarrativeContext,
-  buildACsForStory,
-  buildStoriesForEpic,
-  type NarrativeContext,
-} from "./decompose";
+import { PHASE_NAMES, RELEASE_NAMES } from "./constants";
 import { computeEffectiveCapacity } from "./cost";
 import { computeRoadmapInputsFingerprint } from "./fingerprint";
 import { METHODOLOGY_PROFILES, resolveMethodology } from "./methodology";
 import { validateIntake } from "./validateIntake";
-import { archiveWorkingVersion, ensureApprovedVersionArchived } from "./versioning";
 import { auditInitiative } from "@/lib/audit";
+import { createRegenerationProposal, recordInitialGeneration } from "./proposals";
 import {
   LAYER_SEQUENCE,
   type CapabilityInput,
@@ -308,8 +301,12 @@ function addFeatureTree(
 
 // ---------- full generation (FR-08/FR-09) ----------
 
-export async function generatePrototype(initiativeId: string): Promise<{ prototypeId: string }> {
-  return withTransaction(() => generatePrototypeInternal(initiativeId), { timeout: 120_000 });
+export async function generatePrototype(initiativeId: string): Promise<{ prototypeId: string; proposalId?: string; status?: string }> {
+  return withTransaction(async () => {
+    const existing = await db.prototype.findUnique({ where: { initiativeId }, select: { id: true } });
+    if (existing) return createRegenerationProposal(initiativeId);
+    return generatePrototypeInternal(initiativeId);
+  }, { timeout: 120_000 });
 }
 
 async function generatePrototypeInternal(initiativeId: string): Promise<{ prototypeId: string }> {
@@ -327,30 +324,10 @@ async function generatePrototypeInternal(initiativeId: string): Promise<{ protot
 
   const prototypeId = await withTransaction(
     async (tx) => {
-      // Roadmap versioning foundation: an approved prototype's content is
-      // about to be destroyed by the deleteMany below — preserve it as
-      // history first. Normally a no-op (POST .../approve-plan already
-      // recorded this version eagerly at approval time via
-      // recordApprovedRoadmapVersion); this only self-heals a pre-existing
-      // approved prototype that predates this feature, or a rare crash
-      // between that route's two awaited calls. Reaching this point with an
-      // approved existing prototype always means the caller already passed
-      // recalculatePlan's ApprovedBaselineImpactError guard (confirmApprovedImpact:
-      // true) — generatePrototype itself doesn't need its own confirm flag.
-      const existing = await tx.prototype.findUnique({
-        where: { initiativeId },
-        select: { id: true, approvedAt: true, approvedBaselineJson: true },
-      });
-      if (existing?.approvedAt && existing.approvedBaselineJson) {
-        await ensureApprovedVersionArchived(tx, {
-          initiativeId,
-          approvedBaselineJson: existing.approvedBaselineJson,
-          approvedAt: existing.approvedAt,
-        });
+      // First generation only. Existing plans always enter proposal review.
+      if (await tx.prototype.findUnique({ where: { initiativeId }, select: { id: true } })) {
+        throw new Error("An existing plan requires a reviewed regeneration proposal.");
       }
-      if (existing) await archiveWorkingVersion(existing.id);
-      // Replace working rows only after preserving a complete checkpoint.
-      await tx.prototype.deleteMany({ where: { initiativeId } });
       const proto = await tx.prototype.create({ data: { initiativeId, inputsFingerprintAtGeneration } });
 
       await tx.layerLock.createMany({
@@ -422,6 +399,7 @@ async function generatePrototypeInternal(initiativeId: string): Promise<{ protot
         }
       }
       await flushTreeBatch(tx, batch);
+      await recordInitialGeneration(proto.id, plan);
 
       await tx.initiative.update({
         where: { id: initiativeId },
@@ -443,6 +421,8 @@ async function generatePrototypeInternal(initiativeId: string): Promise<{ protot
 // ---------- downstream propagation (FR-11) ----------
 
 export interface RegenStats {
+  proposalId?: string;
+  status?: string;
   features: number;
   epics: number;
   stories: number;
@@ -468,236 +448,9 @@ export async function regenerateBelow(
   prototypeId: string,
   editedLayer: LayerType,
 ): Promise<RegenStats> {
-  return withTransaction(() => regenerateBelowInternal(prototypeId, editedLayer), { timeout: 120_000 });
-}
-
-async function regenerateBelowInternal(prototypeId: string, editedLayer: LayerType): Promise<RegenStats> {
-  await archiveWorkingVersion(prototypeId);
-  const proto = await db.prototype.findUniqueOrThrow({
-    where: { id: prototypeId },
-    select: { initiativeId: true, initiative: { select: { methodology: true } } },
-  });
-  const methodology = resolveMethodology(proto.initiative.methodology);
-  const intake = await loadIntakeInput(proto.initiativeId);
-  const ctx = buildNarrativeContext(intake);
-  const capById = new Map(intake.capabilities.map((c) => [c.id, c]));
-  const stats: RegenStats = { features: 0, epics: 0, stories: 0, acs: 0, sprints: 0 };
-
-  await withTransaction(
-    async (tx) => {
-      // Reconciliation snapshot (guided-activation restructure): a manual
-      // Sprint's story links point at specific ArtifactLayer story rows,
-      // which this function deletes-and-recreates-with-new-ids for whichever
-      // layer is edited — the manual Sprint row itself survives (repackSprints
-      // only touches origin:"auto" rows), but can silently lose its story
-      // links in the process. Compared against the same query after repack
-      // runs, below, to flag (never silently drop) any manual Sprint whose
-      // linked-story count went down.
-      const manualSprintsBefore = await tx.sprint.findMany({
-        where: { prototypeId, origin: "manual" },
-        select: { id: true, _count: { select: { stories: true } } },
-      });
-
-      if (editedLayer === "roadmap") {
-        // Rebuild features (and everything beneath) under the surviving phases.
-        await tx.artifactLayer.deleteMany({ where: { prototypeId, type: "feature" } });
-        const phases = await tx.artifactLayer.findMany({
-          where: { prototypeId, type: "roadmap_phase" },
-          orderBy: { order: "asc" },
-        });
-        const batch = newTreeBatch();
-        for (const phaseRow of phases) {
-          const content = parseJson(phaseRow.contentJson);
-          const capIds = (content.capabilityIds as string[] | undefined) ?? [];
-          const caps = capIds
-            .map((id) => capById.get(id))
-            .filter((c): c is CapabilityInput => Boolean(c));
-          for (const [fi, cap] of caps.entries()) {
-            const feature = { ...decomposeForRegen(cap, ctx) };
-            addFeatureTree(batch, {
-              prototypeId,
-              parentPhaseId: phaseRow.id,
-              phaseNumber: (content.phaseNumber as number | undefined) ?? 1,
-              feature,
-              order: fi,
-              cap,
-              sprintIdByNumber: new Map(),
-            });
-            stats.features += 1;
-            stats.epics += feature.epics.length;
-            for (const e of feature.epics) {
-              stats.stories += e.stories.length;
-              stats.acs += e.stories.reduce((n, s) => n + s.acs.length, 0);
-            }
-          }
-        }
-        await flushTreeBatch(tx, batch);
-      } else if (editedLayer === "feature_hierarchy") {
-        await tx.artifactLayer.deleteMany({ where: { prototypeId, type: "epic" } });
-        const features = await tx.artifactLayer.findMany({
-          where: { prototypeId, type: "feature" },
-          orderBy: { order: "asc" },
-        });
-        const batch = newTreeBatch();
-        for (const f of features) {
-          const cap = f.sourceCapabilityId ? capById.get(f.sourceCapabilityId) : undefined;
-          if (!cap) continue;
-          // Edited feature titles feed the regenerated epics/stories.
-          const seeds = buildEpicSeeds(cap, f.title);
-          for (const seed of seeds) {
-            const epic: PlannedEpic = {
-              title: seed.title,
-              body: seed.body,
-              stories: buildStoriesForEpic({
-                cap,
-                featureTitle: f.title,
-                epicIndex: seed.epicIndex,
-                ctx,
-              }),
-            };
-            addEpicTree(batch, {
-              prototypeId,
-              parentFeatureId: f.id,
-              epic,
-              epicIndex: seed.epicIndex,
-              epicCount: seeds.length,
-              cap,
-              sprintIdByNumber: new Map(),
-            });
-            stats.epics += 1;
-            stats.stories += epic.stories.length;
-            stats.acs += epic.stories.reduce((n, s) => n + s.acs.length, 0);
-          }
-        }
-        await flushTreeBatch(tx, batch);
-      } else if (editedLayer === "epics") {
-        await tx.artifactLayer.deleteMany({ where: { prototypeId, type: "story" } });
-        const epics = await tx.artifactLayer.findMany({
-          where: { prototypeId, type: "epic" },
-          orderBy: { order: "asc" },
-          include: { parent: { select: { title: true } } },
-        });
-        const batch = newTreeBatch();
-        for (const e of epics) {
-          const cap = e.sourceCapabilityId ? capById.get(e.sourceCapabilityId) : undefined;
-          if (!cap) continue;
-          const content = parseJson(e.contentJson);
-          // An epic still carrying its canonical generated name regenerates
-          // stories from the clean feature title; a user-renamed epic feeds
-          // its edited title into the stories so the edit visibly propagates.
-          const canonical = EPIC_NAME_SUFFIXES.some(
-            (sfx) => e.title === `${e.parent?.title} — ${sfx}`,
-          );
-          const stories = buildStoriesForEpic({
-            cap,
-            featureTitle: canonical ? (e.parent?.title ?? cap.name) : e.title,
-            epicIndex: (content.epicIndex as number | undefined) ?? 0,
-            ctx,
-          });
-          for (const [si, story] of stories.entries()) {
-            addStoryTree(batch, {
-              prototypeId,
-              parentEpicId: e.id,
-              story,
-              order: si,
-              cap,
-              sprintIdByNumber: new Map(),
-            });
-          }
-          stats.stories += stories.length;
-          stats.acs += stories.reduce((n, s) => n + s.acs.length, 0);
-        }
-        await flushTreeBatch(tx, batch);
-      } else if (editedLayer === "stories") {
-        await tx.artifactLayer.deleteMany({
-          where: { prototypeId, type: "acceptance_criterion" },
-        });
-        const stories = await tx.artifactLayer.findMany({
-          where: { prototypeId, type: "story" },
-          orderBy: { order: "asc" },
-        });
-        const acTrace = traceFor.ac();
-        const acRows: ArtifactLayerRow[] = [];
-        for (const s of stories) {
-          const content = parseJson(s.contentJson);
-          const acs = buildACsForStory({
-            persona: (content.persona as string | undefined) ?? ctx.persona,
-            want: (content.want as string | undefined) ?? s.title,
-            benefit: (content.benefit as string | undefined) ?? ctx.outcomeShort,
-          });
-          for (const [ai, ac] of acs.entries()) {
-            acRows.push({
-              id: randomUUID(),
-              prototypeId,
-              type: "acceptance_criterion",
-              parentId: s.id,
-              order: ai,
-              title: ac.title,
-              body: ac.body,
-              contentJson: JSON.stringify({ kind: ac.kind }),
-              sourceCapabilityId: s.sourceCapabilityId,
-              traceAnswerKeys: acTrace.keys,
-              traceNote: acTrace.note,
-            });
-          }
-          stats.acs += acs.length;
-        }
-        if (acRows.length > 0) await tx.artifactLayer.createMany({ data: acRows });
-      }
-      // acceptance_criteria is the leaf — nothing beneath except the agile layers.
-
-      stats.sprints = await repackSprints(tx, prototypeId, intake, methodology);
-
-      if (manualSprintsBefore.length > 0) {
-        const beforeCounts = new Map(manualSprintsBefore.map((s) => [s.id, s._count.stories]));
-        const manualSprintsAfter = await tx.sprint.findMany({
-          where: { prototypeId, origin: "manual" },
-          select: { id: true, _count: { select: { stories: true } } },
-        });
-        const regressedIds = manualSprintsAfter
-          .filter((s) => s._count.stories < (beforeCounts.get(s.id) ?? 0))
-          .map((s) => s.id);
-        if (regressedIds.length > 0) {
-          await tx.sprint.updateMany({
-            where: { id: { in: regressedIds } },
-            data: { status: "needs_reconciliation" },
-          });
-        }
-      }
-
-      // Downstream waterfall locks reset — must be reviewed and re-locked in order.
-      const idx = LAYER_SEQUENCE.indexOf(editedLayer);
-      await tx.layerLock.updateMany({
-        where: { prototypeId, sequence: { gt: idx + 1 } },
-        data: { state: "unlocked" },
-      });
-    },
-    { timeout: 120_000 },
-  );
-
-  await db.prototype.update({ where: { id: prototypeId }, data: { approvedAt: null, approvedBaselineJson: null } });
-  await auditInitiative(proto.initiativeId, "plan.regenerated", { prototypeId, editedLayer });
-  return stats;
-}
-
-function decomposeForRegen(cap: CapabilityInput, ctx: NarrativeContext): PlannedFeature {
-  const seeds = buildEpicSeeds(cap, cap.name);
-  return {
-    capabilityId: cap.id,
-    title: cap.name,
-    body: cap.description.trim().length > 0 ? cap.description.trim() : `Delivers the "${cap.name}" feature.`,
-    isMvp: cap.isMvp,
-    epics: seeds.map((seed) => ({
-      title: seed.title,
-      body: seed.body,
-      stories: buildStoriesForEpic({
-        cap,
-        featureTitle: cap.name,
-        epicIndex: seed.epicIndex,
-        ctx,
-      }),
-    })),
-  };
+  const prototype = await db.prototype.findUniqueOrThrow({ where: { id: prototypeId }, select: { initiativeId: true } });
+  const proposal = await createRegenerationProposal(prototype.initiativeId, editedLayer);
+  return { ...proposal, features: 0, epics: 0, stories: 0, acs: 0, sprints: 0 };
 }
 
 // ---------- agile-layer recompute (sprints, releases) ----------
@@ -923,6 +676,7 @@ export async function repackSprints(
 
 export type RecalculateMode = "full" | "respect_locks";
 export type RecalculateDetail =
+  | "proposal_pending"
   | "full"
   | "repack_only"
   | "regen_below"
@@ -943,6 +697,8 @@ export class RecalculateBlockedError extends Error {}
 export class ApprovedBaselineImpactError extends Error {}
 
 export interface RecalculateResult {
+  proposalId?: string;
+  status?: string;
   prototypeId: string;
   mode: RecalculateMode;
   detail: RecalculateDetail;
@@ -1010,96 +766,10 @@ async function recalculatePlanInternal(
   mode: RecalculateMode,
   options: { confirmApprovedImpact?: boolean },
 ): Promise<RecalculateResult> {
-  if (mode === "full") {
-    if (!options.confirmApprovedImpact) {
-      const existing = await db.prototype.findUnique({ where: { initiativeId }, select: { approvedAt: true } });
-      if (existing?.approvedAt) {
-        throw new ApprovedBaselineImpactError(
-          `This initiative has an approved baseline (approved ${existing.approvedAt.toLocaleDateString()}). ` +
-            "Full regenerate replaces the entire plan. Confirm to proceed anyway.",
-        );
-      }
-    }
-    // generatePrototype never touches Capability rows — clear any Timeline
-    // drag-and-drop phase overrides here so "Full regenerate" actually
-    // discards them, matching what its confirm-modal copy promises
-    // (RefreshBar.tsx). Must NOT run for the "respect_locks" mode's own
-    // full_fallback_no_locks branch below — that path preserves overrides.
-    const intake = await db.intakeAnswerSet.findUnique({
-      where: { initiativeId },
-      select: { id: true },
-    });
-    if (intake) {
-      await db.capability.updateMany({
-        where: { intakeAnswerSetId: intake.id },
-        data: { manualPhaseOverride: null },
-      });
-    }
-    const { prototypeId } = await generatePrototype(initiativeId);
-    return { prototypeId, mode: "full", detail: "full" };
-  }
-
-  const initiative = await db.initiative.findUniqueOrThrow({
-    where: { id: initiativeId },
-    include: { prototype: { include: { layerLocks: true } } },
-  });
-  if (!initiative.prototype) {
-    throw new Error("No prototype to recalculate — generate the plan first.");
-  }
-  const methodology = resolveMethodology(initiative.methodology);
-  const prototypeId = initiative.prototype.id;
-  const branch = determineRespectLocksBranch(
-    initiative.prototype.layerLocks.map((l) => ({ layerType: l.layerType, state: l.state })),
-  );
-
-  // repack_only is deliberately exempt — it only recomputes the always-
-  // flexible agile layer (sprints), never the waterfall structure an
-  // approved baseline actually protects.
-  if (branch.kind !== "repack_only" && initiative.prototype.approvedAt && !options.confirmApprovedImpact) {
-    throw new ApprovedBaselineImpactError(
-      `This initiative has an approved baseline (approved ${initiative.prototype.approvedAt.toLocaleDateString()}). ` +
-        "This recalculation would rebuild part of the approved plan. Confirm to proceed anyway.",
-    );
-  }
-
-  if (branch.kind === "full_fallback_no_locks") {
-    const { prototypeId: id } = await generatePrototype(initiativeId);
-    return { prototypeId: id, mode: "respect_locks", detail: "full_fallback_no_locks" };
-  }
-
-  if (branch.kind === "repack_only") {
-    // Waterfall's agile layer freezes once the baseline is approved — same
-    // guard as the assumptions/move-sprint routes.
-    await assertAgileLayerEditable(initiativeId);
-    const intake = await loadIntakeInput(initiativeId);
-    const sprints = await withTransaction(
-      (tx) => repackSprints(tx, prototypeId, intake, methodology),
-      { timeout: 120_000 },
-    );
-    return { prototypeId, mode: "respect_locks", detail: "repack_only", sprintsRepacked: sprints };
-  }
-
-  await assertRecalculateSafe(initiativeId, prototypeId);
-  const stats = await regenerateBelow(prototypeId, branch.anchorLayer);
-  return { prototypeId, mode: "respect_locks", detail: "regen_below", regenerated: stats };
-}
-
-async function assertRecalculateSafe(initiativeId: string, prototypeId: string): Promise<void> {
-  const [intake, phaseRows] = await Promise.all([
-    loadIntakeInput(initiativeId),
-    db.artifactLayer.findMany({
-      where: { prototypeId, type: "roadmap_phase" },
-      select: { contentJson: true },
-    }),
-  ]);
-  const storedIds = phaseRows.flatMap(
-    (p) => (parseJson(p.contentJson).capabilityIds as string[] | undefined) ?? [],
-  );
-  const currentIds = intake.capabilities.map((c) => c.id);
-  if (capabilitySetDrifted(storedIds, currentIds)) {
-    throw new RecalculateBlockedError(
-      'Capabilities were added or removed since the roadmap was last generated — "Recalculate ' +
-        '— respect my locks" can\'t re-shuffle a locked roadmap. Use Full regenerate instead.',
-    );
-  }
+  const existingPlan = await db.prototype.findUnique({ where: { initiativeId }, select: { id: true } });
+  if (existingPlan) return { ...await createRegenerationProposal(initiativeId), mode, detail: "proposal_pending" };
+  // Compatibility flags from old clients cannot authorize replacement.
+  void options;
+  const result = await generatePrototype(initiativeId);
+  return { ...result, mode, detail: "full" };
 }
