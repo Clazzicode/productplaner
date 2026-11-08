@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { db, withTransaction } from "@/lib/db";
 import { auditInitiative } from "@/lib/audit";
 import { BusinessError } from "@/lib/businessError";
+import { syncDraftFeature } from "@/lib/planning/draftWorkspace";
 import { withPlanningMutation } from "@/lib/generation/mutation";
 import { syncBugPlanningFromRequest } from "@/lib/bugs/service";
 import { requestSchema, type RequestInput, type RequestRecord } from "./model";
@@ -122,6 +123,7 @@ export async function promoteRequest(initiativeId: string, requestId: string, re
       order: (max._max.order ?? -1) + 1,
     } });
     const updated = await db.planningRequest.update({ where: { id: row.id, initiativeId, revision }, data: { capabilityId: capability.id, revision: { increment: 1 } } });
+    await syncDraftFeature(initiativeId, capability);
     const initiative = await db.initiative.findUniqueOrThrow({ where: { id: initiativeId }, select: { organizationId: true } });
     await db.requestRevision.create({ data: {
       organizationId: initiative.organizationId, requestId: row.id, fromRevision: row.revision, toRevision: updated.revision,

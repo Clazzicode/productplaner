@@ -1,30 +1,9 @@
 import { db } from "@/lib/db";
 
-// Guided-activation restructure. Centralized, pure lifecycle-state resolver —
-// every screen that needs "what stage is this initiative at" or "what should
-// the user do next" reads it from here, instead of re-deriving it locally
-// (the old pattern: initiatives/[id]/dashboard/page.tsx and
-// globalDashboardData.ts each hand-rolled their own display-only
-// `nextAction` string). Pure/no I/O, same style as engine.ts's
-// `determineRespectLocksBranch` — callers load the handful of DB facts and
-// pass them in.
-//
-// `manualReleaseCount`/`manualSprintCount` count ONLY origin:"manual" rows.
-// This is deliberate, not an oversight: pre-existing engine-auto-packed
-// Release/Sprint rows (origin:"auto", the default for every row that existed
-// before this restructure) never satisfy these gates, even for initiatives
-// generated long ago — the new Create Release / Plan Sprint steps apply
-// retroactively. See engine.ts's repackSprints/legacy-cleanup comments for
-// what happens to those old auto rows once a prototype "graduates" to manual.
-//
-// The waterfall layer-lock ceremony (Roadmap/Features/Epics/Stories/
-// Acceptance Criteria) that used to gate the step between "plan generated"
-// and "release created" has been removed platform-wide (locking never made
-// sense as a user-facing concept here) — a generated plan is immediately
-// eligible for its first Release, no separate "review and lock the roadmap"
-// stage in between. `src/lib/generation/locking.ts`'s lock/unlock machinery
-// still exists but nothing calls it anymore; `LayerLock` rows just stay
-// permanently unlocked.
+// Compatibility stage labels and next-action recommendations only.
+// Viewing planning work never depends on generation, a release or a sprint.
+// Manual delivery records describe planning context; explicit commitment and
+// approval evidence are reported separately by planning/readiness.ts.
 
 export type LifecycleStage =
   | "no_initiative"
@@ -64,27 +43,14 @@ export interface LifecycleResolution {
   nextAction: NextAction;
 }
 
-/** A 0-100 progress figure for the "plan completion" style widgets across the
- * per-initiative dashboard, global dashboard, admin dashboard, and Executive
- * Report — replaces the old locked-layer-count math (there are no more
- * layers to lock). Keyed on the same stage the resolver already computes, so
- * every one of those screens shows a consistent number. */
-export const STAGE_PROGRESS_PERCENT: Record<LifecycleStage, number> = {
-  no_initiative: 0,
-  initiative_no_plan: 0,
-  plan_generated_no_release: 33,
-  release_no_sprint: 66,
-  active_execution: 100,
-};
-
 /** Short, human label for the current stage — the "where things stand today"
  * half of a progress widget, paired with `nextAction.label` for "what's next". */
 export const STAGE_LABEL: Record<LifecycleStage, string> = {
   no_initiative: "No initiative yet",
-  initiative_no_plan: "Plan not generated",
-  plan_generated_no_release: "Plan generated",
-  release_no_sprint: "Release created",
-  active_execution: "Planning setup complete",
+  initiative_no_plan: "Planning in progress",
+  plan_generated_no_release: "Generated forecast available",
+  release_no_sprint: "Delivery planning in progress",
+  active_execution: "Delivery context recorded",
 };
 
 function actionFor(key: NextActionKey, initiativeId: string | null): NextAction {
@@ -92,9 +58,9 @@ function actionFor(key: NextActionKey, initiativeId: string | null): NextAction 
     case "CREATE_INITIATIVE":
       return { key, label: "Create Initiative", href: "/initiatives/new" };
     case "GENERATE_PLAN":
-      return { key, label: "Generate Plan", href: `/initiatives/${initiativeId}/intake` };
+      return { key, label: "Develop planning work", href: `/initiatives/${initiativeId}/overview` };
     case "CREATE_RELEASE":
-      return { key, label: "Create First Release", href: `/initiatives/${initiativeId}/workspace/sprints` };
+      return { key, label: "Review delivery readiness", href: `/initiatives/${initiativeId}/workspace/release-readiness` };
     case "CREATE_SPRINT":
       return { key, label: "Plan First Sprint", href: `/initiatives/${initiativeId}/workspace/sprints` };
     case "OPERATIONAL_DASHBOARD":

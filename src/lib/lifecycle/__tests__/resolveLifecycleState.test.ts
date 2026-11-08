@@ -22,8 +22,8 @@ describe("resolveLifecycleState", () => {
     expect(result.stage).toBe("initiative_no_plan");
     expect(result.nextAction).toEqual({
       key: "GENERATE_PLAN",
-      label: "Generate Plan",
-      href: "/initiatives/init-1/intake",
+      label: "Develop planning work",
+      href: "/initiatives/init-1/overview",
     });
   });
 

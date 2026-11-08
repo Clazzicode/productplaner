@@ -1,8 +1,10 @@
 import { withAuthenticatedApi } from "@/lib/auth/entryPoints";
 import { NextResponse } from "next/server";
 import { jsonError, zodMessage } from "@/lib/api";
-import { getActiveProfile, requireCurrentUserApi } from "@/lib/auth/session";
-import { db, establishAuthContext } from "@/lib/db";
+import { requireCurrentUserApi } from "@/lib/auth/session";
+import { db, establishAuthContext, withTransaction } from "@/lib/db";
+import { ensureDraftWorkspace } from "@/lib/planning/draftWorkspace";
+import { auditInitiative } from "@/lib/audit";
 import { initiativeCreateSchema } from "@/lib/validation/schemas";
 
 async function POSTHandler(request: Request) {
@@ -13,11 +15,8 @@ async function POSTHandler(request: Request) {
   if (!authGuard.ok) return authGuard.response;
   const user = authGuard.user;
   establishAuthContext(user.authUserId);
-  const profile = await getActiveProfile();
-  if (!profile) {
-    return jsonError("Complete the qualifying questions before creating an initiative.", 403);
-  }
-
+  if (user.memberType !== "internal") return jsonError("Only internal workspace members can create planning work.", 403);
+  return withTransaction(async tx => {
   // Never trust a client-supplied projectId on its own (directive: the
   // application decides tenancy, not the request) — it must resolve to a
   // real Project in the actor's own organization, same "resolve from the DB
@@ -54,7 +53,6 @@ async function POSTHandler(request: Request) {
       organizationId: user.organizationId,
       projectId,
       userId: user.id,
-      qualifyingProfileId: profile.id,
       name: parsed.data.name,
       description: parsed.data.description,
       intakeMethod: parsed.data.intakeMethod ?? null,
@@ -66,7 +64,10 @@ async function POSTHandler(request: Request) {
       initiativeAccess: { create: { userId: user.id, permission: "owner" } },
     },
   });
+  await ensureDraftWorkspace(tx, initiative.id);
+  await auditInitiative(initiative.id, "intake.draft_created");
   return NextResponse.json({ initiativeId: initiative.id });
+  });
 }
 
 export const POST = withAuthenticatedApi(POSTHandler);

@@ -6,6 +6,7 @@ import { HEALTH_LABELS, type HealthStatus } from "@/lib/generation/health";
 import { formatCalendarDate } from "@/lib/calendarDate";
 
 export interface SprintSummaryView {
+  committed?: boolean;
   sprintNumber: number;
   plannedPoints: number;
   capacityPoints: number;
@@ -15,6 +16,7 @@ export interface SprintSummaryView {
 }
 
 export interface ReleaseSummaryView {
+  approved?: boolean;
   name: string;
   sprintRange: string;
   points: number;
@@ -47,7 +49,7 @@ export default function SprintReleaseStatus(props: {
       {s ? (
         <div className="mt-3 rounded-xl bg-neutral-50 p-3">
           <p className="text-sm font-semibold">
-            Sprint {s.sprintNumber}
+            {s.committed ? "Committed sprint" : "Forecast sprint"} {s.sprintNumber}
             <span className="ml-2 font-normal text-neutral-500">
               {formatCalendarDate(s.startDate)} – {formatCalendarDate(s.endDate)}
             </span>
@@ -73,14 +75,14 @@ export default function SprintReleaseStatus(props: {
               <th className="py-1.5 font-semibold">Release</th>
               <th className="py-1.5 font-semibold">Sprints</th>
               <th className="py-1.5 font-semibold">Points</th>
-              <th className="py-1.5 font-semibold">Target</th>
+              <th className="py-1.5 font-semibold">Planning target</th>
               <th className="py-1.5 font-semibold">Status</th>
             </tr>
           </thead>
           <tbody>
             {props.releases.map((r) => (
               <tr key={r.name} className="border-t border-neutral-100">
-                <td className="py-2 font-medium">{r.name}</td>
+                <td className="py-2 font-medium">{r.name}<span className="block text-xs font-normal">{r.approved ? "Approved release decision" : "Forecast · approval pending"}</span></td>
                 <td className="py-2 text-neutral-500">{r.sprintRange}</td>
                 <td className="py-2 text-neutral-500">{r.points}</td>
                 <td className="py-2 whitespace-nowrap text-neutral-500">{formatCalendarDate(r.targetDate)}</td>

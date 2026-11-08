@@ -9,7 +9,6 @@ export const dynamic = "force-dynamic";
 
 async function NewProjectPage() {
   const user = await requireCurrentUser();
-  if (user.profiles.length === 0) redirect("/welcome");
   if (user.permissionRole === "member") redirect("/projects");
 
   return (

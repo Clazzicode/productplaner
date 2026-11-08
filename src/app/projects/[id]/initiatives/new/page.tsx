@@ -1,13 +1,11 @@
 import { withAuthenticatedPage } from "@/lib/auth/entryPoints";
 import { notFound } from "next/navigation";
 import { FocusedLayout } from "@/components/layout/PageLayouts";
-import ProductDirectionBootstrap from "@/components/questionnaire/ProductDirectionBootstrap";
+import GeneralIntakeForm from "@/components/questionnaire/GeneralIntakeForm";
 import Breadcrumb from "@/components/ui/Breadcrumb";
 import { requireProjectPageAccess } from "@/lib/access/projectAccess";
 import { requireCurrentUser } from "@/lib/auth/session";
 import { db, establishAuthContext } from "@/lib/db";
-import { resolveWorkingRole } from "@/lib/onboarding/resolveWorkingRole";
-import { readOnboardingStateServer } from "@/lib/onboarding/tempStateServer";
 
 export const dynamic = "force-dynamic";
 
@@ -31,8 +29,6 @@ async function NewInitiativeInProjectPage({ params }: { params: Promise<{ id: st
   });
   if (!project) notFound();
 
-  const onboarding = await readOnboardingStateServer();
-  const workingRole = resolveWorkingRole(user.workingRole, onboarding.workingRole);
   const hasContext = project._count.initiatives > 0 || project.budget != null || project.averageHourlyRate != null || project.targetLaunchDate != null;
 
   return (
@@ -49,9 +45,8 @@ async function NewInitiativeInProjectPage({ params }: { params: Promise<{ id: st
         A few questions build straight into your working plan — budget, rate, and target date
         carry over from the project unless you override them.
       </p>
-      <ProductDirectionBootstrap
-        hasProfile
-        workingRole={workingRole}
+      <GeneralIntakeForm
+        storageScope={`${user.id}:${user.organizationId}`}
         project={{
           id: project.id,
           name: project.name,

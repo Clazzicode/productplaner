@@ -1,6 +1,5 @@
 import { withAuthenticatedPage } from "@/lib/auth/entryPoints";
 import Link from "next/link";
-import { redirect } from "next/navigation";
 import CoachMark from "@/components/coachmarks/CoachMark";
 import { ContainedLayout } from "@/components/layout/PageLayouts";
 import StatusBadge from "@/components/roadmapStatus/StatusBadge";
@@ -21,7 +20,6 @@ export const dynamic = "force-dynamic";
 async function ProjectsPage() {
   const user = await requireCurrentUser();
   establishAuthContext(user.authUserId);
-  if (user.profiles.length === 0) redirect("/welcome");
   const canCreateProject = user.permissionRole === "owner" || user.permissionRole === "admin";
 
   const projects = await db.project.findMany({

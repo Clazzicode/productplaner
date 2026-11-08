@@ -40,7 +40,7 @@ async function WorkspaceLayout({
   if (!ws) {
     const initiative = await db.initiative.findUnique({ where: { id: initiativeId } });
     if (!initiative) notFound();
-    redirect(`/initiatives/${initiativeId}/intake`);
+    redirect(`/initiatives/${initiativeId}/overview`);
   }
   const methodology = resolveMethodology(ws.initiative.methodology);
   const profile = profileFor(ws.initiative.methodology);
