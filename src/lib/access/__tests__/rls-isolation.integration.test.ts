@@ -38,7 +38,9 @@ const fixtureOrganizations: string[] = [];
 
 const directUrl = process.env.DIRECT_URL;
 if (!directUrl) throw new Error("DIRECT_URL is not set — required for isolation-test fixture setup/teardown.");
-const adminDb = new PrismaClient({ datasourceUrl: directUrl });
+const fixtureAdminUrl = new URL(directUrl);
+fixtureAdminUrl.searchParams.set("connection_limit", "1");
+const adminDb = new PrismaClient({ datasourceUrl: fixtureAdminUrl.toString() });
 
 interface Fixture {
   orgId: string;

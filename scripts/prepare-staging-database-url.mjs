@@ -24,5 +24,8 @@ try {
 // The corrected connection string is written only to the runner's temporary
 // environment file; neither the original nor corrected value is logged.
 url.password = password;
+// CI shares the existing staging pool with Preview. Keep each test application
+// client bounded; concurrent requests must safely share a pooled connection.
+url.searchParams.set("connection_limit", "1");
 appendFileSync(environmentFile, `DATABASE_URL=${url.toString()}\n`, { mode: 0o600 });
 console.log("Prepared the staging application connection from protected secrets.");
