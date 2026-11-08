@@ -1,7 +1,7 @@
 name: Final operational acceptance
 on:
   pull_request:
-    types: [closed]
+    types: [closed, labeled]
   workflow_dispatch:
 permissions:
   contents: read
@@ -9,6 +9,30 @@ concurrency:
   group: clarivia-final-operational-acceptance
   cancel-in-progress: false
 jobs:
+  auth-probe:
+    if: >-
+      ${{ github.event_name == 'pull_request' && github.event.action == 'labeled' &&
+      github.event.label.name == 'run-auth-probe' &&
+      github.event.pull_request.head.repo.full_name == github.repository }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    environment: staging
+    env:
+      APP_ENVIRONMENT: staging
+      STAGING_SUPABASE_PROJECT_REF: ${{ secrets.STAGING_SUPABASE_PROJECT_REF }}
+      DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
+      DIRECT_URL: ${{ secrets.STAGING_DIRECT_URL }}
+      STAGING_SUPABASE_SECRET_KEY: ${{ secrets.STAGING_SUPABASE_SECRET_KEY }}
+      NEXT_PUBLIC_SUPABASE_URL: https://qbogvclmehvrtuwiktos.supabase.co
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - name: Report safe credential classification and Auth admin HTTP status only
+        run: npx tsx scripts/staging-acceptance.ts --probe-auth-admin
   restore:
     if: >-
       ${{ github.event_name == 'workflow_dispatch' ||

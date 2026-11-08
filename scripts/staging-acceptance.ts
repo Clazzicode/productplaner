@@ -13,12 +13,25 @@ for (const name of ["DATABASE_URL","DIRECT_URL"] as const) {
   if (process.env.APP_ENVIRONMENT !== "staging" || process.env.STAGING_SUPABASE_PROJECT_REF !== ref || !(url.hostname === `db.${ref}.supabase.co` || (url.hostname.endsWith(".pooler.supabase.com") && decodeURIComponent(url.username).endsWith(`.${ref}`)))) throw new Error("Acceptance fixtures are restricted to the independent staging project");
 }
 if (!process.env.STAGING_SUPABASE_SECRET_KEY) throw new Error("STAGING_SUPABASE_SECRET_KEY is required in the protected staging environment");
+const credential = process.env.STAGING_SUPABASE_SECRET_KEY;
+const kind = credential.startsWith("sb_secret_") ? "secret" : credential.startsWith("sb_publishable_") ? "publishable" : credential.startsWith("eyJ") ? "legacy_jwt" : "unrecognized";
+const credentialReport: Record<string, unknown> = { kind, hasOuterWhitespace: credential !== credential.trim(), hasQuotes: /^["']|["']$/.test(credential) };
+if (kind === "legacy_jwt") {
+  try { const claims=JSON.parse(Buffer.from(credential.split(".")[1],"base64url").toString());credentialReport.role=claims.role === "service_role" ? "service_role" : "not_service_role";credentialReport.expectedProject=claims.ref === ref; } catch { credentialReport.parseable=false; }
+}
+const service = createClient(`https://${ref}.supabase.co`, credential, { auth: { persistSession: false, autoRefreshToken: false } });
+const probe = await service.auth.admin.listUsers({ page: 1, perPage: 1 });
+credentialReport.adminAccess=!probe.error;
+credentialReport.httpStatus=probe.error?.status ?? 200;
+credentialReport.errorCode=typeof probe.error?.code === "string" && /^[a-z0-9_]{1,80}$/i.test(probe.error.code) ? probe.error.code : probe.error ? "AUTH_ADMIN_REQUEST_FAILED" : null;
+console.log(JSON.stringify({ stagingAuthCredentialProbe: credentialReport }));
+if (probe.error) { process.exitCode=1;await rawDb.$disconnect();return; }
+if (process.argv.includes("--probe-auth-admin")) { await rawDb.$disconnect();return; }
 const base = process.env.ACCEPTANCE_BASE_URL ?? "http://127.0.0.1:3000";
 if (base !== "http://127.0.0.1:3000") throw new Error("This workload targets the isolated runner production build only");
 const duration = Number(process.env.ACCEPTANCE_DURATION_SECONDS ?? 1800);
 if (duration !== 1800) throw new Error("Acceptance requires a full 30-minute workload");
 const admin = new PrismaClient({ datasourceUrl: process.env.DIRECT_URL });
-const service = createClient(`https://${ref}.supabase.co`, process.env.STAGING_SUPABASE_SECRET_KEY, { auth: { persistSession: false, autoRefreshToken: false } });
 const runId = randomUUID();
 type Actor = { index: number; authId: string; userId: string; email: string; password: string; orgId: string; cookies: Map<string,string>; feature?: { id: string; revision: number; input: Record<string,unknown> }; writes: number };
 const actors: Actor[] = []; const orgIds: string[] = [];
@@ -43,7 +56,7 @@ try {
   for (let index=0;index<21;index++) {
     const email = `clarivia.acceptance.${runId}.${index}@example.com`; const password = randomBytes(32).toString("base64url");
     const result = await service.auth.admin.createUser({ email,password,email_confirm: true,user_metadata: { name: `Acceptance test ${index}` } });
-    check(!result.error && result.data.user, "Could not create an isolated staging Auth test account");
+    check(!result.error && result.data.user, `Could not create an isolated staging Auth test account (HTTP ${result.error?.status ?? "unknown"}; ${typeof result.error?.code === "string" && /^[a-z0-9_]{1,80}$/i.test(result.error.code) ? result.error.code : "unclassified"})`);
     actors.push({ index,authId: result.data.user.id,userId:"",email,password,orgId:"",cookies:new Map(),writes:0 });
   }
   for (let group=0;group<2;group++) {
