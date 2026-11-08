@@ -1,4 +1,5 @@
 import { decryptJiraSecret, encryptJiraSecret } from "./crypto";
+import { BusinessError } from "@/lib/businessError";
 
 export interface JiraTokens {
   accessToken: string;
@@ -23,18 +24,20 @@ export interface JiraIssueSnapshot {
   description: unknown;
   issueType: { id: string; name: string; subtask: boolean };
   status: { id: string; name: string; category: string };
-  assignee: { accountId: string; displayName: string } | null;
   priority: { id: string; name: string } | null;
   labels: string[];
   parentKey: string | null;
   storyPoints: number | null;
-  sprint: unknown;
-  fixVersions: { id: string; name: string; releaseDate: string | null }[];
   updated: string | null;
-  rawFields: Record<string, unknown>;
 }
 
 type Fetcher = typeof fetch;
+
+function assertJiraWritesEnabled() {
+  if (process.env.JIRA_WRITE_ENABLED !== "true") {
+    throw new Error("Jira write operations are disabled for this deployment.");
+  }
+}
 
 function config() {
   const clientId = process.env.JIRA_CLIENT_ID?.trim();
@@ -64,7 +67,9 @@ export function jiraAuthorizationUrl(state: string) {
   const params = new URLSearchParams({
     audience: "api.atlassian.com",
     client_id: clientId,
-    scope: "read:jira-work write:jira-work read:jira-user manage:jira-webhook offline_access",
+    scope: process.env.JIRA_WRITE_ENABLED === "true"
+      ? "read:jira-work write:jira-work read:jira-user manage:jira-webhook offline_access"
+      : "read:jira-work offline_access",
     redirect_uri: redirectUri,
     state,
     response_type: "code",
@@ -114,6 +119,9 @@ async function jiraApi(cloudId: string, accessToken: string, path: string, init:
     ...init,
     headers: { authorization: `Bearer ${accessToken}`, accept: "application/json", ...(init.body ? { "content-type": "application/json" } : {}), ...init.headers },
   });
+  if (response.status === 401 || response.status === 403) {
+    throw new BusinessError("Jira access was revoked or this project is no longer permitted. Reconnect Atlassian or review Jira access.", response.status);
+  }
   return jsonResponse(response);
 }
 
@@ -151,10 +159,8 @@ export function issueSnapshot(value: unknown, storyPointsField: string | null): 
   const issueType = object(fields.issuetype);
   const status = object(fields.status);
   const statusCategory = object(status.statusCategory);
-  const assignee = fields.assignee ? object(fields.assignee) : null;
   const priority = fields.priority ? object(fields.priority) : null;
   const parent = fields.parent ? object(fields.parent) : null;
-  const fixVersions = Array.isArray(fields.fixVersions) ? fields.fixVersions.map((item) => object(item)) : [];
   const id = text(row.id);
   const key = text(row.key);
   if (!id || !key) return null;
@@ -165,23 +171,19 @@ export function issueSnapshot(value: unknown, storyPointsField: string | null): 
     description: fields.description ?? null,
     issueType: { id: text(issueType.id), name: text(issueType.name), subtask: Boolean(issueType.subtask) },
     status: { id: text(status.id), name: text(status.name), category: text(statusCategory.key) },
-    assignee: assignee ? { accountId: text(assignee.accountId), displayName: text(assignee.displayName) } : null,
     priority: priority ? { id: text(priority.id), name: text(priority.name) } : null,
     labels: Array.isArray(fields.labels) ? fields.labels.map(text).filter(Boolean) : [],
     parentKey: parent ? text(parent.key) || null : null,
     storyPoints: storyPointsField ? number(fields[storyPointsField]) : null,
-    sprint: fields.customfield_10020 ?? null,
-    fixVersions: fixVersions.map((version) => ({ id: text(version.id), name: text(version.name), releaseDate: text(version.releaseDate) || null })).filter((version) => version.id),
     updated: text(fields.updated) || null,
-    rawFields: fields,
   };
 }
 
-const ISSUE_FIELDS = ["summary","description","issuetype","status","assignee","priority","labels","parent","fixVersions","updated"];
+const ISSUE_FIELDS = ["summary","description","issuetype","status","priority","labels","parent","updated"];
 
 export async function getJiraIssue(input: { cloudId: string; accessToken: string; issueIdOrKey: string; storyPointsField?: string | null }, fetcher: Fetcher = fetch) {
   const storyPointsField = input.storyPointsField === undefined ? "customfield_10016" : input.storyPointsField;
-  const fields = [...ISSUE_FIELDS, ...(storyPointsField ? [storyPointsField] : []), "customfield_10020"].join(",");
+  const fields = [...ISSUE_FIELDS, ...(storyPointsField ? [storyPointsField] : [])].join(",");
   const payload = await jiraApi(input.cloudId, input.accessToken, `/rest/api/3/issue/${encodeURIComponent(input.issueIdOrKey)}?fields=${encodeURIComponent(fields)}`, {}, fetcher);
   const issue = issueSnapshot(payload, storyPointsField);
   if (!issue) throw new Error("Jira returned an invalid issue response.");
@@ -189,6 +191,7 @@ export async function getJiraIssue(input: { cloudId: string; accessToken: string
 }
 
 export async function createJiraIssue(input: { cloudId: string; accessToken: string; fields: Record<string, unknown> }, fetcher: Fetcher = fetch) {
+  assertJiraWritesEnabled();
   const payload = object(await jiraApi(input.cloudId, input.accessToken, "/rest/api/3/issue", { method: "POST", body: JSON.stringify({ fields: input.fields }) }, fetcher));
   const id = text(payload.id); const key = text(payload.key);
   if (!id || !key) throw new Error("Jira created the issue but did not return its identity.");
@@ -196,10 +199,12 @@ export async function createJiraIssue(input: { cloudId: string; accessToken: str
 }
 
 export async function updateJiraIssue(input: { cloudId: string; accessToken: string; issueIdOrKey: string; fields: Record<string, unknown> }, fetcher: Fetcher = fetch) {
+  assertJiraWritesEnabled();
   await jiraApi(input.cloudId, input.accessToken, `/rest/api/3/issue/${encodeURIComponent(input.issueIdOrKey)}`, { method: "PUT", body: JSON.stringify({ fields: input.fields }) }, fetcher);
 }
 
 export async function registerJiraWebhook(input: { cloudId: string; accessToken: string; callbackUrl: string; projectKey: string }, fetcher: Fetcher = fetch) {
+  assertJiraWritesEnabled();
   const payload = object(await jiraApi(input.cloudId, input.accessToken, "/rest/api/3/webhook", { method: "POST", body: JSON.stringify({ url: input.callbackUrl, webhooks: [{ events: ["jira:issue_created", "jira:issue_updated", "jira:issue_deleted"], jqlFilter: `project = \"${input.projectKey.replaceAll('"', '\\"')}\"` }] }) }, fetcher));
   const rows = Array.isArray(payload.webhookRegistrationResult) ? payload.webhookRegistrationResult.map(object) : [];
   const id = rows.map((row) => number(row.createdWebhookId)).find((value): value is number => value !== null);
@@ -208,6 +213,7 @@ export async function registerJiraWebhook(input: { cloudId: string; accessToken:
 }
 
 export async function refreshJiraWebhook(input: { cloudId: string; accessToken: string; webhookId: string }, fetcher: Fetcher = fetch) {
+  assertJiraWritesEnabled();
   const payload = object(await jiraApi(input.cloudId, input.accessToken, "/rest/api/3/webhook/refresh", { method: "PUT", body: JSON.stringify({ webhookIds: [Number(input.webhookId)] }) }, fetcher));
   const expiration = text(payload.expirationDate);
   if (!expiration || Number.isNaN(new Date(expiration).getTime())) throw new Error("Jira did not return the renewed webhook expiration.");
@@ -215,6 +221,7 @@ export async function refreshJiraWebhook(input: { cloudId: string; accessToken: 
 }
 
 export async function deleteJiraWebhooks(input: { cloudId: string; accessToken: string; webhookIds: string[] }, fetcher: Fetcher = fetch) {
+  assertJiraWritesEnabled();
   const webhookIds = input.webhookIds.map(Number).filter(Number.isFinite);
   if (!webhookIds.length) return;
   await jiraApi(input.cloudId, input.accessToken, "/rest/api/3/webhook", { method: "DELETE", body: JSON.stringify({ webhookIds }) }, fetcher);
@@ -222,7 +229,7 @@ export async function deleteJiraWebhooks(input: { cloudId: string; accessToken: 
 
 export async function searchJiraIssues(input: { cloudId: string; accessToken: string; projectKey: string; nextPageToken?: string; storyPointsField?: string | null }, fetcher: Fetcher = fetch) {
   const storyPointsField = input.storyPointsField === undefined ? "customfield_10016" : input.storyPointsField;
-  const body = { jql: `project = \"${input.projectKey.replaceAll('"', '\\"')}\" ORDER BY updated ASC`, maxResults: 100, ...(input.nextPageToken ? { nextPageToken: input.nextPageToken } : {}), fields: [...ISSUE_FIELDS,...(storyPointsField ? [storyPointsField] : []),"customfield_10020"] };
+  const body = { jql: `project = \"${input.projectKey.replaceAll('"', '\\"')}\" ORDER BY updated ASC`, maxResults: 100, ...(input.nextPageToken ? { nextPageToken: input.nextPageToken } : {}), fields: [...ISSUE_FIELDS,...(storyPointsField ? [storyPointsField] : [])] };
   const payload = object(await jiraApi(input.cloudId, input.accessToken, "/rest/api/3/search/jql", { method: "POST", body: JSON.stringify(body) }, fetcher));
   const issues = Array.isArray(payload.issues) ? payload.issues.map((issue) => issueSnapshot(issue, storyPointsField)).filter((issue): issue is JiraIssueSnapshot => Boolean(issue)) : [];
   return { issues, nextPageToken: text(payload.nextPageToken) || null, isLast: Boolean(payload.isLast) };

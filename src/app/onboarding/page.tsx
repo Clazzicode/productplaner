@@ -11,7 +11,7 @@ export default function OnboardingOrganizationPage() {
         </p>
         <h1 className="mt-2 text-3xl font-bold">Let&apos;s set up your workspace</h1>
         <p className="mt-3 text-neutral-500">
-          A couple of quick questions before we get you into the guided planning questions.
+          A couple of quick questions before we get you started with the planning questions.
         </p>
       </div>
       <OrganizationSetupForm />

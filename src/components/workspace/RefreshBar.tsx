@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { apiFetch } from "@/lib/clientApi";
+import { apiFetch, waitForBackgroundJob } from "@/lib/clientApi";
 import { ButtonLoader } from "@/components/ui/loading";
 
 /**
@@ -44,12 +44,12 @@ export default function RefreshBar(props: {
   const run = async (confirmApprovedImpact?: boolean) => {
     setBusy(true);
     setError(null);
-    const res = await apiFetch<{ requiresApprovedImpactConfirmation?: boolean }>(
+    const res = await apiFetch<{ jobId?: string; requiresApprovedImpactConfirmation?: boolean }>(
       `/api/initiatives/${props.initiativeId}/recalculate`,
       { method: "POST", body: { mode: "full", confirmApprovedImpact } },
     );
-    setBusy(false);
     if (!res.ok) {
+      setBusy(false);
       if (res.data?.requiresApprovedImpactConfirmation) {
         setConfirm(false);
         setApprovedImpactMessage(res.error ?? "This would affect an approved baseline.");
@@ -57,6 +57,19 @@ export default function RefreshBar(props: {
       }
       setConfirm(false);
       setError(res.error ?? "Regenerate failed.");
+      return;
+    }
+    if (!res.data?.jobId) {
+      setBusy(false);
+      setError("The regeneration job was not created.");
+      return;
+    }
+    const completed = await waitForBackgroundJob(res.data.jobId);
+    setBusy(false);
+    if (!completed.ok) {
+      setConfirm(false);
+      setApprovedImpactMessage(null);
+      setError(completed.error ?? "Regenerate failed.");
       return;
     }
     setConfirm(false);

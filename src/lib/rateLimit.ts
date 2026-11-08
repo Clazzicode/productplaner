@@ -32,6 +32,15 @@ export function rateLimitPolicyFor(request: Request): RateLimitPolicy | null {
   }
   if (!["POST", "PUT", "PATCH", "DELETE"].includes(request.method)) return null;
   if (AUTH_POLICIES[path]) return AUTH_POLICIES[path];
+  if (path === "/api/atlassian/oauth/start") {
+    return { key: "atlassian.oauth_start", limit: 10, windowSeconds: 600 };
+  }
+  if (path === "/api/atlassian/oauth/disconnect") {
+    return { key: "atlassian.oauth_disconnect", limit: 5, windowSeconds: 600 };
+  }
+  if (path === "/api/atlassian/oauth/verify") {
+    return { key: "atlassian.oauth_verify", limit: 20, windowSeconds: 600 };
+  }
   if (path === "/api/account/start-over") {
     return { key: "account.start_over", limit: 3, windowSeconds: 3600 };
   }
@@ -70,6 +79,15 @@ export function rateLimitPolicyFor(request: Request): RateLimitPolicy | null {
   }
   if (/^\/api\/integrations\/jira\/webhooks\/[^/]+$/.test(path)) {
     return { key: "jira.webhook_delivery", limit: 120, windowSeconds: 60 };
+  }
+  if (path.startsWith("/api/atlassian/forge/") || path === "/api/atlassian/pairings") {
+    return { key: "atlassian.forge_remote", limit: 120, windowSeconds: 60 };
+  }
+  if (path === "/api/workspace-invitations") {
+    return { key: "workspace.invitation.create", limit: 20, windowSeconds: 3600 };
+  }
+  if (path === "/api/workspace-invitations/accept") {
+    return { key: "workspace.invitation.accept", limit: 20, windowSeconds: 3600 };
   }
   if (path.startsWith("/api/admin/")) {
     return { key: "admin.mutation", limit: 60, windowSeconds: 600 };

@@ -64,7 +64,7 @@ export default function AdminShell(props: { children: React.ReactNode; userName:
   const adminNav = (
     <Sidebar
       groups={ADMIN_GROUPS}
-      title="Guided Planning — Administration"
+      title="Clarivia — Administration"
       titleHref="/admin"
       footer={
         <Link

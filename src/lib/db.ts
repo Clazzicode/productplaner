@@ -1,6 +1,7 @@
 import { Prisma, PrismaClient } from "@prisma/client";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { assertEnvironmentIsolation } from "@/lib/environment";
+import { prismaDatabaseUrl } from "@/lib/dbConnection";
 
 // ---------- RLS request context (docs/V2-MULTI-TENANT-AUTH.md) ----------
 // Postgres's auth.uid() reads current_setting('request.jwt.claims', true)::json->>'sub'.
@@ -80,7 +81,10 @@ const globalForPrisma = globalThis as unknown as { rawPrisma?: PrismaClient };
 /** Unextended client. Used internally by withTransaction(), and directly by
  * one-off scripts (backfill, seeding) that manage their own connection/role
  * and don't run inside a request's auth context. Prefer `db` everywhere else. */
-export const rawDb = globalForPrisma.rawPrisma ?? new PrismaClient();
+const serverlessDatabaseUrl = prismaDatabaseUrl(process.env.DATABASE_URL, process.env.VERCEL_ENV);
+export const rawDb = globalForPrisma.rawPrisma ?? new PrismaClient(
+  serverlessDatabaseUrl ? { datasources: { db: { url: serverlessDatabaseUrl } } } : undefined,
+);
 
 if (process.env.NODE_ENV !== "production") globalForPrisma.rawPrisma = rawDb;
 

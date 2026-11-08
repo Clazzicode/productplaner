@@ -3,6 +3,7 @@ import IntegrationsHub, {
   type HubProvider,
 } from "@/components/integrations/IntegrationsHub";
 import CoachMark from "@/components/coachmarks/CoachMark";
+import AtlassianOAuthConnection from "@/components/integrations/AtlassianOAuthConnection";
 import { ContainedLayout } from "@/components/layout/PageLayouts";
 import PageHeader from "@/components/ui/PageHeader";
 import { requireCurrentUser } from "@/lib/auth/session";
@@ -36,7 +37,7 @@ export default async function IntegrationsPage() {
     }),
   ]);
 
-  const hubProviders: HubProvider[] = providers.map((p) => ({
+  const hubProviders: HubProvider[] = providers.filter((p) => p.key !== "jira").map((p) => ({
     id: p.id,
     key: p.key,
     name: p.name,
@@ -68,7 +69,11 @@ export default async function IntegrationsPage() {
   }));
 
   const generated = initiatives.filter((i) => i.status === "generated");
-  const connectedCount = hubConnections.filter(
+  const hubConnectionsForDemo = hubConnections.filter((c) => {
+    const provider = providers.find((p) => p.id === c.providerId);
+    return provider?.key !== "jira";
+  });
+  const connectedCount = hubConnectionsForDemo.filter(
     (c) => c.isEnabled && c.status !== "available",
   ).length;
 
@@ -80,9 +85,12 @@ export default async function IntegrationsPage() {
       />
       <CoachMark coachMarkKey="integrations" className="mt-4" />
       <div className="mt-6">
+        <AtlassianOAuthConnection canManage={user.permissionRole === "owner" || user.permissionRole === "admin"} />
+      </div>
+      <div className="mt-6">
         <IntegrationsHub
           providers={hubProviders}
-          connections={hubConnections}
+          connections={hubConnectionsForDemo}
           initiatives={generated.map((i) => ({ id: i.id, name: i.name }))}
           defaultInitiativeId={generated[0]?.id ?? null}
         />

@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
-import { apiFetch } from "@/lib/clientApi";
+import { apiFetch, waitForBackgroundJob } from "@/lib/clientApi";
 import type { WorkingRole } from "@/lib/onboarding/types";
 import { isAdvancedScoringComplete } from "@/lib/questionnaire/capabilityScoring";
 import { mapMethodologyAnswer, type MethodologyAnswer } from "@/lib/questionnaire/methodologyMapping";
@@ -258,10 +258,17 @@ export default function PlanningQuestionnaire(props: {
     }
     setBusy(true);
     setError(null);
-    const res = await apiFetch(`/api/initiatives/${initiativeId}/generate`, { method: "POST", body: {} });
-    setBusy(false);
-    if (!res.ok) {
+    const res = await apiFetch<{ jobId: string }>(`/api/initiatives/${initiativeId}/generate`, { method: "POST", body: {} });
+    if (!res.ok || !res.data?.jobId) {
+      setBusy(false);
       setError(res.error ?? "Generation failed.");
+      void refreshValidation();
+      return;
+    }
+    const completed = await waitForBackgroundJob(res.data.jobId);
+    setBusy(false);
+    if (!completed.ok) {
+      setError(completed.error ?? "Generation failed.");
       void refreshValidation();
       return;
     }

@@ -7,7 +7,7 @@ import { apiFetch } from "@/lib/clientApi";
 import { AuthenticationLoader, ButtonLoader } from "@/components/ui/loading";
 
 type Mode = "sign-in" | "sign-up" | "forgot-password";
-export default function LoginForm({ linkError = false }: { linkError?: boolean }) {
+export default function LoginForm({ linkError = false, nextPath = "/", testEnvironment = false }: { linkError?: boolean; nextPath?: "/" | "/join"; testEnvironment?: boolean }) {
   const router = useRouter();
   const [mode, setMode] = useState<Mode>("sign-in");
   const [busy, setBusy] = useState(false);
@@ -19,6 +19,10 @@ export default function LoginForm({ linkError = false }: { linkError?: boolean }
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const createAccountLabel = testEnvironment ? "Create test account" : "Create account";
+  const signUpDescription = testEnvironment
+    ? "Use a test username and an email you control for confirmation and recovery. This account exists only in the test environment."
+    : "Choose a username and use a real email for confirmation and recovery.";
 
   const switchMode = (next: Mode) => {
     setMode(next);
@@ -44,7 +48,7 @@ export default function LoginForm({ linkError = false }: { linkError?: boolean }
       body: mode === "sign-in"
         ? { identifier: identity, password }
         : mode === "sign-up"
-          ? { username, email: identity, password, name }
+          ? { username, email: identity, password, name, next: nextPath === "/join" ? "/join" : undefined }
           : { email: identity },
     });
     if (!res.ok) {
@@ -59,7 +63,7 @@ export default function LoginForm({ linkError = false }: { linkError?: boolean }
       setMessage(res.data?.message ?? "Check your email.");
       return;
     }
-    router.push("/");
+    router.push(nextPath);
     router.refresh();
   };
 
@@ -73,12 +77,12 @@ export default function LoginForm({ linkError = false }: { linkError?: boolean }
           </button>
           <button type="button" role="tab" aria-selected={mode === "sign-up"} onClick={() => switchMode("sign-up")} disabled={busy}
             className={`rounded-lg px-4 py-2.5 text-sm font-semibold transition ${mode === "sign-up" ? "bg-accent text-white shadow-sm" : "text-neutral-500 hover:text-text-primary"}`}>
-            Create account
+            {createAccountLabel}
           </button>
         </div>}
-        <h2 className="text-xl font-semibold">{mode === "sign-up" ? "Create a new account" : mode === "forgot-password" ? "Reset your password" : "Welcome back"}</h2>
+        <h2 className="text-xl font-semibold">{mode === "sign-up" ? (testEnvironment ? "Create a test account" : "Create a new account") : mode === "forgot-password" ? "Reset your password" : "Welcome back"}</h2>
         <p className="mb-5 mt-1 text-sm text-neutral-500">
-          {mode === "sign-up" ? "Choose a username and use a real email for confirmation and recovery." : mode === "forgot-password" ? "We will send a secure reset link to your email." : "Sign in with your username or email address."}
+          {mode === "sign-up" ? signUpDescription : mode === "forgot-password" ? "We will send a secure reset link to your email." : "Sign in with your username or email address."}
         </p>
         {error && <div role="alert" className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">{error}</div>}
         {message && <div role="status" className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
@@ -116,7 +120,7 @@ export default function LoginForm({ linkError = false }: { linkError?: boolean }
             autoComplete="new-password" minLength={8} maxLength={128} required disabled={busy} />
         </label>}
         <ButtonLoader type="submit" className="mt-5 w-full justify-center" loading={busy} loadingLabel="Please wait">
-          {mode === "sign-in" ? "Sign in" : mode === "sign-up" ? "Create account" : "Send reset link"}
+          {mode === "sign-in" ? "Sign in" : mode === "sign-up" ? createAccountLabel : "Send reset link"}
         </ButtonLoader>
         {busy && <AuthenticationLoader label="Please wait" />}
         {mode === "sign-in" && <button type="button" onClick={() => switchMode("forgot-password")} disabled={busy} className="mt-4 w-full text-sm text-accent hover:underline">Forgot your password?</button>}

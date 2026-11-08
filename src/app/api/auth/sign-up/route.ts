@@ -13,12 +13,13 @@ const signUpSchema = z.object({
   email: emailSchema,
   name: z.string().trim().min(1, "Enter your name.").max(100),
   password: passwordSchema,
+  next: z.literal("/join").optional(),
 });
 
 async function POSTHandler(request: Request) {
   const parsed = signUpSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return jsonError(zodMessage(parsed.error), 422);
-  const { username, email, name, password } = parsed.data;
+  const { username, email, name, password, next } = parsed.data;
   const normalized = normalizeUsername(username);
   const service = createSupabaseServiceClient();
   const { data: existingUsername, error: lookupError } = await service
@@ -33,7 +34,7 @@ async function POSTHandler(request: Request) {
   // The public flow applies confirmation, password policies, and provider throttles.
   // Never pre-confirm customer addresses through the service-role Admin API.
   const { data, error } = await supabase.auth.signUp({
-    email, password, options: { data: { name, username }, emailRedirectTo: authCallbackUrl(request) },
+    email, password, options: { data: { name, username }, emailRedirectTo: authCallbackUrl(request, false, next) },
   });
   if (error) {
     if ((error.status ?? 0) >= 500) return jsonError("Sign-up unavailable.", 503);

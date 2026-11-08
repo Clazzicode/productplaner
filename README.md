@@ -1,4 +1,4 @@
-# Guided Product Planning Platform — Functional Prototype
+# Clarivia — Functional Prototype
 
 A working prototype of the platform specified in `../Week 3 combined v2.pdf`: a
 methodology-aware planning system that takes a raw product idea through a guided intake and
@@ -6,6 +6,20 @@ generates a **connected, traceable, hybrid-waterfall plan** — roadmap → feat
 epics → user stories → acceptance criteria, with a sprint plan, release plan, capacity
 forecast, cost forecast, and executive presentation computed beneath, then surfaced on a
 dashboard and demo integrations hub.
+
+## Deployed environments
+
+| App deployment | Supabase project | Accounts and data |
+| --- | --- | --- |
+| Vercel Production | `productplaner` (`hzsrdpbdbfqaicropsha`) | Real Clarivia accounts and production data. |
+| Vercel Preview | `Clarivia TEST ONLY - Staging` (`qbogvclmehvrtuwiktos`) | Test accounts and disposable test data only. |
+
+The two projects have separate Auth user lists and passwords. A Production login does not
+sign in to Preview. Preview displays a **TEST ENVIRONMENT** banner and uses test-account
+wording on its sign-in page. The server checks that Preview Auth and Postgres target the
+same non-production Supabase project before handling requests. Do not copy Production
+database URLs or keys into Preview. See `docs/JIRA-DATA-BOUNDARY.md` for Jira's read-only
+staging policy.
 
 ## Scope of this prototype
 

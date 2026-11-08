@@ -9,14 +9,17 @@ import { environmentIsolation } from "@/lib/environment";
  * what silently refreshes it and rewrites the updated cookie onto the
  * response before it reaches getCurrentUser().
  */
-export async function updateSupabaseSession(request: NextRequest) {
-  if (["/api/health", "/api/ready"].includes(request.nextUrl.pathname)) return NextResponse.next();
+export async function updateSupabaseSession(request: NextRequest, forwardedHeaders = new Headers(request.headers)) {
+  if (["/api/health", "/api/ready"].includes(request.nextUrl.pathname)
+    || request.nextUrl.pathname.startsWith("/api/atlassian/forge/")) {
+    return NextResponse.next({ request: { headers: forwardedHeaders } });
+  }
   if (!environmentIsolation().isolated) {
     return NextResponse.json({ error: "This environment is not ready." }, {
       status: 503, headers: { "cache-control": "no-store" },
     });
   }
-  let response = NextResponse.next({ request });
+  let response = NextResponse.next({ request: { headers: forwardedHeaders } });
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -28,7 +31,7 @@ export async function updateSupabaseSession(request: NextRequest) {
         },
         setAll(cookiesToSet) {
           for (const { name, value } of cookiesToSet) request.cookies.set(name, value);
-          response = NextResponse.next({ request });
+          response = NextResponse.next({ request: { headers: forwardedHeaders } });
           for (const { name, value, options } of cookiesToSet) response.cookies.set(name, value, options);
         },
       },

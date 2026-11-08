@@ -1,5 +1,6 @@
 import { timingSafeEqual } from "node:crypto";
 import { processJiraJobs } from "@/lib/jira/jobs";
+import { db, withServiceContext } from "@/lib/db";
 import { withApi } from "@/lib/observability";
 
 function authorized(request: Request) {
@@ -9,7 +10,9 @@ function authorized(request: Request) {
 }
 async function handler(request: Request) {
   if (!authorized(request)) return Response.json({ error: "Unauthorized." }, { status: 401 });
-  return Response.json(await processJiraJobs(25));
+  const result = await processJiraJobs(25);
+  await withServiceContext(() => db.$executeRaw`SELECT app_private.expire_jira_source_data()`);
+  return Response.json(result);
 }
-export const GET = withApi(handler, { diagnostic: true });
-export const POST = withApi(handler, { diagnostic: true });
+export const GET = withApi(handler);
+export const POST = withApi(handler);

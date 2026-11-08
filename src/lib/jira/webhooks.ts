@@ -16,6 +16,7 @@ function webhookBaseUrl() {
 }
 
 export async function registerWebhook(connectionId: string) {
+  if (process.env.JIRA_WRITE_ENABLED !== "true") throw new BusinessError("Jira webhook registration is disabled while this connection is read-only.", 403);
   const { connection, accessToken } = await accessTokenFor(connectionId);
   if (!connection.initiativeId || !connection.cloudId || !connection.projectKey) throw new BusinessError("Finish the Jira connection before enabling webhooks.", 422);
   if (!connection.scopes.split(/\s+/).includes("manage:jira-webhook")) throw new BusinessError("Reconnect Jira and grant webhook management access.", 422);
@@ -31,6 +32,7 @@ export async function registerWebhook(connectionId: string) {
 }
 
 export async function renewWebhook(connectionId: string) {
+  if (process.env.JIRA_WRITE_ENABLED !== "true") throw new BusinessError("Jira webhook renewal is disabled while this connection is read-only.", 403);
   const subscription = await db.jiraWebhookSubscription.findUnique({ where: { connectionId } });
   if (!subscription) throw new BusinessError("Register the Jira webhook before renewing it.", 404);
   const { connection, accessToken } = await accessTokenFor(connectionId);

@@ -2,7 +2,7 @@ import { withApi } from "@/lib/observability";
 import { NextResponse } from "next/server";
 import { jsonError, zodMessage } from "@/lib/api";
 import { requireCurrentUserApi } from "@/lib/auth/session";
-import { db, establishAuthContext } from "@/lib/db";
+import { db, establishAuthContext, withTransaction } from "@/lib/db";
 import { clearOnboardingStateServer } from "@/lib/onboarding/tempStateServer";
 import { qualifyingExperienceLevelPatchSchema, qualifyingSchema } from "@/lib/validation/schemas";
 
@@ -23,20 +23,30 @@ async function POSTHandler(request: Request) {
   if (!authGuard.ok) return authGuard.response;
   const user = authGuard.user;
   establishAuthContext(user.authUserId);
-  const profile = await db.qualifyingProfile.create({
-    data: { userId: user.id, ...data, isProductWork: true },
-  });
-  // Solo vs Team/Organization, captured during onboarding as teamComposition.
-  // Organization.workspaceType defaults to "solo" for every signup (a personal
-  // workspace is auto-provisioned); flip it once the user confirms they're
-  // actually planning as part of a team/org. Never flipped back to "solo" —
-  // workspaceType is informational only, never an authorization signal.
-  if (data.teamComposition !== "solo") {
-    await db.organization.update({
-      where: { id: user.organizationId },
-      data: { workspaceType: "team" },
+  const profile = await withTransaction(async (tx) => {
+    const created = await tx.qualifyingProfile.create({
+      data: { userId: user.id, ...data, isProductWork: true },
     });
-  }
+    // Solo vs Team/Organization, captured during onboarding as teamComposition.
+    // Organization.workspaceType defaults to "solo" for every signup (a personal
+    // workspace is auto-provisioned); flip it once the user confirms they're
+    // actually planning as part of a team/org. Never flipped back to "solo" —
+    // workspaceType is informational only, never an authorization signal.
+    // An invited member may qualify while viewing a team organization. RLS
+    // permits only its owner to update Organization; their own profile must
+    // still be saved. Keep the two writes atomic for an owner.
+    if (
+      data.teamComposition !== "solo" &&
+      user.permissionRole === "owner" &&
+      user.organizationId === user.homeOrganizationId
+    ) {
+      await tx.organization.update({
+        where: { id: user.organizationId },
+        data: { workspaceType: "team" },
+      });
+    }
+    return created;
+  });
   // This account's qualifying answers are now persisted — the temporary
   // onboarding cookie has served its purpose. Clearing it here (rather than
   // only at sign-in/sign-out boundaries) also stops a stale value from this

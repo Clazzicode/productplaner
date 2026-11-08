@@ -1,6 +1,7 @@
 import { ContainedLayout } from "@/components/layout/PageLayouts";
 import PageHeader from "@/components/ui/PageHeader";
 import OrganizationSwitcher from "@/components/auth/OrganizationSwitcher";
+import WorkspaceInvitations from "@/components/workspace/WorkspaceInvitations";
 import { requireCurrentUser } from "@/lib/auth/session";
 import { db, establishAuthContext } from "@/lib/db";
 
@@ -34,6 +35,7 @@ export default async function OrganizationsPage() {
           }))}
         />
       </div>
+      {(user.permissionRole === "owner" || user.permissionRole === "admin") && <WorkspaceInvitations />}
     </ContainedLayout>
   );
 }

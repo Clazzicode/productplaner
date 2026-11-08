@@ -2,7 +2,7 @@ import { currentAuthUserId, db, withTransaction } from "@/lib/db";
 import { auditInitiative } from "@/lib/audit";
 import { regenerateBelow, type RegenStats } from "./engine";
 import { METHODOLOGY_PROFILES, resolveMethodology } from "./methodology";
-import { buildLiveSnapshot, recordApprovedRoadmapVersion } from "./versioning";
+import { buildLiveSnapshot, computeLivePlanFingerprint, recordApprovedRoadmapVersion } from "./versioning";
 import {
   LAYER_FOR_ARTIFACT,
   LAYER_LABELS,
@@ -83,8 +83,14 @@ async function lockLayerInternal(prototypeId: string, layerType: LayerType): Pro
   });
 
   if (layerType === "acceptance_criteria") {
+    const reviewFingerprint = await computeLivePlanFingerprint(prototypeId);
     await snapshotApprovedBaseline(prototypeId);
-    await recordApprovedRoadmapVersion({ initiativeId: prototype.initiativeId, prototypeId, approvedByUserId: actor.id });
+    await recordApprovedRoadmapVersion({
+      initiativeId: prototype.initiativeId,
+      prototypeId,
+      approvedByUserId: actor.id,
+      reviewFingerprint,
+    });
   }
 
   await auditInitiative(prototype.initiativeId, "plan.locked", { layerType });

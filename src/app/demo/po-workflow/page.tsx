@@ -7,7 +7,7 @@ import { poFeatureRecords } from "@/lib/backlog/poFeatures";
 export default function PoWorkflowDemo() {
   if (!poDemoEnabled()) notFound();
   return <main className="mx-auto min-h-screen max-w-7xl bg-slate-50 px-5 py-8 sm:px-8">
-    <p className="text-sm font-semibold uppercase tracking-widest text-indigo-600">Guided Planning · Product Owner</p>
+    <p className="text-sm font-semibold uppercase tracking-widest text-indigo-600">Clarivia · Product Owner</p>
     <h1 className="mt-2 text-3xl font-bold text-slate-950">From request to a clear priority</h1>
     <p className="mb-7 mt-2 text-slate-600">Demo features 1, 2 and 6: capture a request, resolve open questions, and explain what comes next.</p>
     <RequestWorkspace initiativeId="local-demo" initialRequests={demoRequests()} canEdit demo />

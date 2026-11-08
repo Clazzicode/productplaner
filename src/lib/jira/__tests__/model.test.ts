@@ -13,6 +13,7 @@ describe("Jira command validation", () => {
   });
   it("requires explicit selected item IDs and a human reason", () => {
     expect(jiraImportApplySchema.safeParse({ expectedStatus: "previewed", selectedItemIds: ["item-a"], reason: "Reviewed by the Product Owner." }).success).toBe(true);
+    expect(jiraImportApplySchema.safeParse({ expectedStatus: "previewed", selectedItemIds: [], reason: "Reviewed by the Product Owner." }).success).toBe(false);
     expect(jiraImportApplySchema.safeParse({ expectedStatus: "previewed", selectedItemIds: ["item-a"], reason: "ok" }).success).toBe(false);
   });
   it("separates Jira export approval from execution", () => {

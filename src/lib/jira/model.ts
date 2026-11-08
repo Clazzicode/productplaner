@@ -21,11 +21,11 @@ export const jiraProjectSchema = z.object({
   priorityMappings: z.record(z.string(), z.enum(["critical", "high", "medium", "low"])).default({}),
 });
 
-export const jiraImportPreviewSchema = z.object({ connectionId: z.string().trim().min(1) });
+export const jiraImportPreviewSchema = z.object({ connectionId: z.string().trim().min(1), idempotencyKey: z.string().uuid().optional() });
 
 export const jiraImportApplySchema = z.object({
   expectedStatus: z.literal("previewed"),
-  selectedItemIds: z.array(z.string().trim().min(1)).max(1000),
+  selectedItemIds: z.array(z.string().trim().min(1)).min(1).max(1000),
   reason: z.string().trim().min(5).max(1000),
 });
 

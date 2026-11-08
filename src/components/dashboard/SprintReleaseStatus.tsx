@@ -3,6 +3,7 @@ import { Badge, healthBadgeVariant } from "@/components/ui/Badge";
 import { Card, CardTitle } from "@/components/ui/Card";
 import { ProgressBar } from "@/components/ui/ProgressBar";
 import { HEALTH_LABELS, type HealthStatus } from "@/lib/generation/health";
+import { formatCalendarDate } from "@/lib/calendarDate";
 
 export interface SprintSummaryView {
   sprintNumber: number;
@@ -48,7 +49,7 @@ export default function SprintReleaseStatus(props: {
           <p className="text-sm font-semibold">
             Sprint {s.sprintNumber}
             <span className="ml-2 font-normal text-neutral-500">
-              {s.startDate.toLocaleDateString()} – {s.endDate.toLocaleDateString()}
+              {formatCalendarDate(s.startDate)} – {formatCalendarDate(s.endDate)}
             </span>
           </p>
           <p className="mt-1 text-xs text-neutral-500">
@@ -82,7 +83,7 @@ export default function SprintReleaseStatus(props: {
                 <td className="py-2 font-medium">{r.name}</td>
                 <td className="py-2 text-neutral-500">{r.sprintRange}</td>
                 <td className="py-2 text-neutral-500">{r.points}</td>
-                <td className="py-2 whitespace-nowrap text-neutral-500">{r.targetDate.toLocaleDateString()}</td>
+                <td className="py-2 whitespace-nowrap text-neutral-500">{formatCalendarDate(r.targetDate)}</td>
                 <td className="py-2">
                   <Badge variant={healthBadgeVariant(r.health)}>{HEALTH_LABELS[r.health]}</Badge>
                 </td>

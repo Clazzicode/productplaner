@@ -1,4 +1,5 @@
 import type { Prisma } from "@prisma/client";
+import { createHash } from "node:crypto";
 import { currentAuthUserId, db, withTransaction } from "@/lib/db";
 import { auditInitiative } from "@/lib/audit";
 import { computeRoadmapInputsFingerprint } from "./fingerprint";
@@ -53,6 +54,13 @@ export async function buildLiveSnapshot(tx: Tx | typeof db, prototypeId: string)
   return { capturedAt: new Date().toISOString(), layers, sprints, releases, initiative, locks };
 }
 
+/** Fingerprint of the exact live plan presented for approval. */
+export async function computeLivePlanFingerprint(prototypeId: string): Promise<string> {
+  const snapshot = await buildLiveSnapshot(db, prototypeId);
+  const reviewedContent = { ...snapshot, capturedAt: null };
+  return createHash("sha256").update(JSON.stringify(reviewedContent)).digest("hex");
+}
+
 /** Immutable checkpoint before a working plan is replaced or regenerated. */
 export async function archiveWorkingVersion(prototypeId: string): Promise<void> {
   await withTransaction(async (tx) => {
@@ -93,6 +101,7 @@ export async function recordApprovedRoadmapVersion(args: {
   initiativeId: string;
   prototypeId: string;
   approvedByUserId: string | null;
+  reviewFingerprint: string;
 }): Promise<{ versionNumber: number }> {
   const inputsFingerprint = await computeRoadmapInputsFingerprint(args.initiativeId);
   return withTransaction(async (tx) => {
@@ -115,6 +124,7 @@ export async function recordApprovedRoadmapVersion(args: {
         status: "approved",
         snapshotJson: prototype.approvedBaselineJson,
         inputsFingerprint,
+        reviewFingerprint: args.reviewFingerprint,
         approvedAt: prototype.approvedAt,
         approvedByUserId: args.approvedByUserId,
         authoredByUserId: args.approvedByUserId,
@@ -128,8 +138,14 @@ export async function recordApprovedRoadmapVersion(args: {
       planVersionId: version.id,
       approvedBy: args.approvedByUserId,
       approvedAt: prototype.approvedAt,
+      reviewFingerprint: args.reviewFingerprint,
+      metadata: { reviewFingerprint: args.reviewFingerprint },
     } });
-    await auditInitiative(args.initiativeId, "plan.approved", { versionId: version.id, versionNumber });
+    await auditInitiative(args.initiativeId, "plan.approved", {
+      versionId: version.id,
+      versionNumber,
+      reviewFingerprint: args.reviewFingerprint,
+    });
     return { versionNumber };
   });
 }

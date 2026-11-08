@@ -1,4 +1,4 @@
-import { format } from "date-fns";
+import { formatCalendarDate } from "@/lib/calendarDate";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import EmptyState from "@/components/ui/EmptyState";
@@ -154,7 +154,7 @@ export default async function RoadmapPage({
                   )}
                   {start && end && (
                     <span className="rounded-full bg-white px-3 py-1 text-xs font-medium text-neutral-600">
-                      {format(start, "MMM d")} → {format(end, "MMM d, yyyy")}
+                      {formatCalendarDate(start, { month: "short", day: "numeric" })} → {formatCalendarDate(end, { month: "short", day: "numeric", year: "numeric" })}
                     </span>
                   )}
                   <TraceBadge
@@ -226,7 +226,7 @@ export default async function RoadmapPage({
   const milestonesView = (
     timelineData.releases.length === 0
       ? <EmptyState title="No target releases yet" description="Create a release from Sprints & Releases to add the release cadence and target release date to this roadmap." />
-      : <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{timelineData.releases.map((release) => <section key={release.id} className="rounded-xl border border-indigo-100 bg-indigo-50/40 p-5"><p className="text-xs font-semibold uppercase tracking-wide text-indigo-600">Target release</p><h3 className="mt-1 text-lg font-bold text-indigo-950">{format(release.targetDate, "MMM d, yyyy")}</h3><p className="mt-2 text-sm text-indigo-800">{release.label}</p><p className="mt-1 text-xs capitalize text-indigo-700">Cadence: {release.cadence.replaceAll("_", " ") || "Not set"}</p><div className="mt-3 flex flex-wrap gap-1.5 text-xs"><span className="rounded-full bg-white px-2 py-1">{release.featureCount} features</span><span className="rounded-full bg-white px-2 py-1">{release.defectCount} active defects</span><span className="rounded-full bg-white px-2 py-1">{release.blockerCount} blockers</span><span className="rounded-full bg-white px-2 py-1 capitalize">{release.qualityRisk} quality risk</span></div></section>)}</div>
+      : <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{timelineData.releases.map((release) => <section key={release.id} className="rounded-xl border border-indigo-100 bg-indigo-50/40 p-5"><p className="text-xs font-semibold uppercase tracking-wide text-indigo-600">Target release</p><h3 className="mt-1 text-lg font-bold text-indigo-950">{formatCalendarDate(release.targetDate, { month: "short", day: "numeric", year: "numeric" })}</h3><p className="mt-2 text-sm text-indigo-800">{release.label}</p><p className="mt-1 text-xs capitalize text-indigo-700">Cadence: {release.cadence.replaceAll("_", " ") || "Not set"}</p><div className="mt-3 flex flex-wrap gap-1.5 text-xs"><span className="rounded-full bg-white px-2 py-1">{release.featureCount} features</span><span className="rounded-full bg-white px-2 py-1">{release.defectCount} active defects</span><span className="rounded-full bg-white px-2 py-1">{release.blockerCount} blockers</span><span className="rounded-full bg-white px-2 py-1 capitalize">{release.qualityRisk} quality risk</span></div></section>)}</div>
   );
   const connectionsView = (
     <EmptyState
