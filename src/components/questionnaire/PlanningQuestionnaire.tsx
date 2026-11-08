@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
+import { useUnsavedDraft } from "@/components/shell/unsavedChanges";
 import { apiFetch, waitForBackgroundJob } from "@/lib/clientApi";
 import type { WorkingRole } from "@/lib/onboarding/types";
 import { isAdvancedScoringComplete } from "@/lib/questionnaire/capabilityScoring";
@@ -132,6 +133,10 @@ export default function PlanningQuestionnaire(props: {
     (props.currentMethodology as MethodologyAnswer) || "hybrid",
   );
   const [executionTool, setExecutionTool] = useState("none");
+  const markDirectionSaved = useUnsavedDraft(productDirection);
+  const markSuccessSaved = useUnsavedDraft(success);
+  const markDeliverySaved = useUnsavedDraft(delivery);
+  const markMethodologySaved = useUnsavedDraft(methodology);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [validation, setValidation] = useState<{ errors: Flag[]; warnings: Flag[] } | null>(null);
@@ -178,6 +183,7 @@ export default function PlanningQuestionnaire(props: {
         },
       }),
     ]);
+    if (a.ok && b.ok) markDirectionSaved();
     return a.ok && b.ok;
   };
 
@@ -199,6 +205,7 @@ export default function PlanningQuestionnaire(props: {
         },
       }),
     ]);
+    if (a.ok && b.ok) markSuccessSaved();
     return a.ok && b.ok;
   };
 
@@ -223,6 +230,7 @@ export default function PlanningQuestionnaire(props: {
         },
       }),
     ]);
+    if (a.ok && b.ok) markDeliverySaved();
     return a.ok && b.ok;
   };
 
@@ -230,11 +238,12 @@ export default function PlanningQuestionnaire(props: {
     const mapped = mapMethodologyAnswer(methodology);
     // Guard: the methodology endpoint fully regenerates any existing plan on every call,
     // regardless of whether the value changed — only call it when it actually did.
-    if (mapped === props.currentMethodology) return true;
+    if (mapped === props.currentMethodology) { markMethodologySaved(); return true; }
     const res = await apiFetch(`/api/initiatives/${initiativeId}/methodology`, {
       method: "POST",
       body: { methodology: mapped },
     });
+    if (res.ok) markMethodologySaved();
     return res.ok;
   };
 

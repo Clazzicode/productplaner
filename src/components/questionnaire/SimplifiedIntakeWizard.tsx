@@ -1,4 +1,5 @@
 "use client";
+import { useUnsavedChanges } from "@/components/shell/unsavedChanges";
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -152,6 +153,7 @@ export default function SimplifiedIntakeWizard(props: {
   const [submitting, setSubmitting] = useState(false);
   const [genStep, setGenStep] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  useUnsavedChanges([productAnswer, audienceDetail, outcomeAnswer, featuresAnswer, priorityAnswer, nextAnswer, teamSizeAnswer, budgetAnswer, nameOverride, methodology, timeline].some(Boolean) || audienceChips.length > 0);
 
   const derivedName = useMemo(() => deriveInitiativeName(productAnswer), [productAnswer]);
   const initiativeName = nameOverride ?? derivedName;

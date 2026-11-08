@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useUnsavedDraft } from "@/components/shell/unsavedChanges";
 import { ChoiceCard } from "@/components/questionnaire/Choice";
 import { ButtonLoader } from "@/components/ui/loading";
 import { apiFetch } from "@/lib/clientApi";
@@ -25,6 +26,7 @@ export default function SettingsForm(props: {
 }
 function ExperienceLevelCard(props: { initial: SelectableExperienceLevel }) {
   const [selected, setSelected] = useState<SelectableExperienceLevel>(props.initial);
+  const markSaved = useUnsavedDraft(selected);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -39,6 +41,7 @@ function ExperienceLevelCard(props: { initial: SelectableExperienceLevel }) {
       setError(res.error ?? "Could not save.");
       return;
     }
+    markSaved();
     setSaved(true);
   };
 

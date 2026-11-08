@@ -9,6 +9,7 @@ import { isBareRoute } from "./bareMode";
 import LeftNav, { type NavInitiative } from "./LeftNav";
 import MobileNavDrawer from "./MobileNavDrawer";
 import TopHeader from "./TopHeader";
+import { confirmPageNavigation } from "./unsavedChanges";
 
 /**
  * Persistent app chrome (left nav + top bar). Rendered from the root layout;
@@ -56,7 +57,7 @@ export default function AppShell(props: {
 
   const switchInitiative = (id: string) => {
     const target = props.initiatives.find((i) => i.id === id);
-    if (!target) return;
+    if (!target || !confirmPageNavigation()) return;
     router.push(
       target.status === "generated" ? `/initiatives/${id}/dashboard` : `/initiatives/${id}/intake`,
     );
