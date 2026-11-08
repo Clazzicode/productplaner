@@ -29,7 +29,7 @@ export default function InitiativeSummaryList(props: { initiatives: InitiativeOv
       {props.initiatives.length === 0 ? (
         <EmptyState
           title="No initiatives yet"
-          description="Create one and answer the eight planning questions to get a working plan."
+          description="Start with an initiative draft and develop the planning work as evidence becomes available."
           action={
             <Link
               href="/initiatives/new"
@@ -43,7 +43,7 @@ export default function InitiativeSummaryList(props: { initiatives: InitiativeOv
         <ul className="mt-3 space-y-1.5">
           {props.initiatives.slice(0, 6).map((i) => {
             const status = STATUS_META[i.status] ?? STATUS_META.draft;
-            const href = i.status === "generated" ? `/initiatives/${i.id}/dashboard` : `/initiatives/${i.id}/intake`;
+            const href = `/initiatives/${i.id}/overview`;
             return (
               <li key={i.id}>
                 <Link

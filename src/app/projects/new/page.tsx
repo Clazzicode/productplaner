@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 
 async function NewProjectPage() {
   const user = await requireCurrentUser();
-  if (user.permissionRole === "member") redirect("/projects");
+  if (user.memberType !== "internal" || !["owner", "admin"].includes(user.permissionRole)) redirect("/projects");
 
   return (
     <FocusedLayout>

@@ -126,7 +126,7 @@ export default function GeneralIntakeForm(props: { storageScope: string; project
     {error && <p role="alert" className="mt-3 text-sm text-red-700">{error}</p>}
     <div className="mt-6 flex flex-wrap items-center justify-between gap-4">
       <button type="button" disabled={!loaded || saving || continuing || values.name.trim().length < 3} onClick={() => void save()} className="rounded-xl border border-slate-300 px-4 py-3 text-sm font-semibold disabled:opacity-50">Save draft</button>
-      <button type="submit" disabled={!loaded || continuing || values.name.trim().length < 3} className="rounded-xl bg-indigo-600 px-5 py-3 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50">{continuing ? "Opening your workspace…" : "Open planning workspace →"}</button>
+      <button type="submit" disabled={!loaded || continuing || values.name.trim().length < 3} className="rounded-xl bg-indigo-600 px-5 py-3 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50">{continuing ? "Opening your workspace…" : "Explore the five planning tools →"}</button>
     </div>
     <p className="mt-4 text-xs text-slate-500">Saving intake does not call AI, generate stories, or commit sprint work.</p>
   </form>;

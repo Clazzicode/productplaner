@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import { withAuthenticatedPage } from "@/lib/auth/entryPoints";
 import { FocusedLayout } from "@/components/layout/PageLayouts";
 import GeneralIntakeForm from "@/components/questionnaire/GeneralIntakeForm";
@@ -6,6 +7,7 @@ import { requireCurrentUser } from "@/lib/auth/session";
 
 async function NewInitiativePage() {
   const user = await requireCurrentUser();
+  if (user.memberType !== "internal" || !["owner", "admin"].includes(user.permissionRole)) redirect("/initiatives");
   return <FocusedLayout>
     <Breadcrumb items={[{ label: "Initiatives", href: "/initiatives" }, { label: "New initiative" }]} />
     <h1 className="my-4 text-2xl font-semibold">New initiative</h1>

@@ -31,6 +31,7 @@ const STATUS_META: Record<string, { label: string; variant: BadgeVariant }> = {
 
 async function InitiativesPage() {
   const user = await requireCurrentUser();
+  const canCreate = user.memberType === "internal" && ["owner", "admin"].includes(user.permissionRole);
   establishAuthContext(user.authUserId);
   const authorizedInitiativeIds = await listAuthorizedInitiativeIds(user);
 
@@ -55,14 +56,14 @@ async function InitiativesPage() {
         eyebrow="Clarivia"
         title="Your initiatives"
         description="Plan structural status at a glance. Live plan-health against delivery actuals arrives with the v1.1 living-plan release."
-        primaryAction={
+        primaryAction={canCreate ? (
           <Link
             href="/initiatives/new"
             className="rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700"
           >
             + New initiative
           </Link>
-        }
+        ) : undefined}
       />
       <CoachMark coachMarkKey="initiatives" className="mt-4" />
 
@@ -70,15 +71,14 @@ async function InitiativesPage() {
         <div className="mt-12 rounded-2xl border border-dashed border-neutral-300 bg-white p-12 text-center">
           <h2 className="text-lg font-semibold">No initiatives yet</h2>
           <p className="mx-auto mt-2 max-w-md text-sm text-neutral-500">
-            Create one, answer the eight planning questions, and get a working
-            prototype of a complete product plan — roadmap to stories for PO review.
+            {canCreate ? "Save an initiative with a name, then develop its planning work at your own pace." : "Ask a workspace owner to share an initiative or create one for your team."}
           </p>
-          <Link
+          {canCreate && (<Link
             href="/initiatives/new"
             className="mt-6 inline-block rounded-lg bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700"
           >
             Start your first plan
-          </Link>
+          </Link>)}
         </div>
       ) : (
         <ul className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -93,9 +93,7 @@ async function InitiativesPage() {
             const status = STATUS_META[initiative.status] ?? STATUS_META.draft;
             const jira = initiative.syncConnections.find((c) => c.tool === "jira");
             const href =
-              initiative.status === "generated"
-                ? `/initiatives/${initiative.id}/dashboard`
-                : `/initiatives/${initiative.id}/intake`;
+              `/initiatives/${initiative.id}/overview`;
             return (
               <li key={initiative.id}>
                 <Link

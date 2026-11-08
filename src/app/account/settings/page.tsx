@@ -1,11 +1,9 @@
 import { withAuthenticatedPage } from "@/lib/auth/entryPoints";
-import { redirect } from "next/navigation";
 import { ContainedLayout } from "@/components/layout/PageLayouts";
 import PageHeader from "@/components/ui/PageHeader";
 import SettingsForm from "@/components/account/SettingsForm";
 import { requireCurrentUser } from "@/lib/auth/session";
 import { establishAuthContext } from "@/lib/db";
-import type { SelectableExperienceLevel } from "@/lib/onboarding/experienceOptions";
 
 export const dynamic = "force-dynamic";
 
@@ -19,23 +17,14 @@ async function AccountSettingsPage() {
   const user = await requireCurrentUser();
   establishAuthContext(user.authUserId);
 
-  const profile = user.profiles[0];
-  if (!profile) redirect("/welcome");
-
-  // "expert" is a retired UI choice, still valid on old rows — treated
-  // identically to "experienced" everywhere else (roleGuidance.ts), so it
-  // maps to the same choice card here rather than leaving none selected.
-  const currentExperienceLevel: SelectableExperienceLevel =
-    profile.experienceLevel === "expert" ? "experienced" : (profile.experienceLevel as SelectableExperienceLevel);
-
   return (
     <ContainedLayout className="max-w-2xl">
       <PageHeader
         eyebrow="Clarivia"
         title="Settings"
-        description="Change how the platform calibrates guidance for you. These don't change what's asked or how a plan is built."
+        description="One Product Owner workflow. Guidance and tours never change your permissions."
       />
-      <SettingsForm currentExperienceLevel={currentExperienceLevel} />
+      <SettingsForm />
     </ContainedLayout>
   );
 }

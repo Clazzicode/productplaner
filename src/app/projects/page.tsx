@@ -20,7 +20,7 @@ export const dynamic = "force-dynamic";
 async function ProjectsPage() {
   const user = await requireCurrentUser();
   establishAuthContext(user.authUserId);
-  const canCreateProject = user.permissionRole === "owner" || user.permissionRole === "admin";
+  const canCreateProject = user.memberType === "internal" && ["owner", "admin"].includes(user.permissionRole);
 
   const projects = await db.project.findMany({
     where: { organizationId: user.organizationId },

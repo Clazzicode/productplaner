@@ -32,6 +32,7 @@ const STATUS_META: Record<string, { label: string; variant: BadgeVariant }> = {
 async function ProjectHomePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const user = await requireCurrentUser();
+  const canCreate = user.memberType === "internal" && ["owner", "admin"].includes(user.permissionRole);
   establishAuthContext(user.authUserId);
   await requireProjectPageAccess(user, id);
 
@@ -65,12 +66,12 @@ async function ProjectHomePage({ params }: { params: Promise<{ id: string }> }) 
           </div>
           {project.description && <p className="mt-1 text-sm text-neutral-500">{project.description}</p>}
         </div>
-        <Link
+{canCreate && (<Link
           href={`/projects/${project.id}/initiatives/new`}
           className="rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700"
         >
           + New initiative
-        </Link>
+        </Link>)}
       </div>
 
       <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -88,21 +89,19 @@ async function ProjectHomePage({ params }: { params: Promise<{ id: string }> }) 
         {project.initiatives.length === 0 ? (
           <div className="mt-3 rounded-2xl border border-dashed border-neutral-300 bg-white p-8 text-center">
             <p className="text-sm text-neutral-500">No initiatives yet in this project.</p>
-            <Link
+{canCreate && (<Link
               href={`/projects/${project.id}/initiatives/new`}
               className="mt-3 inline-block rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700"
             >
               Create the first one
-            </Link>
+            </Link>)}
           </div>
         ) : (
           <ul className="mt-3 space-y-2">
             {project.initiatives.map((initiative) => {
               const status = STATUS_META[initiative.status] ?? STATUS_META.draft;
               const href =
-                initiative.status === "generated"
-                  ? `/initiatives/${initiative.id}/dashboard`
-                  : `/initiatives/${initiative.id}/intake`;
+                `/initiatives/${initiative.id}/overview`;
               return (
                 <li key={initiative.id}>
                   <Link

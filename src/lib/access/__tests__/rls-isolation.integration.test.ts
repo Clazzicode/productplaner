@@ -26,6 +26,7 @@ import type { ReconciliationItem } from "@/lib/generation/reconciliation";
 import { saveGeneralIntake } from "@/lib/planning/saveGeneralIntake";
 import { loadPlanningEvidence } from "@/lib/planning/readiness";
 import { saveFeature } from "@/lib/backlog/service";
+import { loadGlobalDashboardData } from "@/lib/dashboard/globalDashboardData";
 
 // These tests create isolated fixtures. Never run them against Production.
 const stagingRef = "qbogvclmehvrtuwiktos";
@@ -173,8 +174,10 @@ describe("RLS isolation (real Postgres connection, not mocked)", () => {
         expect(await db.artifactLayer.count({ where: { prototypeId: prototype.id, type: "story" } })).toBe(0);
         const feature = await saveFeature(draftId, { name: "A manually entered feature", description: "An incomplete draft can develop real planning work", backlogLane: "now", backlogStatus: "planned", ownerUserId: null, isMvp: true, businessValue: "high", riskLevel: "medium", dependsOnIds: [] });
         expect(await db.artifactLayer.count({ where: { prototypeId: prototype.id, type: "feature", sourceCapabilityId: feature.id } })).toBe(1);
+        expect((await db.artifactLayer.findFirstOrThrow({ where: { prototypeId: prototype.id, type: "feature", sourceCapabilityId: feature.id } })).parentId).not.toBeNull();
         expect(await db.artifactLayer.count({ where: { prototypeId: prototype.id, type: "epic", sourceCapabilityId: feature.id } })).toBe(1);
         expect(await loadPlanningEvidence(draftId)).toMatchObject({ featureCount: 1, storyCount: 0, criteriaCount: 0, generationReady: false, missingContext: ["problem", "customer", "outcome"], committedSprintCount: 0, approvedReleaseCount: 0 });
+        expect((await loadGlobalDashboardData(actor.id, [draftId])).primary).toMatchObject({ id: draftId, forecastKnown: false, planningEvidence: { featureCount: 1, committedSprintCount: 0 } });
         expect(await db.sprint.count({ where: { prototypeId: prototype.id } })).toBe(0);
         expect(await db.release.count({ where: { prototypeId: prototype.id } })).toBe(0);
         await expect(saveGeneralIntake(actor, draftId, { name: "Conflicting tab edit", expectedUpdatedAt: new Date(0).toISOString() })).rejects.toThrow("another tab");

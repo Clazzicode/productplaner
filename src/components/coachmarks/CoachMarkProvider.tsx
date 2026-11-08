@@ -1,7 +1,7 @@
 "use client";
 
 import { usePathname, useRouter } from "next/navigation";
-import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useState } from "react";
 import { apiFetch } from "@/lib/clientApi";
 import { COACH_MARK_KEYS, type CoachMarkKey } from "@/lib/coachMarks/keys";
 
@@ -50,10 +50,7 @@ interface TourState {
 }
 
 interface CoachMarkContextValue {
-  /** Whether coach marks should render at all for this session — directive
-   * §4: shown automatically for Experienced users; everyone else reaches
-   * them only via "Replay Product Tour" (which also flips this on for the
-   * session, so the replay actually shows something). */
+  /** Enabled only by an explicit request to start/replay the tour. */
   active: boolean;
   isDismissed: (key: CoachMarkKey) => boolean;
   dismiss: (key: CoachMarkKey) => void;
@@ -73,7 +70,6 @@ const CoachMarkContext = createContext<CoachMarkContextValue | null>(null);
 
 export function CoachMarkProvider(props: {
   signedIn: boolean;
-  autoActive: boolean;
   /** Most recently updated `status: "generated"` initiative this user can
    * reach — derived once in src/app/layout.tsx from data it already loads
    * for the nav switcher, so this costs zero extra queries. */
@@ -83,31 +79,13 @@ export function CoachMarkProvider(props: {
   const router = useRouter();
   const pathname = usePathname();
   const [dismissedKeys, setDismissedKeys] = useState<Set<string> | null>(null);
-  const [active, setActive] = useState(props.autoActive);
+  const [active, setActive] = useState(false);
   const [tour, setTour] = useState<TourState | null>(null);
-  // Read once, at mount, same contract as the `active` initial state above
-  // (a later prop change doesn't retroactively decide whether the tour
-  // auto-starts) — captured in refs so the mount effect below can read
-  // their current value without listing them as reactive dependencies.
-  const autoActiveRef = useRef(props.autoActive);
-  const generatedInitiativeIdRef = useRef(props.generatedInitiativeId);
-
   useEffect(() => {
     if (!props.signedIn) return;
     void apiFetch<{ dismissedKeys: string[] }>("/api/coach-marks").then((res) => {
       const dismissed = new Set(res.ok ? (res.data?.dismissedKeys ?? []) : []);
       setDismissedKeys(dismissed);
-      // Auto-activation only ever makes the tour *live* — it never
-      // navigates on its own. The routing fix already lands every fresh
-      // user on /projects (the tour's own step 0), so the common case needs
-      // no forced navigation; a user resuming mid-tour on some other page
-      // simply sees that page's mark in ad hoc mode until they next visit
-      // step 0's page or hit Replay.
-      if (autoActiveRef.current) {
-        const steps = buildTourSteps(generatedInitiativeIdRef.current);
-        const startIndex = steps.findIndex((s) => !dismissed.has(s.key));
-        if (startIndex >= 0) setTour({ steps, index: startIndex });
-      }
     });
   }, [props.signedIn]);
 
