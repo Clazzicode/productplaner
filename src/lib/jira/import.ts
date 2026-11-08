@@ -4,7 +4,9 @@ import { saveFeature } from "@/lib/backlog/service";
 import { ensureFeatureProjection } from "@/lib/planning/featureIdentity";
 import { BusinessError } from "@/lib/businessError";
 import { db, withTransaction } from "@/lib/db";
-import { emptyRequest } from "@/lib/requests/model";
+import { requireCollaborationAction } from "@/lib/access/actionGuard";
+import { buildImportFieldReview, fieldBaselines } from "./fieldReview";
+import { emptyRequest, requestSchema } from "@/lib/requests/model";
 import { saveRequest } from "@/lib/requests/service";
 import { searchJiraIssues, type JiraIssueSnapshot as JiraSourceIssue } from "./client";
 import { jiraHash } from "./crypto";
@@ -15,7 +17,7 @@ type PreviewItem = {
   organizationId: string; externalIssueId: string; externalKey: string; issueTypeId: string; issueTypeName: string;
   targetType: TargetType; targetId: string | null; parentExternalKey: string | null; summary: string;
   sourceSnapshot: Prisma.InputJsonValue; sourceHash: string; action: "create" | "update" | "unchanged" | "conflict" | "skip";
-  conflictReason: string | null; selected: boolean;
+  conflictReason: string | null; selected: boolean; reviewSnapshot: Prisma.InputJsonValue;
 };
 
 export function plainText(value: unknown): string {
@@ -52,37 +54,22 @@ function storyPointsField(connection: JiraConnection): string | null {
   return typeof fields.storyPointsField === "string" ? fields.storyPointsField : null;
 }
 
-function configuredFieldMap(connection: JiraConnection, key: "statusMappings" | "priorityMappings"): Record<string, string> {
-  if (!connection.fieldMappings || typeof connection.fieldMappings !== "object" || Array.isArray(connection.fieldMappings)) return {};
-  const value = (connection.fieldMappings as Record<string, unknown>)[key];
-  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
-  return Object.fromEntries(Object.entries(value).filter((entry): entry is [string, string] => typeof entry[1] === "string"));
-}
-
-function mappedStatus(issue: JiraSourceIssue, connection: JiraConnection): "planned" | "in_progress" | "done" | "blocked" {
-  const map = configuredFieldMap(connection, "statusMappings");
-  const configured = map[issue.status.id] ?? map[issue.status.name] ?? map[issue.status.name.toLowerCase()];
-  return ["planned", "in_progress", "done", "blocked"].includes(configured) ? configured as "planned" | "in_progress" | "done" | "blocked" : issue.status.category === "done" ? "done" : issue.status.category === "indeterminate" ? "in_progress" : "planned";
-}
-
-function mappedPriority(issue: JiraSourceIssue, connection: JiraConnection): "critical" | "high" | "medium" | "low" {
-  const map = configuredFieldMap(connection, "priorityMappings");
-  const name = issue.priority?.name ?? "";
-  const configured = map[issue.priority?.id ?? ""] ?? map[name] ?? map[name.toLowerCase()];
-  return ["critical", "high", "medium", "low"].includes(configured) ? configured as "critical" | "high" | "medium" | "low" : name.toLowerCase().includes("highest") ? "critical" : name.toLowerCase().includes("high") ? "high" : name.toLowerCase().includes("low") ? "low" : "medium";
-}
-
-export async function currentTargetFingerprint(link: JiraExternalLink) {
+export async function currentTargetSnapshot(link: Pick<JiraExternalLink, "targetType" | "targetId">) {
   if (link.targetType === "feature") {
     const row = await db.capability.findUnique({ where: { id: link.targetId }, select: { name: true, description: true, backlogLane: true, backlogStatus: true, businessValue: true, riskLevel: true, backlogRevision: true } });
-    return row ? fingerprint(row) : null;
+    return row ?? null;
   }
   if (link.targetType === "story") {
     const row = await db.artifactLayer.findUnique({ where: { id: link.targetId }, select: { title: true, body: true, points: true, readinessStatus: true, backlogRevision: true, archivedAt: true } });
-    return row ? fingerprint({ ...row, archivedAt: row.archivedAt?.toISOString() ?? null }) : null;
+    return row ? { ...row, archivedAt: row.archivedAt?.toISOString() ?? null } : null;
   }
   const row = await db.bugPlanningRecord.findUnique({ where: { id: link.targetId }, include: { request: { select: { data: true } } } });
-  return row ? fingerprint({ severity: row.severity, status: row.status, priority: row.priority, environment: row.environment, revision: row.revision, request: row.request.data }) : null;
+  return row ? { severity: row.severity, status: row.status, priority: row.priority, environment: row.environment, revision: row.revision, request: row.request.data } : null;
+}
+
+export async function currentTargetFingerprint(link: Pick<JiraExternalLink, "targetType" | "targetId">) {
+  const snapshot = await currentTargetSnapshot(link);
+  return snapshot ? fingerprint(snapshot) : null;
 }
 
 export function sourceSnapshot(issue: JiraSourceIssue) {
@@ -150,19 +137,22 @@ export async function previewJiraImport(connectionId: string, actorUserId: strin
     const mappedTarget = targetType(issue, connection);
     let action: "create" | "update" | "unchanged" | "conflict" | "skip" = mappedTarget === "skip" ? "skip" : link ? "update" : "create";
     let conflictReason: string | null = null;
-    if (link && link.sourceHash === sourceHash) action = "unchanged";
+    const local = link ? await currentTargetSnapshot(link) : null;
+    const localFingerprint = local ? fingerprint(local) : null;
+    if (link && link.targetType !== mappedTarget) { action = "conflict"; conflictReason = "The reviewed issue mapping changed. Resolve the existing canonical link before importing."; }
+    else if (link && link.sourceHash === sourceHash) action = "unchanged";
     else if (link) {
-      const current = await currentTargetFingerprint(link);
+      const current = localFingerprint;
       if (!current) { action = "conflict"; conflictReason = "The linked planning record no longer exists."; }
       else if (current !== link.targetFingerprint) { action = "conflict"; conflictReason = "Both Jira and the planning record changed since the last import."; }
     }
-    items.push({ organizationId: connection.organizationId, externalIssueId: issue.id, externalKey: issue.key, issueTypeId: issue.issueType.id, issueTypeName: issue.issueType.name, targetType: mappedTarget, targetId: link?.targetId ?? null, parentExternalKey: issue.parentKey, summary: issue.summary, sourceSnapshot: snapshot as unknown as Prisma.InputJsonValue, sourceHash, action, conflictReason, selected: false });
+    items.push({ organizationId: connection.organizationId, externalIssueId: issue.id, externalKey: issue.key, issueTypeId: issue.issueType.id, issueTypeName: issue.issueType.name, targetType: mappedTarget, targetId: link?.targetId ?? null, parentExternalKey: issue.parentKey, summary: issue.summary, sourceSnapshot: snapshot as unknown as Prisma.InputJsonValue, sourceHash, action, conflictReason, selected: false, reviewSnapshot: buildImportFieldReview({ issue: snapshot, targetType: mappedTarget, local, targetFingerprint: localFingerprint, baselineHashes: link?.fieldBaselines, baselineAt: link?.lastImportedAt.toISOString() ?? null, localChanged: link ? localFingerprint !== link.targetFingerprint : null, remoteChanged: link ? sourceHash !== link.sourceHash : null }) as unknown as Prisma.InputJsonValue });
   }
   const sourceFingerprint = fingerprint(items.map((item) => ({ externalIssueId: item.externalIssueId, sourceHash: item.sourceHash, action: item.action })));
   try { return await withTransaction(async () => {
-    const stillConnected = await db.jiraConnection.findFirst({ where: { id: connectionId, status: "connected" }, select: { id: true } });
+    const stillConnected = await db.jiraConnection.findFirst({ where: { id: connectionId, status: "connected", revision: connection.revision }, select: { id: true } });
     if (!stillConnected) throw new BusinessError("Jira was disconnected during this read. No import preview was saved.", 409);
-    const run = await db.jiraImportRun.create({ data: { organizationId: connection.organizationId, initiativeId: connection.initiativeId!, connectionId, sourceJobId, sourceEventId, status: "previewed", jql: `project = \"${connection.projectKey}\" ORDER BY updated ASC`, sourceCursor: null, sourceFingerprint, readStartedAt, readCompletedAt, itemCount: items.length, createCount: items.filter((item) => item.action === "create").length, updateCount: items.filter((item) => item.action === "update").length, conflictCount: items.filter((item) => item.action === "conflict").length, unchangedCount: items.filter((item) => item.action === "unchanged").length, initiatedByUserId: actorUserId } });
+    const run = await db.jiraImportRun.create({ data: { organizationId: connection.organizationId, initiativeId: connection.initiativeId!, connectionId, connectionRevision: connection.revision, sourceJobId, sourceEventId, status: "previewed", jql: `project = \"${connection.projectKey}\" ORDER BY updated ASC`, sourceCursor: null, sourceFingerprint, readStartedAt, readCompletedAt, itemCount: items.length, createCount: items.filter((item) => item.action === "create").length, updateCount: items.filter((item) => item.action === "update").length, conflictCount: items.filter((item) => item.action === "conflict").length, unchangedCount: items.filter((item) => item.action === "unchanged").length, initiatedByUserId: actorUserId } });
     if (items.length) await db.jiraImportItem.createMany({ data: items.map((item) => ({ ...item, importRunId: run.id })) });
     for (const [action, lastSyncStatus] of [["unchanged", "unchanged"], ["update", "update_available"], ["conflict", "conflict"], ["skip", "skipped"]] as const) {
       const externalIssueIds = items.filter((item) => item.action === action && byIssue.has(item.externalIssueId)).map((item) => item.externalIssueId);
@@ -192,7 +182,7 @@ export async function previewJiraImport(connectionId: string, actorUserId: strin
 }
 
 export async function loadJiraImport(runId: string) {
-  return db.jiraImportRun.findUnique({ where: { id: runId }, select: { id: true, connectionId: true, status: true, itemCount: true, createCount: true, updateCount: true, conflictCount: true, unchangedCount: true, appliedAt: true, createdAt: true, updatedAt: true } }).then(async (run) => run ? { ...run, items: await db.jiraImportItem.findMany({ where: { importRunId: run.id }, orderBy: [{ action: "asc" }, { externalKey: "asc" }], select: { id: true, externalKey: true, issueTypeName: true, targetType: true, summary: true, action: true, conflictReason: true, selected: true, status: true, createdAt: true, updatedAt: true } }) } : null);
+  return db.jiraImportRun.findUnique({ where: { id: runId }, select: { id: true, connectionId: true, status: true, itemCount: true, createCount: true, updateCount: true, conflictCount: true, unchangedCount: true, appliedAt: true, readCompletedAt: true, connectionRevision: true, createdAt: true, updatedAt: true } }).then(async (run) => run ? { ...run, items: await db.jiraImportItem.findMany({ where: { importRunId: run.id }, orderBy: [{ action: "asc" }, { externalKey: "asc" }], select: { id: true, externalKey: true, issueTypeName: true, targetType: true, targetId: true, reviewSnapshot: true, summary: true, action: true, conflictReason: true, selected: true, status: true, createdAt: true, updatedAt: true } }) } : null);
 }
 
 async function importedFeature(issue: JiraSourceIssue, initiativeId: string, existingId?: string | null) {
@@ -206,7 +196,7 @@ async function importedFeature(issue: JiraSourceIssue, initiativeId: string, exi
 
 async function epicForCapability(initiativeId: string, capabilityId: string, title: string) {
   const prototype = await db.prototype.findUnique({ where: { initiativeId } });
-  if (!prototype) throw new BusinessError("Generate the roadmap before importing Jira stories.", 422);
+  if (!prototype) throw new BusinessError("Start the planning workspace before importing Jira stories.", 422);
   if (prototype.approvedAt) throw new BusinessError("Reopen the approved plan before importing Jira stories.", 409);
   const feature = await ensureFeatureProjection(initiativeId, capabilityId, "jira");
   let epic = await db.artifactLayer.findFirst({ where: { parentId: feature.id, type: "epic", archivedAt: null } });
@@ -220,7 +210,7 @@ async function storyCapability(connectionId: string, initiativeId: string, paren
     if (link) return db.capability.findUnique({ where: { id: link.targetId } });
   }
   const intake = await db.intakeAnswerSet.findUnique({ where: { initiativeId } });
-  if (!intake) throw new BusinessError("Complete guided intake before importing Jira stories.", 422);
+  if (!intake) throw new BusinessError("Save an initiative draft before importing Jira stories.", 422);
   let capability = await db.capability.findFirst({ where: { intakeAnswerSetId: intake.id, backlogKey: "jira-imported-stories" } });
   if (!capability) {
     const max = await db.capability.aggregate({ where: { intakeAnswerSetId: intake.id }, _max: { order: true } });
@@ -248,8 +238,16 @@ async function importedStory(issue: JiraSourceIssue, connectionId: string, initi
   return db.artifactLayer.create({ data: { prototypeId: epic.prototypeId, type: "story", parentId: epic.id, order, title: issue.summary, body: plainText(issue.description) || `Imported from Jira ${issue.key}.`, points: issue.storyPoints ? Math.min(21, Math.max(1, Math.round(issue.storyPoints))) : null, sourceCapabilityId: capability.id, sourceType: "jira", externalRef: issue.key, dedupeKey: `jira:${issue.id}`, readinessStatus: "needs_refinement", traceNote: `Imported from Jira ${issue.key}.` } });
 }
 
-async function importedBug(issue: JiraSourceIssue, connection: JiraConnection, initiativeId: string, actorUserId: string, existingId?: string | null) {
+async function importedBug(issue: JiraSourceIssue, initiativeId: string, actorUserId: string, existingId?: string | null) {
   const existing = existingId ? await db.bugPlanningRecord.findUnique({ where: { id: existingId }, include: { request: true } }) : null;
+  if (existingId && !existing) throw new BusinessError("The linked bug no longer exists.", 409);
+  if (existing) {
+    const request = requestSchema.parse(existing.request.data);
+    request.title = issue.summary;
+    request.problem = plainText(issue.description) || `Bug reported in Jira as ${issue.key}.`;
+    request.bug.observedBehavior = plainText(issue.description) || "See the Jira issue.";
+    return saveRequest(initiativeId, request, { id: existing.requestId, revision: existing.request.revision }, { actorUserId, changeReason: `Imported Jira update ${issue.key}` });
+  }
   const request = emptyRequest();
   request.title = issue.summary;
   request.kind = "bug";
@@ -261,10 +259,8 @@ async function importedBug(issue: JiraSourceIssue, connection: JiraConnection, i
   request.outcome = "The Jira issue is resolved and validated.";
   request.businessRules = "Preserve Jira traceability.";
   request.dependencies = "Review linked Jira work.";
-  const status = mappedStatus(issue, connection);
-  const priority = mappedPriority(issue, connection);
-  request.bug = { severity: priority, affectedArea: issue.labels.join(", ") || "Not specified in Jira", observedBehavior: plainText(issue.description) || "See the Jira issue.", expectedBehavior: "The reported defect no longer occurs.", reproductionDetails: "See the Jira issue.", environment: "Not specified in Jira", status: status === "done" ? "resolved" : status === "in_progress" ? "in_progress" : status === "blocked" ? "confirmed" : "reported" };
-  return saveRequest(initiativeId, request, existing ? { id: existing.requestId, revision: existing.request.revision } : undefined, { actorUserId, changeReason: existing ? `Imported Jira update ${issue.key}` : `Imported Jira bug ${issue.key}` });
+  request.bug = { severity: "medium", affectedArea: issue.labels.join(", ") || "Not specified in Jira", observedBehavior: plainText(issue.description) || "See the Jira issue.", expectedBehavior: "The reported defect no longer occurs.", reproductionDetails: "See the Jira issue.", environment: "Not specified in Jira", status: "reported" };
+  return saveRequest(initiativeId, request, undefined, { actorUserId, changeReason: `Imported Jira bug ${issue.key}` });
 }
 
 async function applyItem(item: { id: string; targetType: string; targetId: string | null; sourceSnapshot: Prisma.JsonValue; sourceHash: string; externalIssueId: string; externalKey: string; issueTypeName: string }, run: { connectionId: string; initiativeId: string; organizationId: string }, actorUserId: string) {
@@ -273,14 +269,15 @@ async function applyItem(item: { id: string; targetType: string; targetId: strin
   if (item.targetType === "feature") target = await importedFeature(issue, run.initiativeId, item.targetId);
   else if (item.targetType === "story") target = await importedStory(issue, run.connectionId, run.initiativeId, item.targetId);
   else if (item.targetType === "bug") {
-    const connection = await db.jiraConnection.findUniqueOrThrow({ where: { id: run.connectionId } });
-    const request = await importedBug(issue, connection, run.initiativeId, actorUserId, item.targetId);
+    const request = await importedBug(issue, run.initiativeId, actorUserId, item.targetId);
     target = await db.bugPlanningRecord.findUniqueOrThrow({ where: { requestId: request.id } });
   } else throw new BusinessError("Skipped Jira items cannot be imported.", 422);
   const linkBase = { organizationId: run.organizationId, initiativeId: run.initiativeId, connectionId: run.connectionId, externalIssueId: item.externalIssueId, externalKey: item.externalKey, issueTypeName: item.issueTypeName, targetType: item.targetType, targetId: target.id, sourceHash: item.sourceHash, targetFingerprint: "", sourceUpdatedAt: issue.updated ? new Date(issue.updated) : null, lastImportedSnapshot: {} as Prisma.InputJsonValue, lastSyncStatus: "imported" };
   const temporary = { ...linkBase, id: "", createdAt: new Date(), updatedAt: new Date(), lastImportedAt: new Date() } as JiraExternalLink;
-  linkBase.targetFingerprint = (await currentTargetFingerprint(temporary)) ?? fingerprint({ id: target.id });
-  await db.jiraExternalLink.upsert({ where: { connectionId_externalIssueId: { connectionId: run.connectionId, externalIssueId: item.externalIssueId } }, create: linkBase, update: { ...linkBase, lastImportedAt: new Date() } });
+  const local = await currentTargetSnapshot(temporary);
+  linkBase.targetFingerprint = local ? fingerprint(local) : fingerprint({ id: target.id });
+  const baselines = fieldBaselines(issue, item.targetType, local) as unknown as Prisma.InputJsonValue;
+  await db.jiraExternalLink.upsert({ where: { connectionId_externalIssueId: { connectionId: run.connectionId, externalIssueId: item.externalIssueId } }, create: { ...linkBase, fieldBaselines: baselines }, update: { ...linkBase, fieldBaselines: baselines, lastImportedAt: new Date() } });
   await db.jiraImportItem.update({ where: { id: item.id }, data: { targetId: target.id, status: "imported" } });
 }
 
@@ -292,6 +289,22 @@ export async function applyJiraImport(runId: string, selectedItemIds: string[], 
     const selected = await db.jiraImportItem.findMany({ where: { importRunId: run.id, id: { in: selectedItemIds } } });
     if (selected.length !== new Set(selectedItemIds).size) throw new BusinessError("One or more selected Jira items are invalid.", 422);
     if (selected.some((item) => !["create","update"].includes(item.action))) throw new BusinessError("Resolve conflicts and exclude unchanged or skipped items before importing.", 422);
+    if (!selected.length) throw new BusinessError("Select at least one create or update.", 422);
+    await requireCollaborationAction(run.initiativeId, actorUserId, "manage_integrations", run.organizationId);
+    const connection = await db.jiraConnection.findUnique({ where: { id: run.connectionId } });
+    if (!connection || connection.status !== "connected" || run.connectionRevision === null || connection.revision !== run.connectionRevision) {
+      throw new BusinessError("The Jira connection changed. Refresh the preview before importing.", 409);
+    }
+    for (const item of selected) {
+      const review = item.reviewSnapshot as { schemaVersion?: number; targetFingerprint?: string | null } | null;
+      if (review?.schemaVersion !== 1) throw new BusinessError("Refresh this legacy import preview before applying it.", 409);
+      const current = item.targetId ? await currentTargetFingerprint({ targetType: item.targetType, targetId: item.targetId }) : null;
+      if (current !== review.targetFingerprint) throw new BusinessError(`${item.externalKey} changed locally after review. Refresh the preview.`, 409);
+      const link = await db.jiraExternalLink.findUnique({ where: { connectionId_externalIssueId: { connectionId: run.connectionId, externalIssueId: item.externalIssueId } } });
+      if ((item.action === "create" && link) || (item.action === "update" && (!link || link.targetId !== item.targetId || link.targetType !== item.targetType))) {
+        throw new BusinessError("The canonical Jira mapping changed. Refresh the preview.", 409);
+      }
+    }
     const changed = await db.jiraImportRun.updateMany({ where: { id: run.id, status: "previewed" }, data: { status: "applying" } });
     if (changed.count !== 1) throw new BusinessError("This Jira import preview changed. Reload and try again.", 409);
     for (const item of selected) await applyItem(item, run, actorUserId);

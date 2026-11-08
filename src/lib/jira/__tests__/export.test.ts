@@ -15,7 +15,7 @@ vi.mock("../oauth", () => ({ accessTokenFor: vi.fn() }));
 vi.mock("../client", () => ({ createJiraIssue: vi.fn(), getJiraIssue: vi.fn(), updateJiraIssue: vi.fn() }));
 vi.mock("../import", () => ({ currentTargetFingerprint: vi.fn(), fingerprint: vi.fn(() => "a".repeat(64)), sourceSnapshot: vi.fn() }));
 
-import { approveJiraExport } from "../export";
+import { approveJiraExport, fieldsFor } from "../export";
 
 vi.stubEnv("JIRA_WRITE_ENABLED", "true");
 
@@ -27,4 +27,10 @@ describe("Jira export approval boundary", () => {
     expect(writes.approval).not.toHaveBeenCalled();
     expect(writes.link).not.toHaveBeenCalled();
   });
+});
+
+it("freezes only the fields that an update will actually send", () => {
+  const candidate = { summary: "Title", description: "Body", issueType: "Story" };
+  expect(Object.keys(fieldsFor(candidate, "project", true).fields).sort()).toEqual(["description", "summary"]);
+  expect(fieldsFor(candidate, "project").fields).toMatchObject({ project: { id: "project" }, issuetype: { name: "Story" } });
 });

@@ -11,14 +11,14 @@ import { recordJiraConflict } from "./conflicts";
 type TargetType = "feature" | "story" | "bug";
 type ExportPayload = { fields: Record<string, unknown> };
 type Candidate = { targetType: TargetType; targetId: string; summary: string; description: string; issueType: string; targetFingerprint: string };
-type PreviewExportItem = { organizationId: string; targetType: TargetType; targetId: string; summary: string; externalIssueId: string | null; externalKey: string | null; action: "create" | "update" | "unchanged" | "conflict"; requestPayload: Prisma.InputJsonValue; targetFingerprint: string; expectedSourceHash: string | null; idempotencyKey: string; conflictReason: string | null; selected: boolean; status: string };
+type PreviewExportItem = { organizationId: string; targetType: TargetType; targetId: string; summary: string; externalIssueId: string | null; externalKey: string | null; action: "create" | "update" | "unchanged" | "conflict"; requestPayload: Prisma.InputJsonValue; reviewSnapshot: Prisma.InputJsonValue; targetFingerprint: string; expectedSourceHash: string | null; idempotencyKey: string; conflictReason: string | null; selected: boolean; status: string };
 
 const adf = (value: string) => ({ type: "doc", version: 1, content: value.split(/\n+/).filter(Boolean).map((text) => ({ type: "paragraph", content: [{ type: "text", text: text.slice(0, 32000) }] })) });
 const dataObject = (value: unknown): Record<string, unknown> => value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 const stringValue = (value: unknown) => typeof value === "string" ? value : "";
 
-function fieldsFor(candidate: Candidate, projectId: string): ExportPayload {
-  return { fields: { project: { id: projectId }, summary: candidate.summary, description: adf(candidate.description || candidate.summary), issuetype: { name: candidate.issueType } } };
+export function fieldsFor(candidate: Pick<Candidate, "summary" | "description" | "issueType">, projectId: string, update = false): ExportPayload {
+  return { fields: { ...(update ? {} : { project: { id: projectId }, issuetype: { name: candidate.issueType } }), summary: candidate.summary, description: adf(candidate.description || candidate.summary) } };
 }
 
 async function candidates(initiativeId: string): Promise<Candidate[]> {
@@ -34,15 +34,15 @@ async function candidates(initiativeId: string): Promise<Candidate[]> {
   ];
 }
 
-function approvalHash(items: { id: string; targetFingerprint: string; requestPayload: Prisma.JsonValue }[]) {
-  return fingerprint([...items].sort((a, b) => a.id.localeCompare(b.id)).map((item) => ({ id: item.id, targetFingerprint: item.targetFingerprint, requestPayload: item.requestPayload })));
+export function approvalHash(items: { id: string; targetFingerprint: string; requestPayload: Prisma.JsonValue; reviewSnapshot?: Prisma.JsonValue }[]) {
+  return fingerprint([...items].sort((a, b) => a.id.localeCompare(b.id)).map((item) => ({ id: item.id, targetFingerprint: item.targetFingerprint, requestPayload: item.requestPayload, reviewSnapshot: item.reviewSnapshot ?? null })));
 }
 
 export async function loadJiraExport(runId: string) {
   const run = await db.jiraExportRun.findUnique({ where: { id: runId }, select: { id: true, connectionId: true, status: true, itemCount: true, createCount: true, updateCount: true, conflictCount: true, unchangedCount: true, executedAt: true, createdAt: true, updatedAt: true } });
   if (!run) return null;
   const [items, approval] = await Promise.all([
-    db.jiraExportItem.findMany({ where: { exportRunId: run.id }, orderBy: [{ action: "asc" }, { summary: "asc" }], select: { id: true, externalKey: true, targetType: true, summary: true, action: true, conflictReason: true, selected: true, status: true, failureMessage: true, createdAt: true, updatedAt: true } }),
+    db.jiraExportItem.findMany({ where: { exportRunId: run.id }, orderBy: [{ action: "asc" }, { summary: "asc" }], select: { id: true, externalKey: true, targetType: true, targetId: true, externalIssueId: true, requestPayload: true, reviewSnapshot: true, summary: true, action: true, conflictReason: true, selected: true, status: true, failureMessage: true, createdAt: true, updatedAt: true } }),
     db.jiraExportApproval.findUnique({ where: { exportRunId: run.id }, select: { id: true, approvedAt: true, approvedByUserId: true } }),
   ]);
   return { ...run, items, approval };
@@ -62,20 +62,23 @@ export async function previewJiraExport(connectionId: string, actorUserId: strin
     const link = byTarget.get(`${candidate.targetType}:${candidate.targetId}`);
     let action: "create" | "update" | "unchanged" | "conflict" = link ? "update" : "create";
     let conflictReason: string | null = null;
+    let before: unknown = null;
     let expectedSourceHash: string | null = link?.sourceHash ?? null;
     if (link && candidate.targetFingerprint === link.targetFingerprint) action = "unchanged";
     else if (link) {
       try {
         const remote = await getJiraIssue({ cloudId: connection.cloudId, accessToken, issueIdOrKey: link.externalIssueId });
         const snapshot = sourceSnapshot(remote) as unknown as Prisma.InputJsonValue;
+        before = { summary: remote.summary, description: dataObject(snapshot).description ?? null };
         const currentSourceHash = fingerprint(snapshot);
         if (currentSourceHash !== link.sourceHash) { action = "conflict"; conflictReason = "Both Jira and the planning record changed since the last synchronization."; }
         expectedSourceHash = currentSourceHash;
         if (action === "conflict") conflictEvidence.set(candidate.targetId, { link, snapshot, jiraFingerprint: currentSourceHash });
       } catch (error) { action = "conflict"; conflictReason = error instanceof Error ? `Could not verify Jira: ${error.message}` : "Could not verify the linked Jira issue."; }
     }
-    const payload = fieldsFor(candidate, connection.projectId);
-    items.push({ organizationId: connection.organizationId, targetType: candidate.targetType, targetId: candidate.targetId, summary: candidate.summary, externalIssueId: link?.externalIssueId ?? null, externalKey: link?.externalKey ?? null, action, requestPayload: payload as unknown as Prisma.InputJsonValue, targetFingerprint: candidate.targetFingerprint, expectedSourceHash, idempotencyKey: jiraHash(`${connection.id}:${candidate.targetType}:${candidate.targetId}:${candidate.targetFingerprint}`), conflictReason, selected: false, status: action === "conflict" ? "conflict" : action === "unchanged" ? "skipped" : "previewed" });
+    const payload = fieldsFor(candidate, connection.projectId, Boolean(link));
+    const reviewSnapshot = { schemaVersion: 1, target: { cloudId: connection.cloudId, projectId: connection.projectId, externalIssueId: link?.externalIssueId ?? null, externalKey: link?.externalKey ?? null, localType: candidate.targetType, localId: candidate.targetId }, before, proposed: payload.fields, omissions: ["Jira status transitions", "priority", "assignee", "labels", "sprint/release assignments", "deletions", ...(link ? ["project move", "issue type change"] : [])], note: action === "unchanged" ? "No write proposed; current remote values were not reread." : "Only the frozen fields are eligible for a future approved write." };
+    items.push({ organizationId: connection.organizationId, targetType: candidate.targetType, targetId: candidate.targetId, summary: candidate.summary, externalIssueId: link?.externalIssueId ?? null, externalKey: link?.externalKey ?? null, action, requestPayload: payload as unknown as Prisma.InputJsonValue, reviewSnapshot: reviewSnapshot as unknown as Prisma.InputJsonValue, targetFingerprint: candidate.targetFingerprint, expectedSourceHash, idempotencyKey: jiraHash(`${connection.id}:${candidate.targetType}:${candidate.targetId}:${candidate.targetFingerprint}`), conflictReason, selected: false, status: action === "conflict" ? "conflict" : action === "unchanged" ? "skipped" : "previewed" });
   }
   const sourceFingerprint = fingerprint(items.map((item) => ({ targetType: item.targetType, targetId: item.targetId, targetFingerprint: item.targetFingerprint, action: item.action })));
   return withTransaction(async () => {
@@ -103,6 +106,7 @@ export async function approveJiraExport(runId: string, selectedItemIds: string[]
     const selected = await db.jiraExportItem.findMany({ where: { exportRunId: run.id, id: { in: uniqueIds } } });
     if (selected.length !== uniqueIds.length || selected.some((item) => !["create", "update"].includes(item.action))) throw new BusinessError("Only conflict-free create or update items can be approved.", 422);
     for (const item of selected) {
+      if (!item.reviewSnapshot || dataObject(item.reviewSnapshot).schemaVersion !== 1) throw new BusinessError("Refresh this legacy export preview before approval.", 409);
       const link = { targetType: item.targetType, targetId: item.targetId } as JiraExternalLink;
       if (await currentTargetFingerprint(link) !== item.targetFingerprint) throw new BusinessError(`“${item.summary}” changed after the preview. Create a new preview.`, 409);
     }
