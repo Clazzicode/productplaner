@@ -826,6 +826,9 @@ model LayerLock {
 }
 
 model ArtifactLayer {
+  generationKey              String?
+  generatedBaseline          Json?
+  generationReviewStatus     String?
   id                         String                      @id @default(cuid())
   prototypeId                String
   prototype                  Prototype                   @relation(fields: [prototypeId], references: [id], onDelete: Cascade)
@@ -875,6 +878,23 @@ model ArtifactLayer {
   // Active feature projection uniqueness is a partial index managed in SQL.
   @@index([sourceCapabilityId])
   @@index([parentId])
+}
+
+model RegenerationProposal {
+  id                String   @id @default(cuid())
+  initiativeId      String
+  prototypeId       String
+  createdByUserId   String
+  sourceFingerprint String
+  recordFingerprint String
+  payload           Json
+  status            String   @default("pending")
+  decisions         Json?
+  resultingMapping  Json?
+  createdAt         DateTime @default(now())
+  appliedAt         DateTime?
+
+  @@index([initiativeId, createdAt])
 }
 
 model ArtifactRevision {

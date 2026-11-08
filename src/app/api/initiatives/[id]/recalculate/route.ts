@@ -4,8 +4,7 @@ import { randomUUID } from "node:crypto";
 import { requireInitiativeApiAccess } from "@/lib/access/guards";
 import { jsonError, zodMessage } from "@/lib/api";
 import { requireCurrentUserApi } from "@/lib/auth/session";
-import { db, establishAuthContext } from "@/lib/db";
-import { determineRespectLocksBranch } from "@/lib/generation/engine";
+import { establishAuthContext } from "@/lib/db";
 import { enqueueBackgroundJob, idempotencyKeyFromRequest } from "@/lib/jobs/queue";
 import { runBackgroundWorkerBatch } from "@/lib/jobs/worker";
 import { recalculatePlanSchema } from "@/lib/validation/schemas";
@@ -28,22 +27,6 @@ async function POSTHandler(
 
   const parsed = recalculatePlanSchema.safeParse(await request.json());
   if (!parsed.success) return jsonError(zodMessage(parsed.error), 422);
-
-  if (!parsed.data.confirmApprovedImpact) {
-    const existing = await db.prototype.findUnique({
-      where: { initiativeId: id },
-      select: { approvedAt: true, layerLocks: { select: { layerType: true, state: true } } },
-    });
-    const branch = existing && parsed.data.mode === "respect_locks"
-      ? determineRespectLocksBranch(existing.layerLocks)
-      : null;
-    if (existing?.approvedAt && (parsed.data.mode === "full" || branch?.kind !== "repack_only")) {
-      return NextResponse.json({
-        error: `This initiative has an approved baseline (approved ${existing.approvedAt.toLocaleDateString()}). This recalculation would rebuild approved work. Confirm to proceed anyway.`,
-        requiresApprovedImpactConfirmation: true,
-      }, { status: 409 });
-    }
-  }
 
   const user = authGuard.user;
   const job = await enqueueBackgroundJob({

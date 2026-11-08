@@ -141,6 +141,18 @@ describe.sequential("migration replay and real PostgreSQL RLS", () => {
       { id: 'identity-criterion', body: 'Human criterion', sprintId: null }, { id: 'identity-story', body: 'Edited story', sprintId: 'identity-sprint' },
     ]);
   });
+  it("keeps proposal evidence immutable and restricts it to initiative editors", async () => {
+    const insert = `INSERT INTO "RegenerationProposal" (id,"initiativeId","prototypeId","createdByUserId","sourceFingerprint","recordFingerprint",payload)
+      VALUES ('proposal-a','init-a','proto-a','user-org-a','source','records','{"items":[]}')`;
+    await asUser(authA, () => pg.exec(insert));
+    expect((await asUser(authB, () => pg.query(`SELECT id FROM "RegenerationProposal"`))).rows).toHaveLength(0);
+    await expect(asUser(authA, () => pg.exec(`INSERT INTO "RegenerationProposal" (id,"initiativeId","prototypeId","createdByUserId","sourceFingerprint","recordFingerprint",payload) VALUES ('forged-proposal','init-a','proto-b','user-org-a','s','r','{}')`))).rejects.toThrow();
+    await expect(asUser(authA, () => pg.exec(`UPDATE "RegenerationProposal" SET payload='{}',status='applied',"appliedAt"=now() WHERE id='proposal-a'`))).rejects.toThrow();
+    await asUser(authA, () => pg.exec(`UPDATE "RegenerationProposal" SET status='applied',"appliedAt"=now(),decisions='[]',"resultingMapping"='{}' WHERE id='proposal-a'`));
+    expect((await asUser(authA, () => pg.query(`UPDATE "RegenerationProposal" SET decisions='["forged"]' WHERE id='proposal-a' RETURNING id`))).rows).toHaveLength(0);
+    await expect(asUser(authA, () => pg.exec(`DELETE FROM "RegenerationProposal" WHERE id='proposal-a'`))).rejects.toThrow();
+  });
+
   it("blocks arbitrary self-enrollment with a known organization ID", async () => {
     await expect(asUser(authA, () => pg.query('INSERT INTO "OrganizationMember" (id,"organizationId","authUserId",role,"updatedAt") VALUES (\'attack\',\'org-b\',$1,\'owner\',now())', [authA]))).rejects.toThrow();
   });

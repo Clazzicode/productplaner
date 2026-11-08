@@ -1130,5 +1130,20 @@
     "classification": "public-demo",
     "reason": "Static intake-preview interface; does not read planning database records.",
     "sourceFingerprint": "7fddc2f9f4f6718d7a6ca0bb0fcfd7077356475372f4b5bdc56d4c06aa5e4fd0"
+  },
+  {
+    "path": "src/app/api/initiatives/[id]/regeneration-proposals/[proposalId]/route.ts",
+    "classification": "authenticated-api",
+    "reason": "Verified identity and initiative editing action required; reviewed regeneration evidence remains inside its initiative boundary."
+  },
+  {
+    "path": "src/app/api/initiatives/[id]/regeneration-proposals/route.ts",
+    "classification": "authenticated-api",
+    "reason": "Verified identity and initiative editing action required; reviewed regeneration evidence remains inside its initiative boundary."
+  },
+  {
+    "path": "src/app/initiatives/[initiativeId]/workspace/regeneration/page.tsx",
+    "classification": "authenticated-page",
+    "reason": "Verified identity and initiative editing action required; reviewed regeneration evidence remains inside its initiative boundary."
   }
 ]
