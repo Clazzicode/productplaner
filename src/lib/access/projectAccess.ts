@@ -2,10 +2,9 @@
 // grant model (docs/V2-RESOURCE-ACCESS.md's "don't multiply grant surfaces
 // without a concrete need" principle, applied to the new Project layer): a
 // Project is a shared context container, not an independently-permissioned
-// deliverable, so visibility/edit is just "active member of the owning org" —
-// the same is_org_member() check RLS enforces at the database layer. The
-// fine-grained control that matters (who can edit which deliverable) stays at
-// InitiativeAccess, unchanged.
+// deliverable. Reads retain the existing shared-context visibility. Changes
+// affecting every initiative require internal workspace administration;
+// initiative-only context uses InitiativeAccess via documentAccess.ts.
 
 import { notFound } from "next/navigation";
 import { NextResponse } from "next/server";
@@ -33,6 +32,7 @@ export async function requireProjectPageAccess(actor: ActorRow, projectId: strin
 export async function requireProjectApiAccess(
   actor: ActorRow,
   projectId: string,
+  minimum: "view" | "edit" = "view",
 ): Promise<{ ok: true } | { ok: false; response: NextResponse }> {
   if (actor.status !== "active") {
     return { ok: false, response: NextResponse.json({ error: "Not found." }, { status: 404 }) };
@@ -40,6 +40,9 @@ export async function requireProjectApiAccess(
   const orgId = await getProjectOrgId(projectId);
   if (orgId === "not_found" || orgId !== actor.organizationId) {
     return { ok: false, response: NextResponse.json({ error: "Not found." }, { status: 404 }) };
+  }
+  if (minimum === "edit" && (actor.memberType !== "internal" || actor.accessLevel !== "org_admin")) {
+    return { ok: false, response: NextResponse.json({ error: "Shared project changes require an internal workspace administrator." }, { status: 403 }) };
   }
   return { ok: true };
 }

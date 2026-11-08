@@ -61,7 +61,7 @@ import { PATCH as jiraJobUpdate } from "@/app/api/integrations/jira/jobs/[jobId]
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mocks.auth.mockResolvedValue({ ok: true, user: { id: "user-a", authUserId: "auth-a", organizationId: "org-a", status: "active", accessLevel: "org_admin", permissionRole: "owner" } });
+  mocks.auth.mockResolvedValue({ ok: true, user: { id: "user-a", authUserId: "auth-a", organizationId: "org-a", status: "active", accessLevel: "org_admin", permissionRole: "owner", memberType: "internal" } });
   // Deliberately return foreign rows, simulating a DB connection that bypasses
   // RLS: application authorization must still independently reject the IDs.
   mocks.initiative.mockResolvedValue({ id: "init-b", organizationId: "org-b" });

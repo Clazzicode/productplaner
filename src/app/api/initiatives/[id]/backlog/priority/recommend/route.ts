@@ -2,7 +2,6 @@ import { z } from "zod";
 import { withApi } from "@/lib/observability";
 import { requireCurrentUserApi } from "@/lib/auth/session";
 import { requireInitiativeApiAccess } from "@/lib/access/guards";
-import { requireOrganizationRole } from "@/lib/access/organizationRole";
 import { db, establishAuthContext } from "@/lib/db";
 import { jsonError, zodMessage } from "@/lib/api";
 import { mapAssistActionError } from "@/lib/ai/assist/routeErrors";
@@ -19,10 +18,8 @@ async function handler(request: Request, { params }: { params: Promise<{ id: str
   const auth = await requireCurrentUserApi();
   if (!auth.ok) return auth.response;
   establishAuthContext(auth.user.authUserId);
-  const access = await requireInitiativeApiAccess(auth.user, id, request.method === "GET" ? "view" : "edit");
+  const access = await requireInitiativeApiAccess(auth.user, id, "edit");
   if (!access.ok) return access.response;
-  const role = requireOrganizationRole(auth.user, ["owner", "admin"]);
-  if (!role.ok) return role.response;
 
   const raw = request.method === "GET"
     ? Object.fromEntries(new URL(request.url).searchParams.entries())

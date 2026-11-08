@@ -67,6 +67,40 @@ describe.sequential("migration replay and real PostgreSQL RLS", () => {
         INSERT INTO "ArtifactLayer" (id,"prototypeId",type,"order",title,body,"updatedAt") VALUES ('artifact-${suffix}','proto-${suffix}','roadmap',0,'Original','Original',now());`);
     }
   });
+  it("enforces collaboration actions in PostgreSQL for direct/team editors and external admins", async () => {
+    const actions = ['read','edit','submit_feedback','triage_feedback','accept_story','approve_plan','approve_release','publish','manage_integrations','approve_jira_export'];
+    const allowed = async () => (await asUser(authMember, () => pg.query<{ action: string; allowed: boolean }>(
+      `SELECT action,app_private.can_initiative_action('init-a',action) AS allowed FROM unnest($1::text[]) action`, [actions]))).rows.filter(r => r.allowed).map(r => r.action);
+    try {
+      expect(await allowed()).toEqual([]);
+      await pg.exec(`INSERT INTO "InitiativeAccess" (id,"initiativeId","userId",permission,"updatedAt") VALUES ('matrix-direct','init-a','user-member','edit',now())`);
+      expect(await allowed()).toEqual(actions.slice(0,5));
+      await expect(asUser(authMember, () => pg.exec(`INSERT INTO "PlanApproval" (id,"organizationId","initiativeId","projectId","planVersionId",status,"approvedBy") VALUES ('matrix-forged','org-a','init-a','project-a','v','approved','user-member')`))).rejects.toThrow(/row-level security/);
+      await pg.exec(`UPDATE "InitiativeAccess" SET permission='view' WHERE id='matrix-direct'`);
+      expect(await allowed()).toEqual(['read','submit_feedback']);
+      await pg.exec(`DELETE FROM "InitiativeAccess" WHERE id='matrix-direct';
+        INSERT INTO "Team" (id,"organizationId",name,"updatedAt") VALUES ('matrix-team','org-a','Matrix team',now());
+        INSERT INTO "TeamMember" (id,"teamId","userId") VALUES ('matrix-team-member','matrix-team','user-member');
+        INSERT INTO "InitiativeAccess" (id,"initiativeId","teamId",permission,"updatedAt") VALUES ('matrix-team-grant','init-a','matrix-team','edit',now());`);
+      expect(await allowed()).toEqual(actions.slice(0,5));
+      await pg.exec(`UPDATE "User" SET "memberType"='external' WHERE id='user-member'; UPDATE "OrganizationMember" SET role='admin' WHERE id='member-extra-org-a'`);
+      expect(await allowed()).toEqual(['read','submit_feedback']);
+      expect((await asUser(authMember, () => pg.query<{ allowed: boolean }>(`SELECT is_org_admin('org-a') AS allowed`))).rows[0].allowed).toBe(false);
+      await asUser(authMember, () => pg.exec(`INSERT INTO "FeedbackRecord" (id,"organizationId","projectId","initiativeId",title,details,source,"sourceReference",category,"dedupeKey","createdByUserId","updatedAt") VALUES ('matrix-feedback','org-a','project-a','init-a','Stakeholder feedback','Feedback details','stakeholder','submission:user-member','general','aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa','user-member',now())`));
+      expect((await asUser(authMember, () => pg.query(`SELECT id FROM "FeedbackRecord" WHERE id='matrix-feedback'`))).rows).toHaveLength(1);
+      expect((await asUser(authMember, () => pg.query(`UPDATE "FeedbackRecord" SET status='triaged' WHERE id='matrix-feedback' RETURNING id`))).rows).toHaveLength(0);
+      await expect(asUser(authMember, () => pg.exec(`INSERT INTO "FeedbackRecord" (id,"organizationId","projectId","initiativeId",title,details,source,category,"dedupeKey","createdByUserId","updatedAt") VALUES ('matrix-forged-feedback','org-a','project-a','init-a','Forged feedback','Details','jira','general','bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb','user-org-a',now())`))).rejects.toThrow(/row-level security/);
+      await pg.exec(`DELETE FROM "TeamMember" WHERE id='matrix-team-member'`);
+      expect(await allowed()).toEqual([]);
+      await pg.exec(`UPDATE "User" SET "memberType"='internal' WHERE id='user-member'`);
+      expect(await allowed()).toEqual(actions);
+      await pg.exec(`UPDATE "OrganizationMember" SET status='disabled' WHERE id='member-extra-org-a'`);
+      expect(await allowed()).toEqual([]);
+      expect((await asUser(authB, () => pg.query<{ allowed: boolean }>(`SELECT app_private.can_initiative_action('init-a','read') AS allowed`))).rows[0].allowed).toBe(false);
+    } finally {
+      await pg.exec(`DELETE FROM "FeedbackRecord" WHERE id='matrix-feedback'; DELETE FROM "InitiativeAccess" WHERE id IN ('matrix-direct','matrix-team-grant'); DELETE FROM "TeamMember" WHERE id='matrix-team-member'; DELETE FROM "Team" WHERE id='matrix-team'; UPDATE "User" SET "memberType"='internal' WHERE id='user-member'; UPDATE "OrganizationMember" SET role='member',status='active' WHERE id='member-extra-org-a'`);
+    }
+  });
   it("blocks arbitrary self-enrollment with a known organization ID", async () => {
     await expect(asUser(authA, () => pg.query('INSERT INTO "OrganizationMember" (id,"organizationId","authUserId",role,"updatedAt") VALUES (\'attack\',\'org-b\',$1,\'owner\',now())', [authA]))).rejects.toThrow();
   });

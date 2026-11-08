@@ -15,6 +15,12 @@ function actor(overrides: Partial<ResolveActor> = {}): ResolveActor {
 }
 
 describe("resolveInitiativeAccess", () => {
+  it("external administrators get no implicit grant and remain view-only with actual grants", () => {
+    const input = { actor: actor({ accessLevel: "org_admin", memberType: "external" }), initiativeOrganizationId: ORG, directGrant: null, teamGrants: [] };
+    expect(resolveInitiativeAccess(input).level).toBe("none");
+    expect(resolveInitiativeAccess({ ...input, directGrant: { permission: "owner" } }).level).toBe("view");
+    expect(resolveInitiativeAccess({ ...input, teamGrants: [{ teamName: "Product", permission: "edit" }] }).level).toBe("view");
+  });
   it("resolves no grant as No Access", () => {
     const result = resolveInitiativeAccess({
       actor: actor(),

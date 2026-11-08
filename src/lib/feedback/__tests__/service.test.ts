@@ -7,9 +7,10 @@ const state = vi.hoisted(() => ({
   audits: [] as string[],
   auditFails: false,
   priorityFails: false,
-  assignedProductOwner: false,
+  internalEditor: false,
 }));
 
+vi.mock("@/lib/access/actionGuard", () => ({ hasCollaborationAction: async (_id: string, actor: string) => actor === "admin-a" || state.internalEditor }));
 vi.mock("@/lib/db", () => ({
   withTransaction: async (fn: () => Promise<unknown>) => {
     const before = structuredClone(state);
@@ -60,8 +61,8 @@ vi.mock("@/lib/db", () => ({
     priorityDecision: { findFirst: async () => null },
     planningRequest: { findFirst: vi.fn() },
     artifactLayer: { findFirst: vi.fn() },
-    stakeholderContact: { findFirst: async () => state.assignedProductOwner ? { id: "contact-a" } : null },
-    stakeholderAssignment: { findFirst: async () => state.assignedProductOwner ? { id: "assignment-a" } : null },
+    stakeholderContact: { findFirst: async () => state.internalEditor ? { id: "contact-a" } : null },
+    stakeholderAssignment: { findFirst: async () => state.internalEditor ? { id: "assignment-a" } : null },
   },
 }));
 
@@ -104,7 +105,7 @@ beforeEach(() => {
   state.audits = [];
   state.auditFails = false;
   state.priorityFails = false;
-  state.assignedProductOwner = false;
+  state.internalEditor = false;
 });
 
 describe("feedback and reprioritization service", () => {
@@ -122,10 +123,10 @@ describe("feedback and reprioritization service", () => {
     expect(state.audits).toContain("feedback.reprioritization_apply");
   });
 
-  it("allows an assigned Product Owner and rejects an unassigned member", async () => {
+  it("allows an internal initiative editor and rejects a viewer", async () => {
     await createProposal();
     await expect(applyProposalCommand("proposal-1", { action: "apply", expectedRevision: 1, decisionReason: "Apply the validated feedback." }, "member-a", false)).rejects.toMatchObject({ status: 403 });
-    state.assignedProductOwner = true;
+    state.internalEditor = true;
     await applyProposalCommand("proposal-1", { action: "apply", expectedRevision: 1, decisionReason: "Apply the validated feedback." }, "member-a", false);
     expect(state.proposals[0].status).toBe("applied");
   });

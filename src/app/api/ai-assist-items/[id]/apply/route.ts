@@ -50,7 +50,7 @@ async function POSTHandler(request: Request, { params }: { params: Promise<{ id:
       const proposed = JSON.parse(item.proposedContentJson) as { color: "green" | "yellow" | "red"; reason: string };
       const targetType: "project" | "initiative" = item.targetType;
       const targetGuard = targetType === "project"
-        ? await requireProjectApiAccess(user, item.targetId ?? "")
+        ? await requireProjectApiAccess(user, item.targetId ?? "", "edit")
         : await requireInitiativeApiAccess(user, item.targetId ?? "", "edit");
       if (!targetGuard.ok) return targetGuard.response;
       return withTransaction(async () => {
