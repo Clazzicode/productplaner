@@ -3,6 +3,7 @@ import { canEditPlanningWeights } from "../permissions";
 
 const BASE = {
   actorStatus: "active",
+  actorMemberType: "internal",
   accessLevel: "standard_user",
   initiativePermission: "view" as const,
   initiativeExperienceLevel: "experienced" as string | null,
@@ -15,10 +16,10 @@ describe("canEditPlanningWeights", () => {
     ).toBe(false);
   });
 
-  it("allows an active org admin regardless of initiative permission or experience", () => {
+  it("denies an inconsistent admin resolution without initiative edit access", () => {
     expect(
       canEditPlanningWeights({ ...BASE, accessLevel: "org_admin", initiativePermission: "view", initiativeExperienceLevel: "first_time" }),
-    ).toBe(true);
+    ).toBe(false);
   });
 
   it("allows a standard user with edit permission on the initiative, regardless of experience", () => {
@@ -26,12 +27,12 @@ describe("canEditPlanningWeights", () => {
     expect(canEditPlanningWeights({ ...BASE, initiativePermission: "owner", initiativeExperienceLevel: "first_time" })).toBe(true);
   });
 
-  it("allows a standard user with only view permission, if experienced", () => {
-    expect(canEditPlanningWeights({ ...BASE, initiativePermission: "view", initiativeExperienceLevel: "experienced" })).toBe(true);
+  it("denies a viewer regardless of experience", () => {
+    expect(canEditPlanningWeights({ ...BASE, initiativePermission: "view", initiativeExperienceLevel: "experienced" })).toBe(false);
   });
 
-  it("allows the legacy 'expert' experience value the same as 'experienced'", () => {
-    expect(canEditPlanningWeights({ ...BASE, initiativePermission: "view", initiativeExperienceLevel: "expert" })).toBe(true);
+  it("denies an experienced legacy viewer too", () => {
+    expect(canEditPlanningWeights({ ...BASE, initiativePermission: "view", initiativeExperienceLevel: "expert" })).toBe(false);
   });
 
   it("denies a standard user with only view permission and Beginner/Some-Experience level", () => {

@@ -6,9 +6,10 @@ const state = vi.hoisted(() => ({
   revisions: [] as Record<string, unknown>[],
   audits: [] as string[],
   auditFails: false,
-  assigned: false,
+  internalEditor: false,
 }));
 
+vi.mock("@/lib/access/actionGuard", () => ({ hasCollaborationAction: async (_id: string, actor: string) => actor === "admin-a" || state.internalEditor }));
 vi.mock("@/lib/db", () => ({
   withTransaction: async (fn: () => Promise<unknown>) => { const before = structuredClone(state); try { return await fn(); } catch (error) { Object.assign(state, before); throw error; } },
   db: {
@@ -24,8 +25,8 @@ vi.mock("@/lib/db", () => ({
     productValidationRevision: { create: async ({ data }: { data: Record<string, unknown> }) => { state.revisions.push(data); return data; }, findMany: async () => state.revisions },
     validationFollowUp: { findMany: async () => [], create: vi.fn() },
     validationAiSuggestion: { findMany: async () => [], findFirst: async () => null, update: vi.fn(), findUnique: vi.fn() },
-    stakeholderContact: { findFirst: async () => state.assigned ? { id: "validator-a" } : null },
-    stakeholderAssignment: { findFirst: async () => state.assigned ? { id: "assignment-a" } : null },
+    stakeholderContact: { findFirst: async () => state.internalEditor ? { id: "validator-a" } : null },
+    stakeholderAssignment: { findFirst: async () => state.internalEditor ? { id: "assignment-a" } : null },
     planningRequest: { create: vi.fn() }, requestRevision: { create: vi.fn() },
   },
 }));
@@ -38,7 +39,7 @@ const criterion = { criterionId: "criterion-a", result: "met" as const, reason: 
 beforeEach(() => {
   state.validation = { id: "validation-a", organizationId: "org-a", projectId: "project-a", initiativeId: "init-a", sprintId: "sprint-a", storyId: "story-a", status: "pending", storyVersion: 1, storySnapshot: { title: "Story A" }, evidenceNotes: "", evidenceLinks: [], decisionReason: "", validatorStakeholderId: null, validatorNameSnapshot: "", revision: 1 };
   state.criteria = [{ id: "result-a", validationId: "validation-a", criterionId: "criterion-a", criterionVersion: 1, criterionSnapshot: { title: "Criterion A" }, result: "pending", reason: "", evidenceNotes: "" }];
-  state.revisions = []; state.audits = []; state.auditFails = false; state.assigned = false;
+  state.revisions = []; state.audits = []; state.auditFails = false; state.internalEditor = false;
 });
 
 describe("PO validation service", () => {
@@ -47,9 +48,9 @@ describe("PO validation service", () => {
     await expect(applyValidationCommand("validation-a", { action: "finalize", expectedRevision: 1, status: "accepted", decisionReason: "Accepted by PO", criteria: [{ ...criterion, result: "pending" }], createFollowUp: false, followUpTitle: "", reason: "PO decision" }, "admin-a", true)).rejects.toThrow("every acceptance criterion");
   });
 
-  it("requires an authorized Product Owner or administrator for the final decision", async () => {
-    await expect(applyValidationCommand("validation-a", { action: "finalize", expectedRevision: 1, status: "accepted", decisionReason: "Accepted by PO", criteria: [criterion], createFollowUp: false, followUpTitle: "", reason: "PO decision" }, "member-a", false)).rejects.toThrow("assigned Product Owner");
-    state.assigned = true;
+  it("permits story acceptance by an internal initiative editor", async () => {
+    await expect(applyValidationCommand("validation-a", { action: "finalize", expectedRevision: 1, status: "accepted", decisionReason: "Accepted by PO", criteria: [criterion], createFollowUp: false, followUpTitle: "", reason: "PO decision" }, "member-a", false)).rejects.toThrow("internal initiative editor");
+    state.internalEditor = true;
     await applyValidationCommand("validation-a", { action: "finalize", expectedRevision: 1, status: "accepted", decisionReason: "All approved outcomes were demonstrated.", criteria: [criterion], createFollowUp: false, followUpTitle: "", reason: "PO accepted delivery" }, "po-a", false);
     expect(state.validation.status).toBe("accepted");
     expect(state.audits).toContain("validation.accepted");

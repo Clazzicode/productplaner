@@ -73,7 +73,7 @@ export async function getResolvedAccess(
 export async function listAuthorizedInitiativeIds(actor: ActorRow): Promise<string[] | null> {
   if (actor.status !== "active") return [];
 
-  if (actor.accessLevel === "org_admin") {
+  if (actor.accessLevel === "org_admin" && actor.memberType === "internal") {
     const all = await db.initiative.findMany({
       where: { organizationId: actor.organizationId },
       select: { id: true },

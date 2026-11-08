@@ -1,3 +1,4 @@
+import { requireInitiativeApiAccess } from "@/lib/access/guards";
 import { withApi } from "@/lib/observability";
 import { NextResponse } from "next/server";
 import { requireProjectApiAccess } from "@/lib/access/projectAccess";
@@ -24,6 +25,11 @@ async function POSTHandler(request: Request, { params }: { params: Promise<{ id:
       select: { projectId: true },
     });
     if (!initiative || initiative.projectId !== id) return jsonError("Initiative not found in this project.", 404);
+    const scopeGuard = await requireInitiativeApiAccess(user, parsed.data.initiativeId, "edit");
+    if (!scopeGuard.ok) return scopeGuard.response;
+  } else {
+    const scopeGuard = await requireProjectApiAccess(user, id, "edit");
+    if (!scopeGuard.ok) return scopeGuard.response;
   }
 
   const risk = await db.risk.create({

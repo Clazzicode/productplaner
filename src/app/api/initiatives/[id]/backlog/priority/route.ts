@@ -1,7 +1,6 @@
 import { withApi } from "@/lib/observability";
 import { requireCurrentUserApi } from "@/lib/auth/session";
 import { requireInitiativeApiAccess } from "@/lib/access/guards";
-import { requireOrganizationRole } from "@/lib/access/organizationRole";
 import { establishAuthContext } from "@/lib/db";
 import { jsonError, zodMessage } from "@/lib/api";
 import { priorityDecisionCommand } from "@/lib/prioritization/model";
@@ -23,8 +22,6 @@ async function handler(request: Request, { params }: { params: Promise<{ id: str
     return Response.json({ history: await listPriorityHistory(id, entityType, entityId) });
   }
 
-  const role = requireOrganizationRole(auth.user, ["owner", "admin"]);
-  if (!role.ok) return role.response;
   const parsed = priorityDecisionCommand.safeParse(await request.json());
   if (!parsed.success) return jsonError(zodMessage(parsed.error), 422);
   const decision = await savePriorityDecision(id, parsed.data, auth.user.id);

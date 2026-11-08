@@ -18,8 +18,8 @@ Avery's approved nine-milestone plan in **Evaluate architecture considerations**
 
 | Milestone | Source finding | Implemented | Deployed | Accepted / evidence |
 |---|---|---|---|---|
-| 1 Worker repair and execution health | 8 | In progress | No | Read-only real-Prisma probe reproduced missing context with a lazy return; awaited callback passed. Monitoring delivery and scheduled cycles pending. |
-| 2 Collaboration action matrix | 5 | No | No | Pending |
+| 1 Worker repair and execution health | 8 | Core repair/health implemented; monitoring incomplete | Production PRs 26–27 | Fixed lazy Prisma retention context. CI and staging migration passed. Protected Preview: missing workers ->503; authenticated idle runs ->200; readiness ->200; unauthorized worker ->401; liveness ->200. Production both workers completed successive scheduled cycles at 05:05, 05:10, 05:15 UTC on Nov 8. Test-job/failure injection and delivered alerts remain pending; Avery confirmed no existing monitoring service. |
+| 2 Collaboration action matrix | 5 | In progress | No | Central action policy, fresh service checks, external-admin cap, scoring authority, story/release separation, feedback receipt path, relevant restrictive RLS. Full suite 955 tests passed before final feedback-policy additions; final CI, deployed role journeys, remaining share/project-context inventory pending. |
 | 3 Authenticated context wrappers/inventory | 6 | No | No | Pending |
 | 4 Canonical records | 2 | No | No | Pending |
 | 5 Reviewed regeneration/reconciliation | 3 | No | No | Pending |

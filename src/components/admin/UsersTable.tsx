@@ -63,6 +63,15 @@ export default function UsersTable(props: { users: UserRow[] }) {
 
   return (
     <div className="space-y-4">
+      {props.users.some(u => u.memberType === "external" && ["owner", "admin"].includes(u.permissionRole)) ? (
+        <div role="status" className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950">
+          <p className="font-semibold">Conflicting external administrative assignments need review.</p>
+          <p>External members receive no administrative authority. An internal workspace owner should review these assignments; no membership has been changed automatically.</p>
+          <ul className="mt-2 list-disc pl-5">{props.users.filter(u => u.memberType === "external" && ["owner", "admin"].includes(u.permissionRole)).map(u => (
+            <li key={u.id}><Link className="underline" href={`/admin/users/${encodeURIComponent(u.id)}`}>{u.name}</Link></li>
+          ))}</ul>
+        </div>
+      ) : null}
       <FilterBar
         trailing={
           <span className="text-xs text-neutral-400">

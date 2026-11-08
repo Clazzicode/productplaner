@@ -89,7 +89,7 @@ export function resolveInitiativeAccess(input: ResolveInitiativeAccessInput): Re
 
   // 2. Active Org Admin -> implicit Owner-equivalent, short-circuit. Never
   // materialized as a stored grant (docs/V2-ACCESS-TEAMS-VISIBILITY.md §5).
-  if (actor.accessLevel === "org_admin") {
+  if (actor.accessLevel === "org_admin" && actor.memberType === "internal") {
     return {
       level: "owner",
       sources: [{ kind: "org_admin", level: "owner" }],

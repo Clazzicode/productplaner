@@ -46,6 +46,7 @@ export default async function CapacityPage({
   const initiativePermission = resolvedAccess === "not_found" ? "none" : resolvedAccess.level;
   const canEditWeights = canEditPlanningWeights({
     actorStatus: user.status,
+    actorMemberType: user.memberType,
     accessLevel: user.accessLevel,
     initiativePermission,
     initiativeExperienceLevel: qualifyingProfile?.experienceLevel ?? null,

@@ -30,7 +30,7 @@ async function PATCHHandler(request: Request, { params }: { params: Promise<{ en
     const guard = await requireInitiativeApiAccess(user, entityId, "edit");
     if (!guard.ok) return guard.response;
   } else {
-    const guard = await requireProjectApiAccess(user, entityId);
+    const guard = await requireProjectApiAccess(user, entityId, "edit");
     if (!guard.ok) return guard.response;
   }
 

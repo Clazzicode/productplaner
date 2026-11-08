@@ -21,7 +21,7 @@ async function guardByScope(
     const guard = await requireInitiativeApiAccess(actor, scope.initiativeId, level);
     return guard.ok ? { ok: true } : guard;
   }
-  const guard = await requireProjectApiAccess(actor, scope.projectId);
+  const guard = await requireProjectApiAccess(actor, scope.projectId, level);
   return guard.ok ? { ok: true } : guard;
 }
 

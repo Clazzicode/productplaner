@@ -39,6 +39,7 @@ async function loadGate(actor: ActorRow, initiativeId: string, weightSetId: stri
 
   const canEdit = canEditPlanningWeights({
     actorStatus: actor.status,
+    actorMemberType: actor.memberType,
     accessLevel: actor.accessLevel,
     initiativePermission: access.level,
     initiativeExperienceLevel: initiative?.qualifyingProfile?.experienceLevel ?? null,

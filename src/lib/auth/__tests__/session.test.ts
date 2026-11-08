@@ -13,6 +13,11 @@ beforeEach(() => {
 });
 
 describe("verified session and active membership", () => {
+  it("does not turn an external administrator into implicit organization-wide access", async () => {
+    mocks.findUnique.mockResolvedValue({ id: "app-user", homeOrganizationId: "org-a", status: "active", memberType: "external" });
+    mocks.findFirst.mockResolvedValue({ organizationId: "org-a", role: "admin" });
+    expect(await getCurrentUser()).toMatchObject({ memberType: "external", permissionRole: "admin", accessLevel: "standard_user" });
+  });
   it("rejects unauthenticated requests", async () => {
     mocks.getUser.mockResolvedValue({ data: { user: null }, error: null });
     const result = await requireCurrentUserApi();

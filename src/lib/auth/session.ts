@@ -105,7 +105,7 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
   return {
     ...user,
     organizationId: membership.organizationId,
-    accessLevel: deriveAccessLevel(membership.role),
+    accessLevel: user.memberType === "internal" ? deriveAccessLevel(membership.role) : "standard_user",
     permissionRole: (membership.role as "owner" | "admin" | "member") ?? "member",
   };
 }
