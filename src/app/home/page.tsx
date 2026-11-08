@@ -6,7 +6,6 @@ import RecentActivity from "@/components/dashboard/RecentActivity";
 import SprintReleaseStatus from "@/components/dashboard/SprintReleaseStatus";
 import UpcomingActions from "@/components/dashboard/UpcomingActions";
 import CurrentFocus from "@/components/dashboard/global/CurrentFocus";
-import GlobalDashboardHeader from "@/components/dashboard/global/GlobalDashboardHeader";
 import InitiativeSummaryList from "@/components/dashboard/global/InitiativeSummaryList";
 import PlanHealthSummary from "@/components/dashboard/global/PlanHealthSummary";
 import RoadmapSnapshot from "@/components/dashboard/global/RoadmapSnapshot";
@@ -19,7 +18,8 @@ import { getEffectiveWidgetVisibility } from "@/lib/dashboard/dashboardConfigura
 import { resolveWidgetVisibility, filterVisible } from "@/lib/dashboard/dashboardConfigResolution";
 import { loadGlobalDashboardData } from "@/lib/dashboard/globalDashboardData";
 import { loadLifecycleDashboardData } from "@/lib/dashboard/lifecycleDashboardData";
-import { resolveDashboardOrder, resolveMainColumnOrder, type DashboardWidgetId } from "@/lib/dashboard/widgetRegistry";
+import { resolveMainColumnOrder, type DashboardWidgetId } from "@/lib/dashboard/widgetRegistry";
+import { planningLabel, commitmentLabel } from "@/lib/planning/readiness";
 import { resolveWorkingRole } from "@/lib/onboarding/resolveWorkingRole";
 import { readOnboardingStateServer } from "@/lib/onboarding/tempStateServer";
 
@@ -54,11 +54,17 @@ async function HomePage() {
     ? await getEffectiveWidgetVisibility(user.organizationId, workingRole)
     : resolveWidgetVisibility({});
   const mainOrder = filterVisible(resolveMainColumnOrder(workingRole), visibility);
-  const fullOrder = filterVisible(resolveDashboardOrder(workingRole), visibility);
 
   const decisions = data.primary?.decisions ?? [];
   const activity = data.primary?.activity ?? [];
   const actions = data.primary?.actions ?? { now: [], next: [], later: [] };
+  const evidence = data.primary?.planningEvidence;
+  const summaryCards = [
+    { label: "Active initiatives", value: String(data.initiatives.length), detail: "Authorized planning work", href: "/initiatives", tone: "text-[#5145ed]" },
+    { label: "Planning evidence", value: evidence ? String(evidence.featureCount) : "—", detail: evidence ? planningLabel(evidence) : "Add an initiative to begin", href: data.primary ? `/initiatives/${data.primary.id}/overview` : "/initiatives", tone: "text-[#5145ed]" },
+    { label: "Delivery commitments", value: evidence ? String(evidence.committedSprintCount + evidence.approvedReleaseCount) : "—", detail: evidence ? commitmentLabel(evidence) : "No commitments recorded", href: data.primary ? `/initiatives/${data.primary.id}/workspace/sprints` : "/initiatives", tone: "text-[#d97706]" },
+    { label: "Decisions needed", value: String(decisions.length), detail: decisions.length ? "Review the decision queue" : "Nothing needs a decision", href: "#decision-queue", tone: "text-[#dc3545]" },
+  ];
 
   function widget(id: DashboardWidgetId) {
     switch (id) {
@@ -92,32 +98,22 @@ async function HomePage() {
 
   return (
     <DashboardLayout>
-      <GlobalDashboardHeader userName={user.name} greeting={data.greeting} operationalSummary={data.operationalSummary} />
-
-      <p className="mt-4 text-sm">Suggested next action: <Link className="text-indigo-700 underline" href={lifecycle.resolution.nextAction.href}>{lifecycle.resolution.nextAction.label}</Link>. All authorized planning sections remain available.</p>
-      <div className="mt-6">
-        {/* Large desktop / standard laptop: two columns, timeline in the right rail —
-            or one column when the timeline widget is configured off. */}
-        <div
-          className={`hidden gap-4 xl:grid ${
-            visibility.upcoming_timeline ? "xl:grid-cols-[minmax(0,1fr)_340px]" : "xl:grid-cols-1"
-          }`}
-        >
-          <div className="min-w-0 space-y-4">
-            {mainOrder.map((id) => (
-              <div key={id}>{widget(id)}</div>
-            ))}
-          </div>
-          {visibility.upcoming_timeline && <aside className="min-w-0 space-y-4">{widget("upcoming_timeline")}</aside>}
-        </div>
-
-        {/* Narrow / tablet: single column, timeline takes its ranked position. */}
-        <div className="space-y-4 xl:hidden">
-          {fullOrder.map((id) => (
-            <div key={id}>{widget(id)}</div>
-          ))}
-        </div>
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div><p className="text-xs font-bold uppercase tracking-[0.16em] text-[#5145ed]">Your workspace</p><h1 className="mt-1 text-3xl font-bold tracking-tight text-[#0d1b3e]">Portfolio overview</h1><p className="mt-2 max-w-3xl text-sm text-text-secondary">{data.greeting}, {user.name.trim().split(/\s+/)[0]}. {data.operationalSummary}</p></div>
+        <Link href={lifecycle.resolution.nextAction.href} className="rounded-lg bg-[#5145ed] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#4238d7]">{lifecycle.resolution.nextAction.label}</Link>
       </div>
+      <div className="mt-6 grid gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(280px,1fr)]">
+        <div className="min-w-0 space-y-4"><section aria-label="Portfolio summary" className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          {summaryCards.map(card => <Link key={card.label} href={card.href} className="min-w-0 rounded-2xl border border-[#dfe3f4] bg-white p-4 shadow-[0_5px_20px_rgba(13,27,62,0.04)] transition hover:border-[#b8b2ff]"><p className={`text-2xl font-bold ${card.tone}`}>{card.value}</p><h2 className="mt-1 text-sm font-semibold text-[#0d1b3e]">{card.label}</h2><p className="mt-1 line-clamp-2 text-xs text-text-secondary">{card.detail}</p></Link>)}
+        </section><section id="decision-queue" className="min-w-0">{visibility.attention ? widget("attention") : <div className="rounded-2xl border border-[#dfe3f4] bg-white p-5 text-sm text-text-secondary">The decision queue is hidden by your dashboard configuration.</div>}</section></div>
+        <aside className="min-w-0 space-y-4">{visibility.upcoming_timeline && widget("upcoming_timeline")}{visibility.plan_health && widget("plan_health")}</aside>
+      </div>
+      <section className="mt-4 rounded-2xl border border-[#dfe3f4] bg-white p-5 shadow-[0_5px_20px_rgba(13,27,62,0.04)]">
+        <h2 className="text-lg font-semibold text-[#0d1b3e]">Lifecycle pipeline</h2>
+        <p className="mt-1 text-xs text-text-secondary">Follow the planning and delivery path for your authorized initiatives.</p>
+        <ol className="mt-4 grid gap-2 sm:grid-cols-5">{["Discover", "Plan", "Deliver", "Validate", "Release"].map((stage, index) => <li key={stage} className="rounded-xl border border-[#dfe3f4] bg-[#f8f8ff] px-4 py-3"><span className="text-xs font-semibold text-[#5145ed]">0{index + 1}</span><p className="mt-1 text-sm font-semibold text-[#0d1b3e]">{stage}</p></li>)}</ol>
+      </section>
+      <div className="mt-4 grid gap-4 lg:grid-cols-2">{mainOrder.filter(id => !["attention", "plan_health", "upcoming_timeline"].includes(id)).map(id => <div key={id} className="min-w-0">{widget(id)}</div>)}</div>
     </DashboardLayout>
   );
 }

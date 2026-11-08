@@ -1,9 +1,8 @@
 import { withAuthenticatedPage } from "@/lib/auth/entryPoints";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { ContainedLayout } from "@/components/layout/PageLayouts";
+import { WideLayout } from "@/components/layout/PageLayouts";
 import { Badge } from "@/components/ui/Badge";
-import PageHeader from "@/components/ui/PageHeader";
 import JiraSyncPanel from "@/components/workspace/JiraSyncPanel";
 import NavTabs from "@/components/workspace/NavTabs";
 import RefreshBar from "@/components/workspace/RefreshBar";
@@ -50,52 +49,16 @@ async function WorkspaceLayout({
   ]);
 
   return (
-    <ContainedLayout>
+    <WideLayout>
       <header className="no-print">
         <WorkspaceBreadcrumb
           initiativeId={initiativeId}
           initiativeName={ws.initiative.name}
           methodology={ws.initiative.methodology}
         />
-        <div className="mt-2">
-          <PageHeader
-            title={ws.initiative.name}
-            description={
-              <>
-                Working prototype · {profile.label} ·{" "}
-                <Link
-                  href={`/initiatives/${initiativeId}/intake`}
-                  className="text-indigo-600 hover:underline"
-                >
-                  view intake answers
-                </Link>
-                {ws.prototype.approvedAt && (
-                  <Badge variant="emerald" className="ml-2">
-                    Baseline approved {new Date(ws.prototype.approvedAt).toLocaleDateString()}
-                  </Badge>
-                )}
-                {drifted && (
-                  <Badge
-                    variant="amber"
-                    className="ml-2"
-                    title="Approved inputs (features, priorities, dependencies, dates, or budget) changed since this roadmap was generated."
-                  >
-                    Inputs changed since generated
-                  </Badge>
-                )}
-              </>
-            }
-            primaryAction={
-              <div className="flex flex-wrap items-center gap-2">
-                <RoadmapVersionPanel initiativeId={initiativeId} />
-                <JiraSyncPanel
-                  initiativeId={initiativeId}
-                  status={ws.jira?.status ?? "not_connected"}
-                  lastSyncedAt={ws.jira?.lastSyncedAt?.toISOString() ?? null}
-                />
-              </div>
-            }
-          />
+        <div className="mt-2 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#dfe3f4] bg-white px-4 py-3">
+          <div className="flex min-w-0 flex-wrap items-center gap-2 text-xs text-slate-600"><strong className="max-w-64 truncate text-sm text-[#0d1b3e]">{ws.initiative.name}</strong><span>· {profile.label}</span><Link href={`/initiatives/${initiativeId}/intake`} className="font-semibold text-[#5145ed] hover:underline">Context</Link>{ws.prototype.approvedAt && <Badge variant="emerald">Baseline approved {new Date(ws.prototype.approvedAt).toLocaleDateString()}</Badge>}{drifted && <Badge variant="amber" title="Approved inputs changed since this roadmap was generated.">Inputs changed since generated</Badge>}</div>
+          <div className="flex flex-wrap items-center gap-2"><RoadmapVersionPanel initiativeId={initiativeId} /><JiraSyncPanel initiativeId={initiativeId} status={ws.jira?.status ?? "not_connected"} lastSyncedAt={ws.jira?.lastSyncedAt?.toISOString() ?? null} /></div>
         </div>
         <div className="mt-4">
           <RefreshBar
@@ -108,10 +71,10 @@ async function WorkspaceLayout({
           <NavTabs initiativeId={initiativeId} methodology={methodology} />
         </div>
       </header>
-      <main className="mt-4 min-w-0 rounded-xl border border-border-subtle bg-white p-3 shadow-[0_8px_28px_rgba(46,71,125,0.06)] sm:p-6 print:border-0 print:shadow-none">
+      <main className="mt-4 min-w-0">
         {children}
       </main>
-    </ContainedLayout>
+    </WideLayout>
   );
 }
 
