@@ -13,11 +13,13 @@
 // only compares against `OrganizationMember.authUserId` / `User.authUserId`,
 // never against a real Supabase `auth.users` row.
 
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { AsyncResource } from "node:async_hooks";
 import { PrismaClient } from "@prisma/client";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { db, establishAuthContext, rawDb, withAuthenticatedDatabaseContext, withServiceContext, withTransaction } from "@/lib/db";
+import { loadWorkerReadiness, observeWorker } from "@/lib/jobs/executionHealth";
+import { processJiraJobs } from "@/lib/jira/jobs";
 
 // These tests create isolated fixtures. Never run them against Production.
 const stagingRef = "qbogvclmehvrtuwiktos";
@@ -128,6 +130,9 @@ beforeAll(async () => {
 
 afterAll(async () => {
   try {
+    await adminDb.jiraConnection.updateMany({ where: { organizationId: { in: fixtureOrganizations } }, data: { status: "revoked" } });
+    await adminDb.jiraSyncJob.deleteMany({ where: { organizationId: { in: fixtureOrganizations } } });
+    await adminDb.jiraConnection.deleteMany({ where: { organizationId: { in: fixtureOrganizations } } });
     await adminDb.initiative.deleteMany({ where: { organizationId: { in: fixtureOrganizations } } });
     await adminDb.project.deleteMany({ where: { organizationId: { in: fixtureOrganizations } } });
     await adminDb.user.deleteMany({ where: { homeOrganizationId: { in: fixtureOrganizations } } });
@@ -224,13 +229,13 @@ describe("RLS isolation (real Postgres connection, not mocked)", () => {
     const results = await Promise.all([orgA, orgB].map(org => withAuthenticatedDatabaseContext({ authUserId: org.ownerAuthUserId, organizationId: org.orgId }, async () => {
       await Promise.resolve();
       const projects = await db.project.findMany({ where: { organizationId: { in: [orgA.orgId, orgB.orgId] } } });
-      const claims = await db.$queryRaw<{ actor: string }[]>`SELECT auth.uid()::text AS actor`;
+      const claims = await db.$queryRaw<{ actor: string }[]>`SELECT (nullif(current_setting('request.jwt.claims',true),'')::jsonb->>'sub') AS actor`;
       expect(projects.every(project => project.organizationId === org.orgId)).toBe(true);
       return claims[0].actor;
     })));
     expect(results).toEqual([orgA.ownerAuthUserId, orgB.ownerAuthUserId]);
     for (let attempt = 0; attempt < 6; attempt++) {
-      const claims = await rawDb.$queryRaw<{ actor: string | null }[]>`SELECT auth.uid()::text AS actor`;
+      const claims = await rawDb.$queryRaw<{ actor: string | null }[]>`SELECT (nullif(current_setting('request.jwt.claims',true),'')::jsonb->>'sub') AS actor`;
       expect(claims[0].actor).toBeNull();
     }
   });
@@ -255,5 +260,49 @@ describe("RLS isolation (real Postgres connection, not mocked)", () => {
     } finally {
       await adminDb.organizationMember.updateMany({ where: { authUserId: memberAuthUserId, organizationId: orgA.orgId }, data: { status: "active" } });
     }
+  });
+
+  it("records failed worker stages, signals consecutive failures, and recovers readiness", async () => {
+    const log = vi.spyOn(console, "error");
+    const idle = async () => ({ data: null, counts: { processed: 0, completed: 0, retried: 0, failed: 0 } });
+    try {
+      for (let cycle = 0; cycle < 2; cycle++) {
+        await expect(observeWorker("jira", async stage => {
+          stage("retention");
+          throw Object.assign(new Error("Synthetic staging health failure"), { code: "STAGING_HEALTH_PROBE" });
+        })).rejects.toThrow("Synthetic staging health failure");
+      }
+      expect((await loadWorkerReadiness()).jira).toBe("failed");
+      expect(log.mock.calls.some(([line]) => String(line).includes('"event":"worker.alert.consecutive_failures"'))).toBe(true);
+    } finally {
+      log.mockRestore();
+      await observeWorker("jira", idle);
+      await observeWorker("jira", idle);
+      await observeWorker("background", idle);
+    }
+    expect(await loadWorkerReadiness()).toEqual({ jira: "ready", background: "ready" });
+  });
+
+  it("claims one isolated synthetic Jira job once and records its terminal outcome without provider requests", async () => {
+    await withAuthenticatedDatabaseContext({ authUserId: orgA.ownerAuthUserId, organizationId: orgA.orgId }, async () => {
+      const connection = await db.jiraConnection.create({ data: {
+        organizationId: orgA.orgId, initiativeId: initiativeA1Id, configuredByUserId: orgA.ownerUserId, status: "revoked",
+      } });
+      const idempotencyKey = createHash("sha256").update(randomUUID()).digest("hex");
+      const input = { organizationId: orgA.orgId, initiativeId: initiativeA1Id, connectionId: connection.id,
+        // Missing exportItemId fails validation before any export execution.
+        jobType: "export_item", payload: {}, idempotencyKey };
+      const job = await db.jiraSyncJob.create({ data: input });
+      await expect(db.jiraSyncJob.create({ data: input })).rejects.toMatchObject({ code: "P2002" });
+      const network = vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("External HTTP is forbidden in this fixture"));
+      try {
+        const result = await processJiraJobs(1, `staging-probe-${randomUUID()}`, orgA.orgId);
+        expect(result).toEqual({ claimed: 1, completed: 0, retried: 0, failed: 1 });
+        expect(await processJiraJobs(1, `staging-probe-${randomUUID()}`, orgA.orgId)).toEqual({ claimed: 0, completed: 0, retried: 0, failed: 0 });
+        expect(network).not.toHaveBeenCalled();
+      } finally { network.mockRestore(); }
+      expect(await db.jiraSyncAttempt.count({ where: { jobId: job.id } })).toBe(1);
+      expect(await db.jiraSyncJob.findUnique({ where: { id: job.id } })).toMatchObject({ status: "failed", attemptCount: 1 });
+    });
   });
 });
