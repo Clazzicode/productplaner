@@ -132,19 +132,23 @@ beforeAll(async () => {
 
 afterAll(async () => {
   try {
-    await adminDb.jiraConnection.updateMany({ where: { organizationId: { in: fixtureOrganizations } }, data: { status: "revoked" } });
-    await adminDb.jiraSyncJob.deleteMany({ where: { organizationId: { in: fixtureOrganizations } } });
-    await adminDb.jiraConnection.deleteMany({ where: { organizationId: { in: fixtureOrganizations } } });
-    await adminDb.initiative.deleteMany({ where: { organizationId: { in: fixtureOrganizations } } });
-    await adminDb.project.deleteMany({ where: { organizationId: { in: fixtureOrganizations } } });
-    await adminDb.user.deleteMany({ where: { homeOrganizationId: { in: fixtureOrganizations } } });
-    await adminDb.organization.deleteMany({ where: { id: { in: fixtureOrganizations } } });
+    await adminDb.$transaction(async tx => {
+      await tx.jiraConnection.updateMany({ where: { organizationId: { in: fixtureOrganizations } }, data: { status: "revoked" } });
+      await tx.jiraSyncJob.deleteMany({ where: { organizationId: { in: fixtureOrganizations } } });
+      await tx.jiraConnection.deleteMany({ where: { organizationId: { in: fixtureOrganizations } } });
+      await tx.initiative.deleteMany({ where: { organizationId: { in: fixtureOrganizations } } });
+      await tx.project.deleteMany({ where: { organizationId: { in: fixtureOrganizations } } });
+      await tx.teamMember.deleteMany({ where: { team: { organizationId: { in: fixtureOrganizations } } } });
+      await tx.team.deleteMany({ where: { organizationId: { in: fixtureOrganizations } } });
+      await tx.user.deleteMany({ where: { homeOrganizationId: { in: fixtureOrganizations } } });
+      await tx.organization.deleteMany({ where: { id: { in: fixtureOrganizations } } });
+    }, { timeout: 15_000 });
   } finally {
     await adminDb.$disconnect();
     await rawDb.$disconnect();
     emptyContext.emitDestroy();
   }
-});
+}, 30_000);
 
 describe("RLS isolation (real Postgres connection, not mocked)", () => {
   it("Account B cannot read Account A's Projects by real id", async () => {
