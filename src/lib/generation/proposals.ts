@@ -145,7 +145,8 @@ export async function applyRegenerationProposal(initiativeId: string, proposalId
           backlogRevision: { increment: 1 }, generationReviewStatus: item.preservedFields.length ? "human_edits_preserved" : null } });
       }
     }
-    await db.prototype.update({ where: { id: proposal.prototypeId }, data: { approvedAt: null, approvedBaselineJson: null } });
+    const changedPlanning = payload.items.some(item => choices.get(item.key)?.action === "apply" && ["add", "change"].includes(item.kind));
+    if (changedPlanning) await db.prototype.update({ where: { id: proposal.prototypeId }, data: { approvedAt: null, approvedBaselineJson: null } });
     await db.regenerationProposal.update({ where: { id: proposal.id }, data: { status: "applied", appliedAt: new Date(),
       decisions: decisions as unknown as Prisma.InputJsonValue, resultingMapping: mapping } });
     await auditInitiative(initiativeId, "plan.regeneration_applied", { proposalId, actorUserId: actor.id, resultingMapping: mapping });

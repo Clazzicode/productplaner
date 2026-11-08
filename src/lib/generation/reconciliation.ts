@@ -77,6 +77,12 @@ export function reconcile(nodes: GeneratedNode[], existing: ExistingNode[]): Rec
     const preservedFields: string[] = [];
     for (const field of fields) {
       if (match[field] === proposed[field]) continue;
+      // Regeneration preserves containment. Do not change phase metadata while
+      // keeping the same parent; explicit roadmap movement remains a human action.
+      if (field === "contentJson" && proposed.type === "feature" && phaseNumber(match) !== phaseNumber({ ...match, contentJson: proposed.contentJson })) {
+        preservedFields.push("contentJson", "parentId", "order");
+        continue;
+      }
       if (!match.sprintId && !match.approvedAt && !match.committed && match.sourceType === "generated" && baseline && Object.hasOwn(baseline, field) && match[field] === baseline[field]) {
         Object.assign(changes, { [field]: proposed[field] });
       } else preservedFields.push(field);

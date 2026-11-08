@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+vi.mock("@/lib/planning/draftWorkspace", () => ({ syncDraftFeature: vi.fn() }));
 import { crystallize, type CrystallizeTarget } from "../crystallize";
 import { PROJECT_CONTEXT_FIELDS, INITIATIVE_CONTEXT_FIELDS } from "../contextFields";
 
@@ -9,6 +10,7 @@ import { PROJECT_CONTEXT_FIELDS, INITIATIVE_CONTEXT_FIELDS } from "../contextFie
 // the only intentional no-ops (never touch `tx` at all).
 function buildStubTx() {
   return {
+    prototype: { findUnique: vi.fn().mockResolvedValue(null) },
     project: {
       update: vi.fn().mockResolvedValue({}),
       findUniqueOrThrow: vi.fn().mockResolvedValue({ teamCompositionJson: "{}", constraintsJson: "[]", stakeholdersJson: "[]" }),

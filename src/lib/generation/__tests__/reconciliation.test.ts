@@ -33,6 +33,13 @@ describe("reviewed reconciliation preserves identity and human work", () => {
   it("does not resurrect an archived record or create a parallel identity", () => {
     expect(reconcile([node], [existing({ archivedAt: new Date() })])[0]).toMatchObject({ kind: "preserve", targetId: "story", changes: {}, preservedFields: expect.arrayContaining(["archivedAt"]) });
   });
+  it("preserves phase metadata when containment is kept, avoiding contradictory reviewed changes", () => {
+    const feature = { ...node, key: "feature:cap", type: "feature", contentJson: '{"phaseNumber":2}' };
+    const row = existing({ type: "feature", generationKey: "feature:cap", contentJson: '{"phaseNumber":1}', generatedBaseline: { ...node, contentJson: '{"phaseNumber":1}' } });
+    const result = reconcile([feature], [row])[0];
+    expect(result.changes).not.toHaveProperty("contentJson");
+    expect(result.preservedFields).toEqual(expect.arrayContaining(["parentId", "contentJson", "order"]));
+  });
   it("proposes new records only where no compatible existing identity requires review", () => {
     expect(reconcile([node], [existing({ id: "unrelated", sourceCapabilityId: "other", generationKey: "other" })])[0]).toMatchObject({ kind: "add", targetId: null });
   });

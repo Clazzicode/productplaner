@@ -43,9 +43,11 @@ export async function syncBugPlanningFromRequest(input: {
   requestId: string;
   data: RequestInput;
   actorUserId?: string;
+  preservePlanningDecisions?: boolean;
   reason: string;
 }) {
   const existing = await db.bugPlanningRecord.findUnique({ where: { requestId: input.requestId } });
+  if (existing && input.preservePlanningDecisions) return existing;
   const isBug = input.data.kind === "bug" || input.data.kind === "defect";
   if (!isBug) {
     if (existing && !existing.archivedAt) {

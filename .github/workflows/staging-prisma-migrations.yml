@@ -18,6 +18,7 @@ on:
 
 permissions:
   contents: read
+  issues: write
 
 concurrency:
   group: staging-prisma-migrations
@@ -145,3 +146,14 @@ jobs:
         run: node scripts/verify-staging-database.mjs
       - name: Verify real pooled user contexts and rollback in staging only
         run: RUN_LIVE_DB_TESTS=true npx vitest run src/lib/access/__tests__/rls-isolation.integration.test.ts
+
+      - name: Verify staging failure reaches the existing GitHub alert channel
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node scripts/worker-monitor.mjs --staging-fixture
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: staging-worker-monitor-${{ github.run_id }}
+          path: .tmp-tests/worker-monitor.json
+          retention-days: 7

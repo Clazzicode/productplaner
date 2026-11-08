@@ -1,7 +1,7 @@
 import { withApi } from "@/lib/observability";
 import { rawDb } from "@/lib/db";
 import { environmentIsolation } from "@/lib/environment";
-import { loadWorkerReadiness } from "@/lib/jobs/executionHealth";
+import { loadWorkerReadiness, loadWorkerSignals, loadWorkerObservation } from "@/lib/jobs/executionHealth";
 
 async function GETHandler() {
   try {
@@ -43,13 +43,13 @@ async function GETHandler() {
         AND to_regprocedure('app_private.claim_jira_jobs(text,integer,text)') IS NOT NULL AS safe
       FROM pg_roles WHERE rolname = current_user`;
     if (!rows[0]?.safe) throw new Error("Database not ready");
-    const workers = await loadWorkerReadiness();
+    const [workers, workerSignals, workerObservation] = await Promise.all([loadWorkerReadiness(), loadWorkerSignals(), loadWorkerObservation()]);
     if (Object.values(workers).some(status => status !== "ready")) {
-      return Response.json({ status: "unavailable", checks: { database: "ready", environmentIsolation: "ready", backgroundWorker: "failed" }, workers },
+      return Response.json({ status: "unavailable", checks: { database: "ready", environmentIsolation: "ready", backgroundWorker: "failed" }, workers, workerSignals, workerObservation, release: { commit: process.env.VERCEL_GIT_COMMIT_SHA ?? null } },
         { status: 503, headers: { "cache-control": "no-store" } });
     }
     return Response.json(
-      { status: "ready", checks: { database: "ready", environmentIsolation: "ready", backgroundWorker: "ready" } },
+      { status: "ready", checks: { database: "ready", environmentIsolation: "ready", backgroundWorker: "ready" }, workers, workerSignals, workerObservation, release: { commit: process.env.VERCEL_GIT_COMMIT_SHA ?? null } },
       { headers: { "cache-control": "no-store" } },
     );
   } catch {

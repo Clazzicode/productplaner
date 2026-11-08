@@ -25,6 +25,8 @@ export function sourceFingerprint(value: string): string {
 
 export async function saveRequest(initiativeId: string, input: RequestInput, existing?: { id: string; revision: number }, options?: {
   actorUserId?: string;
+  /** Reviewed Jira refresh updates source prose, never the separate human triage projection. */
+  preserveBugPlanningDecisions?: boolean;
   changeReason?: string;
   linkedCapabilityId?: string;
   source?: { type: "spreadsheet_row" | "document_finding"; label: string; rawContent: string; locator?: string; documentId?: string; contextItemId?: string };
@@ -74,6 +76,7 @@ export async function saveRequest(initiativeId: string, input: RequestInput, exi
       requestId: row.id,
       data,
       actorUserId: options?.actorUserId,
+      preservePlanningDecisions: options?.preserveBugPlanningDecisions,
       reason: options?.changeReason?.trim() || (previous ? "Request details updated" : "Bug intake created"),
     });
     await db.requestRevision.create({ data: {
