@@ -8,6 +8,9 @@ import { currentVerifiedRequest } from "./verifiedRequest";
 // docs/V2-MULTI-TENANT-AUTH.md. Real Supabase Auth session, resolved to this
 // app's User row via User.authUserId. Replaces the old plaintext
 // "v2_current_user" cookie entirely — see git history for that version.
+// Protected entry points now use auth/entryPoints.ts. The scoped wrapper resolves
+// identity before database execution; legacy context calls below remain necessary
+// for explicitly classified callbacks that cannot use a browser-session wrapper.
 
 const ACTIVE_ORG_COOKIE = "v2_active_org";
 
@@ -81,12 +84,10 @@ function deriveAccessLevel(role: string): string {
  * NOT survive back out to whoever calls getCurrentUser() — this function
  * awaits `cookies()`, and Next.js silently drops unrelated
  * AsyncLocalStorage state at the point a function like that returns to its
- * caller (verified directly against the dev and production server — see the
- * long comment in db.ts). Every caller must call
- * `establishAuthContext(user.authUserId)` itself, in the same function that
- * goes on to use `db`/`withTransaction` — requireCurrentUser()/
- * requireCurrentUserApi() do NOT do this for you (same reason); the page/
- * route calling them must.
+ * caller (verified directly against the dev and production server — see db.ts).
+ * Protected entry-point wrappers establish a scoped context after this returns.
+ * Unwrapped, explicitly classified callbacks must establish their own verified
+ * identity context before using db/withTransaction.
  */
 export async function getCurrentUser(): Promise<CurrentUser | null> {
   const request = currentVerifiedRequest();

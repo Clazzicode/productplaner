@@ -75,7 +75,8 @@ function claimsJson(): string {
   if (!ctx) {
     throw new Error(
       "Database access outside request auth context — call establishAuthContext(user.authUserId) " +
-        "in the same function as this db call (see src/lib/db.ts), or wrap trusted server-only code " +
+        "in an explicitly classified callback, or use withAuthenticatedApi/withAuthenticatedPage " +
+        "for protected entry points; wrap trusted server-only code " +
         "in withServiceContext().",
     );
   }

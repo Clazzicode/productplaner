@@ -283,6 +283,39 @@ describe("RLS isolation (real Postgres connection, not mocked)", () => {
     expect(await loadWorkerReadiness()).toEqual({ jira: "ready", background: "ready" });
   }, 20_000);
 
+  it("enforces the live direct/team/viewer/external-admin action matrix without changing real memberships", async () => {
+    const identity = { authUserId: memberAuthUserId, organizationId: orgA.orgId };
+    const actions = () => withAuthenticatedDatabaseContext(identity, async () => (await db.$queryRaw<{
+      read: boolean; edit: boolean; accept: boolean; approve: boolean; crossWorkspace: boolean;
+    }[]>`SELECT app_private.can_initiative_action(${initiativeA1Id},'read') AS read,
+      app_private.can_initiative_action(${initiativeA1Id},'edit') AS edit,
+      app_private.can_initiative_action(${initiativeA1Id},'accept_story') AS accept,
+      app_private.can_initiative_action(${initiativeA1Id},'approve_release') AS approve,
+      app_private.can_initiative_action(${initiativeB1Id},'read') AS "crossWorkspace"`)[0]);
+    try {
+      const grant = await adminDb.initiativeAccess.create({ data: { initiativeId: initiativeA1Id, userId: memberUserId, permission: "edit" } });
+      expect(await actions()).toEqual({ read: true, edit: true, accept: true, approve: false, crossWorkspace: false });
+      await adminDb.initiativeAccess.update({ where: { id: grant.id }, data: { permission: "view" } });
+      expect(await actions()).toEqual({ read: true, edit: false, accept: false, approve: false, crossWorkspace: false });
+      expect(await withAuthenticatedDatabaseContext(identity, async () => await db.initiative.updateMany({ where: { id: initiativeA1Id }, data: { name: "Forbidden viewer change" } }))).toEqual({ count: 0 });
+      await adminDb.initiativeAccess.delete({ where: { id: grant.id } });
+      const team = await adminDb.team.create({ data: { organizationId: orgA.orgId, name: "Isolated security test team" } });
+      await adminDb.teamMember.create({ data: { teamId: team.id, userId: memberUserId } });
+      await adminDb.initiativeAccess.create({ data: { initiativeId: initiativeA1Id, teamId: team.id, permission: "edit" } });
+      expect(await actions()).toMatchObject({ edit: true, accept: true, approve: false });
+      await adminDb.user.update({ where: { id: memberUserId }, data: { memberType: "external" } });
+      await adminDb.organizationMember.updateMany({ where: { authUserId: memberAuthUserId, organizationId: orgA.orgId }, data: { role: "admin" } });
+      expect(await actions()).toEqual({ read: true, edit: false, accept: false, approve: false, crossWorkspace: false });
+      expect(await withAuthenticatedDatabaseContext(identity, async () => await db.initiative.updateMany({ where: { id: initiativeA1Id }, data: { name: "Forbidden external change" } }))).toEqual({ count: 0 });
+      await adminDb.teamMember.deleteMany({ where: { userId: memberUserId } });
+      expect(await actions()).toEqual({ read: false, edit: false, accept: false, approve: false, crossWorkspace: false });
+    } finally {
+      await adminDb.initiativeAccess.deleteMany({ where: { initiativeId: initiativeA1Id } });
+      await adminDb.user.update({ where: { id: memberUserId }, data: { memberType: "internal" } });
+      await adminDb.organizationMember.updateMany({ where: { authUserId: memberAuthUserId, organizationId: orgA.orgId }, data: { role: "member", status: "active" } });
+    }
+  }, 20_000);
+
   it("claims one isolated synthetic Jira job once and records its terminal outcome without provider requests", async () => {
     await withAuthenticatedDatabaseContext({ authUserId: orgA.ownerAuthUserId, organizationId: orgA.orgId }, async () => {
       const connection = await db.jiraConnection.create({ data: {
