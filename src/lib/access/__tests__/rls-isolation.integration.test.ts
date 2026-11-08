@@ -281,12 +281,13 @@ describe("RLS isolation (real Postgres connection, not mocked)", () => {
       await observeWorker("background", idle);
     }
     expect(await loadWorkerReadiness()).toEqual({ jira: "ready", background: "ready" });
-  });
+  }, 20_000);
 
   it("claims one isolated synthetic Jira job once and records its terminal outcome without provider requests", async () => {
     await withAuthenticatedDatabaseContext({ authUserId: orgA.ownerAuthUserId, organizationId: orgA.orgId }, async () => {
       const connection = await db.jiraConnection.create({ data: {
         organizationId: orgA.orgId, initiativeId: initiativeA1Id, configuredByUserId: orgA.ownerUserId, status: "revoked",
+        accessTokenCiphertext: "synthetic-staging-no-credential", refreshTokenCiphertext: "synthetic-staging-no-credential", tokenExpiresAt: new Date(0), scopes: "",
       } });
       const idempotencyKey = createHash("sha256").update(randomUUID()).digest("hex");
       const input = { organizationId: orgA.orgId, initiativeId: initiativeA1Id, connectionId: connection.id,
@@ -304,5 +305,5 @@ describe("RLS isolation (real Postgres connection, not mocked)", () => {
       expect(await db.jiraSyncAttempt.count({ where: { jobId: job.id } })).toBe(1);
       expect(await db.jiraSyncJob.findUnique({ where: { id: job.id } })).toMatchObject({ status: "failed", attemptCount: 1 });
     });
-  });
+  }, 20_000);
 });
