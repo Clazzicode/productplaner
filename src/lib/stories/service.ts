@@ -227,6 +227,13 @@ export async function updateStory(
     });
     if (updated.count !== 1) throw new BusinessError("This story changed. Reload before saving.");
 
+    if (moving) {
+      await db.artifactLayer.updateMany({
+        where: { parentId: current.id, type: "acceptance_criterion" },
+        data: { sourceCapabilityId: targetEpic.parent!.sourceCapabilityId },
+      });
+    }
+
     const saved = await db.artifactLayer.findUniqueOrThrow({ where: { id: current.id } });
     const action = input.archived === true
       ? "story.archived"

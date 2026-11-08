@@ -101,6 +101,46 @@ describe.sequential("migration replay and real PostgreSQL RLS", () => {
       await pg.exec(`DELETE FROM "FeedbackRecord" WHERE id='matrix-feedback'; DELETE FROM "InitiativeAccess" WHERE id IN ('matrix-direct','matrix-team-grant'); DELETE FROM "TeamMember" WHERE id='matrix-team-member'; DELETE FROM "Team" WHERE id='matrix-team'; UPDATE "User" SET "memberType"='internal' WHERE id='user-member'; UPDATE "OrganizationMember" SET role='member',status='active' WHERE id='member-extra-org-a'`);
     }
   });
+  it("keeps one canonical feature across backlog, roadmap, sprint, release and Jira identities", async () => {
+    await pg.exec(`
+      INSERT INTO "Initiative" (id,"organizationId","userId",name,"projectId","updatedAt") VALUES ('identity-init','org-a','user-org-a','Identity test','project-a',now());
+      INSERT INTO "IntakeAnswerSet" (id,"initiativeId","updatedAt") VALUES ('identity-intake','identity-init',now());
+      INSERT INTO "Capability" (id,"intakeAnswerSetId",name,"isMvp","effortSize","businessValue") VALUES ('identity-cap','identity-intake','Canonical feature',false,'m','medium'),('identity-cap-other','identity-intake','Other feature',false,'m','medium');
+      INSERT INTO "Prototype" (id,"initiativeId","updatedAt") VALUES ('identity-proto','identity-init',now());
+      INSERT INTO "Release" (id,"prototypeId",name,"phaseNumber","targetDate","order",origin) VALUES ('identity-release','identity-proto','Release',1,now(),0,'manual');
+      UPDATE "Capability" SET "releaseId"='identity-release' WHERE id='identity-cap';
+      INSERT INTO "Sprint" (id,"prototypeId","sprintNumber","phaseNumber","startDate","endDate","capacityPoints",origin,"releaseId") VALUES ('identity-sprint','identity-proto',1,1,now(),now()+interval '7 days',10,'manual','identity-release');
+      INSERT INTO "ArtifactLayer" (id,"prototypeId",type,title,body,"sourceCapabilityId","parentId","sprintId","updatedAt") VALUES
+        ('identity-feature','identity-proto','feature','Edited editorial title','Human feature prose','identity-cap',null,null,now()),
+        ('identity-epic','identity-proto','epic','Epic','','identity-cap','identity-feature',null,now()),
+        ('identity-story','identity-proto','story','Story','Edited story','identity-cap','identity-epic','identity-sprint',now()),
+        ('identity-criterion','identity-proto','acceptance_criterion','Manual criterion','Human criterion','identity-cap','identity-story',null,now());
+      INSERT INTO "PlanningRequest" (id,"initiativeId","capabilityId",data,"dedupeKey","updatedAt") VALUES ('identity-request','identity-init','identity-cap','{}',repeat('c',64),now());
+      INSERT INTO "JiraConnection" (id,"organizationId","initiativeId","configuredByUserId",status,"accessTokenCiphertext","refreshTokenCiphertext","tokenExpiresAt",scopes,"updatedAt") VALUES ('identity-jira','org-a','identity-init','user-org-a','revoked','synthetic-not-a-credential','synthetic-not-a-credential',now(),'read:jira-work',now());
+      INSERT INTO "JiraExternalLink" (id,"organizationId","initiativeId","connectionId","externalIssueId","externalKey","issueTypeName","targetType","targetId","sourceHash","targetFingerprint","lastImportedSnapshot","updatedAt") VALUES ('identity-link','org-a','identity-init','identity-jira','100001','CAN-1','Epic','feature','identity-cap',repeat('a',64),repeat('b',64),'{}',now());
+    `);
+    const result = await asUser(authA, () => pg.query(`SELECT c.id AS backlog, f."sourceCapabilityId" AS roadmap,
+      s."sourceCapabilityId" AS sprint, assigned.id AS "release", link."targetId" AS jira, request."capabilityId" AS request
+      FROM "Capability" c JOIN "ArtifactLayer" f ON f.id='identity-feature' JOIN "ArtifactLayer" s ON s.id='identity-story'
+      JOIN "Sprint" sprint ON sprint.id=s."sprintId" JOIN "Release" release ON release.id=sprint."releaseId"
+      JOIN "Capability" assigned ON assigned."releaseId"=release.id JOIN "JiraExternalLink" link ON link.id='identity-link'
+      JOIN "PlanningRequest" request ON request.id='identity-request' WHERE c.id='identity-cap'`));
+    expect(result.rows).toEqual([{ backlog: 'identity-cap', roadmap: 'identity-cap', sprint: 'identity-cap', release: 'identity-cap', jira: 'identity-cap', request: 'identity-cap' }]);
+    await asUser(authA, () => pg.exec(`INSERT INTO "ArtifactLayer" (id,"prototypeId",type,title,"sourceCapabilityId","updatedAt") VALUES ('identity-retry','identity-proto','feature','Retry would overwrite','identity-cap',now()) ON CONFLICT ("prototypeId","sourceCapabilityId") WHERE type='feature' AND "archivedAt" IS NULL AND "sourceCapabilityId" IS NOT NULL DO NOTHING`));
+    expect((await pg.query(`SELECT id,title,body FROM "ArtifactLayer" WHERE "prototypeId"='identity-proto' AND type='feature'`)).rows).toEqual([{ id: 'identity-feature', title: 'Edited editorial title', body: 'Human feature prose' }]);
+    await expect(asUser(authA, () => pg.exec(`INSERT INTO "ArtifactLayer" (id,"prototypeId",type,title,"sourceCapabilityId","updatedAt") VALUES ('identity-duplicate','identity-proto','feature','Duplicate','identity-cap',now())`))).rejects.toThrow(/unique constraint/);
+    await expect(asUser(authA, () => pg.exec(`INSERT INTO "ArtifactLayer" (id,"prototypeId",type,title,"sourceCapabilityId","updatedAt") VALUES ('identity-cross','proto-a','story','Wrong initiative','identity-cap',now())`))).rejects.toThrow(/different initiative/);
+    await expect(asUser(authA, () => pg.exec(`UPDATE "ArtifactLayer" SET "sourceCapabilityId"='identity-cap-other' WHERE id='identity-story'`))).rejects.toThrow(/inconsistent feature identity/);
+    await asUser(authA, () => pg.exec(`
+      INSERT INTO "ArtifactLayer" (id,"prototypeId",type,title,"sourceCapabilityId","updatedAt") VALUES ('identity-feature-other','identity-proto','feature','Other feature','identity-cap-other',now());
+      INSERT INTO "ArtifactLayer" (id,"prototypeId",type,title,"sourceCapabilityId","parentId","updatedAt") VALUES ('identity-epic-other','identity-proto','epic','Other epic','identity-cap-other','identity-feature-other',now());
+      UPDATE "ArtifactLayer" SET "sourceCapabilityId"='identity-cap-other',"parentId"='identity-epic-other' WHERE id='identity-story';
+      UPDATE "ArtifactLayer" SET "sourceCapabilityId"='identity-cap-other' WHERE id='identity-criterion';
+    `));
+    expect((await pg.query(`SELECT id,body,"sprintId" FROM "ArtifactLayer" WHERE id IN ('identity-story','identity-criterion') ORDER BY id`)).rows).toEqual([
+      { id: 'identity-criterion', body: 'Human criterion', sprintId: null }, { id: 'identity-story', body: 'Edited story', sprintId: 'identity-sprint' },
+    ]);
+  });
   it("blocks arbitrary self-enrollment with a known organization ID", async () => {
     await expect(asUser(authA, () => pg.query('INSERT INTO "OrganizationMember" (id,"organizationId","authUserId",role,"updatedAt") VALUES (\'attack\',\'org-b\',$1,\'owner\',now())', [authA]))).rejects.toThrow();
   });

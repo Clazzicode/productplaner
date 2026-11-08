@@ -1,6 +1,7 @@
 import type { JiraConnection, JiraExternalLink, Prisma } from "@prisma/client";
 import { auditInitiative } from "@/lib/audit";
 import { saveFeature } from "@/lib/backlog/service";
+import { ensureFeatureProjection } from "@/lib/planning/featureIdentity";
 import { BusinessError } from "@/lib/businessError";
 import { db, withTransaction } from "@/lib/db";
 import { emptyRequest } from "@/lib/requests/model";
@@ -207,8 +208,7 @@ async function epicForCapability(initiativeId: string, capabilityId: string, tit
   const prototype = await db.prototype.findUnique({ where: { initiativeId } });
   if (!prototype) throw new BusinessError("Generate the roadmap before importing Jira stories.", 422);
   if (prototype.approvedAt) throw new BusinessError("Reopen the approved plan before importing Jira stories.", 409);
-  let feature = await db.artifactLayer.findFirst({ where: { prototypeId: prototype.id, type: "feature", sourceCapabilityId: capabilityId, archivedAt: null } });
-  if (!feature) feature = await db.artifactLayer.create({ data: { prototypeId: prototype.id, type: "feature", title, sourceCapabilityId: capabilityId, sourceType: "jira", dedupeKey: `jira-feature:${capabilityId}` } });
+  const feature = await ensureFeatureProjection(initiativeId, capabilityId, "jira");
   let epic = await db.artifactLayer.findFirst({ where: { parentId: feature.id, type: "epic", archivedAt: null } });
   if (!epic) epic = await db.artifactLayer.create({ data: { prototypeId: prototype.id, type: "epic", parentId: feature.id, title: `${title} delivery`, sourceCapabilityId: capabilityId, sourceType: "jira", dedupeKey: `jira-epic:${capabilityId}` } });
   return epic;
