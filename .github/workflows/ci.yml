@@ -24,6 +24,8 @@ jobs:
       - run: npm ci
       - run: npm run schema:validate
       - run: npm run typecheck
+      - name: Verify acceptance runner can execute before using staging credentials
+        run: npx tsx scripts/staging-acceptance.ts --preflight
       - run: npx tsx scripts/check-auth-entrypoints.ts
       - run: npm run lint -- --max-warnings=0
       - run: npm test
