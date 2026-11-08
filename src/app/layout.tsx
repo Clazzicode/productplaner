@@ -92,7 +92,6 @@ async function RootLayout({
           signedIn={user != null}
           generatedInitiativeId={generatedInitiativeId}
         >
-          <PageNavigation signedIn={user != null} canManageWorkspace={canManageWorkspace} initiatives={navigationInitiatives} />
           <AppShell
             signedIn={user != null}
             canManageWorkspace={canManageWorkspace}
@@ -100,6 +99,7 @@ async function RootLayout({
             accessLevel={user?.accessLevel ?? "standard_user"}
             initiatives={navigationInitiatives}
           >
+            <PageNavigation signedIn={user != null} canManageWorkspace={canManageWorkspace} initiatives={navigationInitiatives} />
             {children}
           </AppShell>
         </CoachMarkProvider>

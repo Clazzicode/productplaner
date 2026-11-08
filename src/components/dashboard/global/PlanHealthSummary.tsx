@@ -13,7 +13,7 @@ export default function PlanHealthSummary(props: { primary: PrimaryInitiativeDet
   const p = props.primary;
   return (
     <Card>
-      <CardTitle>Plan Health</CardTitle>
+      <CardTitle>Portfolio context</CardTitle>
       {!p ? (
         <EmptyState
           title="No planning workspace yet"

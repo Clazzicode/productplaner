@@ -9,6 +9,7 @@ import { isBareRoute } from "./bareMode";
 import LeftNav, { type NavInitiative } from "./LeftNav";
 import MobileNavDrawer from "./MobileNavDrawer";
 import TopHeader from "./TopHeader";
+import { pageNavigation } from "./navigationRoutes";
 import { confirmPageNavigation } from "./unsavedChanges";
 
 /**
@@ -53,7 +54,15 @@ export default function AppShell(props: {
     return props.children;
   }
 
-  const currentName = currentInitiative?.name ?? "Clarivia";
+  const page = pageNavigation(pathname, props.initiatives);
+  const currentName = page.title;
+  const breadcrumbs = routeInitiative
+    ? [
+        { label: routeInitiative.project?.name ?? "Projects", href: routeInitiative.project ? `/projects/${routeInitiative.project.id}` : "/projects" },
+        { label: routeInitiative.name, href: `/initiatives/${routeInitiative.id}/overview` },
+        ...(page.title === routeInitiative.name ? [] : [{ label: page.title }]),
+      ]
+    : [{ label: pathname === "/home" ? "Overview" : page.title }];
 
   const switchInitiative = (id: string) => {
     const target = props.initiatives.find((i) => i.id === id);
@@ -109,6 +118,24 @@ export default function AppShell(props: {
     </div>
   );
 
+  const headerSwitcher = props.initiatives.length > 0 ? (
+    <label className="flex items-center gap-2 text-xs text-white/65">
+      <span className="sr-only">Switch initiative</span>
+      <select value={currentInitiative?.id ?? ""} onChange={(event) => switchInitiative(event.target.value)} aria-label="Switch initiative" className="max-w-44 truncate rounded-lg border border-white/20 bg-[#102546] px-2 py-1.5 text-xs text-white focus:outline-2 focus:outline-white">
+        {props.initiatives.map((initiative) => <option key={initiative.id} value={initiative.id}>{initiative.name}</option>)}
+      </select>
+    </label>
+  ) : null;
+  const createActions = props.canManageWorkspace ? (
+    <details className="group relative">
+      <summary className="cursor-pointer list-none rounded-lg bg-[#5145ed] px-4 py-2 text-sm font-semibold text-white hover:bg-[#4238d7] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white">+ Create <span aria-hidden>⌄</span></summary>
+      <div className="absolute right-0 z-50 mt-2 w-44 rounded-xl border border-border-subtle bg-white p-1.5 text-text-primary shadow-xl">
+        <Link href="/projects/new" className="block rounded-lg px-3 py-2 text-sm hover:bg-[#f4f5fe]">New project</Link>
+        <Link href="/initiatives/new" className="block rounded-lg px-3 py-2 text-sm hover:bg-[#f4f5fe]">New initiative</Link>
+      </div>
+    </details>
+  ) : null;
+
   return (
     <div className="flex min-h-dvh w-full min-w-0 bg-surface">
       <div className="hidden xl:contents">
@@ -124,13 +151,15 @@ export default function AppShell(props: {
       />
       <div className="flex min-w-0 flex-1 flex-col">
         <TopHeader
-          switcherAndNew={switcherAndNew}
-          accountActions={<AccountMenu userName={props.userName} accessLevel={props.accessLevel} />}
+          breadcrumbs={breadcrumbs}
+          switcher={headerSwitcher}
+          createActions={createActions}
+          accountActions={<AccountMenu userName={props.userName} accessLevel={props.accessLevel} dark />}
           currentName={currentName}
           userName={props.userName}
           onOpenMenu={() => setDrawerOpen(true)}
         />
-        <main className="min-w-0 flex-1 bg-[radial-gradient(circle_at_82%_0%,#edf1ff_0,transparent_30%)]">
+        <main className="min-w-0 flex-1 bg-[#f4f5fe]">
           <div className="px-4 pt-4 sm:px-6">
             <AiUsageBanner />
           </div>

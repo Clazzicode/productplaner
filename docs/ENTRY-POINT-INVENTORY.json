@@ -1128,8 +1128,8 @@
   {
     "path": "src/app/workflow-preview/page.tsx",
     "classification": "public-demo",
-    "reason": "Static workflow samples only; five-tool layout variant is development-only behind the existing PO_DEMO_ENABLED flag and supplies no authenticated data or bypass.",
-    "sourceFingerprint": "6c1ba734c25144e3052adcb8d158436d989a9b829e22718b3c1f1517f133a0f0"
+    "reason": "Static workflow samples only; five-tool, meeting, and attendance preview variants are development-only behind PO_DEMO_ENABLED and supply no authenticated data or bypass.",
+    "sourceFingerprint": "524d1d10ac0fc8b0d87551cd16187056edc9b48b340a4e3bd3680bf6d2be6973"
   },
   {
     "path": "src/app/api/initiatives/[id]/regeneration-proposals/[proposalId]/route.ts",

@@ -170,3 +170,27 @@ button, a, input, select, textarea {
     transform: none;
   }
 }
+
+/* Shared treatment for the delivery decision screens. Their workflow logic
+   remains in the existing boards; these rules keep every surface consistent. */
+.clarivia-workflow { color: #0d1b3e; }
+.clarivia-workflow section.rounded-xl,
+.clarivia-workflow article.rounded-xl,
+.clarivia-workflow details.rounded-xl {
+  border-color: #dfe3f4;
+  border-radius: 1rem;
+  box-shadow: 0 5px 20px rgb(13 27 62 / 4%);
+}
+.clarivia-workflow input:not([type="checkbox"]),
+.clarivia-workflow select,
+.clarivia-workflow textarea { border-color: #cfd4e7; background: #fff; }
+.clarivia-workflow button:disabled { cursor: not-allowed; }
+@media (max-width: 767px) {
+  .clarivia-workflow select,
+  .clarivia-workflow input,
+  .clarivia-workflow textarea { width: 100%; min-width: 0; }
+  .clarivia-workflow section, .clarivia-workflow article { min-width: 0; }
+  .clarivia-workflow section > div.flex,
+  .clarivia-workflow article > div.flex { flex-wrap: wrap; }
+  .clarivia-workflow button { max-width: 100%; }
+}

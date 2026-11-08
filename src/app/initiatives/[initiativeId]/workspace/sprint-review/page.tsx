@@ -24,7 +24,7 @@ async function SprintReviewPage({ params }: { params: Promise<{ initiativeId: st
   const serializable = JSON.parse(JSON.stringify(reviews));
   const canEdit = access.level === "edit" || access.level === "owner";
   const canFinalize = canEdit && (user.permissionRole === "owner" || user.permissionRole === "admin");
-  return <div><h2 className="text-xl font-bold">Sprint review</h2><p className="mt-1 text-sm text-neutral-500">Build a presentation-ready review from committed sprint work and demo evidence, then preserve the approved record as an immutable snapshot.</p><div className="mt-6"><SprintReviewBoard initiativeId={initiativeId} sprints={plans.map(plan => ({ id: plan.sprint.id, label: `Sprint ${plan.sprint.sprintNumber}`, startDate: plan.sprint.startDate.toISOString(), endDate: plan.sprint.endDate.toISOString() }))} stakeholders={stakeholders} documents={documents} initialReviews={serializable} canEdit={canEdit} canFinalize={canFinalize} /></div></div>;
+  return <div className="clarivia-workflow"><h2 className="text-3xl font-bold tracking-tight text-[#0d1b3e]">Sprint review</h2><p className="mt-1 text-sm text-neutral-500">Build a presentation-ready review from committed sprint work and demo evidence, then preserve the approved record as an immutable snapshot.</p><div className="mt-6"><SprintReviewBoard initiativeId={initiativeId} sprints={plans.map(plan => ({ id: plan.sprint.id, label: `Sprint ${plan.sprint.sprintNumber}`, startDate: plan.sprint.startDate.toISOString(), endDate: plan.sprint.endDate.toISOString() }))} stakeholders={stakeholders} documents={documents} initialReviews={serializable} canEdit={canEdit} canFinalize={canFinalize} /></div></div>;
 }
 
 export default withAuthenticatedPage(SprintReviewPage);
