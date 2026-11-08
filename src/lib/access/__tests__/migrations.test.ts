@@ -536,6 +536,13 @@ describe.sequential("migration replay and real PostgreSQL RLS", () => {
   });
 
   it("purges cached Jira data only after an administrator disconnects their own workspace", async () => {
+    await asUser(authA, () => pg.exec(`
+      INSERT INTO "JiraSyncJob" (id,"organizationId","initiativeId","connectionId","jobType",payload,"idempotencyKey","updatedAt")
+      VALUES ('jira-purge-job','org-a','init-a','jira-a','import_preview','{}',repeat('3',64),now());
+      INSERT INTO "JiraSyncAttempt" (id,"organizationId","jobId","attemptNumber",status)
+      VALUES ('jira-purge-attempt','org-a','jira-purge-job',1,'succeeded');
+    `));
+    await expect(pg.exec(`DELETE FROM "JiraSyncAttempt" WHERE id='jira-purge-attempt'`)).rejects.toThrow(/immutable/);
     await expect(asUser(authA, () => pg.query(`SELECT app_private.purge_jira_source_data('jira-a')`))).rejects.toThrow();
     await asUser(authA, () => pg.exec(`UPDATE "JiraConnection" SET status='revoked' WHERE id='jira-a'`));
     await expect(asUser(authB, () => pg.query(`SELECT app_private.purge_jira_source_data('jira-a')`))).rejects.toThrow();
@@ -544,7 +551,22 @@ describe.sequential("migration replay and real PostgreSQL RLS", () => {
     expect((await pg.query(`SELECT id FROM "JiraExternalLink" WHERE "connectionId"='jira-a'`)).rows).toHaveLength(0);
     expect((await pg.query(`SELECT id FROM "JiraWebhookEvent" WHERE "connectionId"='jira-a'`)).rows).toHaveLength(0);
     expect((await pg.query(`SELECT id FROM "JiraSyncJob" WHERE "connectionId"='jira-a'`)).rows).toHaveLength(0);
+    expect((await pg.query(`SELECT id FROM "JiraSyncAttempt" WHERE id='jira-purge-attempt'`)).rows).toHaveLength(0);
     expect((await pg.query(`SELECT id FROM "JiraExportApproval" WHERE "exportRunId"='jira-export-a'`)).rows).toHaveLength(1);
+  });
+
+  it("expires terminal Jira jobs together with their immutable attempts", async () => {
+    await pg.exec(`
+      INSERT INTO "JiraConnection" (id,"organizationId","initiativeId","configuredByUserId",status,"cloudId","projectId","projectKey","accessTokenCiphertext","refreshTokenCiphertext","tokenExpiresAt",scopes,"updatedAt")
+      VALUES ('jira-b','org-b','init-b','user-org-b','connected','cloud-b','project-jira-b','GB','v1:encrypted-access-token-value','v1:encrypted-refresh-token-value',now() + interval '1 hour','read:jira-work',now());
+      INSERT INTO "JiraSyncJob" (id,"organizationId","initiativeId","connectionId","jobType",payload,"idempotencyKey",status,"updatedAt")
+      VALUES ('jira-expired-job','org-b','init-b','jira-b','import_preview','{}',repeat('4',64),'completed',now()-interval '91 days');
+      INSERT INTO "JiraSyncAttempt" (id,"organizationId","jobId","attemptNumber",status)
+      VALUES ('jira-expired-attempt','org-b','jira-expired-job',1,'succeeded');
+    `);
+    await pg.query(`SELECT app_private.expire_jira_source_data()`);
+    expect((await pg.query(`SELECT id FROM "JiraSyncJob" WHERE id='jira-expired-job'`)).rows).toHaveLength(0);
+    expect((await pg.query(`SELECT id FROM "JiraSyncAttempt" WHERE id='jira-expired-attempt'`)).rows).toHaveLength(0);
   });
 
   it("isolates, claims, and completes durable jobs without duplicate attempts", async () => {
