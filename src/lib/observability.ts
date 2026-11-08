@@ -8,7 +8,7 @@ const context = new AsyncLocalStorage<{ requestId: string }>();
 export function currentRequestId() { return context.getStore()?.requestId; }
 
 /** Allowlisted fields only: no headers, bodies, tokens, URLs or error messages. */
-export function serverLog(event: string, fields: { status?: number; durationMs?: number; errorType?: string } = {}) {
+export function serverLog(event: string, fields: { status?: number; durationMs?: number; errorType?: string; worker?: "background" | "jira"; stage?: "start" | "execute" | "retention" | "finish"; errorCode?: string; processed?: number; completed?: number; retried?: number; failed?: number } = {}) {
   const payload = JSON.stringify({
     timestamp: new Date().toISOString(),
     level: (fields.status ?? 0) >= 500 ? "error" : "info",

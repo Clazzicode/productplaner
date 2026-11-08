@@ -6,6 +6,7 @@ const context = new AsyncLocalStorage<boolean>();
 mocks.context = context;
 vi.mock("@/lib/jira/jobs", () => ({ processJiraJobs: mocks.process }));
 vi.mock("@/lib/observability", () => ({ withApi: (handler: unknown) => handler }));
+vi.mock("@/lib/jobs/executionHealth", () => ({ observeWorker: async (_name: string, work: (stage: () => void) => Promise<{ data: unknown }>) => (await work(() => {})).data }));
 vi.mock("@/lib/db", () => ({
   withServiceContext: (fn: () => unknown) => (mocks.context as AsyncLocalStorage<boolean>).run(true, fn),
   db: { $executeRaw: () => ({
