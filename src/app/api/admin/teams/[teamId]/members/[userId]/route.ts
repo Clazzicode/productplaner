@@ -1,4 +1,4 @@
-import { withApi } from "@/lib/observability";
+import { withAuthenticatedApi } from "@/lib/auth/entryPoints";
 import { NextResponse } from "next/server";
 import { jsonError } from "@/lib/api";
 import { requireCurrentUserApi } from "@/lib/auth/session";
@@ -22,4 +22,4 @@ async function DELETEHandler(
   return NextResponse.json({ ok: true });
 }
 
-export const DELETE = withApi(DELETEHandler);
+export const DELETE = withAuthenticatedApi(DELETEHandler);

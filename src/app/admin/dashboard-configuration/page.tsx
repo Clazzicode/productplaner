@@ -1,3 +1,4 @@
+import { withAuthenticatedPage } from "@/lib/auth/entryPoints";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { ContainedLayout } from "@/components/layout/PageLayouts";
@@ -29,7 +30,7 @@ function parseRole(value: string | undefined): WorkingRole {
  * This is configuration UI, not a dashboard preview — compact rows, not the
  * card treatment `/home`/`/admin` use.
  */
-export default async function DashboardConfigurationPage({
+async function DashboardConfigurationPage({
   searchParams,
 }: {
   searchParams: Promise<{ role?: string }>;
@@ -73,3 +74,5 @@ export default async function DashboardConfigurationPage({
     </ContainedLayout>
   );
 }
+
+export default withAuthenticatedPage(DashboardConfigurationPage);

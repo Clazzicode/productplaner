@@ -1,3 +1,4 @@
+import { withAuthenticatedApi } from "@/lib/auth/entryPoints";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { auditInitiative } from "@/lib/audit";
@@ -6,7 +7,6 @@ import { requireInitiativeApiAccess } from "@/lib/access/guards";
 import { jsonError, zodMessage } from "@/lib/api";
 import { requireCurrentUserApi } from "@/lib/auth/session";
 import { db, establishAuthContext, withTransaction } from "@/lib/db";
-import { withApi } from "@/lib/observability";
 
 const fieldSchema = z.object({
   localEntityType: z.enum(["epic", "story"]),
@@ -146,5 +146,5 @@ async function PUTHandler(request: Request, { params }: { params: Promise<{ id: 
   return NextResponse.json({ mapping: binding });
 }
 
-export const GET = withApi(GETHandler);
-export const PUT = withApi(PUTHandler);
+export const GET = withAuthenticatedApi(GETHandler);
+export const PUT = withAuthenticatedApi(PUTHandler);

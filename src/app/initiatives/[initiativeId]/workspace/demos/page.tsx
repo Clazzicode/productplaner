@@ -1,3 +1,4 @@
+import { withAuthenticatedPage } from "@/lib/auth/entryPoints";
 import { notFound } from "next/navigation";
 import DemoManagementBoard from "@/components/workspace/DemoManagementBoard";
 import { requireInitiativeView } from "@/lib/access/guards";
@@ -8,7 +9,7 @@ import { loadWorkspace } from "@/lib/workspace";
 
 export const dynamic = "force-dynamic";
 
-export default async function DemoManagementPage({ params }: { params: Promise<{ initiativeId: string }> }) {
+async function DemoManagementPage({ params }: { params: Promise<{ initiativeId: string }> }) {
   const { initiativeId } = await params;
   const user = await requireCurrentUser();
   establishAuthContext(user.authUserId);
@@ -56,3 +57,5 @@ export default async function DemoManagementPage({ params }: { params: Promise<{
 
   return <div><h2 className="text-xl font-bold">Demo management</h2><p className="mt-1 text-sm text-neutral-500">Prepare a sprint review agenda, make readiness decisions, retain presenter and outcome history, and carry unfinished demonstrations into committed future sprints.</p><div className="mt-6"><DemoManagementBoard initiativeId={initiativeId} workItems={workItems} sprints={plans.map(plan => ({ id: plan.sprint.id, label: `Sprint ${plan.sprint.sprintNumber}` }))} stakeholders={stakeholders} demos={serializedDemos} canEdit={canEdit} canDecide={canDecide} /></div></div>;
 }
+
+export default withAuthenticatedPage(DemoManagementPage);

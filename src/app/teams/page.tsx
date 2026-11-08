@@ -1,3 +1,4 @@
+import { withAuthenticatedPage } from "@/lib/auth/entryPoints";
 import { redirect } from "next/navigation";
 import { ContainedLayout } from "@/components/layout/PageLayouts";
 import PageHeader from "@/components/ui/PageHeader";
@@ -16,7 +17,7 @@ export const dynamic = "force-dynamic";
  * Admin, and are re-checked server-side in /api/admin/teams/* regardless of
  * what this page renders.
  */
-export default async function TeamsPage() {
+async function TeamsPage() {
   const user = await requireCurrentUser();
   establishAuthContext(user.authUserId);
   if (user.profiles.length === 0) redirect("/welcome");
@@ -67,3 +68,5 @@ export default async function TeamsPage() {
     </ContainedLayout>
   );
 }
+
+export default withAuthenticatedPage(TeamsPage);

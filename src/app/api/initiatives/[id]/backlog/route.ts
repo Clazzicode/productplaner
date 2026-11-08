@@ -1,4 +1,4 @@
-import { withApi } from "@/lib/observability";
+import { withAuthenticatedApi } from "@/lib/auth/entryPoints";
 import { requireCurrentUserApi } from "@/lib/auth/session";
 import { requireInitiativeApiAccess } from "@/lib/access/guards";
 import { establishAuthContext } from "@/lib/db";
@@ -22,5 +22,5 @@ async function handler(request: Request, { params }: { params: Promise<{ id: str
   }
   return Response.json({ features: (await reorderFeatures(id, command.items)).map(featureRecord) });
 }
-export const GET = withApi(handler);
-export const POST = withApi(handler);
+export const GET = withAuthenticatedApi(handler);
+export const POST = withAuthenticatedApi(handler);

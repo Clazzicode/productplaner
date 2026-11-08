@@ -1,3 +1,4 @@
+import { withAuthenticatedPage } from "@/lib/auth/entryPoints";
 import { redirect } from "next/navigation";
 import { DashboardLayout } from "@/components/layout/PageLayouts";
 import DecisionsRequiredPanel from "@/components/dashboard/DecisionsRequiredPanel";
@@ -35,7 +36,7 @@ export const dynamic = "force-dynamic";
  * unchanged below, still backed by loadGlobalDashboardData — which is the
  * "mature dashboard, shown once earned" the reference doc describes.
  */
-export default async function HomePage() {
+async function HomePage() {
   const user = await requireCurrentUser();
   establishAuthContext(user.authUserId);
   if (user.profiles.length === 0) redirect("/welcome");
@@ -133,3 +134,5 @@ export default async function HomePage() {
     </DashboardLayout>
   );
 }
+
+export default withAuthenticatedPage(HomePage);

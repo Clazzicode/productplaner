@@ -1,3 +1,4 @@
+import { withAuthenticatedPage } from "@/lib/auth/entryPoints";
 import { redirect } from "next/navigation";
 import { WideLayout } from "@/components/layout/PageLayouts";
 import AdminAttentionPanel from "@/components/dashboard/admin/AdminAttentionPanel";
@@ -40,7 +41,7 @@ export const dynamic = "force-dynamic";
  * disabled admin) is redirected to /home, the same behavior the two existing
  * admin-only pages already use — no new access-denied pattern invented.
  */
-export default async function AdminDashboardPage() {
+async function AdminDashboardPage() {
   const user = await requireCurrentUser();
   establishAuthContext(user.authUserId);
   if (user.profiles.length === 0) redirect("/welcome");
@@ -110,3 +111,5 @@ export default async function AdminDashboardPage() {
     </WideLayout>
   );
 }
+
+export default withAuthenticatedPage(AdminDashboardPage);

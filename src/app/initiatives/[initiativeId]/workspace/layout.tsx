@@ -1,3 +1,4 @@
+import { withAuthenticatedPage } from "@/lib/auth/entryPoints";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { ContainedLayout } from "@/components/layout/PageLayouts";
@@ -24,7 +25,7 @@ export const dynamic = "force-dynamic";
  * shared layout — the minimum coverage docs/V2-RESOURCE-ACCESS.md §12 calls
  * for without touching each page individually.
  */
-export default async function WorkspaceLayout({
+async function WorkspaceLayout({
   children,
   params,
 }: {
@@ -114,3 +115,5 @@ export default async function WorkspaceLayout({
     </ContainedLayout>
   );
 }
+
+export default withAuthenticatedPage(WorkspaceLayout);

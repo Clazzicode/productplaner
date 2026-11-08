@@ -1,3 +1,4 @@
+import { withAuthenticatedPage } from "@/lib/auth/entryPoints";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { FocusedLayout } from "@/components/layout/PageLayouts";
@@ -19,7 +20,7 @@ export const dynamic = "force-dynamic";
  * able to open. The actual write path (POST /api/initiatives/[id]/intake) is
  * separately gated at Edit — that's the real enforcement boundary for
  * mutating answers, not this page render. */
-export default async function IntakePage({
+async function IntakePage({
   params,
 }: {
   params: Promise<{ initiativeId: string }>;
@@ -132,3 +133,5 @@ export default async function IntakePage({
     </FocusedLayout>
   );
 }
+
+export default withAuthenticatedPage(IntakePage);

@@ -1,3 +1,4 @@
+import { withAuthenticatedPage } from "@/lib/auth/entryPoints";
 import type { Prisma } from "@prisma/client";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -17,7 +18,7 @@ export const dynamic = "force-dynamic";
 const sources = new Set(["manual", "ai", "split", "generated", "jira"]);
 const readinessStates = new Set(["needs_refinement", "ready_for_refinement", "sprint_ready", "blocked", "split"]);
 
-export default async function EpicsPage({
+async function EpicsPage({
   params,
   searchParams,
 }: {
@@ -148,3 +149,5 @@ export default async function EpicsPage({
     </div>
   );
 }
+
+export default withAuthenticatedPage(EpicsPage);

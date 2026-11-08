@@ -1,10 +1,10 @@
+import { withAuthenticatedApi } from "@/lib/auth/entryPoints";
 import { NextResponse } from "next/server";
 import { requireInitiativeApiAccess } from "@/lib/access/guards";
 import { jsonError, zodMessage } from "@/lib/api";
 import { requireCurrentUserApi } from "@/lib/auth/session";
 import { BusinessError } from "@/lib/businessError";
 import { establishAuthContext } from "@/lib/db";
-import { withApi } from "@/lib/observability";
 import {
   listAcceptanceCriterionHistory,
   updateAcceptanceCriterion,
@@ -63,5 +63,5 @@ async function PATCHHandler(
   }
 }
 
-export const GET = withApi(GETHandler);
-export const PATCH = withApi(PATCHHandler);
+export const GET = withAuthenticatedApi(GETHandler);
+export const PATCH = withAuthenticatedApi(PATCHHandler);

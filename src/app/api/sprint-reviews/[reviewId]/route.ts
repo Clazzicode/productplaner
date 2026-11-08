@@ -1,4 +1,4 @@
-import { withApi } from "@/lib/observability";
+import { withAuthenticatedApi } from "@/lib/auth/entryPoints";
 import { requireCurrentUserApi } from "@/lib/auth/session";
 import { requireInitiativeApiAccess } from "@/lib/access/guards";
 import { requireOrganizationRole } from "@/lib/access/organizationRole";
@@ -20,5 +20,5 @@ async function handler(request: Request, { params }: { params: Promise<{ reviewI
   try { return Response.json({ review: await applyReviewCommand(reviewId, parsed.data, auth.user.id, requireOrganizationRole(auth.user, ["owner", "admin"]).ok) }); }
   catch (error) { if (error instanceof BusinessError) return jsonError(error.message, error.status); throw error; }
 }
-export const GET = withApi(handler);
-export const PATCH = withApi(handler);
+export const GET = withAuthenticatedApi(handler);
+export const PATCH = withAuthenticatedApi(handler);

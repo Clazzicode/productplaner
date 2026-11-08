@@ -1,4 +1,4 @@
-import { withApi } from "@/lib/observability";
+import { withAuthenticatedApi } from "@/lib/auth/entryPoints";
 import { NextResponse } from "next/server";
 import { withPlanningMutation } from "@/lib/generation/mutation";
 import { requireInitiativeApiAccess } from "@/lib/access/guards";
@@ -143,5 +143,5 @@ async function PATCHHandler(
   });
 }
 
-export const GET = withApi(GETHandler);
-export const PATCH = withApi(PATCHHandler);
+export const GET = withAuthenticatedApi(GETHandler);
+export const PATCH = withAuthenticatedApi(PATCHHandler);

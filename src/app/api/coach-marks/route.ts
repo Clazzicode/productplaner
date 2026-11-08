@@ -1,4 +1,4 @@
-import { withApi } from "@/lib/observability";
+import { withAuthenticatedApi } from "@/lib/auth/entryPoints";
 import { NextResponse } from "next/server";
 import { requireCurrentUserApi } from "@/lib/auth/session";
 import { db, establishAuthContext } from "@/lib/db";
@@ -26,5 +26,5 @@ async function DELETEHandler() {
   return NextResponse.json({ ok: true });
 }
 
-export const GET = withApi(GETHandler);
-export const DELETE = withApi(DELETEHandler);
+export const GET = withAuthenticatedApi(GETHandler);
+export const DELETE = withAuthenticatedApi(DELETEHandler);

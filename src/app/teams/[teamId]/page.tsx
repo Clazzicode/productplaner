@@ -1,3 +1,4 @@
+import { withAuthenticatedPage } from "@/lib/auth/entryPoints";
 import { notFound, redirect } from "next/navigation";
 import { ContainedLayout } from "@/components/layout/PageLayouts";
 import Breadcrumb from "@/components/ui/Breadcrumb";
@@ -12,7 +13,7 @@ import { db, establishAuthContext } from "@/lib/db";
 export const dynamic = "force-dynamic";
 
 /** ORGANIZATION -> Teams & Stakeholders -> Team Detail. Admin-aware. */
-export default async function TeamDetailPage({
+async function TeamDetailPage({
   params,
 }: {
   params: Promise<{ teamId: string }>;
@@ -79,3 +80,5 @@ export default async function TeamDetailPage({
     </ContainedLayout>
   );
 }
+
+export default withAuthenticatedPage(TeamDetailPage);

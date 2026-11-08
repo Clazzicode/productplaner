@@ -1,4 +1,4 @@
-import { withApi } from "@/lib/observability";
+import { withAuthenticatedApi } from "@/lib/auth/entryPoints";
 import { NextResponse } from "next/server";
 import { auditInitiative } from "@/lib/audit";
 import { requireInitiativeApiAccess } from "@/lib/access/guards";
@@ -216,4 +216,4 @@ async function POSTHandler(
   }, { timeout: 120_000 });
 }
 
-export const POST = withApi(POSTHandler);
+export const POST = withAuthenticatedApi(POSTHandler);

@@ -1,4 +1,4 @@
-import { withApi } from "@/lib/observability";
+import { withAuthenticatedApi } from "@/lib/auth/entryPoints";
 import { requireCurrentUserApi } from "@/lib/auth/session";
 import { requireInitiativeApiAccess } from "@/lib/access/guards";
 import { db, establishAuthContext } from "@/lib/db";
@@ -16,4 +16,4 @@ async function handler(request: Request, { params }: { params: Promise<{ suggest
   try { return Response.json({ suggestion: await dismissReviewSuggestion(suggestionId, auth.user.id) }); }
   catch (error) { if (error instanceof BusinessError) return jsonError(error.message, error.status); throw error; }
 }
-export const PATCH = withApi(handler);
+export const PATCH = withAuthenticatedApi(handler);

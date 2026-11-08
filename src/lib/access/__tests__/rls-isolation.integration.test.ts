@@ -14,9 +14,25 @@
 // never against a real Supabase `auth.users` row.
 
 import { randomUUID } from "node:crypto";
+import { AsyncResource } from "node:async_hooks";
 import { PrismaClient } from "@prisma/client";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { db, establishAuthContext } from "@/lib/db";
+import { db, establishAuthContext, rawDb, withAuthenticatedDatabaseContext, withServiceContext, withTransaction } from "@/lib/db";
+
+// These tests create isolated fixtures. Never run them against Production.
+const stagingRef = "qbogvclmehvrtuwiktos";
+for (const key of ["DATABASE_URL", "DIRECT_URL"] as const) {
+  const value = process.env[key];
+  if (!value) throw new Error("Staging database credentials are required.");
+  const url = new URL(value);
+  const bound = url.hostname === `db.${stagingRef}.supabase.co` ||
+    (url.hostname.endsWith(".pooler.supabase.com") && decodeURIComponent(url.username).endsWith(`.${stagingRef}`));
+  if (process.env.STAGING_SUPABASE_PROJECT_REF !== stagingRef || !bound || process.env.APP_ENVIRONMENT !== "staging") {
+    throw new Error("Live security tests are restricted to the independent Clarivia staging database.");
+  }
+}
+const emptyContext = new AsyncResource("no-auth-test");
+const fixtureOrganizations: string[] = [];
 
 const directUrl = process.env.DIRECT_URL;
 if (!directUrl) throw new Error("DIRECT_URL is not set — required for isolation-test fixture setup/teardown.");
@@ -41,6 +57,7 @@ let initiativeB1Id: string;
 async function createOrgWithOwner(name: string): Promise<Fixture> {
   const authUserId = randomUUID();
   const org = await adminDb.organization.create({ data: { name, workspaceType: "team" } });
+  fixtureOrganizations.push(org.id);
   const user = await adminDb.user.create({
     data: { authUserId, homeOrganizationId: org.id, name: `${name} Owner`, email: `${authUserId}@test.local` },
   });
@@ -52,6 +69,8 @@ async function createOrgWithOwner(name: string): Promise<Fixture> {
 }
 
 beforeAll(async () => {
+  const role = await rawDb.$queryRaw<{ safe: boolean }[]>`SELECT current_user='app_rw' AND NOT (rolsuper OR rolbypassrls) AS safe FROM pg_roles WHERE rolname=current_user`;
+  expect(role[0]?.safe).toBe(true);
   orgA = await createOrgWithOwner("Isolation Test Org A");
   orgB = await createOrgWithOwner("Isolation Test Org B");
 
@@ -109,12 +128,14 @@ beforeAll(async () => {
 
 afterAll(async () => {
   try {
-    await adminDb.initiative.deleteMany({ where: { organizationId: { in: [orgA.orgId, orgB.orgId] } } });
-    await adminDb.project.deleteMany({ where: { organizationId: { in: [orgA.orgId, orgB.orgId] } } });
-    await adminDb.user.deleteMany({ where: { homeOrganizationId: { in: [orgA.orgId, orgB.orgId] } } });
-    await adminDb.organization.deleteMany({ where: { id: { in: [orgA.orgId, orgB.orgId] } } });
+    await adminDb.initiative.deleteMany({ where: { organizationId: { in: fixtureOrganizations } } });
+    await adminDb.project.deleteMany({ where: { organizationId: { in: fixtureOrganizations } } });
+    await adminDb.user.deleteMany({ where: { homeOrganizationId: { in: fixtureOrganizations } } });
+    await adminDb.organization.deleteMany({ where: { id: { in: fixtureOrganizations } } });
   } finally {
     await adminDb.$disconnect();
+    await rawDb.$disconnect();
+    emptyContext.emitDestroy();
   }
 });
 
@@ -163,8 +184,7 @@ describe("RLS isolation (real Postgres connection, not mocked)", () => {
       { id: memberUserId, organizationId: orgA.orgId, accessLevel: "standard_user", status: "active", memberType: "internal" },
       initiativeA1Id,
     );
-    expect(access).not.toBe("not_found");
-    if (access !== "not_found") expect(access.level).toBe("none");
+    expect(access).toBe("not_found");
   });
 
   it("Account B cannot create an Initiative under Account A's Project — blocked by RLS itself, not just the app guard", async () => {
@@ -193,5 +213,47 @@ describe("RLS isolation (real Postgres connection, not mocked)", () => {
         data: { organizationId: orgA.orgId, createdByUserId: orgB.ownerUserId, name: "Attempted cross-tenant project" },
       }),
     ).rejects.toThrow();
+  });
+
+  it("fails without context and denies service context tenant reads", async () => {
+    await expect(emptyContext.runInAsyncScope(async () => await db.project.findMany({ take: 1 }))).rejects.toThrow("Database access outside request auth context");
+    expect(await withServiceContext(async () => await db.project.findMany({ where: { id: projectA1Id } }))).toEqual([]);
+  });
+
+  it("isolates concurrent verified users and leaves no PostgreSQL claims after pooled transactions", async () => {
+    const results = await Promise.all([orgA, orgB].map(org => withAuthenticatedDatabaseContext({ authUserId: org.ownerAuthUserId, organizationId: org.orgId }, async () => {
+      await Promise.resolve();
+      const projects = await db.project.findMany({ where: { organizationId: { in: [orgA.orgId, orgB.orgId] } } });
+      const claims = await db.$queryRaw<{ actor: string }[]>`SELECT auth.uid()::text AS actor`;
+      expect(projects.every(project => project.organizationId === org.orgId)).toBe(true);
+      return claims[0].actor;
+    })));
+    expect(results).toEqual([orgA.ownerAuthUserId, orgB.ownerAuthUserId]);
+    for (let attempt = 0; attempt < 6; attempt++) {
+      const claims = await rawDb.$queryRaw<{ actor: string | null }[]>`SELECT auth.uid()::text AS actor`;
+      expect(claims[0].actor).toBeNull();
+    }
+  });
+
+  it("rolls back writes inside the verified database context", async () => {
+    const id = randomUUID();
+    await expect(withAuthenticatedDatabaseContext({ authUserId: orgA.ownerAuthUserId, organizationId: orgA.orgId }, async () => {
+      await withTransaction(async () => {
+        await db.project.create({ data: { id, organizationId: orgA.orgId, createdByUserId: orgA.ownerUserId, name: "Rollback verification" } });
+        throw new Error("intentional rollback");
+      });
+    })).rejects.toThrow("intentional rollback");
+    expect(await adminDb.project.findUnique({ where: { id } })).toBeNull();
+  });
+
+  it("rechecks revoked membership after an identity scope was established", async () => {
+    try {
+      await withAuthenticatedDatabaseContext({ authUserId: memberAuthUserId, organizationId: orgA.orgId }, async () => {
+        await adminDb.organizationMember.updateMany({ where: { authUserId: memberAuthUserId, organizationId: orgA.orgId }, data: { status: "disabled" } });
+        expect(await db.project.findUnique({ where: { id: projectA1Id } })).toBeNull();
+      });
+    } finally {
+      await adminDb.organizationMember.updateMany({ where: { authUserId: memberAuthUserId, organizationId: orgA.orgId }, data: { status: "active" } });
+    }
   });
 });

@@ -1,3 +1,4 @@
+import { withAuthenticatedApi } from "@/lib/auth/entryPoints";
 import { jsonError, zodMessage } from "@/lib/api";
 import { requireCurrentUserApi } from "@/lib/auth/session";
 import { establishAuthContext } from "@/lib/db";
@@ -5,7 +6,6 @@ import { manageJiraJob } from "@/lib/jira/jobs";
 import { jiraJobCommandSchema } from "@/lib/jira/model";
 import { jiraJobForUser } from "@/lib/jira/routeAccess";
 import { BusinessError } from "@/lib/businessError";
-import { withApi } from "@/lib/observability";
 
 async function handler(request: Request, { params }: { params: Promise<{ jobId: string }> }) {
   const { jobId } = await params;
@@ -23,4 +23,4 @@ async function handler(request: Request, { params }: { params: Promise<{ jobId: 
   }
 }
 
-export const PATCH = withApi(handler);
+export const PATCH = withAuthenticatedApi(handler);

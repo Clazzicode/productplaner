@@ -1,4 +1,4 @@
-import { withApi } from "@/lib/observability";
+import { withAuthenticatedApi } from "@/lib/auth/entryPoints";
 import { NextResponse } from "next/server";
 import { requireDocumentApiAccess } from "@/lib/access/documentAccess";
 import { requireCurrentUserApi } from "@/lib/auth/session";
@@ -63,4 +63,4 @@ async function GETHandler(_request: Request, { params }: { params: Promise<{ id:
   });
 }
 
-export const GET = withApi(GETHandler);
+export const GET = withAuthenticatedApi(GETHandler);

@@ -1,3 +1,4 @@
+import { withAuthenticatedApi } from "@/lib/auth/entryPoints";
 import { jsonError, zodMessage } from "@/lib/api";
 import { requireCurrentUserApi } from "@/lib/auth/session";
 import { BusinessError } from "@/lib/businessError";
@@ -5,7 +6,6 @@ import { establishAuthContext } from "@/lib/db";
 import { executeJiraExport } from "@/lib/jira/export";
 import { jiraExportExecuteSchema } from "@/lib/jira/model";
 import { jiraExportForUser } from "@/lib/jira/routeAccess";
-import { withApi } from "@/lib/observability";
 
 async function handler(request: Request, { params }: { params: Promise<{ runId: string }> }) {
   const auth = await requireCurrentUserApi(); if (!auth.ok) return auth.response; establishAuthContext(auth.user.authUserId);
@@ -14,4 +14,4 @@ async function handler(request: Request, { params }: { params: Promise<{ runId: 
   try { return Response.json({ exportRun: await executeJiraExport(runId, auth.user.id) }); }
   catch (error) { return error instanceof BusinessError ? jsonError(error.message, error.status) : jsonError(error instanceof Error ? error.message : "Could not execute the Jira export.", 400); }
 }
-export const POST = withApi(handler);
+export const POST = withAuthenticatedApi(handler);

@@ -1,4 +1,4 @@
-import { currentAuthUserId, db } from "@/lib/db";
+import { currentAuthOrganizationId, currentAuthUserId, db } from "@/lib/db";
 import { BusinessError } from "@/lib/businessError";
 import { getResolvedAccess } from "./initiativeAccess";
 import { canPerformAction, type CollaborationAction } from "./actions";
@@ -12,7 +12,8 @@ export async function requireCollaborationAction(initiativeId: string, actorUser
   if (!actor || actor.id !== actorUserId || actor.status !== "active") throw new BusinessError("Not authorized.", 403);
   const initiative = await db.initiative.findUnique({ where: { id: initiativeId }, select: { organizationId: true } });
   if (!initiative) throw new BusinessError("Not found.", 404);
-  if (expectedOrganizationId && initiative.organizationId !== expectedOrganizationId) throw new BusinessError("Not found.", 404);
+  const organizationId = expectedOrganizationId ?? currentAuthOrganizationId();
+  if (organizationId && initiative.organizationId !== organizationId) throw new BusinessError("Not found.", 404);
   const membership = await db.organizationMember.findUnique({
     where: { organizationId_authUserId: { organizationId: initiative.organizationId, authUserId } },
   });

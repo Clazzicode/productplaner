@@ -1,3 +1,4 @@
+import { withAuthenticatedPage } from "@/lib/auth/entryPoints";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import ExecutiveReport from "@/components/executive/ExecutiveReport";
@@ -7,7 +8,7 @@ import { loadWorkspace } from "@/lib/workspace";
 
 export const dynamic = "force-dynamic";
 
-export default async function ExecutivePage({
+async function ExecutivePage({
   params,
 }: {
   params: Promise<{ initiativeId: string }>;
@@ -35,3 +36,5 @@ export default async function ExecutivePage({
     </div>
   );
 }
+
+export default withAuthenticatedPage(ExecutivePage);

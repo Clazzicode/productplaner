@@ -1,4 +1,4 @@
-import { withApi } from "@/lib/observability";
+import { withAuthenticatedApi } from "@/lib/auth/entryPoints";
 import { NextResponse } from "next/server";
 import { jsonError, zodMessage } from "@/lib/api";
 import { getActiveProfile, requireCurrentUserApi } from "@/lib/auth/session";
@@ -69,4 +69,4 @@ async function POSTHandler(request: Request) {
   return NextResponse.json({ initiativeId: initiative.id });
 }
 
-export const POST = withApi(POSTHandler);
+export const POST = withAuthenticatedApi(POSTHandler);

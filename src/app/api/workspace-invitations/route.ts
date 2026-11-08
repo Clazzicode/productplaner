@@ -1,3 +1,4 @@
+import { withAuthenticatedApi } from "@/lib/auth/entryPoints";
 import { createHash, randomBytes } from "node:crypto";
 import { NextResponse } from "next/server";
 import { z } from "zod";
@@ -5,7 +6,6 @@ import { jsonError, zodMessage } from "@/lib/api";
 import { requireCurrentUserApi } from "@/lib/auth/session";
 import { emailSchema } from "@/lib/auth/credentials";
 import { db, establishAuthContext } from "@/lib/db";
-import { withApi } from "@/lib/observability";
 
 const createSchema = z.object({ email: emailSchema });
 const digest = (token: string) => createHash("sha256").update(token).digest("hex");
@@ -64,5 +64,5 @@ async function POSTHandler(request: Request) {
   return NextResponse.json({ invitation, inviteUrl: new URL(`/join#${token}`, request.url).toString() }, { status: 201 });
 }
 
-export const GET = withApi(GETHandler);
-export const POST = withApi(POSTHandler);
+export const GET = withAuthenticatedApi(GETHandler);
+export const POST = withAuthenticatedApi(POSTHandler);

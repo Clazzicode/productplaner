@@ -1,4 +1,4 @@
-import { withApi } from "@/lib/observability";
+import { withAuthenticatedApi } from "@/lib/auth/entryPoints";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireContextItemApiAccess } from "@/lib/access/documentAccess";
@@ -51,4 +51,4 @@ async function POSTHandler(request: Request, { params }: { params: Promise<{ id:
   return NextResponse.json({ ok: true });
 }
 
-export const POST = withApi(POSTHandler);
+export const POST = withAuthenticatedApi(POSTHandler);

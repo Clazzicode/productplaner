@@ -1,9 +1,10 @@
+import { withAuthenticatedApi } from "@/lib/auth/entryPoints";
 import { NextResponse } from "next/server";
 import { requireOrganizationRole } from "@/lib/access/organizationRole";
 import { jsonError } from "@/lib/api";
 import { requireCurrentUserApi } from "@/lib/auth/session";
 import { establishAuthContext, withTransaction } from "@/lib/db";
-import { currentRequestId, withApi } from "@/lib/observability";
+import { currentRequestId } from "@/lib/observability";
 import { randomUUID } from "node:crypto";
 
 export const runtime = "nodejs";
@@ -73,4 +74,4 @@ async function DELETEHandler() {
   return NextResponse.json({ disconnected: true });
 }
 
-export const DELETE = withApi(DELETEHandler);
+export const DELETE = withAuthenticatedApi(DELETEHandler);

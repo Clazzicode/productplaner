@@ -1,4 +1,4 @@
-import { withApi } from "@/lib/observability";
+import { withAuthenticatedApi } from "@/lib/auth/entryPoints";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { jsonError, zodMessage } from "@/lib/api";
@@ -32,4 +32,4 @@ async function PATCHHandler(request: Request) {
   return NextResponse.json({ ok: true });
 }
 
-export const PATCH = withApi(PATCHHandler);
+export const PATCH = withAuthenticatedApi(PATCHHandler);

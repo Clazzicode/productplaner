@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { redirect } from "next/navigation";
 import { db, establishAuthContext, withTransaction } from "@/lib/db";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { currentVerifiedRequest } from "./verifiedRequest";
 
 // docs/V2-MULTI-TENANT-AUTH.md. Real Supabase Auth session, resolved to this
 // app's User row via User.authUserId. Replaces the old plaintext
@@ -19,6 +20,7 @@ function loadUserByAuthId(authUserId: string) {
 }
 
 export interface CurrentUser extends NonNullable<UserWithProfiles> {
+  authUserId: string;
   /** Resolved *active* organization for this request (validated against
    * organization_members, falling back to homeOrganizationId) — kept under
    * this existing field name so the ~30 call sites that already read
@@ -87,6 +89,8 @@ function deriveAccessLevel(role: string): string {
  * route calling them must.
  */
 export async function getCurrentUser(): Promise<CurrentUser | null> {
+  const request = currentVerifiedRequest();
+  if (request) return request.user;
   const supabase = await createSupabaseServerClient();
   const {
     data: { user: authUser },
@@ -104,6 +108,7 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
 
   return {
     ...user,
+    authUserId: authUser.id,
     organizationId: membership.organizationId,
     accessLevel: user.memberType === "internal" ? deriveAccessLevel(membership.role) : "standard_user",
     permissionRole: (membership.role as "owner" | "admin" | "member") ?? "member",

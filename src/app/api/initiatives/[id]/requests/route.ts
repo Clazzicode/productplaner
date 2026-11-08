@@ -1,5 +1,5 @@
+import { withAuthenticatedApi } from "@/lib/auth/entryPoints";
 import { z } from "zod";
-import { withApi } from "@/lib/observability";
 import { requireCurrentUserApi } from "@/lib/auth/session";
 import { requireInitiativeApiAccess } from "@/lib/access/guards";
 import { db, establishAuthContext } from "@/lib/db";
@@ -29,5 +29,5 @@ async function handler(request: Request, { params }: { params: Promise<{ id: str
   const row = value.action === "save" ? await saveRequest(id, value.data, value.existing, { actorUserId: auth.user.id, changeReason: value.changeReason }) : await promoteRequest(id, value.id, value.revision, auth.user.id);
   return Response.json({ request: row });
 }
-export const GET = withApi(handler);
-export const POST = withApi(handler);
+export const GET = withAuthenticatedApi(handler);
+export const POST = withAuthenticatedApi(handler);

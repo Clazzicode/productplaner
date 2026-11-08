@@ -1,4 +1,4 @@
-import { withApi } from "@/lib/observability";
+import { withAuthenticatedApi } from "@/lib/auth/entryPoints";
 import { validateApplyTargets } from "@/lib/ai/assist/apply/validateTargets";
 import { archiveWorkingVersion } from "@/lib/generation/versioning";
 import { auditInitiative } from "@/lib/audit";
@@ -122,4 +122,4 @@ async function POSTHandler(request: Request, { params }: { params: Promise<{ id:
   }
 }
 
-export const POST = withApi(POSTHandler);
+export const POST = withAuthenticatedApi(POSTHandler);

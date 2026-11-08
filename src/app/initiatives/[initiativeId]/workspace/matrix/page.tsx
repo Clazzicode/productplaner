@@ -1,3 +1,4 @@
+import { withAuthenticatedPage } from "@/lib/auth/entryPoints";
 import { notFound } from "next/navigation";
 import StakeholderMatrixPortal from "@/components/matrix/StakeholderMatrixPortal";
 import { requireCurrentUser } from "@/lib/auth/session";
@@ -6,7 +7,7 @@ import { loadStakeholderMatrix } from "@/lib/matrix/stakeholderMatrix";
 
 export const dynamic = "force-dynamic";
 
-export default async function StakeholderMatrixPage({ params }: { params: Promise<{ initiativeId: string }> }) {
+async function StakeholderMatrixPage({ params }: { params: Promise<{ initiativeId: string }> }) {
   const { initiativeId } = await params;
   const user = await requireCurrentUser();
   establishAuthContext(user.authUserId);
@@ -14,3 +15,5 @@ export default async function StakeholderMatrixPage({ params }: { params: Promis
   if (!data) notFound();
   return <StakeholderMatrixPortal data={data} />;
 }
+
+export default withAuthenticatedPage(StakeholderMatrixPage);

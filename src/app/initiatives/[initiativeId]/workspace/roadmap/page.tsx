@@ -1,3 +1,4 @@
+import { withAuthenticatedPage } from "@/lib/auth/entryPoints";
 import { formatCalendarDate } from "@/lib/calendarDate";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
@@ -33,7 +34,7 @@ const parse = (raw: string): Record<string, unknown> => {
   }
 };
 
-export default async function RoadmapPage({
+async function RoadmapPage({
   params,
 }: {
   params: Promise<{ initiativeId: string }>;
@@ -251,3 +252,5 @@ export default async function RoadmapPage({
     </RoadmapToolbar>
   );
 }
+
+export default withAuthenticatedPage(RoadmapPage);

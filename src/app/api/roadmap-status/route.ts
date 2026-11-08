@@ -1,4 +1,4 @@
-import { withApi } from "@/lib/observability";
+import { withAuthenticatedApi } from "@/lib/auth/entryPoints";
 import { requireInitiativeApiAccess } from "@/lib/access/guards";
 import { requireProjectApiAccess } from "@/lib/access/projectAccess";
 import { db } from "@/lib/db";
@@ -52,4 +52,4 @@ async function GETHandler(request: Request) {
   return NextResponse.json({ statuses: Object.fromEntries(statuses) });
 }
 
-export const GET = withApi(GETHandler);
+export const GET = withAuthenticatedApi(GETHandler);

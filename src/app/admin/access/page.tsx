@@ -1,3 +1,4 @@
+import { withAuthenticatedPage } from "@/lib/auth/entryPoints";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { ContainedLayout } from "@/components/layout/PageLayouts";
@@ -22,7 +23,7 @@ const STATUS_META: Record<string, { label: string; variant: BadgeVariant }> = {
  * land on /admin/access/[initiativeId], which is the one real management
  * screen regardless of how you arrived.
  */
-export default async function AdminAccessPage() {
+async function AdminAccessPage() {
   const user = await requireCurrentUser();
   establishAuthContext(user.authUserId);
   if (user.profiles.length === 0) redirect("/welcome");
@@ -69,3 +70,5 @@ export default async function AdminAccessPage() {
     </ContainedLayout>
   );
 }
+
+export default withAuthenticatedPage(AdminAccessPage);

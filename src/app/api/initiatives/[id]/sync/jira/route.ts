@@ -1,4 +1,4 @@
-import { withApi } from "@/lib/observability";
+import { withAuthenticatedApi } from "@/lib/auth/entryPoints";
 import { NextResponse } from "next/server";
 import { requireOrganizationRole } from "@/lib/access/organizationRole";
 import { requireInitiativeApiAccess } from "@/lib/access/guards";
@@ -36,4 +36,4 @@ async function POSTHandler(
   }
 }
 
-export const POST = withApi(POSTHandler);
+export const POST = withAuthenticatedApi(POSTHandler);

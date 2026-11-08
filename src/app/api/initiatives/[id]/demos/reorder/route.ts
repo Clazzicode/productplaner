@@ -1,4 +1,4 @@
-import { withApi } from "@/lib/observability";
+import { withAuthenticatedApi } from "@/lib/auth/entryPoints";
 import { requireCurrentUserApi } from "@/lib/auth/session";
 import { requireInitiativeApiAccess } from "@/lib/access/guards";
 import { requireOrganizationRole } from "@/lib/access/organizationRole";
@@ -22,4 +22,4 @@ async function handler(request: Request, { params }: { params: Promise<{ id: str
   catch (error) { if (error instanceof BusinessError) return jsonError(error.message, error.status); throw error; }
 }
 
-export const PATCH = withApi(handler);
+export const PATCH = withAuthenticatedApi(handler);

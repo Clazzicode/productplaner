@@ -1,3 +1,4 @@
+import { withAuthenticatedPage } from "@/lib/auth/entryPoints";
 import { redirect } from "next/navigation";
 import { ContainedLayout } from "@/components/layout/PageLayouts";
 import PageHeader from "@/components/ui/PageHeader";
@@ -13,7 +14,7 @@ export const dynamic = "force-dynamic";
  * entirely. See docs/V2-USERS-TEAMS.md "Security Limitation" for what this
  * check does and doesn't guarantee in a single-session prototype.
  */
-export default async function AdminUsersPage() {
+async function AdminUsersPage() {
   const user = await requireCurrentUser();
   establishAuthContext(user.authUserId);
   if (user.profiles.length === 0) redirect("/welcome");
@@ -53,3 +54,5 @@ export default async function AdminUsersPage() {
     </ContainedLayout>
   );
 }
+
+export default withAuthenticatedPage(AdminUsersPage);

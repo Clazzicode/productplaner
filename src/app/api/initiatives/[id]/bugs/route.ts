@@ -1,8 +1,8 @@
+import { withAuthenticatedApi } from "@/lib/auth/entryPoints";
 import { NextResponse } from "next/server";
 import { requireInitiativeApiAccess } from "@/lib/access/guards";
 import { requireCurrentUserApi } from "@/lib/auth/session";
 import { db, establishAuthContext } from "@/lib/db";
-import { withApi } from "@/lib/observability";
 
 async function GETHandler(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -26,4 +26,4 @@ async function GETHandler(_request: Request, { params }: { params: Promise<{ id:
   return NextResponse.json({ bugs });
 }
 
-export const GET = withApi(GETHandler);
+export const GET = withAuthenticatedApi(GETHandler);

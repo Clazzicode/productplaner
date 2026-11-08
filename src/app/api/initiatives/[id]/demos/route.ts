@@ -1,4 +1,4 @@
-import { withApi } from "@/lib/observability";
+import { withAuthenticatedApi } from "@/lib/auth/entryPoints";
 import { requireCurrentUserApi } from "@/lib/auth/session";
 import { requireInitiativeApiAccess } from "@/lib/access/guards";
 import { db, establishAuthContext } from "@/lib/db";
@@ -15,4 +15,4 @@ async function handler(request: Request, { params }: { params: Promise<{ id: str
   try { return Response.json({ demo: await createDemoItem(id, parsed.data, auth.user.id) }, { status: 201 }); }
   catch (error) { if (error instanceof BusinessError) return jsonError(error.message, error.status); throw error; }
 }
-export const GET = withApi(handler); export const POST = withApi(handler);
+export const GET = withAuthenticatedApi(handler); export const POST = withAuthenticatedApi(handler);

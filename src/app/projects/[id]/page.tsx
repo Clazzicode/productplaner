@@ -1,3 +1,4 @@
+import { withAuthenticatedPage } from "@/lib/auth/entryPoints";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireProjectPageAccess } from "@/lib/access/projectAccess";
@@ -28,7 +29,7 @@ const STATUS_META: Record<string, { label: string; variant: BadgeVariant }> = {
  * documents tracked at the Project level. Research/recent-activity remain
  * out of scope for this pass.
  */
-export default async function ProjectHomePage({ params }: { params: Promise<{ id: string }> }) {
+async function ProjectHomePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const user = await requireCurrentUser();
   establishAuthContext(user.authUserId);
@@ -158,3 +159,5 @@ function Stat(props: { label: string; value: string }) {
     </div>
   );
 }
+
+export default withAuthenticatedPage(ProjectHomePage);

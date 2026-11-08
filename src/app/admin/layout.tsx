@@ -1,3 +1,4 @@
+import { withAuthenticatedPage } from "@/lib/auth/entryPoints";
 import { redirect } from "next/navigation";
 import AdminShell from "@/components/shell/AdminShell";
 import { requireCurrentUser } from "@/lib/auth/session";
@@ -16,7 +17,7 @@ export const dynamic = "force-dynamic";
  * layout is a UI convenience, not the real authorization boundary — see
  * AdminShell's doc comment).
  */
-export default async function AdminLayout({ children }: { children: React.ReactNode }) {
+async function AdminLayout({ children }: { children: React.ReactNode }) {
   const user = await requireCurrentUser();
   if (user.profiles.length === 0) redirect("/welcome");
   if (user.accessLevel !== "org_admin" || user.status !== "active") redirect("/home");
@@ -27,3 +28,5 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     </AdminShell>
   );
 }
+
+export default withAuthenticatedPage(AdminLayout);

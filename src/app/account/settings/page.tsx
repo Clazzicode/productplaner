@@ -1,3 +1,4 @@
+import { withAuthenticatedPage } from "@/lib/auth/entryPoints";
 import { redirect } from "next/navigation";
 import { ContainedLayout } from "@/components/layout/PageLayouts";
 import PageHeader from "@/components/ui/PageHeader";
@@ -14,7 +15,7 @@ export const dynamic = "force-dynamic";
  * removed pending "a real personal setting"; experience level and working
  * role are exactly that.
  */
-export default async function AccountSettingsPage() {
+async function AccountSettingsPage() {
   const user = await requireCurrentUser();
   establishAuthContext(user.authUserId);
 
@@ -38,3 +39,5 @@ export default async function AccountSettingsPage() {
     </ContainedLayout>
   );
 }
+
+export default withAuthenticatedPage(AccountSettingsPage);

@@ -1,3 +1,4 @@
+import { withAuthenticatedPage } from "@/lib/auth/entryPoints";
 import { redirect } from "next/navigation";
 import { ContainedLayout } from "@/components/layout/PageLayouts";
 import { Badge } from "@/components/ui/Badge";
@@ -8,7 +9,7 @@ import { db, establishAuthContext } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
-export default async function ActivityPage() {
+async function ActivityPage() {
   const user = await requireCurrentUser();
   establishAuthContext(user.authUserId);
   if (user.profiles.length === 0) redirect("/welcome");
@@ -24,3 +25,5 @@ export default async function ActivityPage() {
     </Card>
   </ContainedLayout>;
 }
+
+export default withAuthenticatedPage(ActivityPage);

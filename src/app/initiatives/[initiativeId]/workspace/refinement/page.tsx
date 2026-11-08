@@ -1,3 +1,4 @@
+import { withAuthenticatedPage } from "@/lib/auth/entryPoints";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireCurrentUser } from "@/lib/auth/session";
@@ -12,7 +13,7 @@ import RefinementSessionBoard from "@/components/workspace/RefinementSessionBoar
 import DependencyBlockerBoard from "@/components/workspace/DependencyBlockerBoard";
 export const dynamic = "force-dynamic";
 
-export default async function RefinementPage({ params }: { params: Promise<{ initiativeId: string }> }) {
+async function RefinementPage({ params }: { params: Promise<{ initiativeId: string }> }) {
   const { initiativeId } = await params; const user = await requireCurrentUser(); establishAuthContext(user.authUserId);
   const ws = await loadWorkspace(initiativeId); if (!ws) notFound();
   const [stories, findings, memberships, bugs, sessions, dependencies, blockers, sprints, releases] = await Promise.all([
@@ -68,3 +69,5 @@ export default async function RefinementPage({ params }: { params: Promise<{ ini
     <section className="mt-8"><h3 className="font-semibold">AI refinement review</h3><p className="text-sm text-neutral-500">Run a review for a feature, then approve, edit, or dismiss the findings below.</p><div className="mt-3 flex flex-wrap gap-2">{features.map(feature => <StorySuggestionButton key={feature.id} initiativeId={initiativeId} featureId={feature.id} featureTitle={feature.title} />)}</div><div className="mt-5"><AiAssistPanel initiativeId={initiativeId} scope="features" /></div></section>
   </div>;
 }
+
+export default withAuthenticatedPage(RefinementPage);

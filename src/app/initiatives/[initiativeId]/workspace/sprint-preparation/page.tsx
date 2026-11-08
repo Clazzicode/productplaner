@@ -1,3 +1,4 @@
+import { withAuthenticatedPage } from "@/lib/auth/entryPoints";
 import { notFound } from "next/navigation";
 import SprintPreparationBoard from "@/components/workspace/SprintPreparationBoard";
 import { requireInitiativeView } from "@/lib/access/guards";
@@ -10,7 +11,7 @@ import { loadWorkspace } from "@/lib/workspace";
 
 export const dynamic = "force-dynamic";
 
-export default async function SprintPreparationPage({ params }: { params: Promise<{ initiativeId: string }> }) {
+async function SprintPreparationPage({ params }: { params: Promise<{ initiativeId: string }> }) {
   const { initiativeId } = await params; const user = await requireCurrentUser(); establishAuthContext(user.authUserId);
   const access = await requireInitiativeView(user, initiativeId);
   const canEdit = meetsMinimum(access.level, "edit");
@@ -29,3 +30,5 @@ export default async function SprintPreparationPage({ params }: { params: Promis
   }));
   return <div><h2 className="text-xl font-bold">Guided sprint planning</h2><p className="mt-1 text-sm text-neutral-500">Review readiness evidence, fill gaps, build an editable sprint draft, then explicitly commit it. Suggestions never commit work for you.</p><div className="mt-6"><SprintPreparationBoard initiativeId={initiativeId} items={evaluated} sprints={sprints.map((sprint) => ({ id: sprint.id, label: `Sprint ${sprint.sprintNumber}`, capacityPoints: sprint.capacityPoints, plan: sprint.sprintPlan ? { revision: sprint.sprintPlan.revision, status: sprint.sprintPlan.status, goal: sprint.sprintPlan.goal, items: sprint.sprintPlan.items.map((item) => ({ storyId: item.storyId, bugId: item.bugId, estimatePoints: item.estimatePoints })) } : null }))} canEdit={canEdit} canApprove={canEdit && (user.permissionRole === "owner" || user.permissionRole === "admin")} verbose={depthFromExperience(user.profiles[0]?.experienceLevel)} /></div></div>;
 }
+
+export default withAuthenticatedPage(SprintPreparationPage);

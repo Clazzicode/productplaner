@@ -1,3 +1,4 @@
+import { withAuthenticatedApi } from "@/lib/auth/entryPoints";
 import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { requireOrganizationRole } from "@/lib/access/organizationRole";
@@ -5,7 +6,7 @@ import { requireCurrentUserApi } from "@/lib/auth/session";
 import { getAtlassianAccessToken } from "@/lib/atlassian/credentials";
 import { AtlassianOAuthError, getAtlassianAccessibleResources } from "@/lib/atlassian/oauth";
 import { establishAuthContext, withTransaction } from "@/lib/db";
-import { currentRequestId, withApi } from "@/lib/observability";
+import { currentRequestId } from "@/lib/observability";
 
 export const runtime = "nodejs";
 
@@ -68,4 +69,4 @@ async function POSTHandler() {
   }
 }
 
-export const POST = withApi(POSTHandler);
+export const POST = withAuthenticatedApi(POSTHandler);

@@ -1,3 +1,4 @@
+import { withAuthenticatedApi } from "@/lib/auth/entryPoints";
 import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { requireOrganizationRole } from "@/lib/access/organizationRole";
@@ -5,7 +6,6 @@ import { jsonError } from "@/lib/api";
 import { requireCurrentUserApi } from "@/lib/auth/session";
 import { buildAtlassianAuthorizationUrl, newOAuthState, AtlassianOAuthError } from "@/lib/atlassian/oauth";
 import { db, establishAuthContext, withTransaction } from "@/lib/db";
-import { withApi } from "@/lib/observability";
 
 export const runtime = "nodejs";
 
@@ -52,4 +52,4 @@ async function POSTHandler(request: Request) {
   return NextResponse.json({ authorizationUrl });
 }
 
-export const POST = withApi(POSTHandler);
+export const POST = withAuthenticatedApi(POSTHandler);

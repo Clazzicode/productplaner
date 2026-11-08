@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const state = vi.hoisted(() => ({ auth: "auth-a" as string | null, status: "active", memberType: "internal", membershipStatus: "active", role: "member", level: "edit" }));
 vi.mock("@/lib/db", () => ({
   currentAuthUserId: () => state.auth,
+  currentAuthOrganizationId: () => "org-a",
   db: {
     user: { findUnique: async () => ({ id: "user-a", authUserId: "auth-a", status: state.status, memberType: state.memberType }) },
     initiative: { findUnique: async () => ({ organizationId: "org-a" }) },

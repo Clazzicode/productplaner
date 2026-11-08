@@ -1,4 +1,4 @@
-import { withApi } from "@/lib/observability";
+import { withAuthenticatedApi } from "@/lib/auth/entryPoints";
 import { jsonError, zodMessage } from "@/lib/api";
 import { requireCurrentUserApi } from "@/lib/auth/session";
 import { establishAuthContext } from "@/lib/db";
@@ -14,4 +14,4 @@ async function handler(request: Request, { params }: { params: Promise<{ connect
   try { return Response.json({ connection: await selectJiraSite(connectionId, parsed.data.cloudId, parsed.data.expectedRevision) }); }
   catch (error) { return error instanceof BusinessError ? jsonError(error.message, error.status) : jsonError(error instanceof Error ? error.message : "Could not select Jira site.", 400); }
 }
-export const PATCH = withApi(handler);
+export const PATCH = withAuthenticatedApi(handler);

@@ -1,10 +1,10 @@
+import { withAuthenticatedApi } from "@/lib/auth/entryPoints";
 import { NextResponse } from "next/server";
 import { requireInitiativeApiAccess } from "@/lib/access/guards";
 import { jsonError, zodMessage } from "@/lib/api";
 import { requireCurrentUserApi } from "@/lib/auth/session";
 import { BusinessError } from "@/lib/businessError";
 import { establishAuthContext } from "@/lib/db";
-import { withApi } from "@/lib/observability";
 import { createManualRefinementFinding } from "@/lib/refinement/service";
 import { refinementFindingCreateSchema } from "@/lib/validation/schemas";
 
@@ -32,4 +32,4 @@ async function POSTHandler(
   }
 }
 
-export const POST = withApi(POSTHandler);
+export const POST = withAuthenticatedApi(POSTHandler);

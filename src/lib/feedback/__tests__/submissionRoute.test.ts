@@ -4,7 +4,7 @@ vi.mock("@/lib/observability", () => ({ withApi: (fn: unknown) => fn }));
 vi.mock("@/lib/auth/session", () => ({ requireCurrentUserApi: async () => state.signedIn
   ? { ok: true, user: { id: "external-a", authUserId: "auth-a", organizationId: "org-a" } }
   : { ok: false, response: Response.json({ error: "Not signed in." }, { status: 401 }) } }));
-vi.mock("@/lib/db", () => ({ establishAuthContext: state.context }));
+vi.mock("@/lib/db", () => ({ establishAuthContext: state.context, withAuthenticatedDatabaseContext: async (_identity: unknown, fn: () => Promise<unknown>) => await fn() }));
 vi.mock("@/lib/access/actionGuard", async () => {
   const { BusinessError } = await import("@/lib/businessError");
   return { requireCollaborationAction: async () => { if (!state.allowed) throw new BusinessError("Not authorized.", 403); } };

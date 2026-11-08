@@ -1,5 +1,5 @@
+import { withAuthenticatedApi } from "@/lib/auth/entryPoints";
 import { NextResponse } from "next/server";
-import { withApi } from "@/lib/observability";
 import { requireCurrentUserApi } from "@/lib/auth/session";
 import { requireInitiativeApiAccess } from "@/lib/access/guards";
 import { establishAuthContext } from "@/lib/db";
@@ -12,4 +12,4 @@ async function POSTHandler(request: Request, { params }: { params: Promise<{ id:
   const parsed = acceptanceCriterionApproveSchema.safeParse(await request.json().catch(() => ({}))); if (!parsed.success) return jsonError(zodMessage(parsed.error), 422);
   return NextResponse.json({ criterion: await approveAcceptanceCriterion(id, criterionId, auth.user.id, parsed.data) });
 }
-export const POST = withApi(POSTHandler);
+export const POST = withAuthenticatedApi(POSTHandler);

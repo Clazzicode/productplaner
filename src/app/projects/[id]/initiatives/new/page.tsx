@@ -1,3 +1,4 @@
+import { withAuthenticatedPage } from "@/lib/auth/entryPoints";
 import { notFound } from "next/navigation";
 import { FocusedLayout } from "@/components/layout/PageLayouts";
 import ProductDirectionBootstrap from "@/components/questionnaire/ProductDirectionBootstrap";
@@ -18,7 +19,7 @@ export const dynamic = "force-dynamic";
  * pass) so every experience tier gets the "use existing project context"
  * option and the budget/rate/target-date inheritance it enables.
  */
-export default async function NewInitiativeInProjectPage({ params }: { params: Promise<{ id: string }> }) {
+async function NewInitiativeInProjectPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const user = await requireCurrentUser();
   establishAuthContext(user.authUserId);
@@ -63,3 +64,5 @@ export default async function NewInitiativeInProjectPage({ params }: { params: P
     </FocusedLayout>
   );
 }
+
+export default withAuthenticatedPage(NewInitiativeInProjectPage);

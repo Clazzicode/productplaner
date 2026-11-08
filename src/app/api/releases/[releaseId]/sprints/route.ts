@@ -1,5 +1,5 @@
+import { withAuthenticatedApi } from "@/lib/auth/entryPoints";
 import { createManualSprint } from "@/lib/generation/manualScheduling";
-import { withApi } from "@/lib/observability";
 import { NextResponse } from "next/server";
 import { requireInitiativeApiAccess } from "@/lib/access/guards";
 import { jsonError, zodMessage } from "@/lib/api";
@@ -47,4 +47,4 @@ async function POSTHandler(
   return NextResponse.json({ ok: true, ...result });
 }
 
-export const POST = withApi(POSTHandler);
+export const POST = withAuthenticatedApi(POSTHandler);

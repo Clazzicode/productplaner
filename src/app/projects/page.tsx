@@ -1,3 +1,4 @@
+import { withAuthenticatedPage } from "@/lib/auth/entryPoints";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import CoachMark from "@/components/coachmarks/CoachMark";
@@ -17,7 +18,7 @@ export const dynamic = "force-dynamic";
  * lifecycle-aware /home dashboard, unchanged), or create a new Project.
  * Reuses /initiatives's card-list pattern rather than inventing a new one.
  */
-export default async function ProjectsPage() {
+async function ProjectsPage() {
   const user = await requireCurrentUser();
   establishAuthContext(user.authUserId);
   if (user.profiles.length === 0) redirect("/welcome");
@@ -111,3 +112,5 @@ export default async function ProjectsPage() {
     </ContainedLayout>
   );
 }
+
+export default withAuthenticatedPage(ProjectsPage);

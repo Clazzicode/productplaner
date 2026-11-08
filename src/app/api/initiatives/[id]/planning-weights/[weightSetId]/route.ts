@@ -1,4 +1,4 @@
-import { withApi } from "@/lib/observability";
+import { withAuthenticatedApi } from "@/lib/auth/entryPoints";
 import { NextResponse } from "next/server";
 import { getResolvedAccess, type ActorRow } from "@/lib/access/initiativeAccess";
 import { meetsMinimum } from "@/lib/access/resolution";
@@ -98,5 +98,5 @@ async function DELETEHandler(
   return NextResponse.json({ weights });
 }
 
-export const PATCH = withApi(PATCHHandler);
-export const DELETE = withApi(DELETEHandler);
+export const PATCH = withAuthenticatedApi(PATCHHandler);
+export const DELETE = withAuthenticatedApi(DELETEHandler);

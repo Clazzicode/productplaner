@@ -1,3 +1,4 @@
+import { withAuthenticatedPage } from "@/lib/auth/entryPoints";
 import { notFound, redirect } from "next/navigation";
 import GenerationReviewSummary, { type AssumptionRow } from "@/components/review/GenerationReviewSummary";
 import { requireInitiativeView } from "@/lib/access/guards";
@@ -11,7 +12,7 @@ import { resolveInitiativeEconomics } from "@/lib/projectContext";
 
 export const dynamic = "force-dynamic";
 
-export default async function GenerationReviewPage({
+async function GenerationReviewPage({
   params,
 }: {
   params: Promise<{ initiativeId: string }>;
@@ -115,3 +116,5 @@ export default async function GenerationReviewPage({
     </main>
   );
 }
+
+export default withAuthenticatedPage(GenerationReviewPage);

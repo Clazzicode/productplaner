@@ -1,3 +1,4 @@
+import { withAuthenticatedApi } from "@/lib/auth/entryPoints";
 import { NextResponse } from "next/server";
 import { requireInitiativeApiAccess } from "@/lib/access/guards";
 import { jsonError, zodMessage } from "@/lib/api";
@@ -6,7 +7,6 @@ import { BusinessError } from "@/lib/businessError";
 import { db, establishAuthContext } from "@/lib/db";
 import { dependencyCreateSchema } from "@/lib/dependencies/model";
 import { createWorkDependency } from "@/lib/dependencies/service";
-import { withApi } from "@/lib/observability";
 
 async function GETHandler(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params; const auth = await requireCurrentUserApi(); if (!auth.ok) return auth.response;
@@ -23,5 +23,5 @@ async function POSTHandler(request: Request, { params }: { params: Promise<{ id:
   catch (error) { if (error instanceof BusinessError) return jsonError(error.message, error.status); throw error; }
 }
 
-export const GET = withApi(GETHandler);
-export const POST = withApi(POSTHandler);
+export const GET = withAuthenticatedApi(GETHandler);
+export const POST = withAuthenticatedApi(POSTHandler);

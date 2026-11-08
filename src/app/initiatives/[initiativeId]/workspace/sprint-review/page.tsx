@@ -1,3 +1,4 @@
+import { withAuthenticatedPage } from "@/lib/auth/entryPoints";
 import { notFound } from "next/navigation";
 import SprintReviewBoard from "@/components/workspace/SprintReviewBoard";
 import { requireInitiativeView } from "@/lib/access/guards";
@@ -8,7 +9,7 @@ import { loadWorkspace } from "@/lib/workspace";
 
 export const dynamic = "force-dynamic";
 
-export default async function SprintReviewPage({ params }: { params: Promise<{ initiativeId: string }> }) {
+async function SprintReviewPage({ params }: { params: Promise<{ initiativeId: string }> }) {
   const { initiativeId } = await params;
   const user = await requireCurrentUser(); establishAuthContext(user.authUserId);
   const access = await requireInitiativeView(user, initiativeId);
@@ -25,3 +26,5 @@ export default async function SprintReviewPage({ params }: { params: Promise<{ i
   const canFinalize = canEdit && (user.permissionRole === "owner" || user.permissionRole === "admin");
   return <div><h2 className="text-xl font-bold">Sprint review</h2><p className="mt-1 text-sm text-neutral-500">Build a presentation-ready review from committed sprint work and demo evidence, then preserve the approved record as an immutable snapshot.</p><div className="mt-6"><SprintReviewBoard initiativeId={initiativeId} sprints={plans.map(plan => ({ id: plan.sprint.id, label: `Sprint ${plan.sprint.sprintNumber}`, startDate: plan.sprint.startDate.toISOString(), endDate: plan.sprint.endDate.toISOString() }))} stakeholders={stakeholders} documents={documents} initialReviews={serializable} canEdit={canEdit} canFinalize={canFinalize} /></div></div>;
 }
+
+export default withAuthenticatedPage(SprintReviewPage);

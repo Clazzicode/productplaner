@@ -1,3 +1,4 @@
+import { withAuthenticatedPage } from "@/lib/auth/entryPoints";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import AcceptanceCriterionEditor from "@/components/workspace/AcceptanceCriterionEditor";
@@ -17,7 +18,7 @@ import { loadCostContext, loadWorkspace } from "@/lib/workspace";
 
 export const dynamic = "force-dynamic";
 
-export default async function StoryPage({ params }: {
+async function StoryPage({ params }: {
   params: Promise<{ initiativeId: string; storyId: string }>;
 }) {
   const { initiativeId, storyId } = await params;
@@ -196,3 +197,5 @@ export default async function StoryPage({ params }: {
     </div>
   );
 }
+
+export default withAuthenticatedPage(StoryPage);

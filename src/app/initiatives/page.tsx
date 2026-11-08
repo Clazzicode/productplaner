@@ -1,3 +1,4 @@
+import { withAuthenticatedPage } from "@/lib/auth/entryPoints";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import CoachMark from "@/components/coachmarks/CoachMark";
@@ -29,7 +30,7 @@ const STATUS_META: Record<string, { label: string; variant: BadgeVariant }> = {
   generated: { label: "Prototype live", variant: "emerald" },
 };
 
-export default async function InitiativesPage() {
+async function InitiativesPage() {
   const user = await requireCurrentUser();
   establishAuthContext(user.authUserId);
   if (user.profiles.length === 0) redirect("/welcome");
@@ -142,3 +143,5 @@ export default async function InitiativesPage() {
     </ContainedLayout>
   );
 }
+
+export default withAuthenticatedPage(InitiativesPage);

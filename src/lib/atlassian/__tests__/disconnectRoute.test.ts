@@ -13,6 +13,7 @@ vi.mock("@/lib/auth/session", () => ({
 }));
 vi.mock("@/lib/access/organizationRole", () => ({ requireOrganizationRole: () => ({ ok: true }) }));
 vi.mock("@/lib/db", () => ({
+  withAuthenticatedDatabaseContext: async (_identity: unknown, fn: () => Promise<unknown>) => await fn(),
   establishAuthContext: vi.fn(),
   withTransaction: async (fn: (tx: unknown) => Promise<unknown>) => fn({
     jiraConnection: { updateMany: mocks.revoke, findMany: mocks.findRevoked },

@@ -1,4 +1,4 @@
-import { withApi } from "@/lib/observability";
+import { withAuthenticatedApi } from "@/lib/auth/entryPoints";
 import { jsonError, zodMessage } from "@/lib/api";
 import { requireCurrentUserApi } from "@/lib/auth/session";
 import { establishAuthContext } from "@/lib/db";
@@ -52,5 +52,5 @@ async function patchHandler(request: Request, { params }: RouteContext) {
   }
 }
 
-export const GET = withApi(getHandler);
-export const PATCH = withApi(patchHandler);
+export const GET = withAuthenticatedApi(getHandler);
+export const PATCH = withAuthenticatedApi(patchHandler);

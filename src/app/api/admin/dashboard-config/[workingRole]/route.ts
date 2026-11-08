@@ -1,4 +1,4 @@
-import { withApi } from "@/lib/observability";
+import { withAuthenticatedApi } from "@/lib/auth/entryPoints";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { jsonError, zodMessage } from "@/lib/api";
@@ -80,5 +80,5 @@ async function DELETEHandler(_request: Request, { params }: { params: Promise<{ 
   return NextResponse.json({ widgets: view });
 }
 
-export const POST = withApi(POSTHandler);
-export const DELETE = withApi(DELETEHandler);
+export const POST = withAuthenticatedApi(POSTHandler);
+export const DELETE = withAuthenticatedApi(DELETEHandler);

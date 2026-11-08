@@ -1,3 +1,4 @@
+import { withAuthenticatedPage } from "@/lib/auth/entryPoints";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Badge, riskBadgeVariant } from "@/components/ui/Badge";
@@ -15,7 +16,7 @@ import { loadCostContext, loadWorkspace } from "@/lib/workspace";
 
 export const dynamic = "force-dynamic";
 
-export default async function FeaturesPage({
+async function FeaturesPage({
   params,
 }: {
   params: Promise<{ initiativeId: string }>;
@@ -140,3 +141,5 @@ export default async function FeaturesPage({
     </div>
   );
 }
+
+export default withAuthenticatedPage(FeaturesPage);

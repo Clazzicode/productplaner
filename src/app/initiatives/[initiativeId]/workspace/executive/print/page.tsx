@@ -1,3 +1,4 @@
+import { withAuthenticatedPage } from "@/lib/auth/entryPoints";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import AutoPrint from "@/components/executive/AutoPrint";
@@ -8,7 +9,7 @@ import { loadWorkspace } from "@/lib/workspace";
 
 export const dynamic = "force-dynamic";
 
-export default async function ExecutivePrintPage({
+async function ExecutivePrintPage({
   params,
 }: {
   params: Promise<{ initiativeId: string }>;
@@ -37,3 +38,5 @@ export default async function ExecutivePrintPage({
     </div>
   );
 }
+
+export default withAuthenticatedPage(ExecutivePrintPage);

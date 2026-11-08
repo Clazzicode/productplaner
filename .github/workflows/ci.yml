@@ -24,6 +24,7 @@ jobs:
       - run: npm ci
       - run: npm run schema:validate
       - run: npm run typecheck
+      - run: npx tsx scripts/check-auth-entrypoints.ts
       - run: npm run lint -- --max-warnings=0
       - run: npm test
       - run: npm run build
