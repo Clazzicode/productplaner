@@ -33,7 +33,7 @@ async function DELETEHandler() {
       select: { id: true },
     });
     for (const connection of revokedConnections) {
-      await tx.$queryRaw`SELECT app_private.purge_jira_source_data(${connection.id})`;
+      await tx.$executeRaw`SELECT app_private.purge_jira_source_data(${connection.id})`;
     }
     const removed = await tx.$executeRaw`
       DELETE FROM app_private."AtlassianOAuthConnection"

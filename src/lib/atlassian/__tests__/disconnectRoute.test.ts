@@ -16,8 +16,9 @@ vi.mock("@/lib/db", () => ({
   establishAuthContext: vi.fn(),
   withTransaction: async (fn: (tx: unknown) => Promise<unknown>) => fn({
     jiraConnection: { updateMany: mocks.revoke, findMany: mocks.findRevoked },
-    $queryRaw: mocks.purge,
-    $executeRaw: mocks.deleteGrant,
+    $executeRaw: vi.fn().mockImplementation((parts: TemplateStringsArray) =>
+      parts[0].includes("purge_jira_source_data") ? mocks.purge() : mocks.deleteGrant(),
+    ),
     auditEvent: { create: mocks.audit },
   }),
 }));
