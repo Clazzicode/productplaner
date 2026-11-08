@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import localFont from "next/font/local";
 import AppShell from "@/components/shell/AppShell";
+import PageNavigation from "@/components/shell/PageNavigation";
 import { CoachMarkProvider } from "@/components/coachmarks/CoachMarkProvider";
 import { listAuthorizedInitiativeIds } from "@/lib/access/initiativeAccess";
 import { getCurrentUser } from "@/lib/auth/session";
@@ -88,6 +89,7 @@ export default async function RootLayout({
           autoActive={autoActive}
           generatedInitiativeId={generatedInitiativeId}
         >
+          <PageNavigation signedIn={user != null} hasProfile={(user?.profiles.length ?? 0) > 0} initiatives={initiatives} />
           <AppShell
             hasProfile={(user?.profiles.length ?? 0) > 0}
             userName={user?.name ?? ""}

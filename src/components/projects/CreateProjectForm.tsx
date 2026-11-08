@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { useUnsavedChanges } from "@/components/shell/unsavedChanges";
 import { apiFetch } from "@/lib/clientApi";
 import { ButtonLoader, GenerationProgress } from "@/components/ui/loading";
 
@@ -35,6 +36,7 @@ export default function CreateProjectForm() {
   const [busy, setBusy] = useState(false);
   const [step, setStep] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  useUnsavedChanges(step !== 1 && [name, description, goal, budget, averageHourlyRate, targetLaunchDate, planningApproach].some(Boolean));
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();

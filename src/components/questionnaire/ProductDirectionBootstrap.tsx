@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { useUnsavedChanges } from "@/components/shell/unsavedChanges";
 import { apiFetch } from "@/lib/clientApi";
 import { LEGACY_QUALIFYING_PROFILE_DEFAULTS } from "@/lib/questionnaire/legacyQualifyingDefaults";
 import { depthFromExperience, isSimplifiedIntakeExperience } from "@/lib/questionnaire/roleGuidance";
@@ -60,6 +61,7 @@ export default function ProductDirectionBootstrap(props: {
     problemStatement: "",
     targetCustomer: "",
   });
+  useUnsavedChanges(Object.values(values).some(Boolean));
   // Guided-activation restructure (reference doc §6 "Starting point"):
   // "Start fresh" is today's existing behavior unchanged. "Import existing
   // work" skips the core-idea fields (an imported document fills them) and

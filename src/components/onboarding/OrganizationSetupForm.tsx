@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useUnsavedChanges } from "@/components/shell/unsavedChanges";
 import { useRouter } from "next/navigation";
 import { writeOnboardingState } from "@/lib/onboarding/tempStateClient";
 import { useOnboardingStateSnapshot } from "@/lib/onboarding/useOnboardingStateSnapshot";
@@ -20,6 +21,7 @@ export default function OrganizationSetupForm() {
   const [companySizeOverride, setCompanySizeOverride] = useState<string | null>(null);
   const [industryOverride, setIndustryOverride] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  useUnsavedChanges(nameOverride !== null || companySizeOverride !== null || industryOverride !== null);
 
   const workspaceType = workspaceTypeOverride ?? snapshot.workspaceType ?? null;
   const name = nameOverride ?? snapshot.organizationName ?? "";
