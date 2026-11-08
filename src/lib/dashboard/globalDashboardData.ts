@@ -137,7 +137,7 @@ export async function loadGlobalDashboardData(
     },
   });
 
-  const primaryInitiative = initiatives.find((i) => i.status === "generated") ?? initiatives[0] ?? null;
+  const primaryInitiative = initiatives.find((i) => i.prototype) ?? initiatives[0] ?? null;
 
   const initiativeOverviews: InitiativeOverview[] = initiatives.map((i) => {
     const resolution = resolveLifecycleState({
@@ -330,7 +330,7 @@ export async function loadGlobalDashboardData(
   }
 
   // ---------- cross-initiative upcoming timeline ----------
-  const generatedInitiatives = initiatives.filter((i) => i.status === "generated" && i.prototype);
+  const generatedInitiatives = initiatives.filter((i) => i.prototype);
   const prototypeIds = generatedInitiatives.map((i) => i.prototype!.id);
   const prototypeToInitiative = new Map(generatedInitiatives.map((i) => [i.prototype!.id, i]));
   const multiInitiative = generatedInitiatives.length > 1;

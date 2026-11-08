@@ -6,7 +6,6 @@ import { meetsMinimum } from "@/lib/access/resolution";
 import { requireCurrentUser } from "@/lib/auth/session";
 import { db, establishAuthContext } from "@/lib/db";
 import { evaluateSprintReadiness } from "@/lib/sprintPreparation/service";
-import { depthFromExperience } from "@/lib/questionnaire/roleGuidance";
 import { loadWorkspace } from "@/lib/workspace";
 
 export const dynamic = "force-dynamic";
@@ -28,7 +27,7 @@ async function SprintPreparationPage({ params }: { params: Promise<{ initiativeI
     const latest = assessments.find((assessment) => (item.type === "story" ? assessment.storyId === item.id : assessment.bugId === item.id) && assessment.inputFingerprint === evaluation.inputFingerprint);
     return { ...item, ...evaluation, latestDecision: latest?.decision ?? null, latestReason: latest?.reason ?? null };
   }));
-  return <div><h2 className="text-xl font-bold">Guided sprint planning</h2><p className="mt-1 text-sm text-neutral-500">Review readiness evidence, fill gaps, build an editable sprint draft, then explicitly commit it. Suggestions never commit work for you.</p><div className="mt-6"><SprintPreparationBoard initiativeId={initiativeId} items={evaluated} sprints={sprints.map((sprint) => ({ id: sprint.id, label: `Sprint ${sprint.sprintNumber}`, capacityPoints: sprint.capacityPoints, plan: sprint.sprintPlan ? { revision: sprint.sprintPlan.revision, status: sprint.sprintPlan.status, goal: sprint.sprintPlan.goal, items: sprint.sprintPlan.items.map((item) => ({ storyId: item.storyId, bugId: item.bugId, estimatePoints: item.estimatePoints })) } : null }))} canEdit={canEdit} canApprove={canEdit && (user.permissionRole === "owner" || user.permissionRole === "admin")} verbose={depthFromExperience(user.profiles[0]?.experienceLevel)} /></div></div>;
+  return <div><h2 className="text-xl font-bold">Guided sprint planning</h2><p className="mt-1 text-sm text-neutral-500">Review readiness evidence, fill gaps, build an editable sprint draft, then explicitly commit it. Suggestions never commit work for you.</p><div className="mt-6"><SprintPreparationBoard initiativeId={initiativeId} items={evaluated} sprints={sprints.map((sprint) => ({ id: sprint.id, label: `Sprint ${sprint.sprintNumber}`, capacityPoints: sprint.capacityPoints, plan: sprint.sprintPlan ? { revision: sprint.sprintPlan.revision, status: sprint.sprintPlan.status, goal: sprint.sprintPlan.goal, items: sprint.sprintPlan.items.map((item) => ({ storyId: item.storyId, bugId: item.bugId, estimatePoints: item.estimatePoints })) } : null }))} canEdit={canEdit} canApprove={canEdit && (user.permissionRole === "owner" || user.permissionRole === "admin")} verbose={true} /></div></div>;
 }
 
 export default withAuthenticatedPage(SprintPreparationPage);

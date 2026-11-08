@@ -7,6 +7,7 @@ import { hasCollaborationAction } from "@/lib/access/actionGuard";
 import { loadPlanningEvidence, planningLabel, commitmentLabel } from "@/lib/planning/readiness";
 import StartDraftWorkspace from "@/components/workspace/StartDraftWorkspace";
 import { ContainedLayout } from "@/components/layout/PageLayouts";
+import PoWorkflowGuide from "@/components/planning/PoWorkflowGuide";
 
 async function OverviewPage({ params }: { params: Promise<{ initiativeId: string }> }) {
   const { initiativeId } = await params;
@@ -16,7 +17,7 @@ async function OverviewPage({ params }: { params: Promise<{ initiativeId: string
     db.initiative.findUniqueOrThrow({ where: { id: initiativeId }, include: { prototype: { select: { id: true } } } }),
     loadPlanningEvidence(initiativeId), hasCollaborationAction(initiativeId, user.id, "edit"),
   ]);
-  return <ContainedLayout><h1 className="text-2xl font-semibold">{initiative.name}</h1>
+  return <ContainedLayout><PoWorkflowGuide initiativeId={initiativeId} initiativeName={initiative.name} />
     <p className="mt-3">Planning evidence: {planningLabel(evidence)}</p><p>Delivery commitments: {commitmentLabel(evidence)}</p>
     <p className="mt-2">{evidence.missingContext.length ? `Context to develop: ${evidence.missingContext.join(", ")}.` : "Problem, customer and outcome are recorded."}</p>
     <p>Generation readiness: {evidence.generationReady ? "ready for an optional proposal" : "more evidence needed"}. You can plan manually without generation or AI.</p>

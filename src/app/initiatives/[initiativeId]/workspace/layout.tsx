@@ -15,7 +15,6 @@ import { db, establishAuthContext } from "@/lib/db";
 import { hasRoadmapDrifted } from "@/lib/generation/fingerprint";
 import { profileFor, resolveMethodology } from "@/lib/generation/methodology";
 import { loadWorkspace } from "@/lib/workspace";
-import { WORKING_ROLE_ORDER } from "@/lib/onboarding/roleOptions";
 
 export const dynamic = "force-dynamic";
 
@@ -88,7 +87,7 @@ async function WorkspaceLayout({
             }
             primaryAction={
               <div className="flex flex-wrap items-center gap-2">
-                {WORKING_ROLE_ORDER.includes("product_management") && user.workingRole === "product_management" && <RoadmapVersionPanel initiativeId={initiativeId} />}
+                <RoadmapVersionPanel initiativeId={initiativeId} />
                 <JiraSyncPanel
                   initiativeId={initiativeId}
                   status={ws.jira?.status ?? "not_connected"}

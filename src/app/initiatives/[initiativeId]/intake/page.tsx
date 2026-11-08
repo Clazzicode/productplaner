@@ -8,7 +8,6 @@ import WorkspaceBreadcrumb from "@/components/workspace/WorkspaceBreadcrumb";
 import { requireInitiativeView } from "@/lib/access/guards";
 import { requireCurrentUser } from "@/lib/auth/session";
 import { db, establishAuthContext } from "@/lib/db";
-import { depthFromExperience } from "@/lib/questionnaire/roleGuidance";
 import { readOnboardingStateServer } from "@/lib/onboarding/tempStateServer";
 import { resolveInitiativeEconomics } from "@/lib/projectContext";
 import { resolveWorkingRole } from "@/lib/onboarding/resolveWorkingRole";
@@ -52,7 +51,7 @@ async function IntakePage({
   // Guidance depth now comes from experienceLevel alone — QualifyingProfile.role no
   // longer participates (it's a legacy placeholder value, see
   // src/lib/questionnaire/legacyQualifyingDefaults.ts and docs/V2-QUESTIONNAIRE-MAP.md §6).
-  const verbose = depthFromExperience(initiative.qualifyingProfile?.experienceLevel);
+  const verbose = true;
 
   return (
     <FocusedLayout>
@@ -85,7 +84,7 @@ async function IntakePage({
       <PlanningQuestionnaire
         initiativeId={initiative.id}
         projectId={initiative.projectId}
-        experienceLevel={initiative.qualifyingProfile?.experienceLevel ?? null}
+        experienceLevel={null}
         workingRole={resolveWorkingRole(user.workingRole, onboarding.workingRole)}
         verbose={verbose}
         alreadyGenerated={alreadyGenerated}

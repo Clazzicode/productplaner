@@ -1,7 +1,7 @@
 import { withAuthenticatedPage } from "@/lib/auth/entryPoints";
 import { formatCalendarDate } from "@/lib/calendarDate";
 import Link from "next/link";
-import { notFound, redirect } from "next/navigation";
+import { notFound } from "next/navigation";
 import EmptyState from "@/components/ui/EmptyState";
 import EditableArtifact from "@/components/workspace/EditableArtifact";
 import RoadmapBoard, { type BoardPhase } from "@/components/workspace/RoadmapBoard";
@@ -22,7 +22,6 @@ import { profileFor } from "@/lib/generation/methodology";
 import { loadRoadmapTimelineData, serializeTimelineData } from "@/lib/roadmap/loadRoadmapTimelineData";
 import { traceEntriesFor } from "@/lib/trace";
 import { loadCostContext, loadWorkspace } from "@/lib/workspace";
-import { WORKING_ROLE_ORDER } from "@/lib/onboarding/roleOptions";
 
 export const dynamic = "force-dynamic";
 
@@ -43,11 +42,6 @@ async function RoadmapPage({
   const user = await requireCurrentUser();
   establishAuthContext(user.authUserId);
   const access = await requireInitiativeView(user, initiativeId);
-  // Strategic roadmap is retained for legacy Product Manager accounts and a
-  // future PM experience. The launched PO workflow leads to sprint planning.
-  if (!WORKING_ROLE_ORDER.includes("product_management") || user.workingRole !== "product_management") {
-    redirect(`/initiatives/${initiativeId}/workspace/sprint-preparation`);
-  }
   const ws = await loadWorkspace(initiativeId);
   if (!ws) notFound();
   const cost = await loadCostContext(initiativeId, ws.prototype.id);

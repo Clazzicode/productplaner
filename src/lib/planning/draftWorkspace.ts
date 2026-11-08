@@ -15,10 +15,21 @@ export async function ensureDraftWorkspace(tx: Prisma.TransactionClient, initiat
 }
 
 /** Add a manual story container for the canonical feature, never replace prose. */
-export async function syncDraftFeature(initiativeId: string, capability: { id: string; name: string }) {
+export async function syncDraftFeature(initiativeId: string, capability: { id: string; name: string; backlogLane?: string }) {
   const prototype = await db.prototype.findUnique({ where: { initiativeId }, select: { id: true, approvedAt: true } });
   if (!prototype?.id || prototype.approvedAt) return;
+  const existing = await db.artifactLayer.findFirst({ where: { prototypeId: prototype.id, type: "feature", sourceCapabilityId: capability.id, archivedAt: null } });
   const feature = await ensureFeatureProjection(initiativeId, capability.id);
+  if (!existing) {
+    const order = { now: 0, next: 1, later: 2, unscheduled: 3 }[capability.backlogLane ?? "unscheduled"] ?? 3;
+    let phase = await db.artifactLayer.findFirst({ where: { prototypeId: prototype.id, type: "roadmap_phase", order } });
+    if (!phase) {
+      const root = await db.artifactLayer.findFirst({ where: { prototypeId: prototype.id, type: "roadmap" } });
+      if (root) phase = await db.artifactLayer.create({ data: { prototypeId: prototype.id, parentId: root.id, type: "roadmap_phase", order,
+        title: ["Now", "Next", "Later", "Unscheduled"][order], sourceType: "manual", contentJson: JSON.stringify({ phaseNumber: order + 1 }) } });
+    }
+    if (phase) await db.artifactLayer.update({ where: { id: feature.id }, data: { parentId: phase.id } });
+  }
   if (!await db.artifactLayer.findFirst({ where: { parentId: feature.id, type: "epic", archivedAt: null } })) {
     await db.artifactLayer.create({ data: { prototypeId: prototype.id, parentId: feature.id, type: "epic", title: capability.name,
       body: "Add small, testable stories for this feature.", sourceCapabilityId: capability.id, sourceType: "manual" } });

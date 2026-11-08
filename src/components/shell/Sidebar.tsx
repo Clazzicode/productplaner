@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { NavigationItemProps } from "./NavigationItem";
 import SidebarSection from "./SidebarSection";
+export type SidebarGroup = { title: string; items: NavigationItemProps[]; collapsible?: boolean };
 
 /**
  * `title`/`titleHref`/`footer` default to the standard product shell's
@@ -8,7 +9,7 @@ import SidebarSection from "./SidebarSection";
  * "Back to Workspace" footer instead of duplicating this whole nav column.
  */
 export default function Sidebar(props: {
-  groups: { title: string; items: NavigationItemProps[] }[];
+  groups: SidebarGroup[];
   title?: string;
   titleHref?: string;
   footer?: React.ReactNode;
@@ -24,7 +25,7 @@ export default function Sidebar(props: {
         </span>
       </Link>
       {props.groups.map((group) => (
-        <SidebarSection key={group.title} title={group.title} items={group.items} />
+        <SidebarSection key={group.title} title={group.title} items={group.items} collapsible={group.collapsible} />
       ))}
       {props.footer && <div className="mt-auto">{props.footer}</div>}
     </nav>

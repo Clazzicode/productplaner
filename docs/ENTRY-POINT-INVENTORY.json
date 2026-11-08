@@ -1121,15 +1121,15 @@
   },
   {
     "path": "src/app/welcome/page.tsx",
-    "classification": "public-page",
-    "reason": "Historical qualifying form shell; no tenant data. Experience removal is milestone 7.",
-    "sourceFingerprint": "4c0f624af41319b4aa112203fbafbc45635824234049c6ff73c5374874f31a8a"
+    "classification": "public-redirect",
+    "reason": "Retired experience-evaluation address redirects to authenticated initiative planning; no data lookup or profile mutation.",
+    "sourceFingerprint": "52c05ef8ef336fc81dd75e0370dcbc44ae889b4db716c0f42d63ac501f3848db"
   },
   {
     "path": "src/app/workflow-preview/page.tsx",
     "classification": "public-demo",
-    "reason": "Static intake-preview interface; does not read planning database records.",
-    "sourceFingerprint": "7fddc2f9f4f6718d7a6ca0bb0fcfd7077356475372f4b5bdc56d4c06aa5e4fd0"
+    "reason": "Static workflow samples only; five-tool layout variant is development-only behind the existing PO_DEMO_ENABLED flag and supplies no authenticated data or bypass.",
+    "sourceFingerprint": "6c1ba734c25144e3052adcb8d158436d989a9b829e22718b3c1f1517f133a0f0"
   },
   {
     "path": "src/app/api/initiatives/[id]/regeneration-proposals/[proposalId]/route.ts",

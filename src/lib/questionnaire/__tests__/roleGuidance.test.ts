@@ -1,41 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { depthFromExperience, guidanceFor } from "@/lib/questionnaire/roleGuidance";
+import { depthFromExperience, guidanceFor, isSimplifiedIntakeExperience } from "../roleGuidance";
 
-describe("depthFromExperience", () => {
-  it("is verbose for first_time and some_experience", () => {
-    expect(depthFromExperience("first_time")).toBe(true);
-    expect(depthFromExperience("some_experience")).toBe(true);
+describe("one Product Owner workflow", () => {
+  it.each(["first_time", "some_experience", "experienced", "expert", "unknown", null, undefined])("keeps guidance and intake independent of historical experience %s", experience => {
+    expect(depthFromExperience(experience)).toBe(true);
+    expect(isSimplifiedIntakeExperience(experience)).toBe(false);
   });
-
-  it("is concise for experienced, expert, unknown, or missing", () => {
-    expect(depthFromExperience("experienced")).toBe(false);
-    expect(depthFromExperience("expert")).toBe(false);
-    expect(depthFromExperience(undefined)).toBe(false);
-    expect(depthFromExperience(null)).toBe(false);
-  });
-});
-
-describe("guidanceFor", () => {
-  const sections = [
-    "productDirection",
-    "success",
-    "capabilities",
-    "delivery",
-    "execution",
-    "review",
-  ] as const;
-  const roles = ["product_management", "project_manager", "product_owner"] as const;
-
-  it("returns a non-empty, role-specific string for every section/role pair", () => {
-    for (const section of sections) {
-      const perRole = roles.map((role) => guidanceFor(section, role));
-      for (const text of perRole) expect(text.length).toBeGreaterThan(0);
-      // Working Role must actually change emphasis — not collapse to identical copy.
-      expect(new Set(perRole).size).toBe(roles.length);
+  it.each(["productDirection", "success", "capabilities", "delivery", "execution", "review"] as const)("keeps %s framing consistent across historical roles", section => {
+    for (const role of ["product_owner", "product_management", "project_manager", "business_analyst", "founder_business_lead", "other", null] as const) {
+      expect(guidanceFor(section, role)).toBe(guidanceFor(section, "product_owner"));
     }
-  });
-
-  it("falls back to product_owner framing when role is null", () => {
-    expect(guidanceFor("capabilities", null)).toBe(guidanceFor("capabilities", "product_owner"));
   });
 });

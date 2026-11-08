@@ -9,15 +9,14 @@ import { historySnapshot, serverHistorySnapshot, subscribeHistory } from "./navi
 import { confirmPageNavigation, useNavigationGuard } from "./unsavedChanges";
 
 const sections = [["/home", "Home"], ["/projects", "Projects"], ["/initiatives", "Initiatives"], ["/teams", "Teams & Stakeholders"], ["/integrations", "Integrations"], ["/activity", "Activity"], ["/account/settings", "Account settings"]];
-const setup = [["/onboarding", "Workspace setup"], ["/welcome", "Experience"], ["/onboarding/role", "Working role"]];
 
-export default function PageNavigation({ initiatives, hasProfile, signedIn }: { initiatives: NavInitiative[]; hasProfile: boolean; signedIn: boolean }) {
+export default function PageNavigation({ initiatives, canManageWorkspace, signedIn }: { initiatives: NavInitiative[]; canManageWorkspace: boolean; signedIn: boolean }) {
   const path = usePathname() ?? "/home";
   const router = useRouter();
   const history = useSyncExternalStore(subscribeHistory, historySnapshot, serverHistorySnapshot);
   useNavigationGuard();
   const { parent, parentLabel, title } = pageNavigation(path, initiatives);
-  const options = hasProfile ? sections : setup;
+  const options = sections.filter(([href]) => href !== "/integrations" || canManageWorkspace);
   if (!signedIn || ["/login", "/reset-password"].includes(path) || path.endsWith("/executive/print")) return null;
   const control = "min-h-10 rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm font-medium text-text-primary hover:bg-neutral-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:cursor-not-allowed disabled:opacity-40";
   return (
@@ -32,7 +31,7 @@ export default function PageNavigation({ initiatives, hasProfile, signedIn }: { 
           <select aria-label="Switch section" value="" className={`${control} max-w-56`} onChange={event => { const target = event.target.value; if (target && confirmPageNavigation()) router.push(target); }}>
             <option value="" disabled>Choose section…</option>
             {options.map(([href, label]) => <option key={href} value={href}>{label}</option>)}
-            {hasProfile && path.startsWith("/admin") && <option value="/admin">Administration</option>}
+            {canManageWorkspace && path.startsWith("/admin") && <option value="/admin">Administration</option>}
           </select>
         </label>
       </div>

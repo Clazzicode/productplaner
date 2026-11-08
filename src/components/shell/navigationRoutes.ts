@@ -6,7 +6,7 @@ const labels: Record<string, string> = {
   organizations: "Workspace", settings: "Settings", activity: "Activity", risks: "Risks & Blockers",
   decisions: "Decisions", onboarding: "Workspace setup", welcome: "Experience",
   role: "Working role", "workflow-preview": "Workflow preview", intake: "Planning questions",
-  dashboard: "Initiative overview", backlog: "Feature backlog", requests: "Requests & Priorities",
+  dashboard: "Initiative dashboard", overview: "Five-tool guide", regeneration: "Review regeneration", backlog: "Feature backlog", requests: "Requests & Priorities",
   workspace: "Planning workspace", features: "Features", epics: "Epics", stories: "Story",
   roadmap: "Roadmap", documents: "Documents", refinement: "Refinement", capacity: "Capacity & Cost",
   matrix: "Matrix", executive: "Reports", sprints: "Sprints & Releases", demos: "Demos",

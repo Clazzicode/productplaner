@@ -20,7 +20,8 @@ import { confirmPageNavigation } from "./unsavedChanges";
  * This keeps a useful workspace width on tablets and narrow desktop windows.
  */
 export default function AppShell(props: {
-  hasProfile: boolean;
+  signedIn: boolean;
+  canManageWorkspace?: boolean;
   userName: string;
   accessLevel: string;
   initiatives: NavInitiative[];
@@ -44,10 +45,9 @@ export default function AppShell(props: {
   const routeInitiative = props.initiatives.find((i) => i.id === currentId);
   const currentInitiative =
     routeInitiative ??
-    props.initiatives.find((i) => i.status === "generated") ??
     props.initiatives[0];
 
-  const bare = isBareRoute(pathname, props.hasProfile, routeInitiative);
+  const bare = isBareRoute(pathname, props.signedIn, routeInitiative);
 
   if (bare) {
     return props.children;
@@ -59,7 +59,7 @@ export default function AppShell(props: {
     const target = props.initiatives.find((i) => i.id === id);
     if (!target || !confirmPageNavigation()) return;
     router.push(
-      target.status === "generated" ? `/initiatives/${id}/dashboard` : `/initiatives/${id}/intake`,
+      `/initiatives/${id}/overview`,
     );
   };
 
@@ -91,7 +91,7 @@ export default function AppShell(props: {
           </select>
         </label>
       )}
-      {currentInitiative && (
+      {currentInitiative && props.canManageWorkspace && (
         <Link
           href="/integrations"
           className="hidden h-[38px] items-center gap-2 rounded-lg border border-[#d4def1] bg-white px-3 text-sm font-semibold text-text-primary shadow-sm md:flex"
@@ -102,24 +102,25 @@ export default function AppShell(props: {
           ) : "Connect Jira"}
         </Link>
       )}
-      <Link
+      {props.canManageWorkspace && <Link
         href="/initiatives/new"
         className="hidden h-[38px] items-center rounded-lg bg-accent px-3 text-sm font-semibold text-white shadow-sm hover:bg-accent-hover 2xl:flex"
       >
         + New initiative
-      </Link>
+      </Link>}
     </div>
   );
 
   return (
     <div className="flex min-h-dvh w-full min-w-0 bg-surface">
       <div className="hidden xl:contents">
-        <LeftNav initiatives={props.initiatives} />
+        <LeftNav initiatives={props.initiatives} canManageWorkspace={props.canManageWorkspace} />
       </div>
       <MobileNavDrawer
         open={drawerOpen}
         onClose={() => setDrawerOpen(false)}
         initiatives={props.initiatives}
+        canManageWorkspace={props.canManageWorkspace}
         topContent={switcherAndNew}
         bottomContent={<AccountMenu userName={props.userName} accessLevel={props.accessLevel} dropUp />}
       />

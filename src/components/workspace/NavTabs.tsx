@@ -45,20 +45,13 @@ export default function NavTabs({
   const pathname = usePathname();
   const overrides = LABEL_OVERRIDES[methodology ?? ""] ?? {};
   const currentSlug = BASE_TABS.find((tab) => pathname?.includes(`/workspace/${tab.slug}`))?.slug;
-  const visibleTabs = currentSlug === "features" || currentSlug === "epics" || currentSlug === "refinement" || currentSlug === "sprint-preparation" || currentSlug === "documents"
-    ? BASE_TABS.filter((tab) => ["features", "epics", "refinement", "sprint-preparation", "documents"].includes(tab.slug))
-    : currentSlug === "roadmap"
-      ? BASE_TABS.filter((tab) => tab.slug === "roadmap")
-      : currentSlug === "sprints" || currentSlug === "demos" || currentSlug === "sprint-review" || currentSlug === "validation"
-        ? BASE_TABS.filter((tab) => ["sprints", "demos", "sprint-review", "validation"].includes(tab.slug))
-      : currentSlug === "matrix" || currentSlug === "executive"
-        ? BASE_TABS.filter((tab) => tab.slug === "matrix" || tab.slug === "executive")
-        : [];
+  const visibleTabs = BASE_TABS.filter(tab => ["features", "epics", "roadmap", "sprint-preparation"].includes(tab.slug)
+    || (tab.slug === "refinement" && ["epics", "refinement"].includes(currentSlug ?? "")));
   if (visibleTabs.length === 0) return null;
   return (
     <nav className="no-print flex gap-7 overflow-x-auto no-scrollbar border-b border-border-subtle px-1">
       {visibleTabs.map((tab) => {
-        const href = `/initiatives/${initiativeId}/workspace/${tab.slug}`;
+        const href = tab.slug === "features" ? `/initiatives/${initiativeId}/backlog` : `/initiatives/${initiativeId}/workspace/${tab.slug}`;
         const active = pathname?.startsWith(href);
         return (
           <Link
@@ -71,9 +64,9 @@ export default function NavTabs({
             }`}
           >
             {tab.slug === "features"
-              ? "Features"
+              ? "Features & Backlog"
               : tab.slug === "roadmap"
-                ? "Timeline"
+                ? "Roadmap"
                 : tab.slug === "sprints"
                   ? "Releases & Sprints"
                   : overrides[tab.slug] ?? tab.label}

@@ -57,21 +57,24 @@ async function RootLayout({
           id: true,
           name: true,
           status: true,
+          prototype: { select: { id: true } },
           project: { select: { id: true, name: true } },
           syncConnections: { where: { tool: "jira" }, select: { status: true }, take: 1 },
         },
       })
     : [];
+  const permissions = user && initiatives.length ? await db.$queryRaw<{ id: string; edit: boolean }[]>`
+    SELECT id,app_private.can_initiative_action(id,'edit') AS edit FROM public."Initiative"
+    WHERE id IN (SELECT jsonb_array_elements_text(${JSON.stringify(initiatives.map(row => row.id))}::jsonb))` : [];
+  const navigationInitiatives = initiatives.map(({ prototype, ...row }) => ({ ...row, hasWorkspace: Boolean(prototype), canEdit: permissions.find(permission => permission.id === row.id)?.edit ?? false }));
+  const canManageWorkspace = user?.memberType === "internal" && ["owner", "admin"].includes(user.permissionRole);
 
-  // Directive §4 "Experienced": coach marks show automatically once for this
-  // tier; everyone else only sees them via "Replay Product Tour".
-  const experienceLevel = user?.profiles[0]?.experienceLevel;
-  const autoActive = experienceLevel === "experienced" || experienceLevel === "expert";
+  // Tours are opt-in for every account. Historical experience has no effect.
   // Directive item 6 (guided tour): the three initiative-scoped coach marks
   // (roadmap/planning_workspace/sprints_releases) need one real initiative to
   // route to — reuse the initiative list already loaded above rather than a
   // second query.
-  const generatedInitiativeId = initiatives.find((i) => i.status === "generated")?.id ?? null;
+  const generatedInitiativeId = initiatives.find((i) => i.prototype)?.id ?? null;
   const testEnvironment = isTestEnvironment();
 
   return (
@@ -87,15 +90,15 @@ async function RootLayout({
         )}
         <CoachMarkProvider
           signedIn={user != null}
-          autoActive={autoActive}
           generatedInitiativeId={generatedInitiativeId}
         >
-          <PageNavigation signedIn={user != null} hasProfile={(user?.profiles.length ?? 0) > 0} initiatives={initiatives} />
+          <PageNavigation signedIn={user != null} canManageWorkspace={canManageWorkspace} initiatives={navigationInitiatives} />
           <AppShell
-            hasProfile={(user?.profiles.length ?? 0) > 0}
+            signedIn={user != null}
+            canManageWorkspace={canManageWorkspace}
             userName={user?.name ?? ""}
             accessLevel={user?.accessLevel ?? "standard_user"}
-            initiatives={initiatives}
+            initiatives={navigationInitiatives}
           >
             {children}
           </AppShell>

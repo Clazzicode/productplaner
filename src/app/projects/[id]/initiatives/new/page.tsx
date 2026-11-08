@@ -1,5 +1,5 @@
 import { withAuthenticatedPage } from "@/lib/auth/entryPoints";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { FocusedLayout } from "@/components/layout/PageLayouts";
 import GeneralIntakeForm from "@/components/questionnaire/GeneralIntakeForm";
 import Breadcrumb from "@/components/ui/Breadcrumb";
@@ -22,6 +22,7 @@ async function NewInitiativeInProjectPage({ params }: { params: Promise<{ id: st
   const user = await requireCurrentUser();
   establishAuthContext(user.authUserId);
   await requireProjectPageAccess(user, id);
+  if (user.memberType !== "internal" || !["owner", "admin"].includes(user.permissionRole)) redirect(`/projects/${id}`);
 
   const project = await db.project.findUnique({
     where: { id },

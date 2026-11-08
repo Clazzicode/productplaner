@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { isBareRoute } from "./bareMode";
 
 describe("isBareRoute", () => {
-  it("is always bare with no profile, regardless of path", () => {
+  it("is bare while signed out, regardless of historical profile", () => {
     expect(isBareRoute("/home", false, undefined)).toBe(true);
   });
 
@@ -31,9 +31,9 @@ describe("isBareRoute", () => {
     expect(isBareRoute("/initiatives/abc/workspace/roadmap", true, undefined)).toBe(false);
   });
 
-  it("is bare on the guided questionnaire before generation", () => {
-    expect(isBareRoute("/initiatives/abc/intake", true, { id: "abc", status: "intake_in_progress" })).toBe(true);
-    expect(isBareRoute("/initiatives/abc/intake", true, { id: "abc", status: "draft" })).toBe(true);
+  it("keeps navigation during incomplete intake", () => {
+    expect(isBareRoute("/initiatives/abc/intake", true, { id: "abc", status: "intake_in_progress" })).toBe(false);
+    expect(isBareRoute("/initiatives/abc/intake", true, { id: "abc", status: "draft" })).toBe(false);
   });
 
   it("is shelled on the guided questionnaire after generation (living-plan editing)", () => {

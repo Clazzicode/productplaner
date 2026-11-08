@@ -1,12 +1,7 @@
 import type { WorkingRole } from "@/lib/onboarding/types";
 
-/**
- * Two independent guidance dimensions (docs/V2-QUESTIONNAIRE-MAP.md §6):
- * - Working Role (from V2 onboarding) changes EMPHASIS — which section-level framing
- *   resonates — never which fields are required or how generation behaves.
- * - Experience Level (from Section 1, replacing the old QualifyingProfile.role-based
- *   verbosity flag) changes DEPTH — how much explanatory text each field shows.
- */
+/** Product Owner framing and explanations are consistent for every account.
+ * Historical role/experience arguments remain compatible and inert. */
 
 export type QuestionnaireSection =
   | "productDirection"
@@ -78,19 +73,18 @@ const EMPHASIS: Record<QuestionnaireSection, Record<WorkingRole, string>> = {
 };
 
 export function guidanceFor(section: QuestionnaireSection, role: WorkingRole | null): string {
-  return EMPHASIS[section][role ?? "product_owner"];
+  void role; // Historical role values do not select another working product.
+  return EMPHASIS[section].product_owner;
 }
 
-/** first_time/some_experience → longer, example-bearing help text (mirrors the depth the
- * old role+experienceLevel `verbose` flag produced — see docs/V2-QUESTIONNAIRE-MAP.md §6). */
+/** Compatibility helper: explanations are available to every account. */
 export function depthFromExperience(experienceLevel: string | null | undefined): boolean {
-  return experienceLevel === "first_time" || experienceLevel === "some_experience";
+  void experienceLevel;
+  return true;
 }
 
-/** Same first_time/some_experience split as depthFromExperience, exposed under a name
- * that reflects what it now also decides: whether the simplified 5-question intake
- * (SimplifiedIntakeWizard) renders instead of the full PlanningQuestionnaire. "expert"
- * (a retired UI choice, still valid on old rows) is treated identically to "experienced". */
+/** Retired branching signal; every user follows general intake. */
 export function isSimplifiedIntakeExperience(experienceLevel: string | null | undefined): boolean {
-  return depthFromExperience(experienceLevel);
+  void experienceLevel;
+  return false;
 }
