@@ -61,7 +61,11 @@ describe("Atlassian OAuth 3LO security boundary", () => {
     expect(envelope).not.toContain(tokens.refreshToken);
     expect(decryptAtlassianTokens("workspace-a", envelope)).toEqual(tokens);
     expect(() => decryptAtlassianTokens("workspace-b", envelope)).toThrow(AtlassianOAuthError);
-    expect(() => decryptAtlassianTokens("workspace-a", `${envelope.slice(0, -1)}x`)).toThrow(AtlassianOAuthError);
+    const parts = envelope.split(".");
+    const ciphertext = Buffer.from(parts[3], "base64url");
+    ciphertext[0] ^= 1; // Always change authenticated bytes, not padding bits.
+    parts[3] = ciphertext.toString("base64url");
+    expect(() => decryptAtlassianTokens("workspace-a", parts.join("."))).toThrow(AtlassianOAuthError);
   });
 
   it("exchanges codes only on Atlassian endpoints and refuses grants missing a required read scope", async () => {
