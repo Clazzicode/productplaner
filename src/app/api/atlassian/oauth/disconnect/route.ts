@@ -17,6 +17,8 @@ async function DELETEHandler() {
   const role = requireOrganizationRole(actor, ["owner", "admin"]);
   if (!role.ok) return role.response;
 
+  let stage = "revoke_connections";
+  try {
   await withTransaction(async (tx) => {
     await tx.jiraConnection.updateMany({
       where: { organizationId: actor.organizationId, status: { not: "revoked" } },
@@ -28,18 +30,22 @@ async function DELETEHandler() {
         revision: { increment: 1 },
       },
     });
+    stage = "find_revoked_connections";
     const revokedConnections = await tx.jiraConnection.findMany({
       where: { organizationId: actor.organizationId, status: "revoked" },
       select: { id: true },
     });
     for (const connection of revokedConnections) {
+      stage = "purge_source_data";
       await tx.$executeRaw`SELECT app_private.purge_jira_source_data(${connection.id})`;
     }
+    stage = "delete_workspace_grant";
     const removed = await tx.$executeRaw`
       DELETE FROM app_private."AtlassianOAuthConnection"
       WHERE "organizationId" = ${actor.organizationId}
     `;
     if (removed) {
+      stage = "write_audit_event";
       await tx.auditEvent.create({
         data: {
           id: randomUUID(),
@@ -53,6 +59,17 @@ async function DELETEHandler() {
       });
     }
   });
+  } catch (error) {
+    const details = error && typeof error === "object" ? error as { code?: unknown; meta?: { code?: unknown } } : null;
+    console.error(JSON.stringify({
+      event: "atlassian.disconnect.failed",
+      requestId: currentRequestId(),
+      stage,
+      prismaCode: typeof details?.code === "string" ? details.code : undefined,
+      databaseCode: typeof details?.meta?.code === "string" ? details.meta.code : undefined,
+    }));
+    throw error;
+  }
   return NextResponse.json({ disconnected: true });
 }
 
