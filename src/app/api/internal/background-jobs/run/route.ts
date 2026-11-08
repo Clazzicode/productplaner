@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { runBackgroundWorkerBatch } from "@/lib/jobs/worker";
 import { isAuthorizedWorkerRequest } from "@/lib/jobs/workerAuth";
 import { withApi } from "@/lib/observability";
+import { observeWorker } from "@/lib/jobs/executionHealth";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -15,7 +16,12 @@ async function handler(request: Request) {
     return Response.json({ error: "Unauthorized." }, { status: 401 });
   }
   const workerId = `${process.env.VERCEL_REGION ?? "local"}:${randomUUID()}`;
-  const outcomes = await runBackgroundWorkerBatch(workerId, Number(process.env.BACKGROUND_WORKER_BATCH_SIZE ?? 3));
+  const outcomes = await observeWorker("background", async stage => {
+    stage("execute");
+    const data = await runBackgroundWorkerBatch(workerId, Number(process.env.BACKGROUND_WORKER_BATCH_SIZE ?? 3));
+    return { data, counts: { processed: data.length, completed: data.filter(item => item === "completed").length,
+      retried: data.filter(item => item === "retrying").length, failed: data.filter(item => item === "dead_letter").length } };
+  });
   return Response.json({ processed: outcomes.length, outcomes });
 }
 

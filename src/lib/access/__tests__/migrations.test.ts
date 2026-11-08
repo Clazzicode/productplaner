@@ -43,6 +43,15 @@ async function bootstrap(id: string, authId: string) {
 }
 
 describe.sequential("migration replay and real PostgreSQL RLS", () => {
+  it("restricts worker health to trusted service context on the app role", async () => {
+    await pg.exec(`BEGIN; SET LOCAL ROLE app_rw; SELECT set_config('request.jwt.claims','{"sub":null,"role":"authenticated"}',true);
+      INSERT INTO app_private."WorkerHealth" (worker,"runId","startedAt",stage) VALUES ('jira','service-run',now(),'start'); COMMIT;`);
+    expect((await asUser(authA, () => pg.query(`SELECT worker FROM app_private."WorkerHealth"`))).rows).toHaveLength(0);
+    await expect(asUser(authA, () => pg.exec(`INSERT INTO app_private."WorkerHealth" (worker,"runId","startedAt",stage) VALUES ('background','forged',now(),'start')`))).rejects.toThrow();
+    expect((await asUser(authA, () => pg.query(`UPDATE app_private."WorkerHealth" SET "lastOutcome"='succeeded' RETURNING worker`))).rows).toHaveLength(0);
+    await expect(pg.exec(`BEGIN; SET LOCAL ROLE anon; SELECT * FROM app_private."WorkerHealth";`)).rejects.toThrow();
+    await pg.exec("ROLLBACK");
+  });
   it("replays all migrations and preserves atomic signup under app_rw", async () => {
     await bootstrap("org-a",authA);
     await bootstrap("org-b",authB);
