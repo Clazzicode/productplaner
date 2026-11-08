@@ -1561,7 +1561,7 @@ model JiraImportItem {
   sourceHash        String
   action            String // create | update | unchanged | conflict | skip
   conflictReason    String?
-  selected          Boolean  @default(true)
+  selected          Boolean  @default(false)
   status            String   @default("previewed") // previewed | imported | skipped | failed
   failureMessage    String?
   createdAt         DateTime @default(now())
@@ -1637,7 +1637,7 @@ model JiraExportItem {
   expectedSourceHash String?
   idempotencyKey     String   @unique
   conflictReason     String?
-  selected           Boolean  @default(true)
+  selected           Boolean  @default(false)
   status             String   @default("previewed") // previewed | pending | succeeded | failed | skipped | conflict
   resultSnapshot     Json?
   failureMessage     String?
