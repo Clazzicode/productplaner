@@ -78,9 +78,13 @@ async function GETHandler(request: Request) {
     const resourceMetadata = resources.map(({ id, name, url, scopes }) => ({ id, name, url, scopes }));
     const tokenCiphertext = encryptAtlassianTokens(actor.organizationId, tokens);
     const accessTokenExpiresAt = new Date(Date.now() + tokens.expiresIn * 1000);
-    let jiraConnectionId: string = randomUUID();
+    let jiraConnectionId: string | undefined;
     let reconnected = false;
     await withTransaction(async (tx) => {
+      const priorGrant = await tx.$queryRaw<Array<{ id: string }>>`
+        SELECT id FROM app_private."AtlassianOAuthConnection"
+        WHERE "organizationId" = ${actor.organizationId}
+      `;
       await tx.$executeRaw`
         INSERT INTO app_private."AtlassianOAuthConnection" (
           "id", "organizationId", "connectedByUserId", "resourceMetadata", "grantedScopes",
@@ -105,6 +109,21 @@ async function GETHandler(request: Request) {
         where: { organizationId: actor.organizationId, status: { not: "revoked" }, cloudId: { notIn: resources.map((resource) => resource.id) } },
         data: { status: "reauthorization_required", revision: { increment: 1 } },
       });
+
+      // The hub connects Atlassian to the workspace. It does not select a
+      // planning initiative or Jira project, so it must not create a second
+      // JiraConnection beside an initiative's existing source links.
+      if (pending[0].initiativeId === null) {
+        reconnected = priorGrant.length > 0;
+        await tx.jiraConnection.updateMany({
+          where: { organizationId: actor.organizationId, status: { not: "revoked" }, cloudId: { in: resources.map((resource) => resource.id) } },
+          data: { tokenExpiresAt: accessTokenExpiresAt, scopes: tokens.scopes.join(" "), accessibleResources: resourceMetadata, revision: { increment: 1 } },
+        });
+        await tx.jiraConnection.updateMany({
+          where: { organizationId: actor.organizationId, status: "reauthorization_required", cloudId: { in: resources.map((resource) => resource.id) }, projectId: { not: null }, projectKey: { not: null } },
+          data: { status: "connected", revision: { increment: 1 } },
+        });
+      } else {
 
       const activeConnections = await tx.jiraConnection.findMany({
         where: { organizationId: actor.organizationId, initiativeId: pending[0].initiativeId, status: { not: "revoked" } },
@@ -144,6 +163,7 @@ async function GETHandler(request: Request) {
           },
         });
       } else {
+        jiraConnectionId = randomUUID();
         await tx.jiraConnection.create({
           data: {
             id: jiraConnectionId,
@@ -160,13 +180,14 @@ async function GETHandler(request: Request) {
           },
         });
       }
+      }
       await tx.auditEvent.create({
         data: {
           id: randomUUID(),
           organizationId: actor.organizationId,
           actorUserId: actor.id,
           entityType: "integration",
-          entityId: jiraConnectionId,
+          entityId: jiraConnectionId ?? "atlassian-oauth",
           action: reconnected ? "atlassian.oauth.reconnected" : "atlassian.oauth.connected",
           metadata: { siteCount: resourceMetadata.length, scopes: tokens.scopes, initiativeId: pending[0].initiativeId },
           requestId: currentRequestId(),

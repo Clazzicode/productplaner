@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   audit: vi.fn(),
   state: vi.fn(),
   resources: vi.fn(),
+  grant: vi.fn(),
 }));
 
 vi.mock("@/lib/auth/session", () => ({
@@ -26,6 +27,7 @@ vi.mock("@/lib/db", () => ({
   establishAuthContext: vi.fn(),
   withTransaction: async (fn: (tx: unknown) => Promise<unknown>) => fn({
     $executeRaw: vi.fn(),
+    $queryRaw: mocks.grant,
     jiraConnection: { findMany: mocks.findMany, updateMany: mocks.updateMany, update: mocks.update, create: mocks.create },
     auditEvent: { create: mocks.audit },
   }),
@@ -40,6 +42,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   mocks.state.mockResolvedValue([{ organizationId: "org-a", initiativeId: "initiative-a", returnPath: "/integrations/jira" }]);
   mocks.resources.mockResolvedValue([{ id: "site-a", name: "Test Jira", url: "https://jira.example", scopes: ["read:jira-work"] }]);
+  mocks.grant.mockResolvedValue([]);
   mocks.findMany.mockResolvedValue([]);
   mocks.updateMany.mockResolvedValue({ count: 0 });
   mocks.update.mockResolvedValue({ id: "connection-old" });
@@ -87,5 +90,23 @@ describe("Atlassian OAuth callback connection continuity", () => {
     });
     expect(mocks.create).toHaveBeenCalledOnce();
     expect(mocks.update).not.toHaveBeenCalled();
+  });
+
+  it("renews a workspace-wide grant without creating a duplicate Jira project connection", async () => {
+    mocks.state.mockResolvedValue([{ organizationId: "org-a", initiativeId: null, returnPath: "/integrations" }]);
+    mocks.grant.mockResolvedValue([{ id: "grant-old" }]);
+
+    const response = await GET(callbackRequest());
+    const redirect = new URL(response.headers.get("location")!);
+
+    expect(redirect.pathname).toBe("/integrations");
+    expect(redirect.searchParams.get("atlassian")).toBe("reconnected");
+    expect(redirect.searchParams.has("connectionId")).toBe(false);
+    expect(mocks.create).not.toHaveBeenCalled();
+    expect(mocks.update).not.toHaveBeenCalled();
+    expect(mocks.updateMany).toHaveBeenCalledWith({
+      where: expect.objectContaining({ organizationId: "org-a", cloudId: { in: ["site-a"] } }),
+      data: expect.objectContaining({ scopes: "offline_access read:jira-work" }),
+    });
   });
 });

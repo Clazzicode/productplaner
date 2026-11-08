@@ -16,6 +16,7 @@ type StartResult = { authorizationUrl: string };
 
 const CALLBACK_MESSAGES: Record<string, { text: string; error?: boolean }> = {
   connected: { text: "Atlassian is connected to this workspace with read-only Jira permissions." },
+  reconnected: { text: "Atlassian read-only access was renewed. Existing Jira project mappings were kept." },
   cancelled: { text: "Atlassian authorization was cancelled." },
   invalid_state: { text: "The authorization expired or could not be verified. Please connect again.", error: true },
   no_sites: { text: "No Jira sites were available to Clarivia for the granted account.", error: true },
@@ -73,7 +74,7 @@ export default function AtlassianOAuthConnection(props: { canManage: boolean }) 
   };
 
   const disconnect = async () => {
-    if (!window.confirm("Disconnect Atlassian from this Clarivia workspace? This removes Clarivia's stored credentials.")) return;
+    if (!window.confirm("Disconnect Atlassian from this Clarivia workspace? This removes stored credentials and cached Jira source data. Imported Clarivia planning records remain.")) return;
     setBusy(true);
     setMessage(null);
     const response = await apiFetch<{ disconnected: boolean }>("/api/atlassian/oauth/disconnect", { method: "DELETE" });
@@ -83,7 +84,7 @@ export default function AtlassianOAuthConnection(props: { canManage: boolean }) 
       return;
     }
     setConnection(null);
-    setMessage({ text: "Atlassian has been disconnected from this Clarivia workspace." });
+    setMessage({ text: "Atlassian was disconnected. Stored credentials and cached Jira source data were erased; imported planning records remain." });
   };
 
   const verify = async () => {
@@ -149,7 +150,7 @@ export default function AtlassianOAuthConnection(props: { canManage: boolean }) 
       </div>
 
       <p className="mt-3 text-xs text-neutral-500">
-        Disconnect removes Clarivia’s stored credentials. To revoke Atlassian’s authorization grant too, remove Clarivia from your Atlassian account’s Connected apps.
+        Disconnect removes Clarivia’s stored credentials and cached Jira source data. Imported planning records remain. To revoke Atlassian’s authorization grant too, remove Clarivia from your Atlassian account’s Connected apps.
       </p>
       {message && <p role="status" className={`mt-3 rounded-lg px-3 py-2 text-sm ${message.error ? "bg-red-50 text-red-700" : "bg-emerald-50 text-emerald-700"}`}>{message.text}</p>}
     </section>

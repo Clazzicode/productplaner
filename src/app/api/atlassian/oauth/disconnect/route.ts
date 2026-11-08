@@ -28,6 +28,13 @@ async function DELETEHandler() {
         revision: { increment: 1 },
       },
     });
+    const revokedConnections = await tx.jiraConnection.findMany({
+      where: { organizationId: actor.organizationId, status: "revoked" },
+      select: { id: true },
+    });
+    for (const connection of revokedConnections) {
+      await tx.$queryRaw`SELECT app_private.purge_jira_source_data(${connection.id})`;
+    }
     const removed = await tx.$executeRaw`
       DELETE FROM app_private."AtlassianOAuthConnection"
       WHERE "organizationId" = ${actor.organizationId}
