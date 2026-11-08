@@ -11,7 +11,7 @@ function authorized(request: Request) {
 async function handler(request: Request) {
   if (!authorized(request)) return Response.json({ error: "Unauthorized." }, { status: 401 });
   const result = await processJiraJobs(25);
-  await withServiceContext(() => db.$executeRaw`SELECT app_private.expire_jira_source_data()`);
+  await withServiceContext(async () => await db.$executeRaw`SELECT app_private.expire_jira_source_data()`);
   return Response.json(result);
 }
 export const GET = withApi(handler);
