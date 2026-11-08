@@ -5,6 +5,8 @@ import { createClient } from "@supabase/supabase-js";
 import { createServerClient } from "@supabase/ssr";
 import { rawDb, withAuthenticatedDatabaseContext } from "../src/lib/db";
 import { computeFeatureProposalFingerprint } from "../src/lib/ai/assist/fingerprint";
+async function main() {
+  if (process.argv.includes("--preflight")) { console.log("Acceptance runner transpilation and imports passed; no credentials or database access used."); return; }
 const ref = "qbogvclmehvrtuwiktos";
 for (const name of ["DATABASE_URL","DIRECT_URL"] as const) {
   const url = new URL(process.env[name] ?? "");
@@ -152,3 +154,6 @@ finally{
   await mkdir(".tmp-tests",{recursive:true});await writeFile(".tmp-tests/staging-acceptance.json",JSON.stringify(report,null,2));
   console.log(JSON.stringify(report));await admin.$disconnect();await rawDb.$disconnect();
 }
+
+}
+void main().catch(async () => { console.error("Acceptance runner failed before reporting; no credentials logged."); process.exitCode=1; await rawDb.$disconnect(); });

@@ -34,6 +34,8 @@ jobs:
       DIRECT_URL: ${{ secrets.STAGING_DIRECT_URL }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - name: Read-only staging backup and isolated runner restore
         env:
           RESTORE_CONTAINER: ${{ job.services.postgres.id }}
@@ -49,7 +51,7 @@ jobs:
       ${{ github.event_name == 'workflow_dispatch' ||
       (github.event.pull_request.merged &&
       github.event.pull_request.head.repo.full_name == github.repository &&
-      contains(github.event.pull_request.labels.*.name, 'run-final-acceptance')) }}
+      (contains(github.event.pull_request.labels.*.name, 'run-final-acceptance') || contains(github.event.pull_request.labels.*.name, 'run-final-workload'))) }}
     runs-on: ubuntu-latest
     timeout-minutes: 60
     environment: staging
@@ -70,6 +72,8 @@ jobs:
       EXPECTED_RELEASE: ${{ github.event.pull_request.merge_commit_sha || github.sha }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version-file: .nvmrc
@@ -90,9 +94,17 @@ jobs:
       - name: Wait for the final production code release, then start isolated staging production build
         run: |
           node --input-type=module - <<'JS'
+          const { execFileSync } = await import('node:child_process');
+          const tooling = new Set(['scripts/staging-acceptance.ts','.github/workflows/ci.yml','.github/workflows/operational-acceptance.yml','.github/workflows/worker-monitor.yml']);
           for(let attempt=0;attempt<30;attempt++){
             const result=await fetch('https://www.nextgendepot.online/api/ready').then(r=>r.json()).catch(()=>null);
-            if(result?.release?.commit===process.env.EXPECTED_RELEASE){console.log('Final production release identity verified.');process.exit(0);}
+            const deployed=result?.release?.commit;
+            if(deployed && /^[a-f0-9]{40}$/.test(deployed)) {
+              try {
+                const changes=execFileSync('git',['diff','--name-only',deployed,process.env.EXPECTED_RELEASE],{encoding:'utf8'}).trim().split('\n').filter(Boolean);
+                if(changes.every(path=>tooling.has(path))) {console.log(`Production application identity verified: ${deployed}; only acceptance tooling differs.`);process.exit(0);}
+              } catch { /* Wait for the expected application release. */ }
+            }
             await new Promise(resolve=>setTimeout(resolve,20000));
           }
           throw new Error('Final production release identity was not observed; workload was not started.');

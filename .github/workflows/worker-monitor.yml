@@ -1,7 +1,10 @@
 name: Worker monitoring
 on:
   schedule:
-    - cron: '*/5 * * * *'
+    - cron: '2-57/5 * * * *'
+  push:
+    branches: [master]
+    paths: ['.github/workflows/worker-monitor.yml', 'scripts/worker-monitor.mjs']
   workflow_dispatch:
 permissions:
   contents: read
