@@ -1539,6 +1539,7 @@ model JiraOAuthState {
 }
 
 model JiraImportRun {
+  connectionRevision Int?
   id                String    @id @default(cuid())
   sourceJobId       String?   @unique
   sourceEventId     String?   @unique
@@ -1568,6 +1569,7 @@ model JiraImportRun {
 }
 
 model JiraImportItem {
+  reviewSnapshot    Json?
   id                String   @id @default(cuid())
   organizationId    String
   importRunId       String
@@ -1595,6 +1597,7 @@ model JiraImportItem {
 }
 
 model JiraExternalLink {
+  fieldBaselines       Json? // hashes only; no retained issue body
   id                   String    @id @default(cuid())
   organizationId       String
   initiativeId         String
@@ -1645,6 +1648,7 @@ model JiraExportRun {
 }
 
 model JiraExportItem {
+  reviewSnapshot    Json?
   id                 String   @id @default(cuid())
   organizationId     String
   exportRunId        String

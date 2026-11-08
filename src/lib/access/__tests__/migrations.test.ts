@@ -566,12 +566,25 @@ describe.sequential("migration replay and real PostgreSQL RLS", () => {
     await expect(asUser(authA, () => pg.exec(`INSERT INTO "JiraImportItem" (id,"organizationId","importRunId","externalIssueId","externalKey","issueTypeId","issueTypeName","targetType",summary,"sourceSnapshot","sourceHash",action,"updatedAt") VALUES ('jira-item-cross','org-b','jira-run-a','10002','GP-2','10000','Story','story','Forged','{}',repeat('d',64),'create',now())`))).rejects.toThrow();
   });
 
+  it("freezes field reviews, rejects legacy apply and retains only validated mapping hashes", async () => {
+    await expect(asUser(authA, () => pg.exec(`UPDATE "JiraImportRun" SET status='applying' WHERE id='jira-run-a'`))).rejects.toThrow(/legacy import preview/);
+    await expect(asUser(authA, () => pg.exec(`UPDATE "JiraImportRun" SET "connectionRevision"=1 WHERE id='jira-run-a'`))).rejects.toThrow(/immutable/);
+    await expect(asUser(authA, () => pg.exec(`UPDATE "JiraImportItem" SET "reviewSnapshot"='{"schemaVersion":1}' WHERE id='jira-item-a'`))).rejects.toThrow(/immutable/);
+    await pg.exec(`INSERT INTO "JiraImportRun" (id,"organizationId","initiativeId","connectionId","connectionRevision",jql,"sourceFingerprint","initiatedByUserId","updatedAt")
+      VALUES ('reviewed-run','org-a','init-a','jira-a',1,'project = GP',repeat('a',64),'user-org-a',now())`);
+    await asUser(authA, () => pg.exec(`UPDATE "JiraImportRun" SET status='applying' WHERE id='reviewed-run'`));
+    await pg.exec(`DELETE FROM "JiraImportRun" WHERE id='reviewed-run'`);
+    await expect(pg.exec(`UPDATE "JiraExternalLink" SET "fieldBaselines"='{"summary":{"sourceHash":null,"localHash":null}}' WHERE id='identity-link'`)).rejects.toThrow(/hashes/);
+    await expect(pg.exec(`UPDATE "JiraExternalLink" SET "fieldBaselines"='{"summary":{"sourceHash":"source prose","localHash":"local prose"}}' WHERE id='identity-link'`)).rejects.toThrow(/hashes/);
+    await pg.exec(`UPDATE "JiraExternalLink" SET "fieldBaselines"=jsonb_build_object('summary',jsonb_build_object('sourceHash',repeat('a',64),'localHash',repeat('b',64))) WHERE id='identity-link'`);
+  });
+
   it("isolates Jira exports and freezes approved payloads", async () => {
     await asUser(authA, () => pg.exec(`
       INSERT INTO "JiraExportRun" (id,"organizationId","initiativeId","connectionId","sourceFingerprint","itemCount","createCount","initiatedByUserId","updatedAt")
       VALUES ('jira-export-a','org-a','init-a','jira-a',repeat('e',64),1,1,'user-org-a',now());
-      INSERT INTO "JiraExportItem" (id,"organizationId","exportRunId","targetType","targetId",summary,action,"requestPayload","targetFingerprint","idempotencyKey","updatedAt")
-      VALUES ('jira-export-item-a','org-a','jira-export-a','feature','capability-a','Approved feature','create','{"fields":{"summary":"Approved feature"}}',repeat('f',64),repeat('1',64),now());
+      INSERT INTO "JiraExportItem" (id,"organizationId","exportRunId","targetType","targetId",summary,action,"requestPayload","targetFingerprint","idempotencyKey","reviewSnapshot","updatedAt")
+      VALUES ('jira-export-item-a','org-a','jira-export-a','feature','capability-a','Approved feature','create','{"fields":{"summary":"Approved feature"}}',repeat('f',64),repeat('1',64),'{"schemaVersion":1,"before":"source prose"}',now());
       UPDATE "JiraExportRun" SET status='approved' WHERE id='jira-export-a';
       INSERT INTO "JiraExportApproval" (id,"organizationId","exportRunId","selectedItemIds",reason,"snapshotHash","approvedByUserId")
       VALUES ('jira-export-approval-a','org-a','jira-export-a','["jira-export-item-a"]','PO reviewed the frozen export.',repeat('2',64),'user-org-a');
@@ -579,6 +592,7 @@ describe.sequential("migration replay and real PostgreSQL RLS", () => {
     expect((await asUser(authB, () => pg.query(`SELECT id FROM "JiraExportItem" WHERE id='jira-export-item-a'`))).rows).toEqual([]);
     expect((await asUser(authB, () => pg.query(`SELECT id FROM "JiraExportApproval" WHERE id='jira-export-approval-a'`))).rows).toEqual([]);
     expect((await asUser(authA, () => pg.query(`UPDATE "JiraExportApproval" SET reason='Forged' WHERE id='jira-export-approval-a' RETURNING id`))).rows).toEqual([]);
+    await expect(asUser(authA, () => pg.exec(`UPDATE "JiraExportItem" SET "reviewSnapshot"=NULL WHERE id='jira-export-item-a'`))).rejects.toThrow(/immutable/);
     await expect(asUser(authA, () => pg.exec(`UPDATE "JiraExportItem" SET "requestPayload"='{"fields":{"summary":"Forged"}}' WHERE id='jira-export-item-a'`))).rejects.toThrow();
     await expect(asUser(authA, () => pg.exec(`INSERT INTO "JiraExportItem" (id,"organizationId","exportRunId","targetType","targetId",summary,action,"requestPayload","targetFingerprint","idempotencyKey","updatedAt") VALUES ('jira-export-cross','org-b','jira-export-a','feature','capability-a','Forged','create','{}',repeat('3',64),repeat('4',64),now())`))).rejects.toThrow();
     await asUser(authA, () => pg.exec(`UPDATE "JiraExportRun" SET status='completed', "executedAt"=now() WHERE id='jira-export-a'`));
@@ -648,6 +662,7 @@ describe.sequential("migration replay and real PostgreSQL RLS", () => {
     expect((await pg.query(`SELECT id FROM "JiraSyncJob" WHERE "connectionId"='jira-a'`)).rows).toHaveLength(0);
     expect((await pg.query(`SELECT id FROM "JiraSyncAttempt" WHERE id='jira-purge-attempt'`)).rows).toHaveLength(0);
     expect((await pg.query(`SELECT id FROM "JiraExportApproval" WHERE "exportRunId"='jira-export-a'`)).rows).toHaveLength(1);
+    expect((await pg.query<{ reviewSnapshot: unknown }>(`SELECT "reviewSnapshot" FROM "JiraExportItem" WHERE id='jira-export-item-a'`)).rows[0].reviewSnapshot).toBeNull();
   });
 
   it("expires terminal Jira jobs together with their immutable attempts", async () => {

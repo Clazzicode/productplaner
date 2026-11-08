@@ -97,9 +97,7 @@ export default function AppShell(props: {
           className="hidden h-[38px] items-center gap-2 rounded-lg border border-[#d4def1] bg-white px-3 text-sm font-semibold text-text-primary shadow-sm md:flex"
         >
           <span className="text-[#315cff]">◆</span>
-          {currentInitiative.syncConnections[0]?.status === "connected" ? (
-            <><span className="h-2 w-2 rounded-full bg-emerald-500" /> Connected to Jira</>
-          ) : "Connect Jira"}
+          Jira integration
         </Link>
       )}
       {props.canManageWorkspace && <Link

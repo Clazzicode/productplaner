@@ -19,6 +19,10 @@ import { PrismaClient } from "@prisma/client";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { db, establishAuthContext, rawDb, withAuthenticatedDatabaseContext, withServiceContext, withTransaction } from "@/lib/db";
 import { loadWorkerReadiness, observeWorker } from "@/lib/jobs/executionHealth";
+import { applyJiraImport, currentTargetFingerprint, sourceSnapshot } from "@/lib/jira/import";
+import { buildImportFieldReview, fieldBaselines } from "@/lib/jira/fieldReview";
+import { emptyRequest } from "@/lib/requests/model";
+import { saveRequest } from "@/lib/requests/service";
 import { processJiraJobs } from "@/lib/jira/jobs";
 import { ensureFeatureProjection } from "@/lib/planning/featureIdentity";
 import { createRegenerationProposal, applyRegenerationProposal } from "@/lib/generation/proposals";
@@ -440,4 +444,37 @@ describe("RLS isolation (real Postgres connection, not mocked)", () => {
     }, { timeout: 60_000 }))).rejects.toThrow("rollback regeneration acceptance fixture");
     expect(await adminDb.regenerationProposal.findUnique({ where: { id: proposalId } })).toBeNull();
   }, 70_000);
+  it("applies frozen Jira field reviews to the same canonical records and preserves bug triage; rejects local edits and duplicate apply", async () => {
+    const network = vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("No provider HTTP in this fixture"));
+    try {
+      await expect(withAuthenticatedDatabaseContext({ authUserId: orgA.ownerAuthUserId, organizationId: orgA.orgId }, async () => await withTransaction(async () => {
+        const connection = await db.jiraConnection.create({ data: { organizationId: orgA.orgId, initiativeId: initiativeA1Id, configuredByUserId: orgA.ownerUserId, status: "connected", revision: 1,
+          accessTokenCiphertext: "synthetic-no-credential", refreshTokenCiphertext: "synthetic-no-credential", tokenExpiresAt: new Date(0), scopes: "read:jira-work" } });
+        const requestInput = emptyRequest();
+        Object.assign(requestInput, { title: "Human bug", kind: "bug", source: "jira", sourceReference: "FIXTURE-2", requestor: "Test", problem: "Old body", requestedChange: "Human requested change", dependencies: "Human dependency" });
+        Object.assign(requestInput.bug, { severity: "critical", affectedArea: "Human area", observedBehavior: "Old observed", expectedBehavior: "Human expected", reproductionDetails: "Human steps", environment: "Human environment", status: "confirmed" });
+        const request = await saveRequest(initiativeA1Id, requestInput, undefined, { actorUserId: orgA.ownerUserId });
+        const bug = await db.bugPlanningRecord.findUniqueOrThrow({ where: { requestId: request.id } });
+        const issue = sourceSnapshot({ id: randomUUID(), key: "FIXTURE-2", summary: "Remote bug title", description: "Remote bug body", issueType: { id: "bug", name: "Bug", subtask: false }, status: { id: "done", name: "Done", category: "done" }, priority: { id: "low", name: "Lowest" }, labels: [], parentKey: null, storyPoints: null, updated: null });
+        const target = { targetType: "bug", targetId: bug.id };
+        const baseline = await currentTargetFingerprint(target);
+        const link = await db.jiraExternalLink.create({ data: { organizationId: orgA.orgId, initiativeId: initiativeA1Id, connectionId: connection.id, ...target, externalIssueId: issue.id, externalKey: issue.key, issueTypeName: "Bug", sourceHash: "a".repeat(64), targetFingerprint: baseline!, lastImportedSnapshot: {} } });
+        const run = await db.jiraImportRun.create({ data: { organizationId: orgA.orgId, initiativeId: initiativeA1Id, connectionId: connection.id, connectionRevision: 1, jql: "project = FIXTURE", sourceFingerprint: "b".repeat(64), initiatedByUserId: orgA.ownerUserId } });
+        const review = buildImportFieldReview({ issue, targetType: "bug", local: { request: requestInput, status: bug.status }, targetFingerprint: baseline, baselineHashes: null, baselineAt: null, localChanged: false, remoteChanged: true });
+        const item = await db.jiraImportItem.create({ data: { organizationId: orgA.orgId, importRunId: run.id, externalIssueId: issue.id, externalKey: issue.key, issueTypeId: "bug", issueTypeName: "Bug", ...target, summary: issue.summary, sourceSnapshot: issue, sourceHash: "c".repeat(64), reviewSnapshot: JSON.parse(JSON.stringify(review)), action: "update" } });
+        await db.bugPlanningRecord.update({ where: { id: bug.id }, data: { revision: { increment: 1 } } });
+        await expect(applyJiraImport(run.id, [item.id], "Reviewed fixture", orgA.ownerUserId)).rejects.toThrow("changed locally after review");
+        // Return to the frozen version within this rollback-only fixture, then apply.
+        await db.bugPlanningRecord.update({ where: { id: bug.id }, data: { revision: bug.revision } });
+        await applyJiraImport(run.id, [item.id], "Reviewed fixture", orgA.ownerUserId);
+        const saved = await db.planningRequest.findUniqueOrThrow({ where: { id: request.id } });
+        expect(saved.data).toMatchObject({ title: "Remote bug title", problem: "Remote bug body", requestedChange: "Human requested change", dependencies: "Human dependency", bug: { observedBehavior: "Remote bug body", severity: "critical", status: "confirmed", expectedBehavior: "Human expected", environment: "Human environment", reproductionDetails: "Human steps" } });
+        expect(await db.jiraExternalLink.findUnique({ where: { id: link.id } })).toMatchObject({ targetId: bug.id, lastImportedSnapshot: {}, fieldBaselines: fieldBaselines(issue, "bug", { request: saved.data, status: bug.status }) });
+        await expect(applyJiraImport(run.id, [item.id], "Repeated", orgA.ownerUserId)).rejects.toThrow("already been finalized");
+        expect(network).not.toHaveBeenCalled();
+        throw new Error("rollback Jira review fixture");
+      }, { timeout: 60_000 }))).rejects.toThrow("rollback Jira review fixture");
+    } finally { network.mockRestore(); }
+  }, 70_000);
+
 });
