@@ -872,6 +872,8 @@ model ArtifactLayer {
   @@unique([prototypeId, type, externalRef])
   @@index([prototypeId, type])
   @@index([prototypeId, archivedAt])
+  // Active feature projection uniqueness is a partial index managed in SQL.
+  @@index([sourceCapabilityId])
   @@index([parentId])
 }
 

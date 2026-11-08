@@ -20,8 +20,8 @@ Avery's approved nine-milestone plan in **Evaluate architecture considerations**
 |---|---|---|---|---|
 | 1 Worker repair and execution health | 8 | Core repair/health implemented; monitoring incomplete | Production PRs 26–27 | Fixed lazy Prisma retention context. CI and staging migration passed. Protected Preview: missing workers ->503; authenticated idle runs ->200; readiness ->200; unauthorized worker ->401; liveness ->200. Production both workers completed successive scheduled cycles at 05:05, 05:10, 05:15 UTC on Nov 8. Test-job/failure injection and delivered alerts remain pending; Avery confirmed no existing monitoring service. |
 | 2 Collaboration action matrix | 5 | Implemented; acceptance incomplete | Production PR 28 | Central action policy, fresh service checks, external-admin cap, experience-independent scoring authority, story/release separation, feedback receipt path, restrictive RLS and project-context guards. CI and staging migration passed; 956 local tests passed. Real pooled database checks and signed-in role journeys remain acceptance evidence to complete. Existing publication/provider operations retain workspace-administrator guards; no new publication surface or Jira writes added. |
-| 3 Authenticated context wrappers/inventory | 6 | In progress | No | 194 scoped entry points; all 221 entry points classified, with fingerprinted exceptions. Ten wrapper/inventory tests pass; full suite 966 passed. Real staging context checks, build and deployment pending. |
-| 4 Canonical records | 2 | No | No | Pending |
+| 3 Authenticated context wrappers/inventory | 6 | Implemented | Production PR 29, c1c4593 | 194 protected entry points scoped; 221 classified with fingerprinted exceptions. CI passed (967 unit tests), staging passed 14 real pooled role/context/worker tests, including revoked membership, external admins, rollback and concurrent isolation. Production deployment READY and domain aliases verified. Signed-in UI role journeys remain acceptance work. |
+| 4 Canonical records | 2 | Implemented; release checks in progress | No | Canonical map documented; additive scope/containment constraints and active feature uniqueness; idempotent projection creation preserves editorial content; story moves retain criteria identity. Focused migration replay/helper tests: 46 passed. Live concurrent request check added for staging. |
 | 5 Reviewed regeneration/reconciliation | 3 | No | No | Pending |
 | 6 Planning readiness vs commitments | 1 | No | No | Pending |
 | 7 Feature-led navigation/assistance | 4 | No | No | Pending |
@@ -45,4 +45,8 @@ At each checkpoint, pause implementation, reread the sources, and report complet
 
 ## Checkpoint records
 
-Pending.
+### Checkpoint 3 — November 8, 2026
+
+Reread Avery's approved requirements and pasted audit. Milestones 1–3 serve worker reliability, the action matrix and systematic tenant context. No new roles, unrelated redesign, Jira writes or automatic membership rewrites were introduced. PRs 26–29 deployed; 14 real staging tests passed. Failure injection and a terminal synthetic Jira job were exercised without provider HTTP requests; worker readiness recovered after two successful cycles. Delivered alerts, signed-in UI journeys and final operational acceptance remain pending. Earlier failed-test fixture cleanup is separate from implementation and is not a development blocker.
+
+Verification cadence: checks affected by each change; migration/security/smoke checks before production releases; full 20-user/30-minute load test and 24-hour worker observation after the final release. Do not rerun passed checks without a relevant change or unresolved concern.

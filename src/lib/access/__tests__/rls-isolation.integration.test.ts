@@ -20,6 +20,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { db, establishAuthContext, rawDb, withAuthenticatedDatabaseContext, withServiceContext, withTransaction } from "@/lib/db";
 import { loadWorkerReadiness, observeWorker } from "@/lib/jobs/executionHealth";
 import { processJiraJobs } from "@/lib/jira/jobs";
+import { ensureFeatureProjection } from "@/lib/planning/featureIdentity";
 
 // These tests create isolated fixtures. Never run them against Production.
 const stagingRef = "qbogvclmehvrtuwiktos";
@@ -151,6 +152,23 @@ afterAll(async () => {
 }, 30_000);
 
 describe("RLS isolation (real Postgres connection, not mocked)", () => {
+  it("reuses one canonical feature projection across concurrent requests and preserves editorial edits", async () => {
+    const intake = await adminDb.intakeAnswerSet.create({ data: { initiativeId: initiativeA1Id } });
+    const capability = await adminDb.capability.create({ data: {
+      intakeAnswerSetId: intake.id, name: "Canonical fixture feature", isMvp: true, effortSize: "s", businessValue: "high",
+    } });
+    const prototype = await adminDb.prototype.create({ data: { initiativeId: initiativeA1Id } });
+    const run = () => withAuthenticatedDatabaseContext({ authUserId: orgA.ownerAuthUserId, organizationId: orgA.orgId }, async () =>
+      await ensureFeatureProjection(initiativeA1Id, capability.id));
+    const results = await Promise.all([run(), run(), run()]);
+    expect(new Set(results.map(row => row.id)).size).toBe(1);
+    await adminDb.artifactLayer.update({ where: { id: results[0].id }, data: { title: "Human edited title", body: "Preserve this editorial explanation" } });
+    expect(await run()).toMatchObject({ id: results[0].id, title: "Human edited title", body: "Preserve this editorial explanation" });
+    expect(await adminDb.artifactLayer.count({ where: { prototypeId: prototype.id, type: "feature", sourceCapabilityId: capability.id } })).toBe(1);
+    await expect(withAuthenticatedDatabaseContext({ authUserId: orgB.ownerAuthUserId, organizationId: orgB.orgId }, async () =>
+      await ensureFeatureProjection(initiativeA1Id, capability.id))).rejects.toThrow("Feature not found");
+  }, 20_000);
+
   it("Account B cannot read Account A's Projects by real id", async () => {
     establishAuthContext(orgB.ownerAuthUserId);
     const [a1, a2] = await Promise.all([
