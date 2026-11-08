@@ -743,8 +743,8 @@
   {
     "path": "src/app/api/internal/jira/jobs/run/route.ts",
     "classification": "worker",
-    "reason": "Timing-safe cron authentication; job actor context and awaited retention/health service contexts are explicit.",
-    "sourceFingerprint": "59882a4fc4f4f020dc2709201a5ee97ee6c73c8f73b4c8d44826a2d826bc9eb0"
+    "reason": "Timing-safe cron authentication compares byte lengths before comparison; job actor context and awaited retention/health service contexts are explicit.",
+    "sourceFingerprint": "42989b28f41a181415aeb4473255a0d2dd7aefa87e045a035f5c877b24e87305"
   },
   {
     "path": "src/app/api/projects/route.ts",

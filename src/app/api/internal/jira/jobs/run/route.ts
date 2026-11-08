@@ -6,8 +6,9 @@ import { observeWorker } from "@/lib/jobs/executionHealth";
 
 function authorized(request: Request) {
   const expected = process.env.CRON_SECRET?.trim(); const actual = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "") ?? "";
-  if (!expected || actual.length !== expected.length) return false;
-  return timingSafeEqual(Buffer.from(actual), Buffer.from(expected));
+  if (!expected) return false;
+  const presented = Buffer.from(actual); const configured = Buffer.from(expected);
+  return presented.length === configured.length && timingSafeEqual(presented, configured);
 }
 async function handler(request: Request) {
   if (!authorized(request)) return Response.json({ error: "Unauthorized." }, { status: 401 });
