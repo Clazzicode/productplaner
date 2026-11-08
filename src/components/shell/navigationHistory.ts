@@ -26,6 +26,8 @@ function start() {
     publish();
   };
   history.replaceState = function (data, unused, url) {
+    const current = history.state?.clariviaNavigation;
+    if (current?.scope === scope) index = current.index;
     replace.call(this, { ...data, clariviaNavigation: marker() }, unused, url);
     publish();
   };

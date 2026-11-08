@@ -27,8 +27,8 @@ export function pageNavigation(path: string, initiatives: NavInitiative[]) {
     parent = initiative?.project ? `/projects/${initiative.project.id}` : "/initiatives";
     parentLabel = initiative?.project?.name ?? "Initiatives";
     if (parts[2] === "workspace") {
-      parent = parts.length > 3 ? `/initiatives/${parts[1]}/workspace` : `/initiatives/${parts[1]}/dashboard`;
-      parentLabel = parts.length > 3 ? "Planning workspace" : "Initiative overview";
+      parent = `/initiatives/${parts[1]}/dashboard`;
+      parentLabel = "Initiative overview";
       if (parts[3] === "stories") { parent = `/initiatives/${parts[1]}/workspace/features`; parentLabel = "Features"; }
     }
   } else if (parts[0] === "integrations" && parts.length > 1) {
