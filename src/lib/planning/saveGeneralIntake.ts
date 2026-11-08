@@ -45,6 +45,7 @@ export async function saveGeneralIntake(actor: ActorRow, draftId: string, raw: u
       } });
       await auditInitiative(draftId, "intake.draft_saved", { actorUserId: actor.id });
     } else {
+      if (!["owner", "admin"].includes(membership.role)) throw new BusinessError("A workspace owner or administrator must create the initiative. You can edit initiatives shared with you.", 403);
       let projectId = input.projectId;
       if (projectId) {
         const project = await tx.project.findFirst({ where: { id: projectId, organizationId: actor.organizationId }, select: { id: true } });
@@ -55,14 +56,16 @@ export async function saveGeneralIntake(actor: ActorRow, draftId: string, raw: u
         } });
         projectId = project.id;
       }
-      await tx.initiative.create({ data: {
+      // No RETURNING before the owner grant exists: the restrictive SELECT
+      // policy intentionally cannot resolve a not-yet-visible initiative.
+      await tx.initiative.createMany({ data: {
         id: draftId, organizationId: actor.organizationId, userId: actor.id, projectId,
         name: input.name, description: input.problemStatement, methodology: input.methodology,
         intakeMethod: "guided", status: "intake_in_progress",
-        intakeAnswerSet: { create: {
-          problemStatement: input.problemStatement, targetCustomer: input.targetCustomer, outcomeStatement: input.outcomeStatement,
-        } },
-        initiativeAccess: { create: { userId: actor.id, permission: "owner" } },
+      } });
+      await tx.initiativeAccess.create({ data: { initiativeId: draftId, userId: actor.id, permission: "owner" } });
+      await tx.intakeAnswerSet.create({ data: { initiativeId: draftId,
+        problemStatement: input.problemStatement, targetCustomer: input.targetCustomer, outcomeStatement: input.outcomeStatement,
       } });
       await ensureDraftWorkspace(tx, draftId);
       await auditInitiative(draftId, "intake.draft_created", { actorUserId: actor.id });
