@@ -13,14 +13,34 @@
 // only compares against `OrganizationMember.authUserId` / `User.authUserId`,
 // never against a real Supabase `auth.users` row.
 
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
+import { AsyncResource } from "node:async_hooks";
 import { PrismaClient } from "@prisma/client";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { db, establishAuthContext } from "@/lib/db";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { db, establishAuthContext, rawDb, withAuthenticatedDatabaseContext, withServiceContext, withTransaction } from "@/lib/db";
+import { loadWorkerReadiness, observeWorker } from "@/lib/jobs/executionHealth";
+import { processJiraJobs } from "@/lib/jira/jobs";
+
+// These tests create isolated fixtures. Never run them against Production.
+const stagingRef = "qbogvclmehvrtuwiktos";
+for (const key of ["DATABASE_URL", "DIRECT_URL"] as const) {
+  const value = process.env[key];
+  if (!value) throw new Error("Staging database credentials are required.");
+  const url = new URL(value);
+  const bound = url.hostname === `db.${stagingRef}.supabase.co` ||
+    (url.hostname.endsWith(".pooler.supabase.com") && decodeURIComponent(url.username).endsWith(`.${stagingRef}`));
+  if (process.env.STAGING_SUPABASE_PROJECT_REF !== stagingRef || !bound || process.env.APP_ENVIRONMENT !== "staging") {
+    throw new Error("Live security tests are restricted to the independent Clarivia staging database.");
+  }
+}
+const emptyContext = new AsyncResource("no-auth-test");
+const fixtureOrganizations: string[] = [];
 
 const directUrl = process.env.DIRECT_URL;
 if (!directUrl) throw new Error("DIRECT_URL is not set — required for isolation-test fixture setup/teardown.");
-const adminDb = new PrismaClient({ datasourceUrl: directUrl });
+const fixtureAdminUrl = new URL(directUrl);
+fixtureAdminUrl.searchParams.set("connection_limit", "1");
+const adminDb = new PrismaClient({ datasourceUrl: fixtureAdminUrl.toString() });
 
 interface Fixture {
   orgId: string;
@@ -41,6 +61,7 @@ let initiativeB1Id: string;
 async function createOrgWithOwner(name: string): Promise<Fixture> {
   const authUserId = randomUUID();
   const org = await adminDb.organization.create({ data: { name, workspaceType: "team" } });
+  fixtureOrganizations.push(org.id);
   const user = await adminDb.user.create({
     data: { authUserId, homeOrganizationId: org.id, name: `${name} Owner`, email: `${authUserId}@test.local` },
   });
@@ -52,6 +73,8 @@ async function createOrgWithOwner(name: string): Promise<Fixture> {
 }
 
 beforeAll(async () => {
+  const role = await rawDb.$queryRaw<{ safe: boolean }[]>`SELECT current_user='app_rw' AND NOT (rolsuper OR rolbypassrls) AS safe FROM pg_roles WHERE rolname=current_user`;
+  expect(role[0]?.safe).toBe(true);
   orgA = await createOrgWithOwner("Isolation Test Org A");
   orgB = await createOrgWithOwner("Isolation Test Org B");
 
@@ -109,14 +132,23 @@ beforeAll(async () => {
 
 afterAll(async () => {
   try {
-    await adminDb.initiative.deleteMany({ where: { organizationId: { in: [orgA.orgId, orgB.orgId] } } });
-    await adminDb.project.deleteMany({ where: { organizationId: { in: [orgA.orgId, orgB.orgId] } } });
-    await adminDb.user.deleteMany({ where: { homeOrganizationId: { in: [orgA.orgId, orgB.orgId] } } });
-    await adminDb.organization.deleteMany({ where: { id: { in: [orgA.orgId, orgB.orgId] } } });
+    await adminDb.$transaction(async tx => {
+      await tx.jiraConnection.updateMany({ where: { organizationId: { in: fixtureOrganizations } }, data: { status: "revoked" } });
+      await tx.jiraSyncJob.deleteMany({ where: { organizationId: { in: fixtureOrganizations } } });
+      await tx.jiraConnection.deleteMany({ where: { organizationId: { in: fixtureOrganizations } } });
+      await tx.initiative.deleteMany({ where: { organizationId: { in: fixtureOrganizations } } });
+      await tx.project.deleteMany({ where: { organizationId: { in: fixtureOrganizations } } });
+      await tx.teamMember.deleteMany({ where: { team: { organizationId: { in: fixtureOrganizations } } } });
+      await tx.team.deleteMany({ where: { organizationId: { in: fixtureOrganizations } } });
+      await tx.user.deleteMany({ where: { homeOrganizationId: { in: fixtureOrganizations } } });
+      await tx.organization.deleteMany({ where: { id: { in: fixtureOrganizations } } });
+    }, { timeout: 15_000 });
   } finally {
     await adminDb.$disconnect();
+    await rawDb.$disconnect();
+    emptyContext.emitDestroy();
   }
-});
+}, 30_000);
 
 describe("RLS isolation (real Postgres connection, not mocked)", () => {
   it("Account B cannot read Account A's Projects by real id", async () => {
@@ -163,8 +195,7 @@ describe("RLS isolation (real Postgres connection, not mocked)", () => {
       { id: memberUserId, organizationId: orgA.orgId, accessLevel: "standard_user", status: "active", memberType: "internal" },
       initiativeA1Id,
     );
-    expect(access).not.toBe("not_found");
-    if (access !== "not_found") expect(access.level).toBe("none");
+    expect(access).toBe("not_found");
   });
 
   it("Account B cannot create an Initiative under Account A's Project — blocked by RLS itself, not just the app guard", async () => {
@@ -194,4 +225,124 @@ describe("RLS isolation (real Postgres connection, not mocked)", () => {
       }),
     ).rejects.toThrow();
   });
+
+  it("fails without context and denies service context tenant reads", async () => {
+    await expect(emptyContext.runInAsyncScope(async () => await db.project.findMany({ take: 1 }))).rejects.toThrow("Database access outside request auth context");
+    expect(await withServiceContext(async () => await db.project.findMany({ where: { id: projectA1Id } }))).toEqual([]);
+  });
+
+  it("isolates concurrent verified users and leaves no PostgreSQL claims after pooled transactions", async () => {
+    const results = await Promise.all([orgA, orgB].map(org => withAuthenticatedDatabaseContext({ authUserId: org.ownerAuthUserId, organizationId: org.orgId }, async () => {
+      await Promise.resolve();
+      const projects = await db.project.findMany({ where: { organizationId: { in: [orgA.orgId, orgB.orgId] } } });
+      const claims = await db.$queryRaw<{ actor: string }[]>`SELECT (nullif(current_setting('request.jwt.claims',true),'')::jsonb->>'sub') AS actor`;
+      expect(projects.every(project => project.organizationId === org.orgId)).toBe(true);
+      return claims[0].actor;
+    })));
+    expect(results).toEqual([orgA.ownerAuthUserId, orgB.ownerAuthUserId]);
+    for (let attempt = 0; attempt < 6; attempt++) {
+      const claims = await rawDb.$queryRaw<{ actor: string | null }[]>`SELECT (nullif(current_setting('request.jwt.claims',true),'')::jsonb->>'sub') AS actor`;
+      expect(claims[0].actor).toBeNull();
+    }
+  });
+
+  it("rolls back writes inside the verified database context", async () => {
+    const id = randomUUID();
+    await expect(withAuthenticatedDatabaseContext({ authUserId: orgA.ownerAuthUserId, organizationId: orgA.orgId }, async () => {
+      await withTransaction(async () => {
+        await db.project.create({ data: { id, organizationId: orgA.orgId, createdByUserId: orgA.ownerUserId, name: "Rollback verification" } });
+        throw new Error("intentional rollback");
+      });
+    })).rejects.toThrow("intentional rollback");
+    expect(await adminDb.project.findUnique({ where: { id } })).toBeNull();
+  });
+
+  it("rechecks revoked membership after an identity scope was established", async () => {
+    try {
+      await withAuthenticatedDatabaseContext({ authUserId: memberAuthUserId, organizationId: orgA.orgId }, async () => {
+        await adminDb.organizationMember.updateMany({ where: { authUserId: memberAuthUserId, organizationId: orgA.orgId }, data: { status: "disabled" } });
+        expect(await db.project.findUnique({ where: { id: projectA1Id } })).toBeNull();
+      });
+    } finally {
+      await adminDb.organizationMember.updateMany({ where: { authUserId: memberAuthUserId, organizationId: orgA.orgId }, data: { status: "active" } });
+    }
+  });
+
+  it("records failed worker stages, signals consecutive failures, and recovers readiness", async () => {
+    const log = vi.spyOn(console, "error");
+    const idle = async () => ({ data: null, counts: { processed: 0, completed: 0, retried: 0, failed: 0 } });
+    try {
+      for (let cycle = 0; cycle < 2; cycle++) {
+        await expect(observeWorker("jira", async stage => {
+          stage("retention");
+          throw Object.assign(new Error("Synthetic staging health failure"), { code: "STAGING_HEALTH_PROBE" });
+        })).rejects.toThrow("Synthetic staging health failure");
+      }
+      expect((await loadWorkerReadiness()).jira).toBe("failed");
+      expect(log.mock.calls.some(([line]) => String(line).includes('"event":"worker.alert.consecutive_failures"'))).toBe(true);
+    } finally {
+      log.mockRestore();
+      await observeWorker("jira", idle);
+      await observeWorker("jira", idle);
+      await observeWorker("background", idle);
+    }
+    expect(await loadWorkerReadiness()).toEqual({ jira: "ready", background: "ready" });
+  }, 20_000);
+
+  it("enforces the live direct/team/viewer/external-admin action matrix without changing real memberships", async () => {
+    const identity = { authUserId: memberAuthUserId, organizationId: orgA.orgId };
+    const actions = () => withAuthenticatedDatabaseContext(identity, async () => (await db.$queryRaw<{
+      read: boolean; edit: boolean; accept: boolean; approve: boolean; crossWorkspace: boolean;
+    }[]>`SELECT app_private.can_initiative_action(${initiativeA1Id},'read') AS read,
+      app_private.can_initiative_action(${initiativeA1Id},'edit') AS edit,
+      app_private.can_initiative_action(${initiativeA1Id},'accept_story') AS accept,
+      app_private.can_initiative_action(${initiativeA1Id},'approve_release') AS approve,
+      app_private.can_initiative_action(${initiativeB1Id},'read') AS "crossWorkspace"`)[0]);
+    try {
+      const grant = await adminDb.initiativeAccess.create({ data: { initiativeId: initiativeA1Id, userId: memberUserId, permission: "edit" } });
+      expect(await actions()).toEqual({ read: true, edit: true, accept: true, approve: false, crossWorkspace: false });
+      await adminDb.initiativeAccess.update({ where: { id: grant.id }, data: { permission: "view" } });
+      expect(await actions()).toEqual({ read: true, edit: false, accept: false, approve: false, crossWorkspace: false });
+      expect(await withAuthenticatedDatabaseContext(identity, async () => await db.initiative.updateMany({ where: { id: initiativeA1Id }, data: { name: "Forbidden viewer change" } }))).toEqual({ count: 0 });
+      await adminDb.initiativeAccess.delete({ where: { id: grant.id } });
+      const team = await adminDb.team.create({ data: { organizationId: orgA.orgId, name: "Isolated security test team" } });
+      await adminDb.teamMember.create({ data: { teamId: team.id, userId: memberUserId } });
+      await adminDb.initiativeAccess.create({ data: { initiativeId: initiativeA1Id, teamId: team.id, permission: "edit" } });
+      expect(await actions()).toMatchObject({ edit: true, accept: true, approve: false });
+      await adminDb.user.update({ where: { id: memberUserId }, data: { memberType: "external" } });
+      await adminDb.organizationMember.updateMany({ where: { authUserId: memberAuthUserId, organizationId: orgA.orgId }, data: { role: "admin" } });
+      expect(await actions()).toEqual({ read: true, edit: false, accept: false, approve: false, crossWorkspace: false });
+      expect(await withAuthenticatedDatabaseContext(identity, async () => await db.initiative.updateMany({ where: { id: initiativeA1Id }, data: { name: "Forbidden external change" } }))).toEqual({ count: 0 });
+      await adminDb.teamMember.deleteMany({ where: { userId: memberUserId } });
+      expect(await actions()).toEqual({ read: false, edit: false, accept: false, approve: false, crossWorkspace: false });
+    } finally {
+      await adminDb.initiativeAccess.deleteMany({ where: { initiativeId: initiativeA1Id } });
+      await adminDb.user.update({ where: { id: memberUserId }, data: { memberType: "internal" } });
+      await adminDb.organizationMember.updateMany({ where: { authUserId: memberAuthUserId, organizationId: orgA.orgId }, data: { role: "member", status: "active" } });
+    }
+  }, 20_000);
+
+  it("claims one isolated synthetic Jira job once and records its terminal outcome without provider requests", async () => {
+    await withAuthenticatedDatabaseContext({ authUserId: orgA.ownerAuthUserId, organizationId: orgA.orgId }, async () => {
+      const connection = await db.jiraConnection.create({ data: {
+        organizationId: orgA.orgId, initiativeId: initiativeA1Id, configuredByUserId: orgA.ownerUserId, status: "revoked",
+        accessTokenCiphertext: "synthetic-staging-no-credential", refreshTokenCiphertext: "synthetic-staging-no-credential", tokenExpiresAt: new Date(0), scopes: "",
+      } });
+      const idempotencyKey = createHash("sha256").update(randomUUID()).digest("hex");
+      const input = { organizationId: orgA.orgId, initiativeId: initiativeA1Id, connectionId: connection.id,
+        // Missing exportItemId fails validation before any export execution.
+        jobType: "export_item", payload: {}, idempotencyKey };
+      const job = await db.jiraSyncJob.create({ data: input });
+      await expect(db.jiraSyncJob.create({ data: input })).rejects.toMatchObject({ code: "P2002" });
+      const network = vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("External HTTP is forbidden in this fixture"));
+      try {
+        const result = await processJiraJobs(1, `staging-probe-${randomUUID()}`, orgA.orgId);
+        expect(result).toEqual({ claimed: 1, completed: 0, retried: 0, failed: 1 });
+        expect(await processJiraJobs(1, `staging-probe-${randomUUID()}`, orgA.orgId)).toEqual({ claimed: 0, completed: 0, retried: 0, failed: 0 });
+        expect(network).not.toHaveBeenCalled();
+      } finally { network.mockRestore(); }
+      expect(await db.jiraSyncAttempt.count({ where: { jobId: job.id } })).toBe(1);
+      expect(await db.jiraSyncJob.findUnique({ where: { id: job.id } })).toMatchObject({ status: "failed", attemptCount: 1 });
+    });
+  }, 20_000);
 });

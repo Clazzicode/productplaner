@@ -1,4 +1,4 @@
-import { withApi } from "@/lib/observability";
+import { withAuthenticatedApi } from "@/lib/auth/entryPoints";
 import { NextResponse } from "next/server";
 import { requireDocumentApiAccess } from "@/lib/access/documentAccess";
 import { jsonError } from "@/lib/api";
@@ -208,4 +208,4 @@ function safeScalarOrName(fieldKey: string, valueJson: string): string {
   return valueJson;
 }
 
-export const POST = withApi(POSTHandler);
+export const POST = withAuthenticatedApi(POSTHandler);

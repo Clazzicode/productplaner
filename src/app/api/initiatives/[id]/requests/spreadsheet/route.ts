@@ -1,5 +1,5 @@
+import { withAuthenticatedApi } from "@/lib/auth/entryPoints";
 import { z } from "zod";
-import { withApi } from "@/lib/observability";
 import { jsonError, zodMessage } from "@/lib/api";
 import { requireCurrentUserApi } from "@/lib/auth/session";
 import { requireInitiativeApiAccess } from "@/lib/access/guards";
@@ -61,4 +61,4 @@ async function POSTHandler(request: Request, { params }: { params: Promise<{ id:
   return Response.json({ requests: imported }, { status: 201 });
 }
 
-export const POST = withApi(POSTHandler);
+export const POST = withAuthenticatedApi(POSTHandler);

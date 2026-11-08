@@ -1,3 +1,4 @@
+import { withAuthenticatedPage } from "@/lib/auth/entryPoints";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireCurrentUser } from "@/lib/auth/session";
@@ -7,7 +8,7 @@ import { requestRecord } from "@/lib/requests/service";
 import RequestWorkspace from "@/components/requests/RequestWorkspace";
 import { ContainedLayout } from "@/components/layout/PageLayouts";
 
-export default async function RequestsPage({ params }: { params: Promise<{ initiativeId: string }> }) {
+async function RequestsPage({ params }: { params: Promise<{ initiativeId: string }> }) {
   const { initiativeId } = await params;
   const user = await requireCurrentUser();
   establishAuthContext(user.authUserId);
@@ -25,3 +26,5 @@ export default async function RequestsPage({ params }: { params: Promise<{ initi
     <RequestWorkspace initiativeId={initiativeId} initialRequests={requests.map(requestRecord)} canEdit={access.level === "edit" || access.level === "owner"} />
   </ContainedLayout>;
 }
+
+export default withAuthenticatedPage(RequestsPage);

@@ -1,4 +1,4 @@
-import { withApi } from "@/lib/observability";
+import { withAuthenticatedApi } from "@/lib/auth/entryPoints";
 import { requireOrganizationRole } from "@/lib/access/organizationRole";
 import { NextResponse } from "next/server";
 import { requireProjectApiAccess } from "@/lib/access/projectAccess";
@@ -52,5 +52,5 @@ async function PATCHHandler(request: Request, { params }: { params: Promise<{ id
   return NextResponse.json({ ok: true });
 }
 
-export const GET = withApi(GETHandler);
-export const PATCH = withApi(PATCHHandler);
+export const GET = withAuthenticatedApi(GETHandler);
+export const PATCH = withAuthenticatedApi(PATCHHandler);

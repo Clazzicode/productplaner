@@ -1,3 +1,4 @@
+import { withOptionalAuthenticatedPage } from "@/lib/auth/entryPoints";
 import type { Metadata } from "next";
 import localFont from "next/font/local";
 import AppShell from "@/components/shell/AppShell";
@@ -33,7 +34,7 @@ export const metadata: Metadata = {
     "Methodology-aware planning: from a raw product idea to a connected, execution-ready plan prototype.",
 };
 
-export default async function RootLayout({
+async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
@@ -103,3 +104,5 @@ export default async function RootLayout({
     </html>
   );
 }
+
+export default withOptionalAuthenticatedPage(RootLayout);

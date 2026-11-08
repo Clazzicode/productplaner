@@ -1,4 +1,4 @@
-import { withApi } from "@/lib/observability";
+import { withAuthenticatedApi } from "@/lib/auth/entryPoints";
 import { requireCurrentUserApi } from "@/lib/auth/session";
 import { requireInitiativeApiAccess } from "@/lib/access/guards";
 import { establishAuthContext } from "@/lib/db";
@@ -13,4 +13,4 @@ async function handler(_request: Request, { params }: { params: Promise<{ id: st
   if (!access.ok) return access.response;
   return Response.json({ history: await listFeatureHistory(id, featureId) });
 }
-export const GET = withApi(handler);
+export const GET = withAuthenticatedApi(handler);

@@ -1,3 +1,4 @@
+import { withAuthenticatedPage } from "@/lib/auth/entryPoints";
 import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { ContainedLayout } from "@/components/layout/PageLayouts";
@@ -13,7 +14,7 @@ import { db, establishAuthContext } from "@/lib/db";
 export const dynamic = "force-dynamic";
 
 /** ADMIN -> Users -> User Detail (docs/V2-ORG-ADMIN-IA.md §21). Org Admin only. */
-export default async function UserDetailPage({
+async function UserDetailPage({
   params,
 }: {
   params: Promise<{ userId: string }>;
@@ -96,3 +97,5 @@ export default async function UserDetailPage({
     </ContainedLayout>
   );
 }
+
+export default withAuthenticatedPage(UserDetailPage);

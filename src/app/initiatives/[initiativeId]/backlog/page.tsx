@@ -1,3 +1,4 @@
+import { withAuthenticatedPage } from "@/lib/auth/entryPoints";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireCurrentUser } from "@/lib/auth/session";
@@ -9,7 +10,7 @@ import { listUnifiedBacklog } from "@/lib/backlog/unified";
 import BacklogWorkspace from "@/components/backlog/BacklogWorkspace";
 import { ContainedLayout } from "@/components/layout/PageLayouts";
 
-export default async function BacklogPage({ params }: { params: Promise<{ initiativeId: string }> }) {
+async function BacklogPage({ params }: { params: Promise<{ initiativeId: string }> }) {
   const { initiativeId } = await params;
   const user = await requireCurrentUser();
   establishAuthContext(user.authUserId);
@@ -32,3 +33,5 @@ export default async function BacklogPage({ params }: { params: Promise<{ initia
     <BacklogWorkspace initiativeId={initiativeId} initialFeatures={features.map(featureRecord)} initialItems={items} owners={owners} canEdit={access.level === "edit" || access.level === "owner"} canPrioritize={(access.level === "edit" || access.level === "owner") && (user.permissionRole === "owner" || user.permissionRole === "admin")} />
   </ContainedLayout>;
 }
+
+export default withAuthenticatedPage(BacklogPage);

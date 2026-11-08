@@ -1,3 +1,4 @@
+import { withAuthenticatedPage } from "@/lib/auth/entryPoints";
 import { notFound } from "next/navigation";
 import { Badge, type BadgeVariant } from "@/components/ui/Badge";
 import DocumentReviewPanel from "@/components/documents/DocumentReviewPanel";
@@ -24,7 +25,7 @@ const STATUS_VARIANT: Record<string, BadgeVariant> = {
  * context, mirroring how Section 2's budget/rate/target-date inheritance
  * already works.
  */
-export default async function WorkspaceDocumentsPage({
+async function WorkspaceDocumentsPage({
   params,
 }: {
   params: Promise<{ initiativeId: string }>;
@@ -99,3 +100,5 @@ export default async function WorkspaceDocumentsPage({
     </div>
   );
 }
+
+export default withAuthenticatedPage(WorkspaceDocumentsPage);

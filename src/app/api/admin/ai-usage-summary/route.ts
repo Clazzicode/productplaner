@@ -1,4 +1,4 @@
-import { withApi } from "@/lib/observability";
+import { withAuthenticatedApi } from "@/lib/auth/entryPoints";
 import { NextResponse } from "next/server";
 import { jsonError } from "@/lib/api";
 import { requireCurrentUserApi } from "@/lib/auth/session";
@@ -20,4 +20,4 @@ async function GETHandler() {
   return NextResponse.json(summary);
 }
 
-export const GET = withApi(GETHandler);
+export const GET = withAuthenticatedApi(GETHandler);

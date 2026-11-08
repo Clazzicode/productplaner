@@ -1,3 +1,4 @@
+import { withAuthenticatedPage } from "@/lib/auth/entryPoints";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { WideLayout } from "@/components/layout/PageLayouts";
@@ -10,7 +11,7 @@ import { db, establishAuthContext } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
-export default async function DecisionsPage() {
+async function DecisionsPage() {
   const user = await requireCurrentUser();
   establishAuthContext(user.authUserId);
   if (user.profiles.length === 0) redirect("/welcome");
@@ -48,3 +49,5 @@ export default async function DecisionsPage() {
 }
 
 function Metric({ label, value }: { label: string; value: number }) { return <Card><p className="text-xs font-semibold uppercase tracking-wide text-text-muted">{label}</p><p className="mt-1 text-3xl font-bold text-text-primary">{value}</p></Card>; }
+
+export default withAuthenticatedPage(DecisionsPage);

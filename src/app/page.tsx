@@ -1,3 +1,4 @@
+import { withAuthenticatedPage } from "@/lib/auth/entryPoints";
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth/session";
 import { db, establishAuthContext } from "@/lib/db";
@@ -22,7 +23,7 @@ export const dynamic = "force-dynamic";
  * session resumes correctly regardless of exactly where it stopped. See
  * resolveAccountState() for the actual stage/redirect decision.
  */
-export default async function RootPage() {
+async function RootPage() {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
   establishAuthContext(user.authUserId);
@@ -43,3 +44,5 @@ export default async function RootPage() {
   });
   redirect(redirectTo);
 }
+
+export default withAuthenticatedPage(RootPage);

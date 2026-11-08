@@ -1,7 +1,7 @@
+import { withAuthenticatedApi } from "@/lib/auth/entryPoints";
 import { NextResponse } from "next/server";
 import { requireCurrentUserApi } from "@/lib/auth/session";
 import { db, establishAuthContext } from "@/lib/db";
-import { withApi } from "@/lib/observability";
 
 export const runtime = "nodejs";
 
@@ -46,4 +46,4 @@ async function GETHandler() {
   });
 }
 
-export const GET = withApi(GETHandler);
+export const GET = withAuthenticatedApi(GETHandler);

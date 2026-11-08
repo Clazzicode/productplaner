@@ -1,3 +1,4 @@
+import { withAuthenticatedApi } from "@/lib/auth/entryPoints";
 import { NextResponse } from "next/server";
 import { requireInitiativeApiAccess } from "@/lib/access/guards";
 import { jsonError, zodMessage } from "@/lib/api";
@@ -6,7 +7,6 @@ import { BusinessError } from "@/lib/businessError";
 import { db, establishAuthContext } from "@/lib/db";
 import { blockerUpdateSchema } from "@/lib/dependencies/model";
 import { updatePlanningBlocker } from "@/lib/dependencies/service";
-import { withApi } from "@/lib/observability";
 
 async function PATCHHandler(request: Request, { params }: { params: Promise<{ blockerId: string }> }) {
   const { blockerId } = await params; const auth = await requireCurrentUserApi(); if (!auth.ok) return auth.response;
@@ -20,4 +20,4 @@ async function PATCHHandler(request: Request, { params }: { params: Promise<{ bl
   catch (error) { if (error instanceof BusinessError) return jsonError(error.message, error.status); throw error; }
 }
 
-export const PATCH = withApi(PATCHHandler);
+export const PATCH = withAuthenticatedApi(PATCHHandler);

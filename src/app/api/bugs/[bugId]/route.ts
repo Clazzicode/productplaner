@@ -1,3 +1,4 @@
+import { withAuthenticatedApi } from "@/lib/auth/entryPoints";
 import { NextResponse } from "next/server";
 import { requireInitiativeApiAccess } from "@/lib/access/guards";
 import { jsonError, zodMessage } from "@/lib/api";
@@ -6,7 +7,6 @@ import { bugPlanningUpdateSchema } from "@/lib/bugs/model";
 import { updateBugPlanningRecord } from "@/lib/bugs/service";
 import { BusinessError } from "@/lib/businessError";
 import { db, establishAuthContext } from "@/lib/db";
-import { withApi } from "@/lib/observability";
 
 async function PATCHHandler(request: Request, { params }: { params: Promise<{ bugId: string }> }) {
   const { bugId } = await params;
@@ -29,4 +29,4 @@ async function PATCHHandler(request: Request, { params }: { params: Promise<{ bu
   }
 }
 
-export const PATCH = withApi(PATCHHandler);
+export const PATCH = withAuthenticatedApi(PATCHHandler);

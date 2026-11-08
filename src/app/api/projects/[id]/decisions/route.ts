@@ -1,5 +1,5 @@
+import { withAuthenticatedApi } from "@/lib/auth/entryPoints";
 import { requireInitiativeApiAccess } from "@/lib/access/guards";
-import { withApi } from "@/lib/observability";
 import { NextResponse } from "next/server";
 import { requireProjectApiAccess } from "@/lib/access/projectAccess";
 import { jsonError, zodMessage } from "@/lib/api";
@@ -46,4 +46,4 @@ async function POSTHandler(request: Request, { params }: { params: Promise<{ id:
   return NextResponse.json({ decisionId: decision.id });
 }
 
-export const POST = withApi(POSTHandler);
+export const POST = withAuthenticatedApi(POSTHandler);

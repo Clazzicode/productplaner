@@ -1,3 +1,4 @@
+import { withAuthenticatedPage } from "@/lib/auth/entryPoints";
 import { notFound } from "next/navigation";
 import { Badge, healthBadgeVariant } from "@/components/ui/Badge";
 import AssumptionsEditor from "@/components/workspace/AssumptionsEditor";
@@ -16,7 +17,7 @@ export const dynamic = "force-dynamic";
 
 const money = (n: number) => `$${Math.round(n).toLocaleString()}`;
 
-export default async function CapacityPage({
+async function CapacityPage({
   params,
 }: {
   params: Promise<{ initiativeId: string }>;
@@ -185,3 +186,5 @@ function StatCard({
     </div>
   );
 }
+
+export default withAuthenticatedPage(CapacityPage);

@@ -1,8 +1,8 @@
+import { withAuthenticatedApi } from "@/lib/auth/entryPoints";
 import { NextResponse } from "next/server";
 import { jsonError } from "@/lib/api";
 import { requireCurrentUserApi } from "@/lib/auth/session";
 import { db, establishAuthContext } from "@/lib/db";
-import { withApi } from "@/lib/observability";
 
 async function DELETEHandler(_request: Request, context: { params: Promise<{ invitationId: string }> }) {
   const guard = await requireCurrentUserApi();
@@ -18,4 +18,4 @@ async function DELETEHandler(_request: Request, context: { params: Promise<{ inv
   return NextResponse.json({ ok: true });
 }
 
-export const DELETE = withApi(DELETEHandler);
+export const DELETE = withAuthenticatedApi(DELETEHandler);

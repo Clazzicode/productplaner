@@ -1,4 +1,4 @@
-import { withApi } from "@/lib/observability";
+import { withAuthenticatedApi } from "@/lib/auth/entryPoints";
 import { requireCurrentUserApi } from "@/lib/auth/session";
 import { requireInitiativeApiAccess } from "@/lib/access/guards";
 import { db, establishAuthContext } from "@/lib/db";
@@ -16,4 +16,4 @@ async function handler(request: Request, { params }: { params: Promise<{ demoId:
   try { return Response.json(await generateDemoDraft({ demoItemId: demoId, kind: parsed.data.kind, userId: auth.user.id, organizationId: auth.user.organizationId })); }
   catch (error) { if (error instanceof BusinessError) return jsonError(error.message, error.status); return mapAssistActionError(error); }
 }
-export const POST = withApi(handler);
+export const POST = withAuthenticatedApi(handler);

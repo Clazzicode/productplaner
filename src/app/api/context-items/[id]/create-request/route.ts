@@ -1,4 +1,4 @@
-import { withApi } from "@/lib/observability";
+import { withAuthenticatedApi } from "@/lib/auth/entryPoints";
 import { jsonError } from "@/lib/api";
 import { requireCurrentUserApi } from "@/lib/auth/session";
 import { requireContextItemApiAccess } from "@/lib/access/documentAccess";
@@ -48,4 +48,4 @@ async function POSTHandler(_request: Request, { params }: { params: Promise<{ id
   return Response.json({ request }, { status: 201 });
 }
 
-export const POST = withApi(POSTHandler);
+export const POST = withAuthenticatedApi(POSTHandler);

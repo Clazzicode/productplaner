@@ -1,3 +1,4 @@
+import { withAuthenticatedPage } from "@/lib/auth/entryPoints";
 import { ContainedLayout } from "@/components/layout/PageLayouts";
 import PageHeader from "@/components/ui/PageHeader";
 import OrganizationSwitcher from "@/components/auth/OrganizationSwitcher";
@@ -7,7 +8,7 @@ import { db, establishAuthContext } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
-export default async function OrganizationsPage() {
+async function OrganizationsPage() {
   const user = await requireCurrentUser();
   establishAuthContext(user.authUserId);
 
@@ -39,3 +40,5 @@ export default async function OrganizationsPage() {
     </ContainedLayout>
   );
 }
+
+export default withAuthenticatedPage(OrganizationsPage);

@@ -1,4 +1,4 @@
-import { withApi } from "@/lib/observability";
+import { withAuthenticatedApi } from "@/lib/auth/entryPoints";
 import { requireOrganizationRole } from "@/lib/access/organizationRole";
 import { NextResponse } from "next/server";
 import { jsonError, zodMessage } from "@/lib/api";
@@ -62,5 +62,5 @@ async function POSTHandler(request: Request) {
   return NextResponse.json({ projectId: project.id });
 }
 
-export const GET = withApi(GETHandler);
-export const POST = withApi(POSTHandler);
+export const GET = withAuthenticatedApi(GETHandler);
+export const POST = withAuthenticatedApi(POSTHandler);

@@ -1,4 +1,4 @@
-import { withApi } from "@/lib/observability";
+import { withAuthenticatedApi } from "@/lib/auth/entryPoints";
 import { NextResponse } from "next/server";
 import { demoIntegrationsEnabled } from "@/lib/sync/demoPolicy";
 import { requireCurrentUserApi } from "@/lib/auth/session";
@@ -28,4 +28,4 @@ async function POSTHandler() {
   return NextResponse.json({ ok: true });
 }
 
-export const POST = withApi(POSTHandler);
+export const POST = withAuthenticatedApi(POSTHandler);

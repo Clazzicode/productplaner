@@ -1,4 +1,4 @@
-import { withApi } from "@/lib/observability";
+import { withAuthenticatedApi } from "@/lib/auth/entryPoints";
 import { randomUUID } from "node:crypto";
 import { jsonError, zodMessage } from "@/lib/api";
 import { requireCurrentUserApi } from "@/lib/auth/session";
@@ -22,4 +22,4 @@ async function handler(request: Request) {
     return error instanceof BusinessError ? jsonError(error.message, error.status) : jsonError(error instanceof Error ? error.message : "Could not queue the Jira import.", 400);
   }
 }
-export const POST = withApi(handler);
+export const POST = withAuthenticatedApi(handler);

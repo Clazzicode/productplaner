@@ -1,7 +1,7 @@
+import { withAuthenticatedApi } from "@/lib/auth/entryPoints";
 import { requireCurrentUserApi } from "@/lib/auth/session";
 import { establishAuthContext } from "@/lib/db";
 import { getBackgroundJobForCurrentOrganization } from "@/lib/jobs/queue";
-import { withApi } from "@/lib/observability";
 
 async function GETHandler(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const authGuard = await requireCurrentUserApi();
@@ -12,5 +12,5 @@ async function GETHandler(_request: Request, { params }: { params: Promise<{ id:
   return Response.json(job);
 }
 
-export const GET = withApi(GETHandler);
+export const GET = withAuthenticatedApi(GETHandler);
 

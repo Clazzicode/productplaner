@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({ auth: vi.fn(), write: vi.fn(), initiative: vi.fn(), project: vi.fn() }));
 vi.mock("@/lib/auth/session", () => ({ requireCurrentUserApi: mocks.auth }));
 vi.mock("@/lib/db", () => ({
+  withAuthenticatedDatabaseContext: async (_identity: unknown, fn: () => Promise<unknown>) => await fn(),
   establishAuthContext: vi.fn(), currentAuthUserId: () => "auth-a",
   withTransaction: async (fn: () => Promise<unknown>) => fn(),
   db: {

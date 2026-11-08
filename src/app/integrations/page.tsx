@@ -1,3 +1,4 @@
+import { withAuthenticatedPage } from "@/lib/auth/entryPoints";
 import IntegrationsHub, {
   type HubConnection,
   type HubProvider,
@@ -12,7 +13,7 @@ import { ensureProvidersSeeded } from "@/lib/sync/integrationSeed";
 
 export const dynamic = "force-dynamic";
 
-export default async function IntegrationsPage() {
+async function IntegrationsPage() {
   const user = await requireCurrentUser();
   establishAuthContext(user.authUserId);
   await ensureProvidersSeeded();
@@ -98,3 +99,5 @@ export default async function IntegrationsPage() {
     </ContainedLayout>
   );
 }
+
+export default withAuthenticatedPage(IntegrationsPage);

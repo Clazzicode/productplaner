@@ -1,3 +1,4 @@
+import { withAuthenticatedPage } from "@/lib/auth/entryPoints";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { DashboardLayout } from "@/components/layout/PageLayouts";
@@ -46,7 +47,7 @@ const parseContentJson = (raw: string): Record<string, unknown> => {
 
 export const dynamic = "force-dynamic";
 
-export default async function DashboardPage({
+async function DashboardPage({
   params,
 }: {
   params: Promise<{ initiativeId: string }>;
@@ -531,3 +532,5 @@ export default async function DashboardPage({
     </DashboardLayout>
   );
 }
+
+export default withAuthenticatedPage(DashboardPage);

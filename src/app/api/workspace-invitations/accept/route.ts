@@ -1,10 +1,10 @@
+import { withAuthenticatedApi } from "@/lib/auth/entryPoints";
 import { createHash } from "node:crypto";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { jsonError, zodMessage } from "@/lib/api";
 import { requireCurrentUserApi, setActiveOrganization } from "@/lib/auth/session";
 import { db, establishAuthContext } from "@/lib/db";
-import { withApi } from "@/lib/observability";
 
 const acceptSchema = z.object({ token: z.string().min(40).max(100) });
 
@@ -38,4 +38,4 @@ async function POSTHandler(request: Request) {
   return NextResponse.json({ ok: true, organizationId });
 }
 
-export const POST = withApi(POSTHandler);
+export const POST = withAuthenticatedApi(POSTHandler);

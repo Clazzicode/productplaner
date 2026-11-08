@@ -1,3 +1,4 @@
+import { withAuthenticatedPage } from "@/lib/auth/entryPoints";
 import JiraIntegrationManager from "@/components/integrations/JiraIntegrationManager";
 import { ContainedLayout } from "@/components/layout/PageLayouts";
 import PageHeader from "@/components/ui/PageHeader";
@@ -7,7 +8,7 @@ import { ensureProvidersSeeded } from "@/lib/sync/integrationSeed";
 
 export const dynamic = "force-dynamic";
 
-export default async function JiraIntegrationPage() {
+async function JiraIntegrationPage() {
   const user = await requireCurrentUser();
   establishAuthContext(user.authUserId);
   await ensureProvidersSeeded();
@@ -36,3 +37,5 @@ export default async function JiraIntegrationPage() {
     </ContainedLayout>
   );
 }
+
+export default withAuthenticatedPage(JiraIntegrationPage);

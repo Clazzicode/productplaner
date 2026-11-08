@@ -1,3 +1,4 @@
+import { withAuthenticatedPage } from "@/lib/auth/entryPoints";
 import { notFound, redirect } from "next/navigation";
 import { ContainedLayout } from "@/components/layout/PageLayouts";
 import Breadcrumb from "@/components/ui/Breadcrumb";
@@ -15,7 +16,7 @@ export const dynamic = "force-dynamic";
  * link, and from Team Detail's "manage on the Access page" link. All three
  * land here and read/write the same InitiativeAccess rows.
  */
-export default async function InitiativeAccessPage({
+async function InitiativeAccessPage({
   params,
 }: {
   params: Promise<{ initiativeId: string }>;
@@ -67,3 +68,5 @@ export default async function InitiativeAccessPage({
     </ContainedLayout>
   );
 }
+
+export default withAuthenticatedPage(InitiativeAccessPage);

@@ -143,3 +143,5 @@ jobs:
         run: npx prisma migrate status
       - name: Verify staging role, schema, and RLS
         run: node scripts/verify-staging-database.mjs
+      - name: Verify real pooled user contexts and rollback in staging only
+        run: RUN_LIVE_DB_TESTS=true npx vitest run src/lib/access/__tests__/rls-isolation.integration.test.ts

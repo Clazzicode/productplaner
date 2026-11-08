@@ -1,4 +1,4 @@
-import { withApi } from "@/lib/observability";
+import { withAuthenticatedApi } from "@/lib/auth/entryPoints";
 import { requireCurrentUserApi } from "@/lib/auth/session";
 import { requireInitiativeApiAccess } from "@/lib/access/guards";
 import { requireOrganizationRole } from "@/lib/access/organizationRole";
@@ -20,5 +20,5 @@ async function handler(_request: Request, { params }: { params: Promise<{ clarif
   catch (error) { if (error instanceof BusinessError) return jsonError(error.message, error.status); return mapAssistActionError(error); }
 }
 
-export const POST = withApi(handler);
+export const POST = withAuthenticatedApi(handler);
 

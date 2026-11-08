@@ -23,17 +23,14 @@ import { prismaDatabaseUrl } from "@/lib/dbConnection";
 // function's continuing execution (including deeper nested function calls —
 // e.g. into src/lib/access, src/lib/generation, etc.).
 //
-// Practical rule this drives: getCurrentUser() (src/lib/auth/session.ts)
-// resolves identity but deliberately does NOT call establishAuthContext()
-// itself — it awaits cookies() via the Supabase client, so anything it set
-// would be silently lost the moment it returns. Instead, every page/Route
-// Handler calls `establishAuthContext(user.authUserId)` itself, immediately
-// after awaiting requireCurrentUser()/requireCurrentUserApi(), before any
-// db/withTransaction use in that same function — see those call sites for
-// the pattern. Getting this wrong fails LOUDLY (claimsJson() throws) rather
-// than silently running unauthenticated, so a missed call site is a 500, not
-// a security hole.
-type AuthContext = { authUserId: string | null };
+// Protected routes/pages now use auth/entryPoints.ts wrappers: resolve the
+// identity, then await the complete handler inside a scoped context. A checked
+// inventory prevents new protected entry points from forgetting that wrapper.
+// getCurrentUser() establishes claims only for its own membership queries;
+// callers must not depend on those claims surviving its dynamic-API boundary.
+// Existing establishAuthContext calls remain compatible inside the wrapper.
+// Missing context continues to fail loudly rather than executing anonymously.
+type AuthContext = { authUserId: string | null; organizationId?: string };
 
 const authContext = new AsyncLocalStorage<AuthContext>();
 const transactionContext = new AsyncLocalStorage<Prisma.TransactionClient>();
@@ -46,7 +43,18 @@ const transactionContext = new AsyncLocalStorage<Prisma.TransactionClient>();
  *   establishAuthContext(user.authUserId);
  */
 export function establishAuthContext(authUserId: string | null): void {
-  authContext.enterWith({ authUserId });
+  const existing = authContext.getStore();
+  authContext.enterWith({ authUserId, organizationId: existing?.authUserId === authUserId ? existing.organizationId : undefined });
+}
+
+/** The authenticated entry-point wrapper owns this scope. Await all database
+ * operations in the callback, including lazy Prisma operations. */
+export async function withAuthenticatedDatabaseContext<T>(identity: { authUserId: string; organizationId: string }, fn: () => Promise<T>): Promise<T> {
+  return authContext.run({ authUserId: identity.authUserId, organizationId: identity.organizationId }, async () => await fn());
+}
+
+export function currentAuthOrganizationId(): string | undefined {
+  return authContext.getStore()?.organizationId;
 }
 
 export function currentAuthUserId(): string | null {
@@ -67,7 +75,8 @@ function claimsJson(): string {
   if (!ctx) {
     throw new Error(
       "Database access outside request auth context — call establishAuthContext(user.authUserId) " +
-        "in the same function as this db call (see src/lib/db.ts), or wrap trusted server-only code " +
+        "in an explicitly classified callback, or use withAuthenticatedApi/withAuthenticatedPage " +
+        "for protected entry points; wrap trusted server-only code " +
         "in withServiceContext().",
     );
   }

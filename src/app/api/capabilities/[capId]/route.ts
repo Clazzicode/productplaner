@@ -1,4 +1,4 @@
-import { withApi } from "@/lib/observability";
+import { withAuthenticatedApi } from "@/lib/auth/entryPoints";
 import { NextResponse } from "next/server";
 import { withPlanningMutation } from "@/lib/generation/mutation";
 import { requireInitiativeApiAccess } from "@/lib/access/guards";
@@ -96,5 +96,5 @@ async function DELETEHandler(
   return NextResponse.json({ ok: true });
 }
 
-export const PATCH = withApi(PATCHHandler);
-export const DELETE = withApi(DELETEHandler);
+export const PATCH = withAuthenticatedApi(PATCHHandler);
+export const DELETE = withAuthenticatedApi(DELETEHandler);

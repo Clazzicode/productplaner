@@ -1,3 +1,4 @@
+import { withAuthenticatedApi } from "@/lib/auth/entryPoints";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { z } from "zod";
@@ -5,7 +6,6 @@ import { requireOrganizationRole } from "@/lib/access/organizationRole";
 import { jsonError } from "@/lib/api";
 import { requireCurrentUserApi } from "@/lib/auth/session";
 import { db, establishAuthContext } from "@/lib/db";
-import { withApi } from "@/lib/observability";
 
 const pairingSchema = z.object({}).strict();
 
@@ -52,5 +52,5 @@ async function GETHandler() {
   return NextResponse.json({ installations });
 }
 
-export const GET = withApi(GETHandler);
-export const POST = withApi(POSTHandler);
+export const GET = withAuthenticatedApi(GETHandler);
+export const POST = withAuthenticatedApi(POSTHandler);

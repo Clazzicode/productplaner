@@ -42,4 +42,9 @@ describe("scheduled Jira worker", () => {
     expect(mocks.process).not.toHaveBeenCalled();
     expect(mocks.execute).not.toHaveBeenCalled();
   });
+  it("rejects multibyte credentials without throwing a timing-safe comparison error", async () => {
+    const response = await GET(new Request("https://app.test/api/internal/jira/jobs/run", { headers: { authorization: `Bearer ${"é".repeat("test-worker-authorization".length)}` } }));
+    expect(response.status).toBe(401);
+    expect(mocks.process).not.toHaveBeenCalled();
+  });
 });

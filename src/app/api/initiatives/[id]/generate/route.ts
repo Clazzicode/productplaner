@@ -1,4 +1,4 @@
-import { withApi } from "@/lib/observability";
+import { withAuthenticatedApi } from "@/lib/auth/entryPoints";
 import { after, NextResponse } from "next/server";
 import { randomUUID } from "node:crypto";
 import { requireInitiativeApiAccess } from "@/lib/access/guards";
@@ -52,4 +52,4 @@ async function POSTHandler(
   return NextResponse.json({ jobId: job.id, status: job.status }, { status: 202 });
 }
 
-export const POST = withApi(POSTHandler);
+export const POST = withAuthenticatedApi(POSTHandler);

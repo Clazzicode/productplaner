@@ -1,3 +1,4 @@
+import { withAuthenticatedPage } from "@/lib/auth/entryPoints";
 import { formatCalendarDate } from "@/lib/calendarDate";
 import { notFound } from "next/navigation";
 import CoachMark from "@/components/coachmarks/CoachMark";
@@ -14,7 +15,7 @@ import { clarificationInclude } from "@/lib/clarifications/service";
 
 export const dynamic = "force-dynamic";
 
-export default async function SprintsPage({
+async function SprintsPage({
   params,
 }: {
   params: Promise<{ initiativeId: string }>;
@@ -398,3 +399,5 @@ export default async function SprintsPage({
     </div>
   );
 }
+
+export default withAuthenticatedPage(SprintsPage);

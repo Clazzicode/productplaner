@@ -1,3 +1,4 @@
+import { withAuthenticatedPage } from "@/lib/auth/entryPoints";
 import { FocusedLayout } from "@/components/layout/PageLayouts";
 import ProductDirectionBootstrap from "@/components/questionnaire/ProductDirectionBootstrap";
 import SimplifiedIntakeWizard from "@/components/questionnaire/SimplifiedIntakeWizard";
@@ -10,7 +11,7 @@ import type { SimplifiedExperienceLevel } from "@/lib/onboarding/experienceOptio
 
 export const dynamic = "force-dynamic";
 
-export default async function NewInitiativePage() {
+async function NewInitiativePage() {
   const user = await requireCurrentUser();
   const profile = user.profiles[0] ?? null;
   const onboarding = await readOnboardingStateServer();
@@ -37,3 +38,5 @@ export default async function NewInitiativePage() {
     </FocusedLayout>
   );
 }
+
+export default withAuthenticatedPage(NewInitiativePage);
