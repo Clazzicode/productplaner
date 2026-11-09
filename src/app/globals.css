@@ -423,7 +423,8 @@ html:has(.roadmap-route-frame)::-webkit-scrollbar { display: none; }
   .roadmap-timeline-detail-inner > div:first-child p { font-size: 9px; line-height: 1.1; }
   .roadmap-timeline-detail-inner > div:first-child h2 { margin: 4px 0 0; font-size: 18px; line-height: 1.13; }
   .roadmap-timeline-detail-inner > div:nth-child(2) { padding: 10px 14px; }
-  .roadmap-timeline-detail-inner > div:nth-child(2) section + section { margin-top: 10px; }
+  .roadmap-timeline-detail-inner > div:nth-child(2) section + section { margin-top: 10px !important; }
+  .roadmap-timeline-detail-inner > div:nth-child(2) > section:nth-child(3) { margin-top: 24px !important; }
   .roadmap-timeline-detail-inner section > div:first-child { gap: 4px; }
   .roadmap-timeline-detail-inner section > div:first-child > span { padding: 2px 6px; font-size: 9px; }
   .roadmap-timeline-detail-inner section p { margin-top: 8px; font-size: 10px; line-height: 1.35; }
@@ -435,7 +436,8 @@ html:has(.roadmap-route-frame)::-webkit-scrollbar { display: none; }
   .roadmap-timeline-about p { margin-top: 6px; color: #5a6680; line-height: 1.35; }
   .roadmap-timeline-detail-inner section h3 { font-size: 10px; }
   .roadmap-timeline-detail-inner section dl { margin-top: 5px; border: 1px solid #dce1ed; border-radius: 5px; padding: 2px 7px; font-size: 10px; }
-  .roadmap-timeline-detail-inner section dl > div { gap: 8px; border-bottom: 1px solid #e7e9f2; padding: 3px 0; }
+  .roadmap-timeline-detail-inner section dl > div { gap: 8px; border-bottom: 1px solid #e7e9f2; padding: 1.5px 0; }
+  .roadmap-timeline-detail-inner section dl > div + div { margin-top: 0; }
   .roadmap-timeline-detail-inner > div:last-child { padding: 10px 14px; }
   .roadmap-timeline-detail-inner > div:last-child a { font-size: 10px; }
   .roadmap-connection-detail { top: 89px; }
