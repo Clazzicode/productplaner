@@ -62,7 +62,7 @@ export default function RoadmapPlanningView(props: {
                 onClick={() => { if (confirmPageNavigation()) { setSelectedId(feature.id); setMobileOpen(true); } }}>
                 <strong>{feature.name}</strong>
                 <span className="roadmap-feature-tags"><span>Value: {label(feature.businessValue)}</span>
-                  {feature.dependencyCount > 0 && <span>↗ {feature.dependencyCount} dependencies</span>}
+                  {feature.dependencyCount > 0 && <span title={`${feature.dependencyCount} ${feature.dependencyCount === 1 ? "dependency" : "dependencies"}`}>↗ {feature.dependencyCount} dep.</span>}
                   {feature.blockerCount > 0 && <span className="is-warning">{feature.blockerCount} blockers</span>}
                 </span>
               </button>)}
