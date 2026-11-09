@@ -4,20 +4,7 @@ import { emptyRequest, priorityScore, requestSchema, toRequestInput, type Reques
 import AiAssistItemCard, { type AiAssistItemDTO } from "@/components/ai/AiAssistItemCard";
 import RequestEditor, { type RequestTab } from "./RequestEditor";
 
-const tabs: { id: RequestTab; label: string; description: string }[] = [
-  { id: "intake", label: "Capture request", description: "Describe the need and its source" },
-  { id: "requirements", label: "Clarify requirements", description: "Resolve questions and define scope" },
-  { id: "priority", label: "Prioritize", description: "Record the Product Owner decision" },
-];
-
-function WorkflowIcon({ tab }: { tab: RequestTab }) {
-  const paths: Record<RequestTab, React.ReactNode> = {
-    intake: <><path d="M4 5h8l4 4v10H4z" /><path d="M12 5v4h4M7 13h6m-3-3v6" /></>,
-    requirements: <><path d="M4 5h16v11H9l-5 3V5Z" /><path d="M8 9h8m-8 3h5" /></>,
-    priority: <><path d="M5 4v16m7-16v16m7-16v16M2 9h6m1 5h6m1-6h6" /></>,
-  };
-  return <svg aria-hidden="true" width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">{paths[tab]}</svg>;
-}
+const tabs: { id: RequestTab; label: string }[] = [{ id: "intake", label: "1 · Capture request" }, { id: "requirements", label: "2 · Clarify requirements" }, { id: "priority", label: "6 · Prioritize" }];
 interface SpreadsheetPreviewRow { rowNumber: number; sheetName: string; raw: Record<string, string>; request: RequestInput; warnings: string[] }
 interface RequestRevisionDTO { id: string; fromRevision: number; toRevision: number; reason: string; changedBy: string; changedFields: string[]; sourceAiAssistItemId: string | null; createdAt: string }
 export default function RequestWorkspace({ initiativeId, initialRequests, canEdit, demo = false }: {
@@ -156,26 +143,8 @@ export default function RequestWorkspace({ initiativeId, initialRequests, canEdi
         </button>)}{visible.length === 0 && <p className="py-4 text-sm text-slate-500">No requests match. Capture a request to get started.</p>}</div>
       </aside>
       <section className="min-w-0 rounded-2xl border border-slate-200 bg-white p-5 sm:p-7">
-        <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <p className="mb-1 text-xs font-semibold uppercase tracking-[0.12em] text-indigo-600">Request workspace</p>
-            <h2 className="text-xl font-semibold text-slate-950">{selected ? selected.title : "New request"}</h2>
-            <p className="mt-1 text-sm text-slate-500">{tabs.find(item => item.id === tab)?.description}</p>
-          </div>
-          <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${dirty ? "bg-amber-50 text-amber-800" : "bg-slate-100 text-slate-600"}`}>{dirty ? "Unsaved changes" : selected ? `Saved revision ${selected.revision}` : "Not saved yet"}</span>
-        </div>
-        <nav aria-label="Request workflow" className="mb-6 grid gap-2 rounded-xl border border-slate-200 bg-slate-50/70 p-2 sm:grid-cols-3 lg:grid-cols-1 xl:grid-cols-3">
-          {tabs.map(item => <button
-            key={item.id}
-            type="button"
-            aria-pressed={tab === item.id}
-            onClick={() => setTab(item.id)}
-            className={`flex min-h-[78px] min-w-0 items-start gap-3 rounded-lg border p-3 text-left transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 ${tab === item.id ? "border-indigo-500 bg-white shadow-[0_2px_8px_rgba(79,70,229,0.10)]" : "border-transparent text-slate-600 hover:border-slate-200 hover:bg-white"}`}
-          >
-            <span className={`grid h-9 w-9 flex-none place-items-center rounded-lg ${tab === item.id ? "bg-indigo-100 text-indigo-700" : "bg-white text-slate-500"}`}><WorkflowIcon tab={item.id} /></span>
-            <span className="min-w-0"><span className={`block text-sm font-semibold ${tab === item.id ? "text-indigo-700" : "text-slate-800"}`}>{item.label}</span><span className="mt-1 block text-xs leading-4 text-slate-500">{item.description}</span></span>
-          </button>)}
-        </nav>
+        <div className="mb-5 flex flex-wrap items-center justify-between gap-3"><h2 className="text-xl font-semibold">{selected ? selected.title : "Capture a new request"}</h2><span className="text-xs text-slate-500">{dirty ? "Unsaved changes" : selected ? `Saved revision ${selected.revision}` : "New request"}</span></div>
+        <nav aria-label="Request workflow" className="mb-6 flex flex-wrap gap-2">{tabs.map(t => <button key={t.id} aria-pressed={tab === t.id} onClick={() => setTab(t.id)} className={`rounded-lg px-3 py-2 text-sm font-medium ${tab === t.id ? "bg-indigo-600 text-white" : "bg-slate-100 text-slate-700"}`}>{t.label}</button>)}</nav>
         <form onSubmit={e => { e.preventDefault(); void submit(); }}>
           <fieldset disabled={!canEdit || busy} className="space-y-5 disabled:opacity-70">
             <RequestEditor value={draft} tab={tab} onChange={value => { setDraft(value); setDirty(true); setMessage(""); }} />
