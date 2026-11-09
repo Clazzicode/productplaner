@@ -82,7 +82,7 @@ export default function RoadmapDetailDrawer(props: {
                 </Badge>
               )}
             </div>
-            {feature.description && <p className="mt-3 text-sm text-text-secondary">{feature.description}</p>}
+            {feature.description && <p className="roadmap-timeline-description mt-3 text-sm text-text-secondary">{feature.description}</p>}
           </section>
 
           <section>
@@ -118,6 +118,15 @@ export default function RoadmapDetailDrawer(props: {
             </dl>
           </section>
 
+          <section>
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-text-muted">Delivery</h3>
+            <dl className="mt-2 space-y-1.5 text-sm">
+              <Row label="Epics" value={String(feature.epicCount)} />
+              <Row label="Stories" value={String(feature.storyCount)} />
+              <Row label="Sprint span" value={feature.sprintRange ?? "Not yet packed"} />
+            </dl>
+          </section>
+
           {(feature.dependencyWarnings.length > 0 || feature.blockerCount > 0 || feature.defectCount > 0) && (
             <section className="rounded-xl border border-amber-200 bg-amber-50 p-3">
               <h3 className="text-xs font-semibold uppercase tracking-wide text-amber-900">Delivery warnings</h3>
@@ -130,14 +139,7 @@ export default function RoadmapDetailDrawer(props: {
             </section>
           )}
 
-          <section>
-            <h3 className="text-xs font-semibold uppercase tracking-wide text-text-muted">Delivery</h3>
-            <dl className="mt-2 space-y-1.5 text-sm">
-              <Row label="Epics" value={String(feature.epicCount)} />
-              <Row label="Stories" value={String(feature.storyCount)} />
-              <Row label="Sprint span" value={feature.sprintRange ?? "Not yet packed"} />
-            </dl>
-          </section>
+          {feature.description && <details className="roadmap-timeline-about"><summary>About this feature</summary><p>{feature.description}</p></details>}
         </div>
 
         <div className="flex flex-wrap gap-2 border-t border-border-subtle p-5">

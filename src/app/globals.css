@@ -277,6 +277,7 @@ html:has(.roadmap-route-frame)::-webkit-scrollbar { display: none; }
 .roadmap-timeline-detail-inner > div:nth-child(2) { padding: 16px 25px; }
 .roadmap-timeline-detail-inner > div:last-child { padding: 20px 25px; }
 .roadmap-timeline-detail-inner > div:last-child a { border: 0; padding: 0; color: #5145ed; font-size: 13px; }
+.roadmap-timeline-about { display: none; }
 .roadmap-mobile-phase { border-radius: 7px; background: #eeeafd; padding: 9px 11px; color: #19243d; font-size: 14px; font-weight: 750; }
 .roadmap-mobile-feature.is-selected { border-color: #5145ed; box-shadow: 0 0 0 1px #5145ed; }
 .roadmap-source-pill { border-radius: 999px; background: #eeeafd; padding: 3px 8px; color: #5044d9; font-weight: 650; }
@@ -426,8 +427,12 @@ html:has(.roadmap-route-frame)::-webkit-scrollbar { display: none; }
   .roadmap-timeline-detail-inner section > div:first-child { gap: 4px; }
   .roadmap-timeline-detail-inner section > div:first-child > span { padding: 2px 6px; font-size: 9px; }
   .roadmap-timeline-detail-inner section p { margin-top: 8px; font-size: 10px; line-height: 1.35; }
+  .roadmap-timeline-description { display: none; }
+  .roadmap-timeline-about { display: block; font-size: 10px; }
+  .roadmap-timeline-about summary { cursor: pointer; color: #5145ed; font-weight: 650; }
+  .roadmap-timeline-about p { margin-top: 6px; color: #5a6680; line-height: 1.35; }
   .roadmap-timeline-detail-inner section h3 { font-size: 10px; }
-  .roadmap-timeline-detail-inner section dl { margin-top: 5px; font-size: 10px; }
+  .roadmap-timeline-detail-inner section dl { margin-top: 5px; border: 1px solid #dce1ed; border-radius: 5px; padding: 2px 7px; font-size: 10px; }
   .roadmap-timeline-detail-inner section dl > div { gap: 8px; border-bottom: 1px solid #e7e9f2; padding: 3px 0; }
   .roadmap-timeline-detail-inner > div:last-child { padding: 10px 14px; }
   .roadmap-timeline-detail-inner > div:last-child a { font-size: 10px; }
