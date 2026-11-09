@@ -70,7 +70,7 @@ const timelineData: ClientRoadmapTimelineData = {
 
 export default function RoadmapVisualPreview() {
   if (process.env.VERCEL_ENV !== "preview") notFound();
-  return <AppShell signedIn canManageWorkspace userName="Jordan Sample" accessLevel="standard_user"
+  return <div className="roadmap-visual-preview"><AppShell signedIn canManageWorkspace userName="Jordan Sample" accessLevel="standard_user"
     initiatives={[{ id: "guided-planning-po-roadmap", name: "Product Owner MVP Roadmap", status: "generated", canEdit: false, hasWorkspace: true, project: { id: "preview-project", name: "Guided Planning" }, syncConnections: [] }]}>
     <div className="roadmap-route-frame">
       <details className="roadmap-workspace-tools"><summary>Workspace context <span aria-hidden>⌄</span></summary><div className="roadmap-workspace-tools-content"><strong>Guided Planning</strong><p>Design preview only · no saved changes</p></div></details>
@@ -83,5 +83,5 @@ export default function RoadmapVisualPreview() {
         />
       </RoadmapToolbar>
     </div>
-  </AppShell>;
+  </AppShell></div>;
 }
