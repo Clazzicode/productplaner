@@ -1,7 +1,7 @@
 "use client";
 
-import { format } from "date-fns";
 import { Badge } from "@/components/ui/Badge";
+import { formatCalendarDate } from "@/lib/calendarDate";
 import type { ClientTimelineFeature, ClientTimelinePhaseGroup } from "@/lib/roadmap/loadRoadmapTimelineData";
 import { TIMELINE_HEALTH_LABELS } from "@/lib/roadmap/timelineDerivation";
 
@@ -78,15 +78,13 @@ function FeatureRow(props: { feature: ClientTimelineFeature; selected: boolean; 
         <span className="truncate text-sm font-semibold text-text-primary">{feature.title}</span>
       </div>
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-text-muted">
-        {feature.health ? (
+        {feature.health && (
           <span className="flex items-center gap-1.5">
             <span className={`inline-block h-1.5 w-1.5 rounded-full ${HEALTH_DOT[feature.health]}`} aria-hidden />
             {TIMELINE_HEALTH_LABELS[feature.health]}
           </span>
-        ) : (
-          <span>No date yet</span>
         )}
-        <span>{start && end ? `${format(start, "MMM d")} – ${format(end, "MMM d, yyyy")}` : "Unscheduled"}</span>
+        <span>{start && end ? `${formatCalendarDate(start, { month: "short", day: "numeric" })} – ${formatCalendarDate(end, { month: "short", day: "numeric", year: "numeric" })}` : "Unscheduled"}</span>
         {feature.scheduleSource !== "unscheduled" && <span className="roadmap-source-pill">{feature.scheduleSource === "sprints" ? "From sprint dates" : "Phase estimate"}</span>}
         {feature.dependsOnNames.length > 0 && <span>🔗 {feature.dependsOnNames.length}</span>}
       </div>
