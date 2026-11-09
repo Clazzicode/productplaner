@@ -9,10 +9,8 @@ export default function SidebarSection(props: { title: string; items: Navigation
     <summary className="cursor-pointer rounded px-2 py-2 text-xs font-bold uppercase tracking-wider text-[#91a7d0] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white">{props.title}</summary>{content}
   </details>;
   return (
-    <div>
-      <p className="px-2 text-[10px] font-bold uppercase tracking-[0.2em] text-[#91a7d0]">
-        {props.title}
-      </p>
+    <div className={props.title ? "" : "pt-3"}>
+      {props.title && <p className="px-2 text-[10px] font-bold uppercase tracking-[0.2em] text-[#91a7d0]">{props.title}</p>}
       {content}
     </div>
   );
