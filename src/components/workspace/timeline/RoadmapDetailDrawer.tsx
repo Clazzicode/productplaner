@@ -88,7 +88,7 @@ export default function RoadmapDetailDrawer(props: {
           <section>
             <h3 className="text-xs font-semibold uppercase tracking-wide text-text-muted">Timing</h3>
             <dl className="mt-2 space-y-1.5 text-sm">
-              <Row label="Phase" value={feature.phaseName} />
+              <Row label="Phase" value={feature.phaseName} compactExtra />
               <Row
                 label="Derived start"
                 value={start ? formatCalendarDate(start, { month: "short", day: "numeric", year: "numeric" }) : "—"}
@@ -114,6 +114,7 @@ export default function RoadmapDetailDrawer(props: {
               <Row
                 label="Depended on by"
                 value={feature.dependedOnByNames.length > 0 ? feature.dependedOnByNames.join(", ") : "None"}
+                compactExtra
               />
             </dl>
           </section>
@@ -121,8 +122,8 @@ export default function RoadmapDetailDrawer(props: {
           <section>
             <h3 className="text-xs font-semibold uppercase tracking-wide text-text-muted">Delivery</h3>
             <dl className="mt-2 space-y-1.5 text-sm">
-              <Row label="Epics" value={String(feature.epicCount)} />
-              <Row label="Stories" value={String(feature.storyCount)} />
+              <Row label="Epics" value={String(feature.epicCount)} compactExtra />
+              <Row label="Stories" value={String(feature.storyCount)} compactExtra />
               <Row label="Sprint span" value={feature.sprintRange ?? "Not yet packed"} />
             </dl>
           </section>
@@ -140,6 +141,9 @@ export default function RoadmapDetailDrawer(props: {
           )}
 
           {feature.description && <details className="roadmap-timeline-about"><summary>About this feature</summary><p>{feature.description}</p></details>}
+          <details className="roadmap-timeline-about"><summary>More feature details</summary>
+            <dl><Row label="Phase" value={feature.phaseName} /><Row label="Used by" value={feature.dependedOnByNames.length > 0 ? feature.dependedOnByNames.join(", ") : "None"} /><Row label="Epics" value={String(feature.epicCount)} /><Row label="Stories" value={String(feature.storyCount)} /></dl>
+          </details>
         </div>
 
         <div className="flex flex-wrap gap-2 border-t border-border-subtle p-5">
@@ -161,9 +165,9 @@ export default function RoadmapDetailDrawer(props: {
   );
 }
 
-function Row(props: { label: string; value: string }) {
+function Row(props: { label: string; value: string; compactExtra?: boolean }) {
   return (
-    <div className="flex items-start justify-between gap-4">
+    <div className={`flex items-start justify-between gap-4 ${props.compactExtra ? "roadmap-timeline-extra-row" : ""}`}>
       <dt className="shrink-0 text-text-muted">{props.label}</dt>
       <dd className="text-right text-text-primary">{props.value}</dd>
     </div>
