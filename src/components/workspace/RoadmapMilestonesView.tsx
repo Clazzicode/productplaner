@@ -15,7 +15,7 @@ const cadence = (value: string) => value ? value.replaceAll("_", " ").replace(/\
 export default function RoadmapMilestonesView(props: {
   initiativeId: string; releases: Release[]; features: Feature[];
 }) {
-  const [selectedId, setSelectedId] = useState<string | null>(props.releases[0]?.id ?? null);
+  const [selectedId, setSelectedId] = useState<string | null>(props.releases.find((release) => release.blockerCount > 0 || release.qualityRisk === "high")?.id ?? props.releases[0]?.id ?? null);
   const [mobileOpen, setMobileOpen] = useState(false);
   const selected = props.releases.find((release) => release.id === selectedId) ?? null;
   if (props.releases.length === 0) return <div className="roadmap-empty">

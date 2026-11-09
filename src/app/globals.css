@@ -107,6 +107,7 @@ button, a, input, select, textarea {
    is intentionally part of the page, while the workspace actions remain in
    the nearby context menu rather than a second toolbar above the roadmap. */
 .roadmap-route-frame { --roadmap-rail: clamp(380px, 28vw, 470px); position: relative; min-height: calc(100dvh - 60px); background: #f7f7fd; }
+body:has(.roadmap-visual-preview) > aside[aria-label="Test environment"] { display: none; }
 .roadmap-top-header { height: 60px; }
 .roadmap-page { min-height: calc(100dvh - 60px); padding: 20px 27px 36px; color: #10182d; }
 .roadmap-page:has(.roadmap-detail) { padding-right: calc(var(--roadmap-rail) + 25px); }
@@ -226,7 +227,10 @@ button, a, input, select, textarea {
 .roadmap-connection-detail section p { margin: 5px 0; border: 1px solid #dce1ed; border-radius: 7px; padding: 10px 12px; font-size: 13px; }
 .roadmap-placement-pill { display: inline-block; border-radius: 7px; background: #e9e4ff; padding: 6px 12px; color: #4b3ce0; font-size: 13px; font-weight: 700; }
 .roadmap-cadence-strip { margin: 18px 0 15px; border-radius: 9px; background: #eeeafd; padding: 10px 13px; }
-.roadmap-cadence-strip > div { justify-content: flex-start; }
+.roadmap-cadence-strip > div { justify-content: flex-start; flex-wrap: nowrap; overflow-x: auto; }
+.roadmap-cadence-strip > div > div { flex: none; }
+.roadmap-cadence-strip > div > div:last-child { flex-wrap: nowrap; }
+.roadmap-cadence-strip > div > div:last-child > span { white-space: nowrap; }
 .roadmap-cadence-strip h3 { display: inline-block; }
 .roadmap-cadence-strip h3::after { content: "ⓘ"; margin-left: 8px; color: #6d62ba; }
 .roadmap-cadence-strip p { display: inline-block; margin-left: 10px; border-radius: 6px; background: #fff; padding: 5px 8px; }
@@ -281,6 +285,37 @@ button, a, input, select, textarea {
   .roadmap-lane { padding-right: 5px; padding-left: 5px; }
   .roadmap-feature-card { padding-right: 6px; padding-left: 6px; }
 }
+@media (min-width: 1020px) and (max-width: 1199px) {
+  .roadmap-route-frame, .roadmap-page { min-height: calc(100dvh - 36px); }
+  .roadmap-top-header { height: 36px; padding-right: 10px; padding-left: 10px; }
+  .roadmap-top-header .home-header-search summary { height: 28px; font-size: 11px; }
+  .roadmap-top-header .home-header-search svg { width: 14px; height: 14px; }
+  .roadmap-top-header [aria-label="Activity"] { width: 28px; height: 28px; }
+  .roadmap-top-header [aria-label^="Account menu"] { transform: scale(.8); }
+  .roadmap-sidebar > a:first-child { height: 36px; }
+  .roadmap-page { padding: 12px 18px 25px; }
+  .roadmap-page:has(.roadmap-detail) { padding-right: calc(var(--roadmap-rail) + 12px); }
+  .roadmap-page-heading h1 { font-size: 21px; }
+  .roadmap-page-heading p { margin-top: 2px; font-size: 10px; }
+  .roadmap-view-tabs { margin-top: 8px; gap: 4px; }
+  .roadmap-view-tabs button { min-height: 32px; padding: 7px 12px; font-size: 12px; }
+  .roadmap-workspace-tools { top: 11px; right: calc(var(--roadmap-rail) + 12px); }
+  .roadmap-workspace-tools > summary { padding: 4px 7px; font-size: 9px; }
+  .roadmap-info { min-height: 31px; margin: 15px 0 12px; padding: 6px 10px; font-size: 11px; }
+  .roadmap-controls { min-height: 30px; margin-bottom: 13px; }
+  .roadmap-search, .roadmap-filter summary, .roadmap-filter-menu summary { height: 29px; min-height: 29px; font-size: 11px; }
+  .roadmap-search input, .roadmap-backlog-link { font-size: 11px; }
+  .roadmap-lane { min-height: 350px; }
+  .roadmap-lane-heading h3 { font-size: 12px; }
+  .roadmap-lane-heading p { font-size: 9px; }
+  .roadmap-feature-card { min-height: 59px; gap: 6px; padding-top: 7px; padding-bottom: 7px; }
+  .roadmap-feature-card strong { font-size: 10px; }
+  .roadmap-feature-tags > span { font-size: 8px; }
+  .roadmap-detail { top: 36px; padding: 15px 17px; }
+  .roadmap-detail h2 { font-size: 20px; }
+  .roadmap-field, .roadmap-feature-description, .roadmap-facts > div { font-size: 11px; }
+  .roadmap-field select { padding: 6px 8px; font-size: 11px; }
+}
 @media (min-width: 851px) and (max-width: 1019px) {
   .roadmap-page:has(.roadmap-detail) { padding-right: 27px; }
   .roadmap-workspace-tools { right: 27px; }
@@ -296,8 +331,8 @@ button, a, input, select, textarea {
   .roadmap-page, .roadmap-page:has(.roadmap-detail) { padding: 18px 16px 30px; }
   .roadmap-page-heading { padding-right: 100px; }
   .roadmap-page-heading h1 { font-size: 27px; }
-  .roadmap-view-tabs { gap: 3px; }
-  .roadmap-view-tabs button { padding: 10px 13px; font-size: 13px; }
+  .roadmap-view-tabs { gap: 0; justify-content: space-between; }
+  .roadmap-view-tabs button { padding: 10px 5px; font-size: 11px; }
   .roadmap-workspace-tools { top: 17px; right: 16px; }
   .roadmap-workspace-tools > summary { font-size: 11px; }
   .roadmap-detail { display: none; top: 0; z-index: 60; width: min(100%, 480px); box-shadow: -20px 0 40px #101c4260; }
