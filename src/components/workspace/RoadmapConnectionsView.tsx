@@ -13,6 +13,22 @@ const lanes = [
 ];
 const laneRank = new Map(lanes.map((lane, index) => [lane.id, index]));
 const laneLabel = (lane: string) => lanes.find((item) => item.id === lane)?.name ?? "Unscheduled";
+function dependencyFirst(features: ConnectionFeature[]) {
+  const byId = new Map(features.map((feature) => [feature.id, feature]));
+  const visited = new Set<string>();
+  const visiting = new Set<string>();
+  const ordered: ConnectionFeature[] = [];
+  const visit = (feature: ConnectionFeature) => {
+    if (visited.has(feature.id) || visiting.has(feature.id)) return;
+    visiting.add(feature.id);
+    feature.dependsOnIds.forEach((id) => { const dependency = byId.get(id); if (dependency) visit(dependency); });
+    visiting.delete(feature.id);
+    visited.add(feature.id);
+    ordered.push(feature);
+  };
+  features.forEach(visit);
+  return ordered;
+}
 
 /** Read-only relationship map from existing capability dependency edges. */
 export default function RoadmapConnectionsView(props: { initiativeId: string; features: ConnectionFeature[] }) {
@@ -67,7 +83,7 @@ export default function RoadmapConnectionsView(props: { initiativeId: string; fe
   </div>;
   return <div className="roadmap-stage roadmap-connections-stage">
     <div className="roadmap-stage-main">
-      <div className="roadmap-connections-heading"><span aria-hidden>◇</span><div><h2>Relationship preview</h2><p>See how existing planning features depend on one another.</p></div></div>
+      <div className="roadmap-connections-heading"><span aria-hidden>◇</span><h2>Relationship preview</h2></div>
       <div className="roadmap-info"><span aria-hidden>ⓘ</span> This map is read-only. Edit feature dependencies in the full feature backlog.</div>
       <div className="roadmap-graph-surface">
         <span className="roadmap-eyebrow">Read-only preview</span>
@@ -76,7 +92,7 @@ export default function RoadmapConnectionsView(props: { initiativeId: string; fe
             {paths.map((path) => <path key={path.key} d={path.d} fill="none" stroke={path.warning ? "#d39a24" : "#6960b8"} strokeWidth="2" markerEnd={path.warning ? "url(#roadmap-arrow-warning)" : "url(#roadmap-arrow)"} />)}
           </svg>
           {lanes.filter((lane) => props.features.some((feature) => feature.lane === lane.id)).map((lane) => <section className="roadmap-graph-lane" key={lane.id}><h3>{lane.name}</h3>
-            {props.features.filter((feature) => feature.lane === lane.id).map((feature) => <button type="button" data-feature-id={feature.id} key={feature.id} className={`roadmap-graph-node ${feature.id === selectedId ? "is-selected" : ""}`} onClick={() => { setSelectedId(feature.id); setMobileOpen(true); }}>{feature.name}</button>)}
+            {dependencyFirst(props.features.filter((feature) => feature.lane === lane.id)).map((feature) => <button type="button" data-feature-id={feature.id} key={feature.id} className={`roadmap-graph-node ${feature.id === selectedId ? "is-selected" : ""}`} onClick={() => { setSelectedId(feature.id); setMobileOpen(true); }}>{feature.name}</button>)}
           </section>)}
         </div>
         <Link className="roadmap-backlog-link" href={`/initiatives/${props.initiativeId}/backlog`}>Open full feature backlog ↗</Link>
