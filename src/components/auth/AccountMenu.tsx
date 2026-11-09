@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { apiFetch } from "@/lib/clientApi";
 import Avatar from "@/components/ui/Avatar";
+import ChevronIcon from "@/components/ui/ChevronIcon";
 import { ButtonLoader } from "@/components/ui/loading";
 import { useCoachMarks } from "@/components/coachmarks/CoachMarkProvider";
 
@@ -77,9 +78,7 @@ export default function AccountMenu(props: { userName: string; accessLevel: stri
       >
         <Avatar name={props.userName} />
         <span className={`max-w-32 truncate font-medium ${props.compact ? "hidden" : "hidden sm:inline"}`}>{props.userName}</span>
-        <span aria-hidden className={`text-[10px] ${props.compact ? "hidden" : ""} ${props.dark ? "text-white/60" : "text-neutral-400"}`}>
-          ▼
-        </span>
+        <ChevronIcon direction="down" size={12} className={`${props.compact ? "hidden" : ""} ${props.dark ? "text-white/60" : "text-neutral-400"}`} />
       </button>
 
       {open && (

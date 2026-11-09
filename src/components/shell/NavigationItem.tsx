@@ -79,7 +79,7 @@ export default function NavigationItem(props: NavigationItemProps & { nested?: b
     <Link
       href={props.href}
       aria-current={active ? "page" : undefined}
-      className={`flex items-center rounded-md px-3 py-2 font-medium transition ${props.nested ? "min-h-9 text-sm" : "min-h-12 text-[17px]"} ${
+      className={`flex items-center rounded-md px-3 py-2 transition ${props.nested ? "min-h-8 text-[13px]" : "min-h-10 text-sm"} ${active ? "font-semibold" : "font-normal"} ${
         active
           ? "bg-gradient-to-r from-[#5c55f7] to-[#4b45e8] text-white"
           : "text-[#d7e0f3] hover:bg-nav-hover hover:text-white"

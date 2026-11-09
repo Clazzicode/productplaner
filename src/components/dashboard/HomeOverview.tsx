@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { GlobalDashboardData } from "@/lib/dashboard/globalDashboardData";
+import ChevronIcon from "@/components/ui/ChevronIcon";
 
 type IconName = "decision" | "risk" | "calendar" | "delivery" | "activity";
 
@@ -47,7 +48,7 @@ export default function HomeOverview(props: {
           <Link key={card.label} href={card.href} className="home-kpi">
             <span className={`home-kpi-icon home-kpi-icon-${card.tone}`}><Icon name={card.icon} /></span>
             <span className="home-kpi-copy"><span>{card.label}</span><strong>{card.value}</strong></span>
-            <span className="home-kpi-chevron" aria-hidden="true">›</span>
+            <ChevronIcon size={16} className="home-kpi-chevron" />
           </Link>
         ))}
       </section>
@@ -56,7 +57,7 @@ export default function HomeOverview(props: {
         <section id="decision-queue" className="home-panel home-decisions">
           <div className="home-panel-heading">
             <div><h2>Needs your decision <span className="home-count">{decisions.length} {decisions.length === 1 ? "item" : "items"}</span></h2><p>Features or changes waiting for your input to keep plans on track.</p></div>
-            <Link href="/decisions">View all decisions <span aria-hidden="true">›</span></Link>
+            <Link href="/decisions">View all decisions <ChevronIcon size={13} /></Link>
           </div>
           {!props.showDecisions ? (
             <p className="home-empty">The decision queue is hidden in your dashboard settings.</p>
@@ -73,7 +74,7 @@ export default function HomeOverview(props: {
                     <td className="home-missing">—</td>
                     <td><span className={`home-status home-status-${item.severity}`}>{item.severity === "risk" ? "At risk" : "Decision needed"}</span></td>
                     <td className="home-missing">—</td>
-                    <td><Link href={item.href} aria-label={`Review ${item.title}`} className="home-row-more">›</Link></td>
+                    <td><Link href={item.href} aria-label={`Review ${item.title}`} className="home-row-more"><ChevronIcon size={15} /></Link></td>
                   </tr>
                 ))}</tbody>
               </table>
@@ -98,7 +99,7 @@ export default function HomeOverview(props: {
             ) : <p className="home-empty">Create a release to see its target and approval status here.</p>}
           </section>
           <section id="blockers" className="home-panel home-blockers">
-            <div className="home-rail-heading"><h2>Blockers <span className="home-count home-count-red">{blockers.length}</span></h2><Link href="/risks">View all <span aria-hidden="true">›</span></Link></div>
+            <div className="home-rail-heading"><h2>Blockers <span className="home-count home-count-red">{blockers.length}</span></h2><Link href="/risks">View all <ChevronIcon size={13} /></Link></div>
             {blockers.length === 0 ? <p className="home-empty">No recorded blockers. At-risk decisions will appear here.</p> : (
               <ul>{blockers.slice(0, 2).map((item, index) => <li key={`${item.href}-${index}`}><span className="home-blocker-icon"><Icon name="risk" size={20} /></span><Link href={item.href}><strong>{item.title}</strong><small>{item.impact}</small></Link><span className="home-status home-status-risk">Risk</span></li>)}</ul>
             )}
@@ -106,7 +107,7 @@ export default function HomeOverview(props: {
         </aside>
       </div>
       <section className="home-panel home-activity">
-        <div className="home-rail-heading"><h2>Recent activity</h2><Link href="/activity">View activity <span aria-hidden="true">›</span></Link></div>
+        <div className="home-rail-heading"><h2>Recent activity</h2><Link href="/activity">View activity <ChevronIcon size={13} /></Link></div>
         {props.showActivity === false ? <p className="home-empty">Recent activity is hidden in your dashboard settings.</p> : activity.length === 0 ? <p className="home-empty">Your recent planning and delivery updates will appear here.</p> : (
           <ul>{activity.slice(0, 4).map((item, index) => <li key={`${item.label}-${index}`}><span className="home-activity-icon"><Icon name="activity" size={17} /></span><div><strong>{item.label}</strong><small>{formatDate(item.when)}</small></div></li>)}</ul>
         )}

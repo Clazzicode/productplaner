@@ -2,7 +2,6 @@ import { withOptionalAuthenticatedPage } from "@/lib/auth/entryPoints";
 import type { Metadata } from "next";
 import localFont from "next/font/local";
 import AppShell from "@/components/shell/AppShell";
-import PageNavigation from "@/components/shell/PageNavigation";
 import { CoachMarkProvider } from "@/components/coachmarks/CoachMarkProvider";
 import { listAuthorizedInitiativeIds } from "@/lib/access/initiativeAccess";
 import { getCurrentUser } from "@/lib/auth/session";
@@ -99,7 +98,6 @@ async function RootLayout({
             accessLevel={user?.accessLevel ?? "standard_user"}
             initiatives={navigationInitiatives}
           >
-            {user && <PageNavigation signedIn canManageWorkspace={canManageWorkspace} initiatives={navigationInitiatives} />}
             {children}
           </AppShell>
         </CoachMarkProvider>

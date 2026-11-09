@@ -9,8 +9,8 @@ import { isBareRoute } from "./bareMode";
 import LeftNav, { type NavInitiative } from "./LeftNav";
 import MobileNavDrawer from "./MobileNavDrawer";
 import TopHeader from "./TopHeader";
-import { pageNavigation } from "./navigationRoutes";
-import { confirmPageNavigation } from "./unsavedChanges";
+import ChevronIcon from "@/components/ui/ChevronIcon";
+import { confirmPageNavigation, useNavigationGuard } from "./unsavedChanges";
 
 /**
  * Persistent app chrome (left nav + top bar). Rendered from the root layout;
@@ -30,6 +30,7 @@ export default function AppShell(props: {
 }) {
   const pathname = usePathname() ?? "";
   const router = useRouter();
+  useNavigationGuard();
   const [drawerOpen, setDrawerOpen] = useState(false);
   // Adjusting state during render (not in an effect) when a value the
   // component reads — pathname — changes: React's documented pattern for
@@ -48,6 +49,8 @@ export default function AppShell(props: {
     routeInitiative ??
     props.initiatives[0];
   const projects = Array.from(new Map(props.initiatives.filter(row => row.project).map(row => [row.project!.id, row.project!])).values());
+  const routeProjectId = pathname.match(/^\/projects\/([^/]+)/)?.[1];
+  const selectedProject = projects.find(project => project.id === routeProjectId) ?? currentInitiative?.project ?? undefined;
   const home = pathname === "/home";
   const roadmap = /^\/initiatives\/[^/]+\/workspace\/roadmap\/?$/.test(pathname);
 
@@ -56,16 +59,6 @@ export default function AppShell(props: {
   if (bare) {
     return props.children;
   }
-
-  const page = pageNavigation(pathname, props.initiatives);
-  const currentName = page.title;
-  const breadcrumbs = routeInitiative
-    ? [
-        { label: routeInitiative.project?.name ?? "Projects", href: routeInitiative.project ? `/projects/${routeInitiative.project.id}` : "/projects" },
-        { label: routeInitiative.name, href: `/initiatives/${routeInitiative.id}/overview` },
-        ...(page.title === routeInitiative.name ? [] : [{ label: page.title }]),
-      ]
-    : [{ label: pathname === "/home" ? "Overview" : page.title }];
 
   const switchInitiative = (id: string) => {
     const target = props.initiatives.find((i) => i.id === id);
@@ -121,17 +114,9 @@ export default function AppShell(props: {
     </div>
   );
 
-  const headerSwitcher = props.initiatives.length > 0 ? (
-    <label className="flex items-center gap-2 text-xs text-white/65">
-      <span className="sr-only">Switch initiative</span>
-      <select value={currentInitiative?.id ?? ""} onChange={(event) => switchInitiative(event.target.value)} aria-label="Switch initiative" className="max-w-44 truncate rounded-lg border border-white/20 bg-[#102546] px-2 py-1.5 text-xs text-white focus:outline-2 focus:outline-white">
-        {props.initiatives.map((initiative) => <option key={initiative.id} value={initiative.id}>{initiative.name}</option>)}
-      </select>
-    </label>
-  ) : null;
   const createActions = props.canManageWorkspace ? (
-    <details className={`group relative ${home ? "home-header-create" : ""}`}>
-      <summary className="cursor-pointer list-none rounded-md bg-[#5145ed] px-5 py-2.5 text-base font-semibold text-white shadow-[0_2px_5px_rgba(81,69,237,0.2)] hover:bg-[#4238d7] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#5145ed]">Create <span aria-hidden className="ml-2">⌄</span></summary>
+    <details className="group relative">
+      <summary className="flex h-9 cursor-pointer list-none items-center gap-2 rounded-md bg-[#5145ed] px-4 text-sm font-medium text-white shadow-[0_2px_5px_rgba(81,69,237,0.2)] hover:bg-[#4238d7] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#5145ed]">Create <ChevronIcon direction="down" size={13} /></summary>
       <div className="absolute right-0 z-50 mt-2 w-44 rounded-xl border border-border-subtle bg-white p-1.5 text-text-primary shadow-xl">
         <Link href="/projects/new" className="block rounded-lg px-3 py-2 text-sm hover:bg-[#f4f5fe]">New project</Link>
         <Link href="/initiatives/new" className="block rounded-lg px-3 py-2 text-sm hover:bg-[#f4f5fe]">New initiative</Link>
@@ -154,18 +139,14 @@ export default function AppShell(props: {
       />
       <div className="flex min-w-0 flex-1 flex-col">
         <TopHeader
-          breadcrumbs={breadcrumbs}
-          switcher={headerSwitcher}
           createActions={createActions}
-          accountActions={<AccountMenu userName={props.userName} accessLevel={props.accessLevel} dark={!home && !roadmap} compact={roadmap} />}
-          currentName={currentName}
+          accountActions={<AccountMenu userName={props.userName} accessLevel={props.accessLevel} />}
           userName={props.userName}
           onOpenMenu={() => setDrawerOpen(true)}
-          home={home}
           roadmap={roadmap}
           requestHref={currentInitiative ? `/initiatives/${currentInitiative.id}/requests` : undefined}
           featureHref={currentInitiative ? `/initiatives/${currentInitiative.id}/backlog` : undefined}
-          project={currentInitiative?.project ?? undefined}
+          project={selectedProject}
           projects={projects}
         />
         <main className={`min-w-0 flex-1 ${home ? "bg-white" : "bg-[#f4f5fe]"}`}>
