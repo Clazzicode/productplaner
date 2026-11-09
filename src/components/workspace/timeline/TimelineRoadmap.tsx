@@ -32,12 +32,24 @@ export default function TimelineRoadmap(props: { initiativeId: string; data: Cli
   const [search, setSearch] = useState("");
   const [selectedFeatureId, setSelectedFeatureId] = useState<string | null>(data.phases.flatMap((group) => group.features)[0]?.id ?? data.unscheduled[0]?.id ?? null);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [compactAxis, setCompactAxis] = useState(false);
+
+  useEffect(() => {
+    const query = window.matchMedia("(min-width: 851px) and (max-width: 1019px)");
+    const update = () => setCompactAxis(query.matches);
+    update();
+    query.addEventListener("change", update);
+    return () => query.removeEventListener("change", update);
+  }, []);
 
   const today = useMemo(() => new Date(), []);
-  const axis = useMemo(
-    () => buildTimeAxis({ axisStart: data.axisStart ? new Date(data.axisStart) : null, axisEnd: data.axisEnd ? new Date(data.axisEnd) : null, zoom, today }),
-    [data.axisStart, data.axisEnd, zoom, today],
-  );
+  const axis = useMemo(() => {
+    const fullAxis = buildTimeAxis({ axisStart: data.axisStart ? new Date(data.axisStart) : null, axisEnd: data.axisEnd ? new Date(data.axisEnd) : null, zoom, today });
+    // The narrow desktop reference fits four months in the working pane.
+    // Keep the same real dates and zoom choice while reducing pixel density.
+    if (!compactAxis || zoom !== "year") return fullAxis;
+    return { ...fullAxis, pxPerDay: 3, totalPx: fullAxis.totalDays * 3 };
+  }, [compactAxis, data.axisStart, data.axisEnd, zoom, today]);
   const todayLeft = todayOffset(axis, today);
 
   // Scroll "today" into view on load/zoom change instead of leaving the
@@ -123,7 +135,7 @@ export default function TimelineRoadmap(props: { initiativeId: string; data: Cli
           <div className="relative" style={{ width: `calc(var(--timeline-left-col) + ${axis.totalPx}px)` }}>
             {todayLeft != null && (
               <div
-                className="pointer-events-none absolute z-10 w-px bg-accent/40"
+                className="pointer-events-none absolute z-30 w-px bg-accent/40"
                 style={{ left: `calc(var(--timeline-left-col) + ${todayLeft}px)`, top: 0, bottom: 0 }}
                 aria-hidden
               ><span className="absolute -top-5 left-0 rounded bg-[#5145ed] px-1.5 py-0.5 text-[10px] font-semibold text-white">Today</span></div>
