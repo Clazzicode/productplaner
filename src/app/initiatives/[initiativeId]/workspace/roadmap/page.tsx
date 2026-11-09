@@ -2,13 +2,14 @@ import { withAuthenticatedPage } from "@/lib/auth/entryPoints";
 import { formatCalendarDate } from "@/lib/calendarDate";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import EmptyState from "@/components/ui/EmptyState";
 import EditableArtifact from "@/components/workspace/EditableArtifact";
 import RoadmapBoard, { type BoardPhase } from "@/components/workspace/RoadmapBoard";
 import RoadmapLegacyViews from "@/components/workspace/RoadmapLegacyViews";
 import RoadmapToolbar from "@/components/workspace/RoadmapToolbar";
 import RoadmapViewSwitcher from "@/components/workspace/RoadmapViewSwitcher";
 import RoadmapPlanningView from "@/components/workspace/RoadmapPlanningView";
+import RoadmapMilestonesView from "@/components/workspace/RoadmapMilestonesView";
+import RoadmapConnectionsView from "@/components/workspace/RoadmapConnectionsView";
 import TraceBadge from "@/components/workspace/TraceBadge";
 import CoachMark from "@/components/coachmarks/CoachMark";
 import TimelineRoadmap from "@/components/workspace/timeline/TimelineRoadmap";
@@ -44,6 +45,7 @@ async function RoadmapPage({
   const access = await requireInitiativeView(user, initiativeId);
   const ws = await loadWorkspace(initiativeId);
   if (!ws) notFound();
+  const project = await db.project.findUnique({ where: { id: ws.initiative.projectId }, select: { name: true } });
   const cost = await loadCostContext(initiativeId, ws.prototype.id);
 
   const root = await db.artifactLayer.findFirst({
@@ -218,31 +220,32 @@ async function RoadmapPage({
     <TimelineRoadmap initiativeId={initiativeId} data={serializeTimelineData(timelineData)} />
   );
 
-  const milestonesView = (
-    timelineData.releases.length === 0
-      ? <EmptyState title="No target releases yet" description="Create a release from Sprints & Releases to add the release cadence and target release date to this roadmap." />
-      : <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{timelineData.releases.map((release) => <section key={release.id} className="rounded-xl border border-indigo-100 bg-indigo-50/40 p-5"><p className="text-xs font-semibold uppercase tracking-wide text-indigo-600">Target release</p><h3 className="mt-1 text-lg font-bold text-indigo-950">{formatCalendarDate(release.targetDate, { month: "short", day: "numeric", year: "numeric" })}</h3><p className="mt-2 text-sm text-indigo-800">{release.label}</p><p className="mt-1 text-xs capitalize text-indigo-700">Cadence: {release.cadence.replaceAll("_", " ") || "Not set"}</p><div className="mt-3 flex flex-wrap gap-1.5 text-xs"><span className="rounded-full bg-white px-2 py-1">{release.featureCount} features</span><span className="rounded-full bg-white px-2 py-1">{release.defectCount} active defects</span><span className="rounded-full bg-white px-2 py-1">{release.blockerCount} blockers</span><span className="rounded-full bg-white px-2 py-1 capitalize">{release.qualityRisk} quality risk</span></div></section>)}</div>
-  );
-  const connectionsView = (
-    <EmptyState
-      title="Connections is coming in Step 9D"
-      description="Feature dependencies will render as a relationship map here — not built yet."
-    />
-  );
+  const milestonesView = <RoadmapMilestonesView
+    initiativeId={initiativeId}
+    releases={timelineData.releases.map((release) => ({ ...release, targetDate: release.targetDate.toISOString() }))}
+    features={timelineFeatures.map((feature) => ({ id: feature.id, title: feature.title, releaseId: feature.releaseId }))}
+  />;
+  const connectionsView = <RoadmapConnectionsView initiativeId={initiativeId}
+    features={ws.initiative.intakeAnswerSet!.capabilities.map((capability) => ({
+      id: capability.id, name: capability.name, lane: capability.backlogLane,
+      dependsOnIds: capability.dependsOnEdges.map((edge) => edge.toCapabilityId),
+      dependencyWarnings: timelineByCapabilityId.get(capability.id)?.dependencyWarnings ?? [],
+    }))}
+  />;
 
   return (
     <RoadmapToolbar
       title="Roadmap"
-      description="Plan features in Now, Next, Later, or Unscheduled, then enrich the roadmap with release cadence, target dates, and dependencies."
+      description={<><Link href={`/projects/${ws.initiative.projectId}`}>{project?.name ?? "Project"}</Link><span aria-hidden> / </span>{ws.initiative.name}</>}
     >
       <CoachMark coachMarkKey="roadmap" className="mb-4" />
       <RoadmapViewSwitcher planning={planningView} timeline={timelineView} milestones={milestonesView} connections={connectionsView} />
-      <RoadmapLegacyViews list={listView} board={boardView} />
-
-      {/* Secondary to the roadmap above, never the main output (Section 4). */}
-      <div className="mt-8 max-w-xl">
-        <AiAssistPanel initiativeId={initiativeId} scope="roadmap" />
-      </div>
+      <details className="roadmap-secondary-tools">
+        <summary>More roadmap tools <span aria-hidden>⌄</span></summary>
+        <p>Use the original phase editor and AI assistance when you need to refine the underlying roadmap.</p>
+        <RoadmapLegacyViews list={listView} board={boardView} />
+        <div className="mt-6 max-w-xl"><AiAssistPanel initiativeId={initiativeId} scope="roadmap" /></div>
+      </details>
     </RoadmapToolbar>
   );
 }

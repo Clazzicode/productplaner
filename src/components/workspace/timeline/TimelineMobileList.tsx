@@ -22,6 +22,7 @@ const HEALTH_DOT: Record<NonNullable<ClientTimelineFeature["health"]>, string> =
 export default function TimelineMobileList(props: {
   phases: ClientTimelinePhaseGroup[];
   unscheduled: ClientTimelineFeature[];
+  selectedFeatureId: string | null;
   onSelect: (id: string) => void;
 }) {
   const nonEmptyPhases = props.phases.filter((p) => p.features.length > 0);
@@ -34,10 +35,10 @@ export default function TimelineMobileList(props: {
     <div className="space-y-5">
       {nonEmptyPhases.map((group) => (
         <div key={group.phaseNumber}>
-          <p className="text-xs font-semibold uppercase tracking-wide text-text-muted">{group.name}</p>
+          <p className="roadmap-mobile-phase">{group.name}</p>
           <div className="mt-2 space-y-2">
             {group.features.map((f) => (
-              <FeatureRow key={f.id} feature={f} onSelect={props.onSelect} />
+              <FeatureRow key={f.id} feature={f} selected={f.id === props.selectedFeatureId} onSelect={props.onSelect} />
             ))}
           </div>
         </div>
@@ -45,10 +46,10 @@ export default function TimelineMobileList(props: {
 
       {props.unscheduled.length > 0 && (
         <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-text-muted">Unscheduled</p>
+          <p className="roadmap-mobile-phase">Unscheduled</p>
           <div className="mt-2 space-y-2">
             {props.unscheduled.map((f) => (
-              <FeatureRow key={f.id} feature={f} onSelect={props.onSelect} />
+              <FeatureRow key={f.id} feature={f} selected={f.id === props.selectedFeatureId} onSelect={props.onSelect} />
             ))}
           </div>
         </div>
@@ -57,7 +58,7 @@ export default function TimelineMobileList(props: {
   );
 }
 
-function FeatureRow(props: { feature: ClientTimelineFeature; onSelect: (id: string) => void }) {
+function FeatureRow(props: { feature: ClientTimelineFeature; selected: boolean; onSelect: (id: string) => void }) {
   const { feature } = props;
   const start = feature.start ? new Date(feature.start) : null;
   const end = feature.end ? new Date(feature.end) : null;
@@ -66,7 +67,7 @@ function FeatureRow(props: { feature: ClientTimelineFeature; onSelect: (id: stri
     <button
       type="button"
       onClick={() => props.onSelect(feature.id)}
-      className="flex w-full flex-col gap-1 rounded-xl border border-neutral-200 bg-white px-3.5 py-3 text-left shadow-sm active:bg-neutral-50"
+      className={`roadmap-mobile-feature flex w-full flex-col gap-1 rounded-xl border bg-white px-3.5 py-3 text-left shadow-sm active:bg-neutral-50 ${props.selected ? "is-selected" : "border-neutral-200"}`}
     >
       <div className="flex items-center gap-1.5">
         {feature.isMvp && (
@@ -86,6 +87,7 @@ function FeatureRow(props: { feature: ClientTimelineFeature; onSelect: (id: stri
           <span>No date yet</span>
         )}
         <span>{start && end ? `${format(start, "MMM d")} – ${format(end, "MMM d, yyyy")}` : "Unscheduled"}</span>
+        {feature.scheduleSource !== "unscheduled" && <span className="roadmap-source-pill">{feature.scheduleSource === "sprints" ? "From sprint dates" : "Phase estimate"}</span>}
         {feature.dependsOnNames.length > 0 && <span>🔗 {feature.dependsOnNames.length}</span>}
       </div>
     </button>

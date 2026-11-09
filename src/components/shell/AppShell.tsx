@@ -49,6 +49,7 @@ export default function AppShell(props: {
     props.initiatives[0];
   const projects = Array.from(new Map(props.initiatives.filter(row => row.project).map(row => [row.project!.id, row.project!])).values());
   const home = pathname === "/home";
+  const roadmap = /^\/initiatives\/[^/]+\/workspace\/roadmap\/?$/.test(pathname);
 
   const bare = isBareRoute(pathname, props.signedIn, routeInitiative);
 
@@ -140,7 +141,7 @@ export default function AppShell(props: {
 
   return (
     <div className="flex min-h-dvh w-full min-w-0 bg-surface">
-      <div className="hidden xl:contents">
+      <div className={roadmap ? "hidden min-[851px]:contents" : "hidden xl:contents"}>
         <LeftNav initiatives={props.initiatives} canManageWorkspace={props.canManageWorkspace} />
       </div>
       <MobileNavDrawer
@@ -156,18 +157,19 @@ export default function AppShell(props: {
           breadcrumbs={breadcrumbs}
           switcher={headerSwitcher}
           createActions={createActions}
-          accountActions={<AccountMenu userName={props.userName} accessLevel={props.accessLevel} dark={!home} />}
+          accountActions={<AccountMenu userName={props.userName} accessLevel={props.accessLevel} dark={!home && !roadmap} compact={roadmap} />}
           currentName={currentName}
           userName={props.userName}
           onOpenMenu={() => setDrawerOpen(true)}
           home={home}
+          roadmap={roadmap}
           requestHref={currentInitiative ? `/initiatives/${currentInitiative.id}/requests` : undefined}
           featureHref={currentInitiative ? `/initiatives/${currentInitiative.id}/backlog` : undefined}
           project={currentInitiative?.project ?? undefined}
           projects={projects}
         />
         <main className={`min-w-0 flex-1 ${home ? "bg-white" : "bg-[#f4f5fe]"}`}>
-          <div className="px-4 pt-4 sm:px-6">
+          <div className={roadmap ? "px-0 pt-0" : "px-4 pt-4 sm:px-6"}>
             <AiUsageBanner />
           </div>
           {props.children}

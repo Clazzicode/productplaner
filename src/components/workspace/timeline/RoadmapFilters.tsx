@@ -19,8 +19,9 @@ export default function RoadmapFilters(props: {
   const { filters, onChange } = props;
 
   return (
-    <div className="flex flex-wrap items-center gap-2 border-b border-border-subtle pb-3">
-      <span className="text-xs font-semibold uppercase tracking-wide text-text-muted">Filter</span>
+    <details className="roadmap-filter-menu">
+      <summary>Filter <span aria-hidden>⌄</span><small>{props.matchCount} of {props.totalCount}</small></summary>
+      <div className="roadmap-filter-menu-content">
 
       <button
         type="button"
@@ -88,9 +89,7 @@ export default function RoadmapFilters(props: {
         </button>
       )}
 
-      <span className="ml-auto text-xs text-text-muted">
-        {props.matchCount} of {props.totalCount} features
-      </span>
-    </div>
+      </div>
+    </details>
   );
 }

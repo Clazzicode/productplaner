@@ -12,16 +12,19 @@ export default function TopHeader(props: {
   userName: string;
   onOpenMenu: () => void;
   home?: boolean;
+  roadmap?: boolean;
   requestHref?: string;
   featureHref?: string;
   project?: { id: string; name: string };
   projects?: { id: string; name: string }[];
 }) {
   const home = Boolean(props.home);
+  const roadmap = Boolean(props.roadmap);
+  const light = home || roadmap;
   return (
-    <header className={`no-print sticky top-0 z-30 flex h-16 min-w-0 items-center gap-2 border-b px-4 sm:gap-5 sm:px-6 ${home ? "border-[#dfe3ee] bg-white text-[#111a32]" : "justify-between border-[#1b3153] bg-[#07162f] text-white shadow-[0_4px_18px_rgba(7,22,47,0.12)]"}`}>
-      <div className={`flex min-w-0 items-center gap-3 ${home ? "flex-1 sm:flex-none" : ""}`}>
-        <button type="button" onClick={props.onOpenMenu} aria-label="Open navigation" className={`rounded-md p-2 xl:hidden ${home ? "text-[#283653] hover:bg-[#f4f5ff]" : "text-white/80 hover:bg-white/10"}`}>
+    <header className={`no-print sticky top-0 z-30 flex h-16 min-w-0 items-center gap-2 border-b px-4 sm:gap-5 sm:px-6 ${light ? "border-[#dfe3ee] bg-white text-[#111a32]" : "justify-between border-[#1b3153] bg-[#07162f] text-white shadow-[0_4px_18px_rgba(7,22,47,0.12)]"} ${roadmap ? "roadmap-top-header" : ""}`}>
+      <div className={`flex min-w-0 items-center gap-3 ${light ? "flex-1 sm:flex-none" : ""}`}>
+        <button type="button" onClick={props.onOpenMenu} aria-label="Open navigation" className={`rounded-md p-2 xl:hidden ${light ? "text-[#283653] hover:bg-[#f4f5ff]" : "text-white/80 hover:bg-white/10"}`}>
           <span className="block h-0.5 w-5 bg-current" /><span className="mt-1 block h-0.5 w-5 bg-current" /><span className="mt-1 block h-0.5 w-5 bg-current" />
         </button>
         {home ? (
@@ -34,6 +37,11 @@ export default function TopHeader(props: {
               {props.projects?.map(project => <Link key={project.id} href={`/projects/${project.id}`} className="block truncate rounded-md px-3 py-2 text-sm hover:bg-[#f4f4ff]">{project.name}</Link>)}
             </div>
           </details>
+        ) : roadmap ? (
+          <Link href="/home" className="flex min-w-0 items-center gap-2 font-bold tracking-wide text-[#111a32] xl:hidden">
+            <span className="text-[#5145ed]" aria-hidden>◆</span><span className="hidden sm:inline">CLARIVIA</span>
+            <span className="truncate text-sm font-semibold sm:ml-2 sm:border-l sm:border-[#d9deeb] sm:pl-3">Roadmap</span>
+          </Link>
         ) : (
           <>
             <Link href="/home" className="flex shrink-0 items-center gap-2 font-bold tracking-[0.08em] text-white xl:hidden">
@@ -53,11 +61,11 @@ export default function TopHeader(props: {
           </>
         )}
       </div>
-      {home && (
+      {light && (
         <details className="home-header-search group relative mx-auto hidden w-full max-w-[600px] lg:block">
           <summary className="flex h-10 cursor-pointer list-none items-center gap-3 rounded-md border border-[#d9deeb] bg-[#fafbfe] px-4 text-base text-[#667089] shadow-[0_1px_2px_rgba(15,25,50,0.04)] hover:border-[#a9a9fa]">
             <svg aria-hidden="true" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="11" cy="11" r="7"/><path d="m16 16 5 5"/></svg>
-            <span className="truncate">Find requests or features...</span>
+            <span className="truncate">{roadmap ? "Search features, requirements, or requests..." : "Find requests or features..."}</span>
           </summary>
           <div className="absolute left-0 right-0 z-50 mt-2 rounded-lg border border-[#d9deeb] bg-white p-2 shadow-xl">
             <p className="px-3 py-2 text-xs font-semibold uppercase tracking-wide text-[#78839b]">Search in a workspace</p>
@@ -67,12 +75,12 @@ export default function TopHeader(props: {
           </div>
         </details>
       )}
-      <div className={`flex shrink-0 items-center gap-2 sm:gap-3 ${home ? "ml-auto" : ""}`}>
-        {!home && <div className="hidden 2xl:block">{props.switcher}</div>}
-        <div className="hidden sm:block">{props.createActions}</div>
-        {home && <Link href="/activity" aria-label="Activity" title="Activity" className="hidden h-9 w-9 place-items-center rounded-md text-[#273451] hover:bg-[#f4f5ff] sm:grid"><svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"/><path d="M10 21h4"/></svg></Link>}
-        <div className={home ? "hidden sm:block" : "hidden xl:block"}>{props.accountActions}</div>
-        <button type="button" onClick={props.onOpenMenu} aria-label="Open account menu" className={`rounded-full ${home ? "sm:hidden" : "xl:hidden"}`}><Avatar name={props.userName} /></button>
+      <div className={`flex shrink-0 items-center gap-2 sm:gap-3 ${light ? "ml-auto" : ""}`}>
+        {!light && <div className="hidden 2xl:block">{props.switcher}</div>}
+        {!roadmap && <div className="hidden sm:block">{props.createActions}</div>}
+        {light && <Link href="/activity" aria-label="Activity" title="Activity" className="hidden h-9 w-9 place-items-center rounded-md text-[#273451] hover:bg-[#f4f5ff] sm:grid"><svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"/><path d="M10 21h4"/></svg></Link>}
+        <div className={light ? "hidden sm:block" : "hidden xl:block"}>{props.accountActions}</div>
+        <button type="button" onClick={props.onOpenMenu} aria-label="Open account menu" className={`rounded-full ${light ? "sm:hidden" : "xl:hidden"}`}><Avatar name={props.userName} /></button>
       </div>
     </header>
   );

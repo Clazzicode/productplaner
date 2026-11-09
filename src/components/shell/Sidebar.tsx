@@ -14,9 +14,10 @@ export default function Sidebar(props: {
   titleHref?: string;
   footer?: React.ReactNode;
   homeMode?: boolean;
+  compact?: boolean;
 }) {
   return (
-    <nav className="no-print sticky top-0 flex h-dvh w-[238px] shrink-0 flex-col gap-4 overflow-y-auto border-r border-border-nav bg-[#07172f] px-3 pb-5">
+    <nav className={`no-print sticky top-0 flex h-dvh shrink-0 flex-col gap-4 overflow-y-auto border-r border-border-nav bg-[#07172f] px-3 pb-5 ${props.compact ? "roadmap-sidebar w-[196px]" : "w-[238px]"}`}>
       <Link href={props.titleHref ?? "/home"} className="-mx-3 flex h-16 shrink-0 flex-col justify-center border-b border-white/10 px-5">
         <span className="text-[22px] font-bold leading-6 tracking-tight text-white">{props.title ?? "Clarivia"}</span>
         {!props.title && <span className="mt-0.5 text-[10px] font-semibold uppercase tracking-[0.22em] text-[#a9b8d6]">Product owner</span>}

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { confirmPageNavigation } from "@/components/shell/unsavedChanges";
 
 export type RoadmapView = "planning" | "timeline" | "milestones" | "connections";
 
@@ -28,20 +29,20 @@ export default function RoadmapViewSwitcher(props: {
 
   return (
     <div>
-      <div className="inline-flex rounded-lg border border-neutral-200 bg-neutral-50 p-0.5 text-sm">
+      <div className="roadmap-view-tabs" role="tablist" aria-label="Roadmap views">
         {VIEWS.map((v) => (
           <button
             key={v.value}
-            onClick={() => setView(v.value)}
-            className={`rounded-md px-3 py-1.5 font-medium transition ${
-              view === v.value ? "bg-white text-accent shadow-sm" : "text-text-secondary hover:text-text-primary"
-            }`}
+            onClick={() => { if (confirmPageNavigation()) setView(v.value); }}
+            role="tab"
+            aria-selected={view === v.value}
+            className={view === v.value ? "is-active" : ""}
           >
             {v.label}
           </button>
         ))}
       </div>
-      <div className="mt-4">
+      <div className="roadmap-view-content" role="tabpanel">
         {view === "planning" && props.planning}
         {view === "timeline" && props.timeline}
         {view === "milestones" && props.milestones}

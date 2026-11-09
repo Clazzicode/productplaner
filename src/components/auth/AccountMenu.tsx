@@ -30,7 +30,7 @@ import { useCoachMarks } from "@/components/coachmarks/CoachMarkProvider";
 // of the drawer's own overflow-hidden panel — opening downward (the desktop
 // default) clips the menu off-screen entirely. Found via real mobile-width
 // testing, not assumed.
-export default function AccountMenu(props: { userName: string; accessLevel: string; dropUp?: boolean; dark?: boolean }) {
+export default function AccountMenu(props: { userName: string; accessLevel: string; dropUp?: boolean; dark?: boolean; compact?: boolean }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -76,8 +76,8 @@ export default function AccountMenu(props: { userName: string; accessLevel: stri
         className={`flex items-center gap-2 rounded-full py-1 pl-1 pr-2.5 text-sm transition ${props.dark ? "text-white hover:bg-white/10" : "text-text-secondary hover:bg-[#edf3ff]"}`}
       >
         <Avatar name={props.userName} />
-        <span className="hidden max-w-32 truncate font-medium sm:inline">{props.userName}</span>
-        <span aria-hidden className={`text-[10px] ${props.dark ? "text-white/60" : "text-neutral-400"}`}>
+        <span className={`max-w-32 truncate font-medium ${props.compact ? "hidden" : "hidden sm:inline"}`}>{props.userName}</span>
+        <span aria-hidden className={`text-[10px] ${props.compact ? "hidden" : ""} ${props.dark ? "text-white/60" : "text-neutral-400"}`}>
           ▼
         </span>
       </button>

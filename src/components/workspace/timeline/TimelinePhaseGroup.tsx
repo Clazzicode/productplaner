@@ -17,7 +17,7 @@ export default function TimelinePhaseGroup(props: {
 
   return (
     <div>
-      <div className="flex bg-surface">
+      <div className="roadmap-timeline-phase flex bg-surface">
         <div
           className="sticky left-0 z-10 shrink-0 bg-surface px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-text-muted"
           style={{ width: LEFT_COL_PX }}
