@@ -159,12 +159,6 @@ export default function TimelineRoadmap(props: { initiativeId: string; data: Cli
           </div>
         </div>
 
-        <UnscheduledFeatures
-          features={filteredUnscheduled}
-          selectedFeatureId={selectedFeatureId}
-          onSelect={(id) => { setSelectedFeatureId(id); setMobileOpen(true); }}
-        />
-
         {matchCount === 0 && totalCount > 0 && (
           <p className="mt-4 rounded-lg border border-dashed border-neutral-300 px-4 py-6 text-center text-sm text-text-muted">
             No Features match the current filters.
@@ -173,6 +167,13 @@ export default function TimelineRoadmap(props: { initiativeId: string; data: Cli
       </div>
 
       <div className="roadmap-timeline-legend"><span><i className="is-solid" /> From sprint dates</span><span><i className="is-estimate" /> Phase estimate</span><span className="roadmap-timeline-note">ⓘ Dates are estimates for planning and may change.</span></div>
+      <div className="hidden sm:block">
+        <UnscheduledFeatures
+          features={filteredUnscheduled}
+          selectedFeatureId={selectedFeatureId}
+          onSelect={(id) => { setSelectedFeatureId(id); setMobileOpen(true); }}
+        />
+      </div>
 
       {/* Mobile: simplified read-only list, same data/filters/drawer. */}
       <div className="mt-3 sm:hidden">
