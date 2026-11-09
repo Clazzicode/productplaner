@@ -91,7 +91,7 @@ export default function RoadmapConnectionsView(props: { initiativeId: string; fe
           <svg className="roadmap-graph-lines" aria-hidden="true"><defs><marker id="roadmap-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#6960b8" /></marker><marker id="roadmap-arrow-warning" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#d39a24" /></marker></defs>
             {paths.map((path) => <path key={path.key} d={path.d} fill="none" stroke={path.warning ? "#d39a24" : "#6960b8"} strokeWidth="2" markerEnd={path.warning ? "url(#roadmap-arrow-warning)" : "url(#roadmap-arrow)"} />)}
           </svg>
-          {lanes.filter((lane) => props.features.some((feature) => feature.lane === lane.id)).map((lane) => <section className="roadmap-graph-lane" key={lane.id}><h3>{lane.name}</h3>
+          {lanes.filter((lane) => props.features.some((feature) => feature.lane === lane.id)).map((lane) => <section className={`roadmap-graph-lane ${lane.id === "unscheduled" ? "is-unscheduled" : ""}`} key={lane.id}><h3>{lane.name}</h3>
             {dependencyFirst(props.features.filter((feature) => feature.lane === lane.id)).map((feature) => <button type="button" data-feature-id={feature.id} key={feature.id} className={`roadmap-graph-node ${feature.id === selectedId ? "is-selected" : ""}`} onClick={() => { setSelectedId(feature.id); setMobileOpen(true); }}>{feature.name}</button>)}
           </section>)}
         </div>

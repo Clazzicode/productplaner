@@ -1,7 +1,6 @@
 "use client";
 
 import type { TimeAxis } from "@/lib/roadmap/timelineScale";
-import { LEFT_COL_PX, MONTH_ROW_PX } from "./layout";
 
 /**
  * Sticky top time axis — a quarter-grouping row above a month row (§6). Month
@@ -17,10 +16,10 @@ export default function TimelineTimeHeader(props: { axis: TimeAxis }) {
     <div className="roadmap-time-header sticky top-0 z-20 flex bg-white">
       <div
         className="sticky left-0 z-30 flex shrink-0 items-end border-b border-r border-border-subtle bg-white px-4 pb-2 text-sm font-bold"
-        style={{ width: LEFT_COL_PX, height: MONTH_ROW_PX }}
+        style={{ width: "var(--timeline-left-col)", height: "var(--timeline-header-height)" }}
       >Feature</div>
       <div style={{ width: axis.totalPx }}>
-        <div className="flex border-b border-border-subtle" style={{ height: MONTH_ROW_PX }}>
+        <div className="flex border-b border-border-subtle" style={{ height: "var(--timeline-header-height)" }}>
           {axis.months.map((m) => {
             const days = Math.round((m.end.getTime() - m.start.getTime()) / 86_400_000) + 1;
             return (

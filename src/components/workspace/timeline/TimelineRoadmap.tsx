@@ -6,7 +6,7 @@ import { formatCalendarDate } from "@/lib/calendarDate";
 import type { ClientRoadmapTimelineData } from "@/lib/roadmap/loadRoadmapTimelineData";
 import { EMPTY_FILTERS, filterFeatures, type TimelineFilterState } from "@/lib/roadmap/timelineFilters";
 import { buildTimeAxis, markerOffset, todayOffset, type ZoomLevel } from "@/lib/roadmap/timelineScale";
-import { LEFT_COL_PX, ROW_HEIGHT_PX } from "./layout";
+import { LEFT_COL_PX } from "./layout";
 import RoadmapDetailDrawer from "./RoadmapDetailDrawer";
 import RoadmapFilters from "./RoadmapFilters";
 import TimelineMobileList from "./TimelineMobileList";
@@ -48,7 +48,8 @@ export default function TimelineRoadmap(props: { initiativeId: string; data: Cli
   useEffect(() => {
     const el = scrollRef.current;
     if (!el || todayLeft == null) return;
-    el.scrollLeft = Math.max(0, LEFT_COL_PX + todayLeft - el.clientWidth / 3);
+    const leftColumn = Number.parseFloat(getComputedStyle(el).getPropertyValue("--timeline-left-col")) || LEFT_COL_PX;
+    el.scrollLeft = Math.max(0, leftColumn + todayLeft - el.clientWidth / 3);
   }, [zoom, todayLeft]);
 
   const filteredPhases = data.phases.map((group) => ({
@@ -86,11 +87,6 @@ export default function TimelineRoadmap(props: { initiativeId: string; data: Cli
     );
   }
 
-  const rowsHeight = filteredPhases.reduce(
-    (n, p) => n + (p.features.length > 0 ? p.features.length * ROW_HEIGHT_PX + 30 : 0),
-    0,
-  );
-
   return (
     <div className="roadmap-stage roadmap-timeline-stage">
       <div className="roadmap-stage-main">
@@ -124,18 +120,18 @@ export default function TimelineRoadmap(props: { initiativeId: string; data: Cli
       <div className="hidden sm:block">
         <div ref={scrollRef} className="roadmap-timeline-canvas mt-2 max-h-[70vh] overflow-auto rounded-xl border border-border-subtle">
           <TimelineTimeHeader axis={axis} />
-          <div className="relative" style={{ width: LEFT_COL_PX + axis.totalPx }}>
+          <div className="relative" style={{ width: `calc(var(--timeline-left-col) + ${axis.totalPx}px)` }}>
             {todayLeft != null && (
               <div
                 className="pointer-events-none absolute z-10 w-px bg-accent/40"
-                style={{ left: LEFT_COL_PX + todayLeft, top: 0, height: rowsHeight }}
+                style={{ left: `calc(var(--timeline-left-col) + ${todayLeft}px)`, top: 0, bottom: 0 }}
                 aria-hidden
               ><span className="absolute -top-5 left-0 rounded bg-[#5145ed] px-1.5 py-0.5 text-[10px] font-semibold text-white">Today</span></div>
             )}
             {data.releases.map((release) => {
               const left = markerOffset(axis, new Date(release.targetDate));
               if (left == null) return null;
-              return <div key={release.id} className="pointer-events-none absolute z-10 border-l border-dashed border-indigo-500/70" style={{ left: LEFT_COL_PX + left, top: 0, height: rowsHeight }} aria-hidden>
+              return <div key={release.id} className="pointer-events-none absolute z-10 border-l border-dashed border-indigo-500/70" style={{ left: `calc(var(--timeline-left-col) + ${left}px)`, top: 0, bottom: 0 }} aria-hidden>
                 <span className="absolute left-1 top-1 whitespace-nowrap rounded bg-indigo-600 px-1.5 py-0.5 text-[10px] font-semibold text-white">{release.label}</span>
               </div>;
             })}

@@ -2,7 +2,6 @@
 
 import type { ClientTimelinePhaseGroup } from "@/lib/roadmap/loadRoadmapTimelineData";
 import type { TimeAxis } from "@/lib/roadmap/timelineScale";
-import { LEFT_COL_PX } from "./layout";
 import TimelineRow from "./TimelineRow";
 
 /** One Phase lane group — a clear section label row, then one row per Feature (§5). */
@@ -20,7 +19,7 @@ export default function TimelinePhaseGroup(props: {
       <div className="roadmap-timeline-phase flex bg-surface">
         <div
           className="sticky left-0 z-10 shrink-0 bg-surface px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-text-muted"
-          style={{ width: LEFT_COL_PX }}
+          style={{ width: "var(--timeline-left-col)" }}
         >
           {group.name}
         </div>
