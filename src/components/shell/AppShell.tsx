@@ -49,7 +49,7 @@ export default function AppShell(props: {
     props.initiatives[0];
   const projects = Array.from(new Map(props.initiatives.filter(row => row.project).map(row => [row.project!.id, row.project!])).values());
   const home = pathname === "/home";
-  const roadmap = /^\/initiatives\/[^/]+\/workspace\/roadmap\/?$/.test(pathname);
+  const roadmap = /^\/initiatives\/[^/]+\/workspace\/roadmap\/?$/.test(pathname) || pathname === "/roadmap-visual-preview";
 
   const bare = isBareRoute(pathname, props.signedIn, routeInitiative);
 

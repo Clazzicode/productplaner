@@ -36,7 +36,7 @@ export default function LeftNav(props: { initiatives: NavInitiative[]; canManage
       { label: "Decisions", href: "/decisions" }, { label: "Activity", href: "/activity" }, scoped("workspace/features", "Feature hierarchy"),
       scoped("workspace/matrix", "Matrix Portal"), scoped("workspace/executive", "Reports"), { label: "Account settings", href: "/account/settings" }] },
   ];
-  const roadmapMode = /^\/initiatives\/[^/]+\/workspace\/roadmap\/?$/.test(pathname);
+  const roadmapMode = /^\/initiatives\/[^/]+\/workspace\/roadmap\/?$/.test(pathname) || pathname === "/roadmap-visual-preview";
   if (pathname === "/home" || roadmapMode) {
     const quick: SidebarGroup = { title: "", items: [
       { label: "Home", href: "/home" },
