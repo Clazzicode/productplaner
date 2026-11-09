@@ -7,3 +7,7 @@ This version has breaking changes — APIs, conventions, and file structure may 
 This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
 
 <!-- END:nextjs-agent-rules -->
+
+## Deployment communication
+
+For Clarivia changes, explicitly state whether work was only tested locally, pushed to a branch, deployed to a preview, or deployed to production. Never describe a local implementation or test as visible on `nextgendepot.online` until the production deployment has been verified.

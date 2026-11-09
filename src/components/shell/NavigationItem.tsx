@@ -19,6 +19,7 @@ export interface NavigationItemProps {
   /** null = disabled — see `disabled` for why and whether it's unlockable. */
   href: string | null;
   disabled?: NavDisabledState;
+  exact?: boolean;
 }
 
 const ICONS: Record<string, string> = {
@@ -42,7 +43,7 @@ function ItemLabel({ label }: { label: string }) {
   return <span className="flex items-center gap-3"><span aria-hidden className="grid w-5 place-items-center text-center text-base text-[#b9c9ee]">{HOME_ICONS[label] ? <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">{HOME_ICONS[label]}</svg> : ICONS[label] ?? "·"}</span><span>{label}</span></span>;
 }
 
-export default function NavigationItem(props: NavigationItemProps) {
+export default function NavigationItem(props: NavigationItemProps & { nested?: boolean }) {
   const pathname = usePathname() ?? "";
 
   if (!props.href) {
@@ -72,12 +73,13 @@ export default function NavigationItem(props: NavigationItemProps) {
     );
   }
 
-  const active = pathname === props.href || pathname.startsWith(`${props.href}/`);
+  const active = pathname === props.href || (!props.exact && pathname.startsWith(`${props.href}/`));
 
   return (
     <Link
       href={props.href}
-      className={`flex min-h-12 items-center rounded-md px-3 py-2 text-[17px] font-medium transition ${
+      aria-current={active ? "page" : undefined}
+      className={`flex items-center rounded-md px-3 py-2 font-medium transition ${props.nested ? "min-h-9 text-sm" : "min-h-12 text-[17px]"} ${
         active
           ? "bg-gradient-to-r from-[#5c55f7] to-[#4b45e8] text-white"
           : "text-[#d7e0f3] hover:bg-nav-hover hover:text-white"

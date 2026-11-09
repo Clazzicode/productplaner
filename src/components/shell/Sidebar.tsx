@@ -1,7 +1,8 @@
 import Link from "next/link";
 import type { NavigationItemProps } from "./NavigationItem";
 import SidebarSection from "./SidebarSection";
-export type SidebarGroup = { title: string; items: NavigationItemProps[]; collapsible?: boolean };
+export type SidebarSubgroup = { label: string; items: NavigationItemProps[] };
+export type SidebarGroup = { title: string; items: (NavigationItemProps | SidebarSubgroup)[]; collapsible?: boolean };
 
 /**
  * `title`/`titleHref`/`footer` default to the standard product shell's
@@ -13,7 +14,6 @@ export default function Sidebar(props: {
   title?: string;
   titleHref?: string;
   footer?: React.ReactNode;
-  homeMode?: boolean;
   compact?: boolean;
 }) {
   return (
@@ -24,15 +24,7 @@ export default function Sidebar(props: {
           {!props.title && <span className="mt-0.5 text-[10px] font-semibold uppercase tracking-[0.22em] text-[#a9b8d6]">Product owner</span>}
         </>}
       </Link>
-      {props.homeMode ? (
-        <>
-          <SidebarSection title="" items={props.groups[0]?.items ?? []} />
-          <details className="mt-auto rounded-md border border-white/10 px-2 py-2 text-[#b9c9ee]">
-            <summary className="cursor-pointer text-sm font-semibold">All tools</summary>
-            <div className="mt-3 space-y-3">{props.groups.slice(1).map(group => <SidebarSection key={group.title} title={group.title} items={group.items} collapsible={group.collapsible} />)}</div>
-          </details>
-        </>
-      ) : props.groups.map((group) => (
+      {props.groups.map((group) => (
         <SidebarSection key={group.title} title={group.title} items={group.items} collapsible={group.collapsible} />
       ))}
       {props.footer && <div className="mt-auto">{props.footer}</div>}

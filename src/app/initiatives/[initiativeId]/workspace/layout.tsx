@@ -79,9 +79,6 @@ async function WorkspaceLayout({
             manualSprintCount={manualSprintCount}
           />
         </div>
-        <div className="mt-4">
-          <NavTabs initiativeId={initiativeId} methodology={methodology} />
-        </div>
       </header>}>
       {children}
     </RoadmapWorkspaceFrame>
