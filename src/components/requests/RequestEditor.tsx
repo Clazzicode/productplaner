@@ -6,7 +6,7 @@ import PriorityFields from "./PriorityFields";
 
 export type RequestTab = "intake" | "requirements" | "priority";
 
-const inputClass = "mt-1 block w-full rounded-lg border border-slate-300 bg-white p-2.5";
+const inputClass = "mt-1 block w-full rounded-lg border border-[#d0d8e9] bg-white px-3 py-2.5 text-sm outline-none focus:border-[#5145ed] focus:ring-2 focus:ring-[#dedaff]";
 
 export default function RequestEditor({ value, onChange, tab }: {
   value: RequestInput; onChange: (value: RequestInput) => void; tab: RequestTab;
@@ -17,7 +17,7 @@ export default function RequestEditor({ value, onChange, tab }: {
     "dependencies" | "risks" | "stakeholders" | "supportingMaterials" | "definitionOfSuccess"
   >, label: string, long = false, placeholder?: string) => (
     <label className="block text-sm font-medium" key={key}>
-      {label}
+      {label}{key === "title" && <span className="text-rose-600"> *</span>}
       {long ? (
         <textarea className={inputClass} rows={3} maxLength={8000} value={value[key]}
           placeholder={placeholder} onChange={(e) => onChange({ ...value, [key]: e.target.value })} />
@@ -35,7 +35,16 @@ export default function RequestEditor({ value, onChange, tab }: {
   if (tab === "intake") {
     const isBug = value.kind === "bug" || value.kind === "defect";
     return <div className="space-y-4">
-      {field("title", "Request title")}
+      <section className="overflow-hidden rounded-xl border border-[#dce2f0] bg-white">
+        <h3 className="bg-[#f1f2ff] px-4 py-2 text-sm font-semibold text-[#17213d]">Request details</h3>
+        <div className="space-y-4 p-4">
+          {field("title", "Request title", false, "A clear, concise title for the request")}
+          {field("problem", "What problem needs solving?", true, "Describe the need, context, and expected outcome.")}
+        </div>
+      </section>
+      <section className="overflow-hidden rounded-xl border border-[#dce2f0] bg-white">
+        <h3 className="bg-[#f1f2ff] px-4 py-2 text-sm font-semibold text-[#17213d]">Classification &amp; source</h3>
+        <div className="space-y-4 p-4">
       <div className="grid gap-4 sm:grid-cols-2">
         <label className="block text-sm font-medium">Work type
           <select className={inputClass} value={value.kind} onChange={(e) => onChange({ ...value, kind: e.target.value as RequestInput["kind"],
@@ -69,9 +78,13 @@ export default function RequestEditor({ value, onChange, tab }: {
           placeholder="Paste the original meeting notes. They are preserved as immutable source evidence when the request is saved."
           onChange={(e) => onChange({ ...value, meetingNotes: e.target.value })} />
       </label>}
-      {field("problem", "What problem needs solving?", true)}
-      {field("requestedChange", "What change is requested?", true)}
-      {field("outcome", "Requested outcome", true)}
+        </div>
+      </section>
+      <section className="overflow-hidden rounded-xl border border-[#dce2f0] bg-white">
+        <h3 className="bg-[#f1f2ff] px-4 py-2 text-sm font-semibold text-[#17213d]">Additional context</h3>
+        <div className="space-y-4 p-4">
+          {field("requestedChange", "What change is requested?", true)}
+          {field("outcome", "Requested outcome", true)}
       {isBug && <section className="space-y-4 rounded-xl border border-rose-200 bg-rose-50/50 p-4">
         <div><h3 className="font-semibold text-rose-950">Bug details</h3><p className="text-xs text-rose-800">Keep the original source so this planning record remains traceable to Jira, a spreadsheet, or a manual report.</p></div>
         <div className="grid gap-4 sm:grid-cols-3">
@@ -86,6 +99,8 @@ export default function RequestEditor({ value, onChange, tab }: {
         {[{ key: "observedBehavior", label: "Observed behavior" }, { key: "expectedBehavior", label: "Expected behavior" }, { key: "reproductionDetails", label: "Reproduction details" }] .map(({ key, label }) => <label key={key} className="block text-sm font-medium">{label}<textarea className={inputClass} rows={3} value={value.bug[key as keyof Pick<RequestInput["bug"], "observedBehavior" | "expectedBehavior" | "reproductionDetails">]} onChange={(e) => onChange({ ...value, bug: { ...value.bug, [key]: e.target.value } })} /></label>)}
         <label className="block text-sm font-medium">Environment<input className={inputClass} value={value.bug.environment} maxLength={160} placeholder="Browser, app version, device, or environment" onChange={(e) => onChange({ ...value, bug: { ...value.bug, environment: e.target.value } })} /></label>
       </section>}
+        </div>
+      </section>
     </div>;
   }
 

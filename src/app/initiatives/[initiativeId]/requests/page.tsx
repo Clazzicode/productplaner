@@ -1,5 +1,4 @@
 import { withAuthenticatedPage } from "@/lib/auth/entryPoints";
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireCurrentUser } from "@/lib/auth/session";
 import { requireInitiativeView } from "@/lib/access/guards";
@@ -19,10 +18,7 @@ async function RequestsPage({ params }: { params: Promise<{ initiativeId: string
   ]);
   if (!initiative) notFound();
   return <ContainedLayout>
-    <div className="mb-6 space-y-2"><Link href={`/initiatives/${initiativeId}/intake`} className="text-sm text-indigo-700">{initiative.name} / Guided intake</Link>
-      <h1 className="text-3xl font-bold">Requests & priorities</h1>
-      <p className="text-slate-500">Capture the need, clarify the requirements, and record the PO’s priority decision.</p>
-    </div>
+    <div className="mb-5"><h1 className="text-[26px] font-semibold tracking-tight text-[#111b36]">Requests & priorities</h1></div>
     <RequestWorkspace initiativeId={initiativeId} initialRequests={requests.map(requestRecord)} canEdit={access.level === "edit" || access.level === "owner"} />
   </ContainedLayout>;
 }
