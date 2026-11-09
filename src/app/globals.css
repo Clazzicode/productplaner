@@ -257,7 +257,7 @@ body:has(.roadmap-visual-preview) > aside[aria-label="Test environment"] { displ
 .roadmap-zoom button { min-width: 62px; border-radius: 5px; padding: 7px 9px; font-size: 12px; font-weight: 650; }
 .roadmap-zoom button.is-active { background: #5145ed; color: #fff; }
 .roadmap-timeline-canvas { --timeline-left-col: 236px; --timeline-row-height: 60px; --timeline-header-height: 48px; --timeline-block-inset: 17px; background: #fff; }
-.roadmap-time-header { color: #202a42; }
+.roadmap-time-header { width: max-content; color: #202a42; }
 .roadmap-timeline-phase { background: #efedfd; }
 .roadmap-timeline-phase > div:first-child { background: #efedfd; color: #202846; font-size: 13px; font-weight: 750; text-transform: none; }
 .roadmap-timeline-row > div:last-child { background-image: repeating-linear-gradient(90deg, transparent, transparent 178px, #e8ebf3 179px, #e8ebf3 180px); }
