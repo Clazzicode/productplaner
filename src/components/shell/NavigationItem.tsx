@@ -29,8 +29,17 @@ const ICONS: Record<string, string> = {
   "Teams & Stakeholders": "♙", Integrations: "↗", Activity: "⌁",
 };
 
+const HOME_ICONS: Record<string, React.ReactNode> = {
+  Home: <><path d="m3 10 9-7 9 7v10H3V10Z"/><path d="M9 20v-7h6v7"/></>,
+  Requests: <><path d="M3 8h18l-2 12H5L3 8Z"/><path d="M7 8V4h10v4m-8 5h6"/></>,
+  Features: <><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></>,
+  Roadmap: <><rect x="3" y="4" width="18" height="16" rx="1"/><path d="M3 9h18M8 9v11m5-7h5m-5 4h3"/></>,
+  Delivery: <><circle cx="12" cy="12" r="9"/><path d="m8 12 3 3 5-6"/></>,
+  Insights: <><path d="M4 20V10h4v10M10 20V5h4v15m2 0v-8h4v8M2 20h20"/></>,
+};
+
 function ItemLabel({ label }: { label: string }) {
-  return <span className="flex items-center gap-3"><span aria-hidden className="w-5 text-center text-base text-[#b9c9ee]">{ICONS[label] ?? "·"}</span><span>{label}</span></span>;
+  return <span className="flex items-center gap-3"><span aria-hidden className="grid w-5 place-items-center text-center text-base text-[#b9c9ee]">{HOME_ICONS[label] ? <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">{HOME_ICONS[label]}</svg> : ICONS[label] ?? "·"}</span><span>{label}</span></span>;
 }
 
 export default function NavigationItem(props: NavigationItemProps) {
@@ -68,10 +77,10 @@ export default function NavigationItem(props: NavigationItemProps) {
   return (
     <Link
       href={props.href}
-      className={`block rounded-lg px-2.5 py-2 text-sm font-medium transition ${
+      className={`flex min-h-12 items-center rounded-md px-3 py-2 text-[17px] font-medium transition ${
         active
-          ? "bg-nav-selected text-text-inverse"
-          : "text-text-inverse-muted hover:bg-nav-hover hover:text-text-inverse"
+          ? "bg-gradient-to-r from-[#5c55f7] to-[#4b45e8] text-white"
+          : "text-[#d7e0f3] hover:bg-nav-hover hover:text-white"
       }`}
     >
       <ItemLabel label={props.label} />

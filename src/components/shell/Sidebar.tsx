@@ -13,16 +13,23 @@ export default function Sidebar(props: {
   title?: string;
   titleHref?: string;
   footer?: React.ReactNode;
+  homeMode?: boolean;
 }) {
   return (
-    <nav className="no-print sticky top-0 flex h-dvh w-[242px] shrink-0 flex-col gap-4 overflow-y-auto border-r border-border-nav bg-nav px-3 pb-5 shadow-[8px_0_32px_rgba(7,22,47,0.12)]">
-      <Link href={props.titleHref ?? "/home"} className="-mx-3 flex h-16 shrink-0 items-center gap-3 border-b border-white/10 px-5">
-        <span className="relative grid h-8 w-8 place-items-center" aria-hidden="true"><span className="absolute left-1 top-0 h-5 w-5 rounded-sm bg-[#7b6bff]" /><span className="absolute bottom-0 right-0 h-5 w-5 rounded-sm bg-[#3f5de0] opacity-90" /><span className="absolute bottom-1 left-0 h-3 w-3 rounded-sm bg-white/90" /></span>
-        <span className="text-lg font-bold uppercase tracking-[0.08em] text-text-inverse">
-          {props.title ?? "Clarivia"}
-        </span>
+    <nav className="no-print sticky top-0 flex h-dvh w-[238px] shrink-0 flex-col gap-4 overflow-y-auto border-r border-border-nav bg-[#07172f] px-3 pb-5">
+      <Link href={props.titleHref ?? "/home"} className="-mx-3 flex h-16 shrink-0 flex-col justify-center border-b border-white/10 px-5">
+        <span className="text-[22px] font-bold leading-6 tracking-tight text-white">{props.title ?? "Clarivia"}</span>
+        {!props.title && <span className="mt-0.5 text-[10px] font-semibold uppercase tracking-[0.22em] text-[#a9b8d6]">Product owner</span>}
       </Link>
-      {props.groups.map((group) => (
+      {props.homeMode ? (
+        <>
+          <SidebarSection title="" items={props.groups[0]?.items ?? []} />
+          <details className="mt-auto rounded-md border border-white/10 px-2 py-2 text-[#b9c9ee]">
+            <summary className="cursor-pointer text-sm font-semibold">All tools</summary>
+            <div className="mt-3 space-y-3">{props.groups.slice(1).map(group => <SidebarSection key={group.title} title={group.title} items={group.items} collapsible={group.collapsible} />)}</div>
+          </details>
+        </>
+      ) : props.groups.map((group) => (
         <SidebarSection key={group.title} title={group.title} items={group.items} collapsible={group.collapsible} />
       ))}
       {props.footer && <div className="mt-auto">{props.footer}</div>}

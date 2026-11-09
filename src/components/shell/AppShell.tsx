@@ -47,6 +47,8 @@ export default function AppShell(props: {
   const currentInitiative =
     routeInitiative ??
     props.initiatives[0];
+  const projects = Array.from(new Map(props.initiatives.filter(row => row.project).map(row => [row.project!.id, row.project!])).values());
+  const home = pathname === "/home";
 
   const bare = isBareRoute(pathname, props.signedIn, routeInitiative);
 
@@ -127,8 +129,8 @@ export default function AppShell(props: {
     </label>
   ) : null;
   const createActions = props.canManageWorkspace ? (
-    <details className="group relative">
-      <summary className="cursor-pointer list-none rounded-lg bg-[#5145ed] px-4 py-2 text-sm font-semibold text-white hover:bg-[#4238d7] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white">+ Create <span aria-hidden>⌄</span></summary>
+    <details className={`group relative ${home ? "home-header-create" : ""}`}>
+      <summary className="cursor-pointer list-none rounded-md bg-[#5145ed] px-5 py-2.5 text-base font-semibold text-white shadow-[0_2px_5px_rgba(81,69,237,0.2)] hover:bg-[#4238d7] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#5145ed]">Create <span aria-hidden className="ml-2">⌄</span></summary>
       <div className="absolute right-0 z-50 mt-2 w-44 rounded-xl border border-border-subtle bg-white p-1.5 text-text-primary shadow-xl">
         <Link href="/projects/new" className="block rounded-lg px-3 py-2 text-sm hover:bg-[#f4f5fe]">New project</Link>
         <Link href="/initiatives/new" className="block rounded-lg px-3 py-2 text-sm hover:bg-[#f4f5fe]">New initiative</Link>
@@ -154,12 +156,17 @@ export default function AppShell(props: {
           breadcrumbs={breadcrumbs}
           switcher={headerSwitcher}
           createActions={createActions}
-          accountActions={<AccountMenu userName={props.userName} accessLevel={props.accessLevel} dark />}
+          accountActions={<AccountMenu userName={props.userName} accessLevel={props.accessLevel} dark={!home} />}
           currentName={currentName}
           userName={props.userName}
           onOpenMenu={() => setDrawerOpen(true)}
+          home={home}
+          requestHref={currentInitiative ? `/initiatives/${currentInitiative.id}/requests` : undefined}
+          featureHref={currentInitiative ? `/initiatives/${currentInitiative.id}/backlog` : undefined}
+          project={currentInitiative?.project ?? undefined}
+          projects={projects}
         />
-        <main className="min-w-0 flex-1 bg-[#f4f5fe]">
+        <main className={`min-w-0 flex-1 ${home ? "bg-white" : "bg-[#f4f5fe]"}`}>
           <div className="px-4 pt-4 sm:px-6">
             <AiUsageBanner />
           </div>

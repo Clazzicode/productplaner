@@ -36,5 +36,21 @@ export default function LeftNav(props: { initiatives: NavInitiative[]; canManage
       { label: "Decisions", href: "/decisions" }, { label: "Activity", href: "/activity" }, scoped("workspace/features", "Feature hierarchy"),
       scoped("workspace/matrix", "Matrix Portal"), scoped("workspace/executive", "Reports"), { label: "Account settings", href: "/account/settings" }] },
   ];
+  if (pathname === "/home") {
+    const quick: SidebarGroup = { title: "", items: [
+      { label: "Home", href: "/home" },
+      scoped("requests", "Requests"),
+      scoped("backlog", "Features"),
+      scoped("workspace/roadmap", "Roadmap"),
+      scoped("workspace/sprints", "Delivery"),
+      scoped("workspace/executive", "Insights"),
+    ] };
+    const allTools = groups.map(group => ({
+      ...group,
+      collapsible: true,
+      items: group.items.filter(item => item.href !== "/home"),
+    }));
+    return <Sidebar groups={[quick, ...allTools]} homeMode />;
+  }
   return <Sidebar groups={groups} />;
 }
