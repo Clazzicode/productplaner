@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import PendingRequestsNavigation from "@/components/requests/PendingRequestsNavigation";
 
 /**
  * Guided-activation restructure (reference doc §11): a disabled nav item is
@@ -78,10 +79,12 @@ export default function NavigationItem(props: NavigationItemProps & { nested?: b
   }
 
   const active = pathname === props.href || (!props.exact && pathname.startsWith(`${props.href}/`));
+  const requestsLink = props.href.endsWith("/requests");
 
   return (
     <Link
       href={props.href}
+      prefetch={requestsLink ? false : undefined}
       aria-current={active ? "page" : undefined}
       className={`flex items-center rounded-md px-3 py-2 transition ${props.nested ? "min-h-8 text-[13px]" : "min-h-10 text-sm"} ${active ? "font-semibold" : "font-normal"} ${
         active
@@ -90,6 +93,7 @@ export default function NavigationItem(props: NavigationItemProps & { nested?: b
       }`}
     >
       <ItemLabel label={props.label} icon={props.icon} />
+      {requestsLink && <PendingRequestsNavigation />}
     </Link>
   );
 }
