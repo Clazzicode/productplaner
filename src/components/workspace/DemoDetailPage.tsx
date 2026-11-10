@@ -25,7 +25,7 @@ function ProviderPage({ provider, demoTitle, agendaHref }: { provider: "Google M
   return <section className="overflow-hidden rounded-xl border border-[#d9dff0] bg-white shadow-[0_3px_16px_rgba(40,39,109,.04)]">
     <div className="p-4 sm:p-5">
       <div className="flex flex-wrap items-start justify-between gap-3 border-b border-[#e8eaf3] pb-3">
-        <div className="flex items-center gap-3"><span className={`flex h-9 shrink-0 items-center justify-center rounded-lg border border-[#e2e5f1] bg-white ${provider === "Zoom" ? "w-[72px]" : "w-11"}`}><Image src={provider === "Zoom" ? "/brands/zoom-logo.png" : "/brands/google-meet.svg"} alt="" width={provider === "Zoom" ? 56 : 27} height={provider === "Zoom" ? 15 : 22} className="h-auto" /></span><div><h2 className="text-base font-bold text-[#101a35]">{provider} connection</h2><p className="mt-1 text-xs text-[#74809c]">Meeting account not connected</p></div></div>
+        <div className="flex items-center gap-3"><span className={`flex h-9 shrink-0 items-center justify-center rounded-lg border border-[#e2e5f1] bg-white ${provider === "Zoom" ? "w-[72px]" : "w-11"}`}><Image src={provider === "Zoom" ? "/brands/zoom-logo.png" : "/brands/google-meet.svg"} alt="" width={provider === "Zoom" ? 56 : 27} height={provider === "Zoom" ? 13 : 22} /></span><div><h2 className="text-base font-bold text-[#101a35]">{provider} connection</h2><p className="mt-1 text-xs text-[#74809c]">Meeting account not connected</p></div></div>
         <span className="rounded-full bg-[#f0f1f6] px-3 py-1 text-xs font-semibold text-[#56627e]">Not connected</span>
       </div>
       <div className="mt-3 rounded-lg border border-[#d9d5ff] bg-[#f8f7ff] px-3 py-2 text-xs leading-5 text-[#3b3b72]">
