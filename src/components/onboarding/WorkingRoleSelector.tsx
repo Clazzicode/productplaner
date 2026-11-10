@@ -42,7 +42,7 @@ export default function WorkingRoleSelector() {
       setSubmitting(false);
       return;
     }
-    router.push("/projects");
+    router.push("/onboarding/connections");
   };
 
   return (

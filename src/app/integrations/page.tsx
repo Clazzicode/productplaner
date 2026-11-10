@@ -10,6 +10,7 @@ import PageHeader from "@/components/ui/PageHeader";
 import { requireCurrentUser } from "@/lib/auth/session";
 import { db, establishAuthContext } from "@/lib/db";
 import { ensureProvidersSeeded } from "@/lib/sync/integrationSeed";
+import MeetingProviderConnections from "@/components/integrations/MeetingProviderConnections";
 
 export const dynamic = "force-dynamic";
 
@@ -38,7 +39,7 @@ async function IntegrationsPage() {
     }),
   ]);
 
-  const hubProviders: HubProvider[] = providers.filter((p) => p.key !== "jira").map((p) => ({
+  const hubProviders: HubProvider[] = providers.filter((p) => !["jira", "google_calendar", "zoom", "notion"].includes(p.key)).map((p) => ({
     id: p.id,
     key: p.key,
     name: p.name,
@@ -72,22 +73,19 @@ async function IntegrationsPage() {
   const generated = initiatives.filter((i) => i.status === "generated");
   const hubConnectionsForDemo = hubConnections.filter((c) => {
     const provider = providers.find((p) => p.id === c.providerId);
-    return provider?.key !== "jira";
+    return provider && !["jira", "google_calendar", "zoom", "notion"].includes(provider.key);
   });
-  const connectedCount = hubConnectionsForDemo.filter(
-    (c) => c.isEnabled && c.status !== "available",
-  ).length;
-
   return (
     <ContainedLayout>
       <PageHeader
         title="Integrations"
-        description={`Connection hub — ${connectedCount} of ${hubProviders.length} tools connected. The platform stays the system of record; execution tools receive the work.`}
+        description="Connect Google Calendar, Google Meet, Zoom, and Notion to bring meetings and notes into your planning workspace."
       />
       <CoachMark coachMarkKey="integrations" className="mt-4" />
       <div className="mt-6">
         <AtlassianOAuthConnection canManage={user.permissionRole === "owner" || user.permissionRole === "admin"} />
       </div>
+      <div className="mt-6"><MeetingProviderConnections /></div>
       <div className="mt-6">
         <IntegrationsHub
           providers={hubProviders}
