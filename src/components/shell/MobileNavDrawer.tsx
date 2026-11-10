@@ -17,6 +17,7 @@ export default function MobileNavDrawer(props: {
   onClose: () => void;
   initiatives: NavInitiative[];
   canManageWorkspace?: boolean;
+  userId?: string;
   topContent?: React.ReactNode;
   bottomContent?: React.ReactNode;
 }) {
@@ -88,7 +89,7 @@ export default function MobileNavDrawer(props: {
           <div className="border-b border-neutral-200 px-3 py-3">{props.topContent}</div>
         )}
         <div className="min-h-0 min-w-0 flex-1 overflow-y-auto [&>nav]:h-auto [&>nav]:min-h-full [&>nav]:w-full [&>nav]:overflow-visible">
-          <LeftNav initiatives={props.initiatives} canManageWorkspace={props.canManageWorkspace} />
+          <LeftNav initiatives={props.initiatives} canManageWorkspace={props.canManageWorkspace} userId={props.userId} />
         </div>
         {props.bottomContent && (
           <div className="border-t border-neutral-200 px-3 py-3">{props.bottomContent}</div>

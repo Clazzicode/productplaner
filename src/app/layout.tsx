@@ -95,6 +95,7 @@ async function RootLayout({
             signedIn={user != null}
             canManageWorkspace={canManageWorkspace}
             userName={user?.name ?? ""}
+            userId={user?.authUserId ?? ""}
             accessLevel={user?.accessLevel ?? "standard_user"}
             initiatives={navigationInitiatives}
           >

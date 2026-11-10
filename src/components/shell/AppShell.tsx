@@ -6,7 +6,8 @@ import { useState } from "react";
 import AccountMenu from "@/components/auth/AccountMenu";
 import AiUsageBanner from "@/components/ai/AiUsageBanner";
 import { isBareRoute } from "./bareMode";
-import LeftNav, { type NavInitiative } from "./LeftNav";
+import LeftNav, { buildSidebarGroups, type NavInitiative } from "./LeftNav";
+import { sectionDestinations } from "./sectionSearch";
 import MobileNavDrawer from "./MobileNavDrawer";
 import TopHeader from "./TopHeader";
 import ChevronIcon from "@/components/ui/ChevronIcon";
@@ -24,6 +25,7 @@ export default function AppShell(props: {
   signedIn: boolean;
   canManageWorkspace?: boolean;
   userName: string;
+  userId: string;
   accessLevel: string;
   initiatives: NavInitiative[];
   children: React.ReactNode;
@@ -128,13 +130,14 @@ export default function AppShell(props: {
   return (
     <div className="flex min-h-dvh w-full min-w-0 bg-surface">
       <div className={roadmap ? "hidden min-[851px]:contents" : "hidden xl:contents"}>
-        <LeftNav initiatives={props.initiatives} canManageWorkspace={props.canManageWorkspace} />
+        <LeftNav initiatives={props.initiatives} canManageWorkspace={props.canManageWorkspace} userId={props.userId} />
       </div>
       <MobileNavDrawer
         open={drawerOpen}
         onClose={() => setDrawerOpen(false)}
         initiatives={props.initiatives}
         canManageWorkspace={props.canManageWorkspace}
+        userId={props.userId}
         topContent={switcherAndNew}
         bottomContent={<AccountMenu userName={props.userName} accessLevel={props.accessLevel} dropUp />}
       />
@@ -149,6 +152,7 @@ export default function AppShell(props: {
           featureHref={currentInitiative ? `/initiatives/${currentInitiative.id}/backlog` : undefined}
           project={selectedProject}
           projects={projects}
+          destinations={sectionDestinations(buildSidebarGroups(props, pathname))}
         />
         <main className={`min-w-0 flex-1 ${home ? "bg-white" : "bg-[#f4f5fe]"}`}>
           <div className={roadmap || demoDetail ? "px-0 pt-0" : "px-4 pt-4 sm:px-6"}>
