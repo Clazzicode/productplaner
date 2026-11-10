@@ -53,6 +53,7 @@ export default function AppShell(props: {
   const selectedProject = projects.find(project => project.id === routeProjectId) ?? currentInitiative?.project ?? undefined;
   const home = pathname === "/home";
   const roadmap = /^\/initiatives\/[^/]+\/workspace\/roadmap\/?$/.test(pathname);
+  const demoDetail = /^\/initiatives\/[^/]+\/workspace\/demos\/[^/]+(?:\/(?:google-meet|zoom))?\/?$/.test(pathname);
 
   const bare = isBareRoute(pathname, props.signedIn, routeInitiative);
 
@@ -150,7 +151,7 @@ export default function AppShell(props: {
           projects={projects}
         />
         <main className={`min-w-0 flex-1 ${home ? "bg-white" : "bg-[#f4f5fe]"}`}>
-          <div className={roadmap ? "px-0 pt-0" : "px-4 pt-4 sm:px-6"}>
+          <div className={roadmap || demoDetail ? "px-0 pt-0" : "px-4 pt-4 sm:px-6"}>
             <AiUsageBanner />
           </div>
           {props.children}
