@@ -3,6 +3,7 @@
 // resolution rule itself lives in exactly one place (resolution.ts).
 
 import { db } from "@/lib/db";
+import { cache } from "react";
 import { resolveInitiativeAccess, type PermissionLevel, type ResolvedAccess } from "./resolution";
 
 export type { PermissionLevel, ResolvedAccess } from "./resolution";
@@ -42,7 +43,7 @@ async function loadTeamGrants(userId: string, initiativeId: string) {
  * belongs to a different organization, per docs/V2-RESOURCE-ACCESS.md §17:
  * never reveal whether a cross-org resource exists.
  */
-export async function getResolvedAccess(
+export const getResolvedAccess = cache(async function getResolvedAccess(
   actor: ActorRow,
   initiativeId: string,
 ): Promise<ResolvedAccess | "not_found"> {
@@ -61,7 +62,7 @@ export async function getResolvedAccess(
     directGrant: directGrantRow ? { permission: directGrantRow.permission as PermissionLevel } : null,
     teamGrants,
   });
-}
+});
 
 /**
  * Every initiative in the user's organization the user currently has at
