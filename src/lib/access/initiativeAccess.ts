@@ -51,6 +51,13 @@ export const getResolvedAccess = cache(async function getResolvedAccess(
   if (!initiative) return "not_found";
   if (actor.organizationId !== initiative.organizationId) return "not_found";
 
+  // The canonical resolver gives active internal org admins implicit Owner
+  // access before inspecting grants. Avoid two unnecessary database reads for
+  // that case while still verifying the initiative belongs to this org.
+  if (actor.status === "active" && actor.accessLevel === "org_admin" && actor.memberType === "internal") {
+    return resolveInitiativeAccess({ actor, initiativeOrganizationId: initiative.organizationId, directGrant: null, teamGrants: [] });
+  }
+
   const [directGrantRow, teamGrants] = await Promise.all([
     db.initiativeAccess.findUnique({ where: { initiativeId_userId: { initiativeId, userId: actor.id } } }),
     loadTeamGrants(actor.id, initiativeId),
