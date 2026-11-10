@@ -1160,5 +1160,80 @@
     "path": "src/app/initiatives/[initiativeId]/overview/page.tsx",
     "classification": "authenticated-page",
     "reason": "Verified user/workspace context; draft edits and explicit workspace initialization require current initiative editing authority."
+  },
+  {
+    "path": "src/app/api/meeting-providers/[provider]/route.ts",
+    "classification": "authenticated-api",
+    "reason": "Verified user connects or disconnects their own encrypted calendar or Zoom OAuth grant."
+  },
+  {
+    "path": "src/app/api/meeting-providers/[provider]/callback/route.ts",
+    "classification": "authenticated-api",
+    "reason": "Verified user completes their own OAuth callback after checking the browser state cookie."
+  },
+  {
+    "path": "src/app/api/notion/route.ts",
+    "classification": "authenticated-api",
+    "reason": "Verified user connects or disconnects their own encrypted Notion OAuth grant."
+  },
+  {
+    "path": "src/app/api/notion/callback/route.ts",
+    "classification": "authenticated-api",
+    "reason": "Verified user completes their own Notion OAuth callback after checking the browser state cookie."
+  },
+  {
+    "path": "src/app/api/initiatives/[initiativeId]/meetings/route.ts",
+    "classification": "authenticated-api",
+    "reason": "Verified initiative editor schedules a provider call and sends calendar invitations."
+  },
+  {
+    "path": "src/app/api/meetings/[meetingId]/route.ts",
+    "classification": "authenticated-api",
+    "reason": "Verified initiative editor updates meeting notes, transcript, and reviewed summary."
+  },
+  {
+    "path": "src/app/api/meetings/[meetingId]/summary/route.ts",
+    "classification": "authenticated-api",
+    "reason": "Verified initiative editor requests a grounded AI draft from stored meeting content."
+  },
+  {
+    "path": "src/app/api/meetings/[meetingId]/refresh-link/route.ts",
+    "classification": "authenticated-api",
+    "reason": "Verified meeting organizer retrieves a delayed Google Meet link for their own meeting."
+  },
+  {
+    "path": "src/app/api/meetings/[meetingId]/attendance/route.ts",
+    "classification": "authenticated-api",
+    "reason": "Verified meeting organizer imports provider meeting times and participant observations."
+  },
+  {
+    "path": "src/app/api/meetings/[meetingId]/notion/route.ts",
+    "classification": "authenticated-api",
+    "reason": "Verified initiative editor imports shared Notion page text into a meeting draft."
+  },
+  {
+    "path": "src/app/initiatives/[initiativeId]/workspace/demos/[demoId]/page.tsx",
+    "classification": "authenticated-page",
+    "reason": "Verified user views the demo record within the initiative access boundary."
+  },
+  {
+    "path": "src/app/initiatives/[initiativeId]/workspace/demos/[demoId]/google-meet/page.tsx",
+    "classification": "authenticated-page",
+    "reason": "Verified user views Google Meet scheduling and notes for an accessible demo."
+  },
+  {
+    "path": "src/app/initiatives/[initiativeId]/workspace/demos/[demoId]/zoom/page.tsx",
+    "classification": "authenticated-page",
+    "reason": "Verified user views Zoom scheduling and notes for an accessible demo."
+  },
+  {
+    "path": "src/app/initiatives/[initiativeId]/workspace/demos/[demoId]/google-calendar/page.tsx",
+    "classification": "authenticated-page",
+    "reason": "Verified user views their own Google Calendar schedule within an accessible demo."
+  },
+  {
+    "path": "src/app/api/calendar/events/route.ts",
+    "classification": "authenticated-api",
+    "reason": "Verified user retrieves sanitized events from only their own connected Google Calendar."
   }
 ]

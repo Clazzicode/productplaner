@@ -1466,6 +1466,22 @@ model IntegrationConnection {
   @@unique([organizationId, providerId, initiativeId])
 }
 
+model PersonalIntegrationConnection {
+  id                       String   @id @default(cuid())
+  organizationId           String
+  userId                   String
+  provider                 String
+  accountEmail             String?
+  accountLabel             String?
+  tokenCiphertext          String
+  accessTokenExpiresAt     DateTime?
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+
+  @@unique([organizationId, userId, provider])
+  @@index([userId, provider])
+}
+
 model IntegrationCapability {
   id                 String              @id @default(cuid())
   providerId         String
@@ -2896,6 +2912,15 @@ model PlanningMeeting {
   releaseId                 String?
   title                     String
   scheduledAt               DateTime?
+  scheduledEndAt            DateTime?
+  provider                 String?   // google_meet | zoom
+  joinUrl                  String?
+  providerMeetingId        String?
+  calendarEventId          String?
+  actualStartedAt          DateTime?
+  actualEndedAt            DateTime?
+  summary                  String    @default("")
+  transcriptSource         String?   // provider | imported | manual
   facilitatorStakeholderId  String?
   facilitatorNameSnapshot   String    @default("")
   purpose                   String    @default("")
@@ -2922,10 +2947,16 @@ model PlanningMeetingParticipant {
   participantNameSnapshot  String
   participantEmailSnapshot String?
   role                     String   @default("participant")
+  attendanceStatus         String   @default("invited") // invited | joined | absent | unmatched
+  providerDisplayName      String?
+  providerParticipantId    String?
+  joinedAt                 DateTime?
+  leftAt                   DateTime?
   createdAt                DateTime @default(now())
 
   @@unique([meetingId, stakeholderId])
   @@index([organizationId, meetingId])
+  @@unique([meetingId, providerParticipantId])
 }
 
 model PlanningMeetingWorkItem {
