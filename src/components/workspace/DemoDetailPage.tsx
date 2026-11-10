@@ -4,6 +4,7 @@ import { requireInitiativeView } from "@/lib/access/guards";
 import { requireCurrentUser } from "@/lib/auth/session";
 import { db, establishAuthContext } from "@/lib/db";
 import { demoInclude } from "@/lib/demos/service";
+import { notionEvidenceLink } from "@/lib/demos/notionLink";
 
 export type DemoDetailView = "information" | "google-meet" | "zoom";
 
@@ -11,19 +12,6 @@ const statusLabels: Record<string, string> = {
   proposed: "Proposed", preparing: "Preparing", ready: "Ready", not_ready: "Not ready",
   demonstrated: "Demonstrated", skipped: "Skipped", carried_over: "Carried over",
 };
-
-function notionLink(value: unknown): string | null {
-  if (!Array.isArray(value)) return null;
-  for (const item of value) {
-    if (typeof item !== "string") continue;
-    try {
-      const url = new URL(item);
-      const host = url.hostname.toLowerCase();
-      if (url.protocol === "https:" && (host === "notion.so" || host.endsWith(".notion.so") || host === "notion.site" || host.endsWith(".notion.site"))) return url.toString();
-    } catch { /* An evidence link may be an older free-form value. */ }
-  }
-  return null;
-}
 
 function Field({ label, value, wide = false }: { label: string; value: string; wide?: boolean }) {
   return <div className={`grid gap-2 border-b border-[#e8eaf3] py-3 last:border-b-0 sm:grid-cols-[155px_minmax(0,1fr)] ${wide ? "sm:col-span-2" : ""}`}>
@@ -80,7 +68,7 @@ export default async function DemoDetailPage({ initiativeId, demoId, view }: { i
     { view: "google-meet", label: "Google Meet", href: `${detail}/google-meet` },
     { view: "zoom", label: "Zoom", href: `${detail}/zoom` },
   ];
-  const linkedNotion = notionLink(demo.evidenceLinks);
+  const linkedNotion = notionEvidenceLink(demo.evidenceLinks);
   const featureTitle = demo.capability?.name ?? "No linked feature";
   const bugData = demo.bug?.request.data;
   const bugTitle = bugData && typeof bugData === "object" && !Array.isArray(bugData) && "title" in bugData && typeof bugData.title === "string" ? bugData.title : "Linked bug";
