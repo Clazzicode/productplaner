@@ -9,6 +9,7 @@ describe("section search", () => {
   it("links nested sections to the current initiative", () => {
     expect(searchSections("sprint planning", sections)[0]).toMatchObject({ label: "Sprint Planning", href: "/initiatives/initiative-1/workspace/sprint-preparation" });
     expect(searchSections("initiative brief", sections)[0]).toMatchObject({ label: "Initiative brief", href: "/initiatives/initiative-1/intake" });
+    expect(searchSections("sprint", sections)[0]).toMatchObject({ label: "Sprint", href: "/initiatives/initiative-1/workspace/sprint-preparation" });
   });
 
   it("ranks section names and related terms", () => {

@@ -24,21 +24,28 @@ function hasItems(item: NavigationItemProps | SidebarSubgroup): item is SidebarS
 export function sectionDestinations(groups: SidebarGroup[]): SectionDestination[] {
   return groups.flatMap(group => group.items.flatMap(item => {
     const entries = hasItems(item) ? item.items : [item];
-    return entries.flatMap(entry => entry.href ? [{
+    const groupDestination = hasItems(item) ? entries.find(entry => entry.href) : undefined;
+    return [...(groupDestination?.href ? [{
+      label: item.label,
+      href: groupDestination.href,
+      group: group.title || "Top",
+      keywords: `${item.label} ${group.title} ${aliases[item.label] ?? ""}`.toLowerCase(),
+    }] : []), ...entries.flatMap(entry => entry.href ? [{
       label: entry.label,
       href: entry.href,
       group: group.title || "Top",
       keywords: `${entry.label} ${item.label} ${group.title} ${aliases[entry.label] ?? ""}`.toLowerCase(),
-    }] : []);
+    }] : [])];
   }));
 }
 
 export function searchSections(query: string, sections: SectionDestination[]): SectionDestination[] {
-  const terms = query.toLowerCase().trim().split(/\s+/).filter(Boolean);
+  const normalizedQuery = query.toLowerCase().trim();
+  const terms = normalizedQuery.split(/\s+/).filter(Boolean);
   if (!terms.length) return [];
   return sections.map(section => {
     const label = section.label.toLowerCase();
-    const score = terms.reduce((sum, term) => {
+    const score = (label === normalizedQuery ? 200 : 0) + terms.reduce((sum, term) => {
       if (label === term) return sum + 100;
       if (label.startsWith(term)) return sum + 70;
       if (label.includes(term)) return sum + 45;

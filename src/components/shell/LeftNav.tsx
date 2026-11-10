@@ -125,8 +125,9 @@ export default function LeftNav(props: { initiatives: NavInitiative[]; canManage
   </details>;
 
   const renderItem = (item: NavigationItemProps | SidebarSubgroup) => isSubgroup(item)
-    ? <details key={item.label} className="group rounded-lg border border-white/10 bg-white/[0.04]" open={item.items.some(child => child.href === pathname) || undefined}>
-        <summary className="flex min-h-9 cursor-pointer list-none items-center gap-2 rounded-lg px-3 text-[13px] text-[#e2e9f8] hover:bg-white/10"><span className="text-[#aebce0] group-open:rotate-90">›</span><SectionIcon name={iconFor(item.label)} size={17} /><span>{item.label}</span></summary>
+    ? <details key={item.label} className="group relative rounded-lg border border-white/10 bg-white/[0.04]" open={item.items.some(child => child.href === pathname) || undefined}>
+        <summary className={`flex min-h-9 cursor-pointer list-none items-center gap-2 rounded-lg px-3 text-[13px] text-[#e2e9f8] hover:bg-white/10 ${tab === "all" ? "pr-14" : ""}`}><span className="text-[#aebce0] group-open:rotate-90">›</span><SectionIcon name={iconFor(item.label)} size={17} /><span>{item.label}</span></summary>
+        {tab === "all" && <div className="absolute right-1 top-1 flex items-center gap-0.5">{iconPicker(item.label)}<button type="button" onClick={() => togglePin(item.label)} aria-label={`${prefs.pins.includes(item.label) ? "Unpin" : "Pin"} ${item.label}`} title={prefs.pins.includes(item.label) ? "Unpin" : "Pin"} className="p-1 text-[#a9b8e5] hover:text-white">{prefs.pins.includes(item.label) ? "◆" : "◇"}</button></div>}
         <div className="space-y-0.5 border-t border-white/10 py-1 pl-4 pr-1">{item.items.map(child => renderItem(child))}</div>
       </details>
     : <div key={item.label} className="group/row flex items-center gap-1 rounded-lg hover:bg-white/[0.06]">
