@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import NavigationItem, { type NavigationItemProps } from "./NavigationItem";
@@ -31,7 +32,7 @@ const DEFAULT_PINS = ["Requests & Priorities", "Roadmap", "Demos", "Reports"];
 type MenuPreferences = { pins: string[]; icons: Record<string, IconName> };
 
 function SectionIcon({ name, size = 20 }: { name: IconName; size?: number }) {
-  return <span aria-hidden className="inline-block shrink-0 bg-center bg-no-repeat" style={{ width: size, height: size, backgroundSize: "contain", backgroundImage: `url(/sidebar-icons/${name}.svg)` }} />;
+  return <Image src={`/sidebar-icons/${name}.svg`} alt="" width={size} height={size} unoptimized className="shrink-0" />;
 }
 
 function isSubgroup(item: NavigationItemProps | SidebarSubgroup): item is SidebarSubgroup { return "items" in item; }
@@ -147,7 +148,7 @@ export default function LeftNav(props: { initiatives: NavInitiative[]; canManage
         <div className="mb-3 flex items-center justify-between"><h2 className="text-[13px] font-semibold">Pinned shortcuts</h2><button type="button" onClick={() => setEditing(!editing)} className="text-[12px] text-[#a68cff] hover:text-white">✎ {editing ? "Done" : "Edit pins"}</button></div>
         <div className="grid grid-cols-2 gap-2">{prefs.pins.filter(pin => destinationFor(pin)).map(pin => { const destination = destinationFor(pin)!; return <div key={pin} className={`relative min-h-[73px] rounded-[10px] border bg-gradient-to-br from-[#162d4d] to-[#102540] ${pathname === destination.href ? "border-[#6657ff] ring-1 ring-[#6657ff]" : "border-[#334864]"}`}>
           <Link href={destination.href} className="flex h-full flex-col justify-end gap-1 px-3 py-2 pr-5 text-[13px] leading-tight hover:bg-white/[0.05]"><SectionIcon name={iconFor(pin)} size={23} /><span className="truncate">{pin === "Requests & Priorities" ? "Requests" : pin}</span></Link>
-          <button type="button" onClick={() => togglePin(pin)} aria-label={`Unpin ${pin}`} title="Unpin" className="absolute right-1.5 top-1.5 text-[13px] text-[#a58bff]">{editing ? "×" : "⌁"}</button>
+          <button type="button" onClick={() => togglePin(pin)} aria-label={`Unpin ${pin}`} title="Unpin" className="absolute right-1.5 top-1.5 text-[#a58bff]">{editing ? <span className="text-base leading-none">×</span> : <svg aria-hidden width="13" height="13" viewBox="0 0 16 16" fill="currentColor"><path d="m6 1 5 1-1 3 2 2-.5 1.5-3-.5-2 5-1.5 1 .5-6L3 7l.5-1.5L6 5V1Z"/></svg>}</button>
           {editing && <div className="absolute bottom-1 right-1">{iconPicker(pin)}</div>}
         </div>; })}</div>
         {editing && <p className="mt-2 text-[11px] text-[#b6c6e1]">Open All sections to pin more destinations or change their icons.</p>}
