@@ -43,6 +43,7 @@ describe("meeting provider OAuth", () => {
     const google = new URL(authorizationUrl("google_calendar", "state"));
     expect(google.origin).toBe("https://accounts.google.com");
     expect(google.searchParams.get("scope")).toContain("calendar.events");
+    expect(google.searchParams.get("scope")).toContain("calendar.calendarlist.readonly");
     expect(google.searchParams.get("scope")).toContain("meetings.space.readonly");
     expect(google.searchParams.get("scope")).toContain("openid email");
     expect(google.searchParams.get("access_type")).toBe("offline");

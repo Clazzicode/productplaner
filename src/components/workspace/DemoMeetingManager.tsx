@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { apiFetch } from "@/lib/clientApi";
@@ -102,7 +103,7 @@ export default function DemoMeetingManager(props: {
   }
   return <div className="space-y-5">
     <section className="rounded-2xl border border-[#dfe3f2] bg-white p-5 shadow-sm">
-      <div className="flex flex-wrap items-center justify-between gap-2"><h2 className="text-xl font-bold">{providerName} meetings</h2><span className={`text-xs font-semibold ${connected ? "text-emerald-700" : "text-amber-700"}`}>{connected ? "Ready to schedule" : "Connection needed"}</span></div>
+      <div className="flex flex-wrap items-center justify-between gap-2"><div className="flex items-center gap-3"><span className="grid size-11 place-items-center rounded-xl bg-[#f5f4ff]"><Image src={props.provider === "google_meet" ? "/brands/google-meet.svg" : "/brands/zoom-logo.png"} alt="" width={props.provider === "google_meet" ? 30 : 38} height={30} className="object-contain" /></span><h2 className="text-xl font-bold">{providerName} meetings</h2></div><span className={`text-xs font-semibold ${connected ? "text-emerald-700" : "text-amber-700"}`}>{connected ? "Ready to schedule" : "Connection needed"}</span></div>
       <p className="mt-2 text-sm text-slate-600">{props.provider === "zoom" ? "Zoom creates the call; Google Calendar sends an invitation containing its join link." : "Google Calendar creates the Meet link and sends the invitation."} Planned guests and observed attendance are tracked separately.</p>
       {props.calendarEmail && <p className="mt-2 text-sm text-slate-600">Invitations and calendar event: <strong>{props.calendarEmail}</strong>{props.provider === "zoom" && props.zoomEmail ? <> · Zoom host: <strong>{props.zoomEmail}</strong></> : null}</p>}
       {!connected && props.canUseIntegrations && <Link href="/integrations" className="mt-3 inline-block rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white">Connect {props.calendarConnected ? "Zoom" : "Google Calendar"}</Link>}

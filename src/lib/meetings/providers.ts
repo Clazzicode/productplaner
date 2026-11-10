@@ -64,7 +64,7 @@ export function authorizationUrl(provider: MeetingProvider, state: string): stri
   url.searchParams.set("redirect_uri", config.redirectUri);
   url.searchParams.set("state", state);
   if (provider === "google_calendar") {
-    url.searchParams.set("scope", "openid email https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/meetings.space.readonly");
+    url.searchParams.set("scope", "openid email https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/calendar.calendarlist.readonly https://www.googleapis.com/auth/meetings.space.readonly");
     url.searchParams.set("access_type", "offline");
     url.searchParams.set("prompt", "consent");
   }
@@ -91,7 +91,7 @@ export async function exchangeCode(provider: MeetingProvider, code: string): Pro
   const result = await tokenRequest(provider, form);
   if (!result.refreshToken) throw new Error("The provider did not grant offline access. Please reconnect.");
   const required = provider === "google_calendar"
-    ? ["openid", "email", "https://www.googleapis.com/auth/calendar.events", "https://www.googleapis.com/auth/meetings.space.readonly"]
+    ? ["openid", "email", "https://www.googleapis.com/auth/calendar.events", "https://www.googleapis.com/auth/calendar.calendarlist.readonly", "https://www.googleapis.com/auth/meetings.space.readonly"]
     : ["meeting:write:meeting", "meeting:read:past_meeting", "meeting:read:list_past_participants", "cloud_recording:read:meeting_transcript", "user:read:user"];
   if (!required.every((scope) => result.scopes.includes(scope))) throw new Error("The provider did not grant the required meeting permissions.");
   return { tokens: { accessToken: result.accessToken, refreshToken: result.refreshToken }, expiresAt: Date.now() + result.expiresIn * 1000 };

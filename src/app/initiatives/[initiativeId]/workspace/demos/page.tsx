@@ -17,7 +17,7 @@ async function DemoManagementPage({ params }: { params: Promise<{ initiativeId: 
   const workspace = await loadWorkspace(initiativeId);
   if (!workspace) notFound();
 
-  const [plans, demos, stakeholders, blockers, clarifications] = await Promise.all([
+  const [plans, demos, stakeholders, blockers, clarifications, connections] = await Promise.all([
     db.sprintPlan.findMany({
       where: { initiativeId, status: "committed" },
       orderBy: { sprint: { sprintNumber: "asc" } },
@@ -36,6 +36,7 @@ async function DemoManagementPage({ params }: { params: Promise<{ initiativeId: 
     db.stakeholderContact.findMany({ where: { organizationId: workspace.initiative.organizationId, archivedAt: null }, select: { id: true, displayName: true }, orderBy: { displayName: "asc" } }),
     db.planningBlocker.findMany({ where: { initiativeId, status: { in: ["open", "in_progress"] } }, select: { sprintId: true, storyId: true, bugId: true } }),
     db.inSprintClarification.findMany({ where: { initiativeId, status: { in: ["open", "answered"] } }, select: { storyId: true, bugId: true } }),
+    db.personalIntegrationConnection.findMany({ where: { organizationId: user.organizationId, userId: user.id }, select: { provider: true, accountEmail: true } }),
   ]);
 
   const bugTitle = (data: unknown) => typeof data === "object" && data && !Array.isArray(data) && "title" in data ? String(data.title) : "Bug";
@@ -55,7 +56,7 @@ async function DemoManagementPage({ params }: { params: Promise<{ initiativeId: 
   const canEdit = access.level === "edit" || access.level === "owner";
   const canDecide = canEdit && (user.permissionRole === "owner" || user.permissionRole === "admin");
 
-  return <DemoManagementBoard initiativeId={initiativeId} workItems={workItems} sprints={plans.map(plan => ({ id: plan.sprint.id, label: `Sprint ${plan.sprint.sprintNumber}` }))} stakeholders={stakeholders} demos={serializedDemos} canEdit={canEdit} canDecide={canDecide} />;
+  return <DemoManagementBoard initiativeId={initiativeId} workItems={workItems} sprints={plans.map(plan => ({ id: plan.sprint.id, label: `Sprint ${plan.sprint.sprintNumber}` }))} stakeholders={stakeholders} demos={serializedDemos} canEdit={canEdit} canDecide={canDecide} calendarEmail={connections.find(connection => connection.provider === "google_calendar")?.accountEmail ?? null} googleConnected={connections.some(connection => connection.provider === "google_calendar")} zoomConnected={connections.some(connection => connection.provider === "zoom")} />;
 }
 
 export default withAuthenticatedPage(DemoManagementPage);

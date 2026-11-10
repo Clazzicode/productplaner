@@ -11,7 +11,6 @@ import { requireCurrentUser } from "@/lib/auth/session";
 import { db, establishAuthContext } from "@/lib/db";
 import { ensureProvidersSeeded } from "@/lib/sync/integrationSeed";
 import MeetingProviderConnections from "@/components/integrations/MeetingProviderConnections";
-import NotionConnection from "@/components/integrations/NotionConnection";
 
 export const dynamic = "force-dynamic";
 
@@ -78,10 +77,6 @@ async function IntegrationsPage() {
     const provider = providers.find((p) => p.id === c.providerId);
     return provider && !["jira", "google_calendar", "zoom", "notion"].includes(provider.key);
   });
-  const connectedCount = hubConnectionsForDemo.filter(
-    (c) => c.isEnabled && c.status !== "available",
-  ).length;
-
   return (
     <ContainedLayout>
       <PageHeader
@@ -95,14 +90,14 @@ async function IntegrationsPage() {
       <div className="mt-6">
         <MeetingProviderConnections
           canManage
-          connections={(["google_calendar", "zoom"] as const).map((key) => ({
+          connections={(["google_calendar", "zoom", "notion"] as const).map((key) => ({
             provider: key,
             connected: personalConnections.some((connection) => connection.provider === key),
             accountEmail: personalConnections.find((connection) => connection.provider === key)?.accountEmail ?? null,
+            accountLabel: personalConnections.find((connection) => connection.provider === key)?.accountLabel ?? null,
           }))}
         />
       </div>
-      <div className="mt-6"><NotionConnection canManage connected={personalConnections.some((connection) => connection.provider === "notion")} accountLabel={personalConnections.find((connection) => connection.provider === "notion")?.accountLabel ?? null} /></div>
       <div className="mt-6">
         <IntegrationsHub
           providers={hubProviders}
