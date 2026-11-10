@@ -19,6 +19,9 @@ async function POSTHandler(
   { params }: { params: Promise<{ providerKey: string }> },
 ) {
   const { providerKey } = await params;
+  if (["google_calendar", "zoom", "notion"].includes(providerKey)) {
+    return jsonError("Use the live connection flow for this service.", 400);
+  }
   const parsed = integrationActionSchema.safeParse(await request.json());
   if (!parsed.success) return jsonError(zodMessage(parsed.error), 422);
 
