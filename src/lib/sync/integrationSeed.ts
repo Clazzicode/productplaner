@@ -140,6 +140,33 @@ const PROVIDERS: ProviderSeed[] = [
       { key: "create_demo_issue_refs", label: "Create Issue References" },
     ],
   },
+  {
+    key: "google_calendar",
+    name: "Google Calendar & Meet",
+    category: "communication",
+    description: "Connect an organizer's calendar to send invitations with a unique Google Meet link.",
+    isFeatured: true,
+    supportsImport: true,
+    supportsExport: true,
+    displayOrder: 9,
+    capabilities: [
+      { key: "calendar_invites", label: "Calendar invitations" },
+      { key: "meet_links", label: "Google Meet links" },
+    ],
+  },
+  {
+    key: "zoom",
+    name: "Zoom",
+    category: "communication",
+    description: "Connect a Zoom host to create meeting links for Clarivia meetings.",
+    isFeatured: true,
+    supportsImport: true,
+    supportsExport: true,
+    displayOrder: 10,
+    capabilities: [
+      { key: "zoom_links", label: "Scheduled Zoom links" },
+    ],
+  },
 ];
 
 let seeded = false;

@@ -1,5 +1,7 @@
 # Clarivia — Functional Prototype
 
+Meeting provider setup and data flow: [Meeting connections and notes](docs/MEETING-INTEGRATIONS.md).
+
 A working prototype of the platform specified in `../Week 3 combined v2.pdf`: a
 methodology-aware planning system that takes a raw product idea through a guided intake and
 generates a **connected, traceable, hybrid-waterfall plan** — roadmap → feature hierarchy →

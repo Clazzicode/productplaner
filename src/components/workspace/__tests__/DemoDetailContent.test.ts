@@ -23,14 +23,14 @@ function render(view: DemoDetailView) {
 }
 
 describe("Demo detail views", () => {
-  it("shows the recorded work and the planned Notion area without claiming sync", () => {
+  it("shows the recorded work and a real path to connect Notion", () => {
     const html = render("information");
     for (const value of ["Onboarding story", "Show the setup flow", "Jordan Kim", "Avery Lee", "Use the updated script", "Sprint 24", "Setup checklist completed"]) {
       expect(html).toContain(value);
     }
     expect(html).toContain("No Notion page linked");
-    expect(html).toContain("Connect Notion · Coming soon");
-    expect(html).toContain("disabled");
+    expect(html).toContain("Connect Notion");
+    expect(html).toContain('href="/integrations"');
   });
 
   it.each(["google-meet", "zoom"] as const)("keeps the %s provider state truthful", (view) => {
