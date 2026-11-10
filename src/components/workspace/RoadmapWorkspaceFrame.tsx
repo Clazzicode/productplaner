@@ -9,7 +9,13 @@ export default function RoadmapWorkspaceFrame(props: {
   roadmapTools: React.ReactNode;
   children: React.ReactNode;
 }) {
-  const isRoadmap = /^\/initiatives\/[^/]+\/workspace\/roadmap\/?$/.test(usePathname() ?? "");
+  const pathname = usePathname() ?? "";
+  const isRoadmap = /^\/initiatives\/[^/]+\/workspace\/roadmap\/?$/.test(pathname);
+  const isDemoDetail = /^\/initiatives\/[^/]+\/workspace\/demos\/[^/]+(?:\/(?:google-meet|zoom))?\/?$/.test(pathname);
+
+  if (isDemoDetail) {
+    return <WideLayout className="!max-w-none !px-0 !py-0"><div className="min-w-0">{props.children}</div></WideLayout>;
+  }
 
   if (isRoadmap) {
     return <WideLayout className="!max-w-none !px-0 !py-0">

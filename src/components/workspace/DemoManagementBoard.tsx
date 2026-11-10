@@ -3,6 +3,7 @@
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 import { apiFetch } from "@/lib/clientApi";
 import PlannedMeetingPanel from "@/components/workspace/PlannedMeetingPanel";
 
@@ -88,7 +89,7 @@ function DemoMeetingDirectory({ initiativeId, demos }: { initiativeId: string; d
     {demos.length === 0 ? <p className="mt-5 rounded-xl border border-dashed border-[#dfe3f4] p-5 text-center text-sm text-slate-500">Add committed work to the demo agenda to populate these pages.</p> :
       <ul className="mt-5 space-y-3">{demos.map(demo => {
         const base = `/initiatives/${initiativeId}/workspace/demos/${demo.id}`;
-        return <li key={demo.id} className="rounded-xl border border-[#e2e5f2] bg-[#fafaff] p-3"><p className="font-semibold text-[#0d1b3e]">{demo.title}</p><p className="mt-1 text-xs text-slate-500">Sprint {demo.sprint.sprintNumber} · {STATUS_LABELS[demo.status] ?? demo.status}</p><div className="mt-3 flex flex-wrap gap-2"><Link href={base} className="rounded-lg bg-[#5145ed] px-3 py-2 text-xs font-semibold text-white">Demo information</Link><Link href={`${base}/google-meet`} className="rounded-lg border border-[#d7d2fb] px-3 py-2 text-xs font-semibold text-[#5145ed]">Google Meet</Link><Link href={`${base}/zoom`} className="rounded-lg border border-[#d7d2fb] px-3 py-2 text-xs font-semibold text-[#5145ed]">Zoom</Link></div></li>;
+        return <li key={demo.id} className="rounded-xl border border-[#e2e5f2] bg-[#fafaff] p-3"><p className="font-semibold text-[#0d1b3e]">{demo.title}</p><p className="mt-1 text-xs text-slate-500">Sprint {demo.sprint.sprintNumber} · {STATUS_LABELS[demo.status] ?? demo.status}</p><div className="mt-3 flex flex-wrap gap-2"><Link href={base} className="rounded-lg bg-[#5145ed] px-3 py-2 text-xs font-semibold text-white">Demo information</Link><Link href={`${base}/google-meet`} className="inline-flex items-center gap-2 rounded-lg border border-[#d7d2fb] px-3 py-2 text-xs font-semibold text-[#5145ed]"><Image src="/brands/google-meet.svg" alt="" width={18} height={15} />Google Meet</Link><Link href={`${base}/zoom`} aria-label="Zoom" className="inline-flex min-h-8 items-center rounded-lg border border-[#d7d2fb] px-3 py-2"><Image src="/brands/zoom-logo.png" alt="" width={36} height={8} /></Link></div></li>;
       })}</ul>}
   </section>;
 }

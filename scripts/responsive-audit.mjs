@@ -15,8 +15,8 @@ if (!chrome) throw new Error("Chrome or Edge was not found; set CHROME_PATH.");
 
 const requestedWidths = process.env.RESPONSIVE_WIDTHS?.split(',').map(Number);
 const viewports = [
-  ...[320, 360, 390, 440, 744, 768, 820, 1024, 1280, 1440, 1920].map((width) => ({
-    width, height: width <= 440 ? 844 : 900, label: `${width}px`, mobile: width <= 440,
+  ...[320, 360, 390, 440, 744, 768, 820, 1024, 1280, 1440, 1672, 1920].map((width) => ({
+    width, height: width <= 440 ? 844 : width === 1672 ? 940 : 900, label: `${width}px`, mobile: width <= 440,
   })),
   { width: 844, height: 390, label: "phone landscape", mobile: true },
   { width: 820, height: 1180, label: "tablet portrait", mobile: false },
@@ -136,10 +136,14 @@ try {
         }
         console.log(`CHECK ${label} guide arrangement and five keyboard selections completed`);
       }
-      if (process.env.RESPONSIVE_SCREENSHOTS === "1" && label.endsWith("px") && [320, 1280].includes(width)) {
+      if (process.env.RESPONSIVE_SCREENSHOTS === "1" && label.endsWith("px") && (requestedWidths ? requestedWidths.includes(width) : [320, 1280].includes(width))) {
         const output = path.join(".next", "responsive-check", `${route.replace(/[^a-z0-9]/gi, "-")}-${width}.png`);
         await mkdir(path.dirname(output), { recursive: true });
-        const screenshot = await command("Page.captureScreenshot", { format: "png", captureBeyondViewport: false });
+        // The Next.js development badge belongs to the test runner, not the product UI.
+        if (process.env.RESPONSIVE_HIDE_DEV_INDICATOR === "1") {
+          await command("Runtime.evaluate", { expression: "document.querySelector('nextjs-portal')?.remove()" });
+        }
+        const screenshot = await command("Page.captureScreenshot", { format: "png", captureBeyondViewport: process.env.RESPONSIVE_FULL_PAGE === "1" });
         await writeFile(output, Buffer.from(screenshot.data, "base64"));
       }
     }
