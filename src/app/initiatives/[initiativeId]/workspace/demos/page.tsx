@@ -55,7 +55,7 @@ async function DemoManagementPage({ params }: { params: Promise<{ initiativeId: 
   const canEdit = access.level === "edit" || access.level === "owner";
   const canDecide = canEdit && (user.permissionRole === "owner" || user.permissionRole === "admin");
 
-  return <div className="clarivia-workflow"><h2 className="text-3xl font-bold tracking-tight text-[#0d1b3e]">Demo management</h2><p className="mt-1 text-sm text-neutral-500">Prepare a sprint review agenda, make readiness decisions, retain presenter and outcome history, and carry unfinished demonstrations into committed future sprints.</p><div className="mt-6"><DemoManagementBoard initiativeId={initiativeId} workItems={workItems} sprints={plans.map(plan => ({ id: plan.sprint.id, label: `Sprint ${plan.sprint.sprintNumber}` }))} stakeholders={stakeholders} demos={serializedDemos} canEdit={canEdit} canDecide={canDecide} /></div></div>;
+  return <DemoManagementBoard initiativeId={initiativeId} workItems={workItems} sprints={plans.map(plan => ({ id: plan.sprint.id, label: `Sprint ${plan.sprint.sprintNumber}` }))} stakeholders={stakeholders} demos={serializedDemos} canEdit={canEdit} canDecide={canDecide} />;
 }
 
 export default withAuthenticatedPage(DemoManagementPage);

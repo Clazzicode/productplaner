@@ -11,10 +11,10 @@ export default function RoadmapWorkspaceFrame(props: {
 }) {
   const pathname = usePathname() ?? "";
   const isRoadmap = /^\/initiatives\/[^/]+\/workspace\/roadmap\/?$/.test(pathname);
-  const isDemoDetail = /^\/initiatives\/[^/]+\/workspace\/demos\/[^/]+(?:\/(?:google-meet|zoom))?\/?$/.test(pathname);
+  const isDemoDetail = /^\/initiatives\/[^/]+\/workspace\/demos(?:\/.*)?$/.test(pathname);
 
   if (isDemoDetail) {
-    return <WideLayout className="!max-w-none !px-0 !py-0"><div className="min-w-0">{props.children}</div></WideLayout>;
+    return <WideLayout className="!max-w-none !px-0 !py-0"><div className="min-w-0">{props.children}</div><details className="mx-4 mb-6 rounded-xl border border-[#dfe3f4] bg-white p-4 sm:mx-7 lg:mx-9"><summary className="cursor-pointer text-sm font-semibold text-[#5145ed]">Workspace context and history</summary><div className="mt-4 space-y-4">{props.header}{props.roadmapTools}</div></details></WideLayout>;
   }
 
   if (isRoadmap) {

@@ -53,7 +53,7 @@ export default function AppShell(props: {
   const selectedProject = projects.find(project => project.id === routeProjectId) ?? currentInitiative?.project ?? undefined;
   const home = pathname === "/home";
   const roadmap = /^\/initiatives\/[^/]+\/workspace\/roadmap\/?$/.test(pathname);
-  const demoDetail = /^\/initiatives\/[^/]+\/workspace\/demos\/[^/]+(?:\/(?:google-meet|zoom))?\/?$/.test(pathname);
+  const demoDetail = /^\/initiatives\/[^/]+\/workspace\/demos(?:\/.*)?$/.test(pathname);
 
   const bare = isBareRoute(pathname, props.signedIn, routeInitiative);
 
