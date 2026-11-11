@@ -12,7 +12,7 @@ async function handler(request: Request, { params }: { params: Promise<{ id: str
   if (!access.ok) return access.response;
   const [connections, links] = await Promise.all([
     db.jiraConnection.findMany({ where: { initiativeId: id, status: { not: "revoked" } }, select: { id: true, status: true, siteUrl: true, projectKey: true, lastSyncAt: true, lastSyncStatus: true } }),
-    db.jiraExternalLink.findMany({ where: { initiativeId: id }, select: { connectionId: true, targetType: true, targetId: true, externalIssueId: true, externalKey: true, deliveryStatusName: true, deliveryMappedStatus: true, deliveryPriorityName: true, deliveryLabels: true, deliverySourceUpdatedAt: true, deliveryObservedAt: true, deliveryRevision: true } }),
+    db.jiraExternalLink.findMany({ where: { initiativeId: id }, select: { connectionId: true, targetType: true, targetId: true, externalIssueId: true, externalKey: true, deliveryStatusName: true, deliveryMappedStatus: true, deliveryPriorityName: true, deliveryLabels: true, deliverySourceUpdatedAt: true, deliveryObservedAt: true, deliveryCheckedAt: true, deliveryRevision: true } }),
   ]);
   const active = new Map(connections.map(connection => [connection.id, connection]));
   const items = links.filter(link => active.has(link.connectionId)).map(link => {
@@ -29,6 +29,7 @@ async function handler(request: Request, { params }: { params: Promise<{ id: str
       deliveryLabels: link.deliveryLabels,
       jiraUpdatedAt: link.deliverySourceUpdatedAt?.toISOString() ?? null,
       observedAt: link.deliveryObservedAt?.toISOString() ?? null,
+      checkedAt: link.deliveryCheckedAt?.toISOString() ?? null,
       revision: link.deliveryRevision,
       connectionStatus: connection.status,
     };

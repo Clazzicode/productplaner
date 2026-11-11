@@ -46,6 +46,12 @@ describe("Jira delivery mirror", () => {
     expect(mocks.updateLink).not.toHaveBeenCalled();
   });
 
+  it("records a successful check without changing the delivery revision", async () => {
+    mocks.findLink.mockResolvedValue({ ...link, deliveryStatusId: "3", deliveryStatusName: "In Progress", deliveryStatusCategory: "indeterminate", deliveryMappedStatus: "in_progress", deliveryPriorityId: "2", deliveryPriorityName: "High", deliveryLabels: ["delivery"], deliveryParentKey: "ABC-1", deliverySourceUpdatedAt: new Date(issue.updated) });
+    expect(await applyJiraDeliverySnapshot("connection-1", issue, "200", "ABC", {})).toEqual({ updated: false, reason: "unchanged" });
+    expect(mocks.updateLink).toHaveBeenCalledWith(expect.objectContaining({ data: { deliveryCheckedAt: expect.any(Date) } }));
+  });
+
   it("rejects an issue moved to another Jira project", async () => {
     await expect(applyJiraDeliverySnapshot("connection-1", issue, "999", "OTHER", {})).rejects.toThrow("moved to another project");
     expect(mocks.updateLink).not.toHaveBeenCalled();

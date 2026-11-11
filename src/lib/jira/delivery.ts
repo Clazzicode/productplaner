@@ -42,7 +42,10 @@ export async function applyJiraDeliverySnapshot(connectionId: string, issue: Del
   if (sourceUpdatedAt && Number.isNaN(sourceUpdatedAt.getTime())) throw new BusinessError("Jira returned an invalid issue update time.", 422);
   if (sourceUpdatedAt && link.deliverySourceUpdatedAt && sourceUpdatedAt < link.deliverySourceUpdatedAt) return { updated: false, reason: "older" as const };
   const mappedStatus = mappedJiraDeliveryStatus(issue, fieldMappings);
-  if (!deliveryChanged(link, issue, mappedStatus)) return { updated: false, reason: "unchanged" as const };
+  if (!deliveryChanged(link, issue, mappedStatus)) {
+    await db.jiraExternalLink.updateMany({ where: { id: link.id, deliveryRevision: link.deliveryRevision }, data: { deliveryCheckedAt: new Date() } });
+    return { updated: false, reason: "unchanged" as const };
+  }
   const result = await db.jiraExternalLink.updateMany({
     where: { id: link.id, deliveryRevision: link.deliveryRevision, ...(sourceUpdatedAt ? { OR: [{ deliverySourceUpdatedAt: null }, { deliverySourceUpdatedAt: { lte: sourceUpdatedAt } }] } : {}) },
     data: {
@@ -57,6 +60,7 @@ export async function applyJiraDeliverySnapshot(connectionId: string, issue: Del
       deliveryParentKey: issue.parentKey,
       deliverySourceUpdatedAt: sourceUpdatedAt,
       deliveryObservedAt: new Date(),
+      deliveryCheckedAt: new Date(),
       deliveryRevision: { increment: 1 },
     },
   });
@@ -68,5 +72,7 @@ export async function refreshJiraDeliveryIssue(connectionId: string, externalIss
   if (connection.status !== "connected" || !connection.cloudId || !connection.projectId || !connection.projectKey) throw new BusinessError("The Jira connection is incomplete.", 422);
   const issue = await getJiraIssue({ cloudId: connection.cloudId, accessToken, issueIdOrKey: externalIssueId });
   if (issue.id !== externalIssueId) throw new BusinessError("Jira returned a different issue identity.", 409);
-  return applyJiraDeliverySnapshot(connection.id, issue, connection.projectId, connection.projectKey, connection.fieldMappings);
+  const result = await applyJiraDeliverySnapshot(connection.id, issue, connection.projectId, connection.projectKey, connection.fieldMappings);
+  if (result.reason !== "unlinked") await db.jiraConnection.updateMany({ where: { id: connection.id, status: "connected" }, data: { lastSyncAt: new Date(), lastSyncStatus: "delivery_read_complete" } });
+  return result;
 }

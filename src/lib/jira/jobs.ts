@@ -45,7 +45,7 @@ async function perform(job: { id: string; jobType: string; payload: unknown; con
     return;
   }
   if (job.jobType === "delivery_reconcile") {
-    const links = await db.jiraExternalLink.findMany({ where: { connectionId: job.connectionId }, orderBy: [{ deliveryObservedAt: "asc" }, { id: "asc" }], take: 25, select: { externalIssueId: true } });
+    const links = await db.jiraExternalLink.findMany({ where: { connectionId: job.connectionId }, orderBy: [{ deliveryCheckedAt: "asc" }, { id: "asc" }], take: 25, select: { externalIssueId: true } });
     for (let start = 0; start < links.length; start += 5) {
       await Promise.all(links.slice(start, start + 5).map(link => refreshJiraDeliveryIssue(job.connectionId, link.externalIssueId)));
     }
@@ -128,9 +128,9 @@ export async function processJiraJobs(limit = 10, workerId = `jira-${randomUUID(
       } else if (job.jobType === "renew_webhook" && terminal) {
         await db.jiraWebhookSubscription.updateMany({ where: { connectionId: job.connectionId, status: { not: "disabled" } }, data: { status: "renewal_required" } });
       }
-      if (job.jobType === "import_preview" || job.jobType === "webhook_import") {
+      if (job.jobType === "import_preview" || job.jobType === "webhook_import" || job.jobType === "delivery_reconcile") {
         await db.jiraConnection.update({ where: { id: job.connectionId }, data: { lastSyncAt: new Date(), lastSyncStatus: "read_failed", ...(error instanceof BusinessError && [401, 403].includes(error.status) ? { status: "reauthorization_required", revision: { increment: 1 } } : {}) } });
-        await auditInitiative(job.initiativeId, "jira.import_read_failed", { jiraJobId: job.id, jiraConnectionId: job.connectionId, workspaceId: job.organizationId, attempt: job.attemptCount, terminal, occurredAt: new Date().toISOString() });
+        await auditInitiative(job.initiativeId, job.jobType === "delivery_reconcile" ? "jira.delivery_read_failed" : "jira.import_read_failed", { jiraJobId: job.id, jiraConnectionId: job.connectionId, workspaceId: job.organizationId, attempt: job.attemptCount, terminal, occurredAt: new Date().toISOString() });
       }
       if (terminal) result.failed += 1; else result.retried += 1;
     }

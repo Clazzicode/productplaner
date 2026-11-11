@@ -1609,6 +1609,7 @@ model JiraExternalLink {
   deliveryParentKey    String?
   deliverySourceUpdatedAt DateTime?
   deliveryObservedAt   DateTime?
+  deliveryCheckedAt    DateTime?
   deliveryRevision     Int       @default(0)
   id                   String    @id @default(cuid())
   organizationId       String

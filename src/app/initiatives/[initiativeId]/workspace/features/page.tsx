@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Badge, riskBadgeVariant } from "@/components/ui/Badge";
 import CoachMark from "@/components/coachmarks/CoachMark";
+import JiraDeliveryLive from "@/components/jira/JiraDeliveryLive";
 import AiAssistPanel from "@/components/ai/AiAssistPanel";
 import EditableArtifact from "@/components/workspace/EditableArtifact";
 import ExplainBadge from "@/components/workspace/ExplainBadge";
@@ -47,6 +48,7 @@ async function FeaturesPage({
         Each feature from intake appears once here, grouped by roadmap phase.
       </p>
       <CoachMark coachMarkKey="planning_workspace" className="mt-4" />
+      <div className="mt-4"><JiraDeliveryLive initiativeId={initiativeId} /></div>
 
       <div className="mt-6 space-y-6">
         {phases.map((phase) => (

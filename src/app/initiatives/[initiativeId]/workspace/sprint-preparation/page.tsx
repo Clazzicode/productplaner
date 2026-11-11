@@ -1,6 +1,7 @@
 import { withAuthenticatedPage } from "@/lib/auth/entryPoints";
 import { notFound } from "next/navigation";
 import SprintPreparationBoard from "@/components/workspace/SprintPreparationBoard";
+import JiraDeliveryLive from "@/components/jira/JiraDeliveryLive";
 import { requireInitiativeView } from "@/lib/access/guards";
 import { meetsMinimum } from "@/lib/access/resolution";
 import { requireCurrentUser } from "@/lib/auth/session";
@@ -28,7 +29,7 @@ async function SprintPreparationPage({ params }: { params: Promise<{ initiativeI
     const latest = assessments.find((assessment) => (item.type === "story" ? assessment.storyId === item.id : assessment.bugId === item.id) && assessment.inputFingerprint === evaluation.inputFingerprint);
     return { ...item, ...evaluation, latestDecision: latest?.decision ?? null, latestReason: latest?.reason ?? null };
   }));
-  return <div className="clarivia-workflow"><h2 className="text-3xl font-bold tracking-tight text-[#0d1b3e]">Guided sprint planning</h2><p className="mt-1 text-sm text-neutral-500">Review readiness evidence, fill gaps, build an editable sprint draft, then explicitly commit it. Suggestions never commit work for you.</p><div className="mt-6"><SprintPreparationBoard initiativeId={initiativeId} items={evaluated} sprints={sprints.map((sprint) => ({ id: sprint.id, label: `Sprint ${sprint.sprintNumber}`, capacityPoints: sprint.capacityPoints, plan: sprint.sprintPlan ? { revision: sprint.sprintPlan.revision, status: sprint.sprintPlan.status, goal: sprint.sprintPlan.goal, items: sprint.sprintPlan.items.map((item) => ({ storyId: item.storyId, bugId: item.bugId, estimatePoints: item.estimatePoints })) } : null }))} canEdit={canEdit} canApprove={canEdit && (user.permissionRole === "owner" || user.permissionRole === "admin")} verbose={true} /></div></div>;
+  return <div className="clarivia-workflow"><h2 className="text-3xl font-bold tracking-tight text-[#0d1b3e]">Guided sprint planning</h2><p className="mt-1 text-sm text-neutral-500">Review readiness evidence, fill gaps, build an editable sprint draft, then explicitly commit it. Suggestions never commit work for you.</p><div className="mt-4"><JiraDeliveryLive initiativeId={initiativeId} /></div><div className="mt-6"><SprintPreparationBoard initiativeId={initiativeId} items={evaluated} sprints={sprints.map((sprint) => ({ id: sprint.id, label: `Sprint ${sprint.sprintNumber}`, capacityPoints: sprint.capacityPoints, plan: sprint.sprintPlan ? { revision: sprint.sprintPlan.revision, status: sprint.sprintPlan.status, goal: sprint.sprintPlan.goal, items: sprint.sprintPlan.items.map((item) => ({ storyId: item.storyId, bugId: item.bugId, estimatePoints: item.estimatePoints })) } : null }))} canEdit={canEdit} canApprove={canEdit && (user.permissionRole === "owner" || user.permissionRole === "admin")} verbose={true} /></div></div>;
 }
 
 export default withAuthenticatedPage(SprintPreparationPage);
