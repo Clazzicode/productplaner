@@ -102,7 +102,13 @@ export async function configureJiraProject(connectionId: string, input: JiraProj
   const projects = await listJiraProjects(connection.cloudId, accessToken);
   const project = projects.find((item) => item.id === input.projectId && item.key === input.projectKey);
   if (!project) throw new BusinessError("Choose a Jira project available to this connection.", 422);
-  const changed = await db.jiraConnection.updateMany({ where: { id: connectionId, revision: input.expectedRevision, status: { not: "revoked" } }, data: { projectId: project.id, projectKey: project.key, projectName: project.name, issueTypeMappings: input.issueTypeMappings, fieldMappings: { storyPointsField: input.storyPointsField, statusMappings: input.statusMappings, priorityMappings: input.priorityMappings }, status: "connected", revision: { increment: 1 } } });
+  const metadata = await getJiraProjectMetadata({ cloudId: connection.cloudId, accessToken, projectId: project.id, projectKey: project.key });
+  const availableTypes = new Map(metadata.issueTypes.filter((type) => !type.subtask).map((type) => [type.id, type]));
+  for (const [localType, jiraTypeId] of Object.entries(input.outboundIssueTypeIds)) {
+    if (!jiraTypeId) continue;
+    if (!availableTypes.has(jiraTypeId) || input.issueTypeMappings[jiraTypeId] !== localType) throw new BusinessError(`The outbound ${localType} issue type must match a reviewed, non-subtask Jira mapping.`, 422);
+  }
+  const changed = await db.jiraConnection.updateMany({ where: { id: connectionId, revision: input.expectedRevision, status: { not: "revoked" } }, data: { projectId: project.id, projectKey: project.key, projectName: project.name, issueTypeMappings: input.issueTypeMappings, fieldMappings: { storyPointsField: input.storyPointsField, statusMappings: input.statusMappings, priorityMappings: input.priorityMappings, outboundIssueTypeIds: input.outboundIssueTypeIds }, status: "connected", revision: { increment: 1 } } });
   if (changed.count !== 1) throw new BusinessError("The Jira connection changed. Reload and try again.", 409);
   const saved = await db.jiraConnection.findUniqueOrThrow({ where: { id: connectionId } });
   await mirrorHubConnection(saved);

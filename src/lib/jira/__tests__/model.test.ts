@@ -8,7 +8,7 @@ describe("Jira command validation", () => {
   });
   it("limits issue mappings to supported planning targets", () => {
     expect(jiraProjectSchema.safeParse({ projectId: "1", projectKey: "GP", projectName: "Guided Planning", expectedRevision: 1, issueTypeMappings: { Epic: "feature", Bug: "bug" }, storyPointsField: "customfield_10016" }).success).toBe(true);
-    expect(jiraProjectSchema.safeParse({ projectId: "1", projectKey: "GP", projectName: "Guided Planning", expectedRevision: 1, issueTypeMappings: { "10001": "story" }, storyPointsField: null, statusMappings: { "3": "in_progress" }, priorityMappings: { "1": "critical" } }).success).toBe(true);
+    expect(jiraProjectSchema.safeParse({ projectId: "1", projectKey: "GP", projectName: "Guided Planning", expectedRevision: 1, issueTypeMappings: { "10001": "story" }, outboundIssueTypeIds: { feature: null, story: "10001", bug: null }, storyPointsField: null, statusMappings: { "3": "in_progress" }, priorityMappings: { "1": "critical" } }).success).toBe(true);
     expect(jiraProjectSchema.safeParse({ projectId: "1", projectKey: "GP", projectName: "Guided Planning", expectedRevision: 1, issueTypeMappings: { Epic: "release" }, storyPointsField: "points" }).success).toBe(false);
   });
   it("requires explicit selected item IDs and a human reason", () => {

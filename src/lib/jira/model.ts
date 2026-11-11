@@ -19,6 +19,7 @@ export const jiraProjectSchema = z.object({
   storyPointsField: z.string().trim().regex(/^customfield_\d+$/).nullable().default(null),
   statusMappings: z.record(z.string(), z.enum(["planned", "in_progress", "done", "blocked"])).default({}),
   priorityMappings: z.record(z.string(), z.enum(["critical", "high", "medium", "low"])).default({}),
+  outboundIssueTypeIds: z.object({ feature: z.string().trim().min(1).nullable(), story: z.string().trim().min(1).nullable(), bug: z.string().trim().min(1).nullable() }).default({ feature: null, story: null, bug: null }),
 });
 
 export const jiraImportPreviewSchema = z.object({ connectionId: z.string().trim().min(1), idempotencyKey: z.string().uuid().optional() });

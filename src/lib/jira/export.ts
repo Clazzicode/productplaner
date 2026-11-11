@@ -19,8 +19,17 @@ const dataObject = (value: unknown): Record<string, unknown> => value && typeof 
 const stringValue = (value: unknown) => typeof value === "string" ? value : "";
 export { exportSourceFingerprint } from "./import";
 
-export function fieldsFor(candidate: Pick<Candidate, "summary" | "description" | "issueType">, projectId: string, update = false): ExportPayload {
-  return { fields: { ...(update ? {} : { project: { id: projectId }, issuetype: { name: candidate.issueType } }), summary: candidate.summary, description: adf(candidate.description || candidate.summary) } };
+export function fieldsFor(candidate: Pick<Candidate, "summary" | "description" | "issueType">, projectId: string, update = false, issueTypeId?: string | null): ExportPayload {
+  return { fields: { ...(update ? {} : { project: { id: projectId }, issuetype: issueTypeId ? { id: issueTypeId } : { name: candidate.issueType } }), summary: candidate.summary, description: adf(candidate.description || candidate.summary) } };
+}
+
+export function assertFrozenJiraTarget(reviewSnapshot: unknown, connection: { cloudId: string; projectId: string }) {
+  const frozen = dataObject(dataObject(reviewSnapshot).target);
+  if (frozen.cloudId !== connection.cloudId || frozen.projectId !== connection.projectId) throw new BusinessError("The Jira site or project changed after approval. Create a new export preview.", 409);
+}
+
+export function assertJiraIssueProject(issue: { projectId?: string | null; projectKey?: string | null }, connection: { projectId: string; projectKey: string | null }) {
+  if (issue.projectId !== connection.projectId || connection.projectKey && issue.projectKey !== connection.projectKey) throw new BusinessError("The linked Jira issue moved to another project. Resolve the mapping before exporting.", 409);
 }
 
 async function candidates(initiativeId: string): Promise<Candidate[]> {
@@ -56,6 +65,7 @@ export async function previewJiraExport(connectionId: string, actorUserId: strin
   if (connection.status !== "connected" || !connection.initiativeId || !connection.cloudId || !connection.projectId) throw new BusinessError("Finish selecting a Jira site, project, and initiative before exporting.", 422);
   if (!connection.scopes.split(/\s+/).includes("write:jira-work")) throw new BusinessError("Reconnect Jira and grant write access before creating an export preview.", 422);
   const local = await candidates(connection.initiativeId);
+  const outboundIssueTypeIds = dataObject(dataObject(connection.fieldMappings).outboundIssueTypeIds);
   const links = await db.jiraExternalLink.findMany({ where: { connectionId } });
   const earlierRuns = await db.jiraExportRun.findMany({ where: { connectionId }, select: { id: true } });
   const uncertainCreates = earlierRuns.length ? await db.jiraExportItem.findMany({ where: { exportRunId: { in: earlierRuns.map(run => run.id) }, action: "create", createAttemptedAt: { not: null }, externalIssueId: null }, select: { targetType: true, targetId: true } }) : [];
@@ -69,6 +79,11 @@ export async function previewJiraExport(connectionId: string, actorUserId: strin
     let conflictReason: string | null = null;
     let before: unknown = null;
     let expectedSourceHash: string | null = link?.exportSourceHash ?? null;
+    const issueTypeId = stringValue(outboundIssueTypeIds[candidate.targetType]);
+    if (!link && !issueTypeId) {
+      action = "conflict";
+      conflictReason = `No reviewed outbound Jira issue type is selected for ${candidate.targetType}. Configure the project mapping first.`;
+    }
     if (!link && uncertainTargets.has(`${candidate.targetType}:${candidate.targetId}`)) {
       action = "conflict";
       conflictReason = "A prior Jira create may have succeeded. Verify the issue in Jira and reconcile its link before exporting again.";
@@ -85,8 +100,8 @@ export async function previewJiraExport(connectionId: string, actorUserId: strin
         if (action === "conflict") conflictEvidence.set(candidate.targetId, { link, snapshot, jiraFingerprint: currentSourceHash });
       } catch (error) { action = "conflict"; conflictReason = error instanceof Error ? `Could not verify Jira: ${error.message}` : "Could not verify the linked Jira issue."; }
     }
-    const payload = fieldsFor(candidate, connection.projectId, Boolean(link));
-    const reviewSnapshot = { schemaVersion: 1, target: { cloudId: connection.cloudId, projectId: connection.projectId, externalIssueId: link?.externalIssueId ?? null, externalKey: link?.externalKey ?? null, localType: candidate.targetType, localId: candidate.targetId }, before, proposed: payload.fields, omissions: ["Jira status transitions", "priority", "assignee", "labels", "sprint/release assignments", "deletions", ...(link ? ["project move", "issue type change"] : [])], note: action === "unchanged" ? "No write proposed; current remote values were not reread." : "Only the frozen fields are eligible for a future approved write." };
+    const payload = fieldsFor(candidate, connection.projectId, Boolean(link), issueTypeId);
+    const reviewSnapshot = { schemaVersion: 1, target: { cloudId: connection.cloudId, projectId: connection.projectId, issueTypeId: issueTypeId || null, externalIssueId: link?.externalIssueId ?? null, externalKey: link?.externalKey ?? null, localType: candidate.targetType, localId: candidate.targetId }, before, proposed: payload.fields, omissions: ["Jira status transitions", "priority", "assignee", "labels", "sprint/release assignments", "deletions", ...(link ? ["project move", "issue type change"] : [])], note: action === "unchanged" ? "No write proposed; current remote values were not reread." : "Only the frozen fields are eligible for a future approved write." };
     items.push({ organizationId: connection.organizationId, targetType: candidate.targetType, targetId: candidate.targetId, summary: candidate.summary, externalIssueId: link?.externalIssueId ?? null, externalKey: link?.externalKey ?? null, action, requestPayload: payload as unknown as Prisma.InputJsonValue, reviewSnapshot: reviewSnapshot as unknown as Prisma.InputJsonValue, targetFingerprint: candidate.targetFingerprint, expectedSourceHash, idempotencyKey: jiraHash(`${connection.id}:${candidate.targetType}:${candidate.targetId}:${candidate.targetFingerprint}`), conflictReason, selected: false, status: action === "conflict" ? "conflict" : action === "unchanged" ? "skipped" : "previewed" });
   }
   const sourceFingerprint = fingerprint(items.map((item) => ({ targetType: item.targetType, targetId: item.targetId, targetFingerprint: item.targetFingerprint, action: item.action })));
@@ -131,10 +146,12 @@ export async function approveJiraExport(runId: string, selectedItemIds: string[]
 }
 
 async function executeItem(item: Awaited<ReturnType<typeof db.jiraExportItem.findUniqueOrThrow>>, run: { connectionId: string; initiativeId: string; organizationId: string }, connection: { cloudId: string; projectId: string; projectKey: string | null; fieldMappings: unknown }, accessToken: string) {
+  assertFrozenJiraTarget(item.reviewSnapshot, connection);
   const current = await currentTargetFingerprint({ targetType: item.targetType, targetId: item.targetId } as JiraExternalLink);
   if (current !== item.targetFingerprint) throw new BusinessError("The planning record changed after approval. Create and approve a new export.", 409);
   if (item.externalIssueId && item.expectedSourceHash) {
     const remote = await getJiraIssue({ cloudId: connection.cloudId, accessToken, issueIdOrKey: item.externalIssueId });
+    assertJiraIssueProject(remote, connection);
     if (exportSourceFingerprint(remote) !== item.expectedSourceHash) throw new BusinessError("The Jira issue's exported fields changed after approval. Resolve the conflict before exporting.", 409);
   }
   const payload = item.requestPayload as unknown as ExportPayload;
