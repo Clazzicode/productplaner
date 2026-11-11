@@ -1,5 +1,6 @@
 import type { JiraExternalLink, Prisma } from "@prisma/client";
-import { db } from "@/lib/db";
+import { db, withTransaction } from "@/lib/db";
+import { auditInitiative } from "@/lib/audit";
 import { BusinessError } from "@/lib/businessError";
 import { getJiraIssue, type JiraIssueSnapshot } from "./client";
 import { accessTokenFor } from "./oauth";
@@ -46,7 +47,8 @@ export async function applyJiraDeliverySnapshot(connectionId: string, issue: Del
     await db.jiraExternalLink.updateMany({ where: { id: link.id, deliveryRevision: link.deliveryRevision }, data: { deliveryCheckedAt: new Date() } });
     return { updated: false, reason: "unchanged" as const };
   }
-  const result = await db.jiraExternalLink.updateMany({
+  const result = await withTransaction(async () => {
+    const changed = await db.jiraExternalLink.updateMany({
     where: { id: link.id, deliveryRevision: link.deliveryRevision, ...(sourceUpdatedAt ? { OR: [{ deliverySourceUpdatedAt: null }, { deliverySourceUpdatedAt: { lte: sourceUpdatedAt } }] } : {}) },
     data: {
       externalKey: issue.key,
@@ -63,6 +65,9 @@ export async function applyJiraDeliverySnapshot(connectionId: string, issue: Del
       deliveryCheckedAt: new Date(),
       deliveryRevision: { increment: 1 },
     },
+    });
+    if (changed.count === 1) await auditInitiative(link.initiativeId, "jira.delivery_updated", { jiraConnectionId: connectionId, jiraIssueId: issue.id, jiraIssueKey: issue.key, targetType: link.targetType, targetId: link.targetId, previousStatus: link.deliveryStatusName, currentStatus: issue.status.name, mappedStatus, jiraUpdatedAt: issue.updated });
+    return changed;
   });
   return { updated: result.count === 1, reason: result.count === 1 ? "updated" as const : "raced" as const };
 }

@@ -2,11 +2,13 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { JiraExternalLink } from "@prisma/client";
 
 const mocks = vi.hoisted(() => ({ findLink: vi.fn(), updateLink: vi.fn() }));
-vi.mock("@/lib/db", () => ({ db: { jiraExternalLink: { findFirst: mocks.findLink, updateMany: mocks.updateLink } } }));
+vi.mock("@/lib/db", () => ({ withTransaction: async (fn: () => Promise<unknown>) => fn(), db: { jiraExternalLink: { findFirst: mocks.findLink, updateMany: mocks.updateLink } } }));
+vi.mock("@/lib/audit", () => ({ auditInitiative: vi.fn() }));
 vi.mock("../oauth", () => ({ accessTokenFor: vi.fn() }));
 vi.mock("../client", () => ({ getJiraIssue: vi.fn() }));
 
 import { applyJiraDeliverySnapshot, mappedJiraDeliveryStatus } from "../delivery";
+import { auditInitiative } from "@/lib/audit";
 
 const issue = {
   id: "10001", key: "ABC-12", projectId: "200", projectKey: "ABC",
@@ -15,14 +17,14 @@ const issue = {
   updated: "2026-11-11T12:00:00.000Z",
 };
 const link = {
-  id: "link-1", externalKey: "ABC-12", deliveryStatusId: null, deliveryStatusName: null,
+  id: "link-1", initiativeId: "init-1", targetType: "story", targetId: "story-1", externalKey: "ABC-12", deliveryStatusId: null, deliveryStatusName: null,
   deliveryStatusCategory: null, deliveryMappedStatus: null, deliveryPriorityId: null,
   deliveryPriorityName: null, deliveryLabels: [], deliveryParentKey: null,
   deliverySourceUpdatedAt: null, deliveryRevision: 0,
 } as unknown as JiraExternalLink;
 
 describe("Jira delivery mirror", () => {
-  beforeEach(() => { mocks.findLink.mockReset().mockResolvedValue(link); mocks.updateLink.mockReset().mockResolvedValue({ count: 1 }); });
+  beforeEach(() => { mocks.findLink.mockReset().mockResolvedValue(link); mocks.updateLink.mockReset().mockResolvedValue({ count: 1 }); vi.mocked(auditInitiative).mockClear(); });
 
   it("uses the project's status mapping, then Jira's status category", () => {
     expect(mappedJiraDeliveryStatus(issue, { statusMappings: { "3": "blocked" } })).toBe("blocked");
@@ -38,6 +40,7 @@ describe("Jira delivery mirror", () => {
     expect(data).not.toHaveProperty("sourceHash");
     expect(data).not.toHaveProperty("lastImportedSnapshot");
     expect(data).not.toHaveProperty("backlogStatus");
+    expect(auditInitiative).toHaveBeenCalledWith("init-1", "jira.delivery_updated", expect.objectContaining({ jiraIssueKey: "ABC-12", currentStatus: "In Progress" }));
   });
 
   it("ignores an older source observation", async () => {
@@ -50,6 +53,7 @@ describe("Jira delivery mirror", () => {
     mocks.findLink.mockResolvedValue({ ...link, deliveryStatusId: "3", deliveryStatusName: "In Progress", deliveryStatusCategory: "indeterminate", deliveryMappedStatus: "in_progress", deliveryPriorityId: "2", deliveryPriorityName: "High", deliveryLabels: ["delivery"], deliveryParentKey: "ABC-1", deliverySourceUpdatedAt: new Date(issue.updated) });
     expect(await applyJiraDeliverySnapshot("connection-1", issue, "200", "ABC", {})).toEqual({ updated: false, reason: "unchanged" });
     expect(mocks.updateLink).toHaveBeenCalledWith(expect.objectContaining({ data: { deliveryCheckedAt: expect.any(Date) } }));
+    expect(auditInitiative).not.toHaveBeenCalled();
   });
 
   it("rejects an issue moved to another Jira project", async () => {

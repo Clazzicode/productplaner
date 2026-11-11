@@ -15,6 +15,10 @@ async function handler(request: Request, { params }: { params: Promise<{ id: str
     db.jiraExternalLink.findMany({ where: { initiativeId: id }, select: { connectionId: true, targetType: true, targetId: true, externalIssueId: true, externalKey: true, deliveryStatusName: true, deliveryMappedStatus: true, deliveryPriorityName: true, deliveryLabels: true, deliverySourceUpdatedAt: true, deliveryObservedAt: true, deliveryCheckedAt: true, deliveryRevision: true } }),
   ]);
   const active = new Map(connections.map(connection => [connection.id, connection]));
+  const storyIds = [...new Set(links.filter(link => link.targetType === "story").map(link => link.targetId))];
+  const validations = storyIds.length ? await db.productValidation.findMany({ where: { initiativeId: id, storyId: { in: storyIds } }, orderBy: [{ createdAt: "desc" }, { id: "desc" }], select: { storyId: true, status: true } }) : [];
+  const latestValidation = new Map<string, string>();
+  for (const validation of validations) if (!latestValidation.has(validation.storyId)) latestValidation.set(validation.storyId, validation.status);
   const items = links.filter(link => active.has(link.connectionId)).map(link => {
     const connection = active.get(link.connectionId)!;
     return {
@@ -32,6 +36,7 @@ async function handler(request: Request, { params }: { params: Promise<{ id: str
       checkedAt: link.deliveryCheckedAt?.toISOString() ?? null,
       revision: link.deliveryRevision,
       connectionStatus: connection.status,
+      poValidationStatus: link.targetType === "story" ? latestValidation.get(link.targetId) ?? "not_started" : null,
     };
   });
   return Response.json({
