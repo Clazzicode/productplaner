@@ -39,6 +39,8 @@ export const jiraExportApprovalSchema = z.object({
 
 export const jiraExportExecuteSchema = z.object({ expectedStatus: z.literal("approved") });
 
+export const jiraCreateReconcileSchema = z.object({ jiraKey: z.string().trim().regex(/^[A-Za-z][A-Za-z0-9_]*-\d+$/).max(100), reason: z.string().trim().min(5).max(1000) }).strict();
+
 export const jiraWebhookCommandSchema = z.object({ action: z.enum(["register", "renew"]) });
 
 export const jiraJobCommandSchema = z.object({ action: z.enum(["replay", "cancel"]) }).strict();

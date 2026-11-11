@@ -273,7 +273,7 @@ async function applyItem(item: { id: string; targetType: string; targetId: strin
     const request = await importedBug(issue, run.initiativeId, actorUserId, item.targetId);
     target = await db.bugPlanningRecord.findUniqueOrThrow({ where: { requestId: request.id } });
   } else throw new BusinessError("Skipped Jira items cannot be imported.", 422);
-  const linkBase = { organizationId: run.organizationId, initiativeId: run.initiativeId, connectionId: run.connectionId, externalIssueId: item.externalIssueId, externalKey: item.externalKey, issueTypeName: item.issueTypeName, targetType: item.targetType, targetId: target.id, sourceHash: item.sourceHash, targetFingerprint: "", sourceUpdatedAt: issue.updated ? new Date(issue.updated) : null, lastImportedSnapshot: {} as Prisma.InputJsonValue, lastSyncStatus: "imported" };
+  const linkBase = { organizationId: run.organizationId, initiativeId: run.initiativeId, connectionId: run.connectionId, externalIssueId: item.externalIssueId, externalKey: item.externalKey, issueTypeName: item.issueTypeName, targetType: item.targetType, targetId: target.id, sourceHash: item.sourceHash, exportSourceHash: fingerprint({ summary: issue.summary, description: plainText(issue.description).trim() }), targetFingerprint: "", sourceUpdatedAt: issue.updated ? new Date(issue.updated) : null, lastImportedSnapshot: {} as Prisma.InputJsonValue, lastSyncStatus: "imported" };
   const temporary = { ...linkBase, id: "", createdAt: new Date(), updatedAt: new Date(), lastImportedAt: new Date() } as JiraExternalLink;
   const local = await currentTargetSnapshot(temporary);
   linkBase.targetFingerprint = local ? fingerprint(local) : fingerprint({ id: target.id });

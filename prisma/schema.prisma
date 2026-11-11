@@ -1597,6 +1597,7 @@ model JiraImportItem {
 }
 
 model JiraExternalLink {
+  exportSourceHash   String? // Jira summary/description baseline for approved outbound writes
   fieldBaselines       Json? // hashes only; no retained issue body
   deliveryStatusId     String?
   deliveryStatusName   String?
@@ -1661,6 +1662,8 @@ model JiraExportRun {
 
 model JiraExportItem {
   reviewSnapshot    Json?
+  createAttemptedAt DateTime? // set before POST; uncertain attempts cannot be retried blindly
+  connectionId       String
   id                 String   @id @default(cuid())
   organizationId     String
   exportRunId        String
@@ -1685,6 +1688,7 @@ model JiraExportItem {
   @@unique([exportRunId, targetType, targetId])
   @@index([organizationId, exportRunId, action])
   @@index([externalKey])
+  @@index([connectionId, targetType, targetId])
 }
 
 model JiraExportApproval {

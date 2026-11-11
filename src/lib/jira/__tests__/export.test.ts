@@ -13,9 +13,9 @@ vi.mock("@/lib/db", () => ({
 vi.mock("@/lib/audit", () => ({ auditInitiative: vi.fn() }));
 vi.mock("../oauth", () => ({ accessTokenFor: vi.fn() }));
 vi.mock("../client", () => ({ createJiraIssue: vi.fn(), getJiraIssue: vi.fn(), updateJiraIssue: vi.fn() }));
-vi.mock("../import", () => ({ currentTargetFingerprint: vi.fn(), fingerprint: vi.fn(() => "a".repeat(64)), sourceSnapshot: vi.fn() }));
+vi.mock("../import", () => ({ currentTargetFingerprint: vi.fn(), fingerprint: vi.fn((value: unknown) => JSON.stringify(value)), plainText: vi.fn((value: unknown) => typeof value === "string" ? value : ""), sourceSnapshot: vi.fn() }));
 
-import { approveJiraExport, fieldsFor } from "../export";
+import { approveJiraExport, exportSourceFingerprint, fieldsFor } from "../export";
 
 vi.stubEnv("JIRA_WRITE_ENABLED", "true");
 
@@ -33,4 +33,11 @@ it("freezes only the fields that an update will actually send", () => {
   const candidate = { summary: "Title", description: "Body", issueType: "Story" };
   expect(Object.keys(fieldsFor(candidate, "project", true).fields).sort()).toEqual(["description", "summary"]);
   expect(fieldsFor(candidate, "project").fields).toMatchObject({ project: { id: "project" }, issuetype: { name: "Story" } });
+});
+
+it("ignores Jira delivery status when checking outbound field changes", () => {
+  const before = { summary: "Story", description: "Details", status: "To Do" };
+  const after = { summary: "Story", description: "Details", status: "Done" };
+  expect(exportSourceFingerprint(before)).toBe(exportSourceFingerprint(after));
+  expect(exportSourceFingerprint({ ...after, description: "Changed" })).not.toBe(exportSourceFingerprint(before));
 });

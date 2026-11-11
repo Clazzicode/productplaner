@@ -161,6 +161,13 @@ export async function manageJiraJob(jobId: string, action: "replay" | "cancel", 
       return db.jiraSyncJob.findUniqueOrThrow({ where: { id: job.id } });
     }
     if (!["failed", "cancelled"].includes(job.status)) throw new BusinessError("Only failed or cancelled Jira work can be replayed.", 409);
+    if (job.jobType === "export_item") {
+      const exportItemId = String(payloadObject(job.payload).exportItemId ?? "");
+      const item = exportItemId ? await db.jiraExportItem.findUnique({ where: { id: exportItemId } }) : null;
+      if (item?.action === "create" && item.createAttemptedAt && !item.externalIssueId) {
+        throw new BusinessError("The Jira create outcome is uncertain. Find and reconcile the issue before retrying.", 409);
+      }
+    }
     const replay = await db.jiraSyncJob.create({ data: { organizationId: job.organizationId, initiativeId: job.initiativeId, connectionId: job.connectionId, jobType: job.jobType, payload: (job.payload ?? {}) as Prisma.InputJsonValue, idempotencyKey: jiraHash(`replay:${job.id}:${randomUUID()}`), maxAttempts: job.maxAttempts } });
     const payload = payloadObject(job.payload);
     if (job.jobType === "export_item") {
