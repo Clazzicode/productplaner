@@ -965,6 +965,11 @@
     "reason": "Verified session and scoped database execution; existing initiative/page guards retained."
   },
   {
+    "path": "src/app/initiatives/[initiativeId]/workspace/bugs/[bugId]/page.tsx",
+    "classification": "authenticated-page",
+    "reason": "Verified initiative view access and scoped bug lookup before rendering planning and Jira delivery data."
+  },
+  {
     "path": "src/app/initiatives/[initiativeId]/workspace/demos/[demoId]/google-calendar/page.tsx",
     "classification": "authenticated-page",
     "reason": "Verified session and scoped database execution; demo detail component checks initiative access."
@@ -1008,6 +1013,11 @@
     "path": "src/app/initiatives/[initiativeId]/workspace/executive/print/page.tsx",
     "classification": "authenticated-page",
     "reason": "Verified session and scoped database execution; existing initiative/page guards retained."
+  },
+  {
+    "path": "src/app/initiatives/[initiativeId]/workspace/features/[featureId]/page.tsx",
+    "classification": "authenticated-page",
+    "reason": "Verified initiative view access and scoped feature lookup before rendering planning and Jira delivery data."
   },
   {
     "path": "src/app/initiatives/[initiativeId]/workspace/features/page.tsx",
