@@ -7,6 +7,7 @@ import { jiraHash } from "./crypto";
 import { currentTargetFingerprint, fingerprint, sourceSnapshot } from "./import";
 import { accessTokenFor } from "./oauth";
 import { recordJiraConflict } from "./conflicts";
+import { applyJiraDeliverySnapshot } from "./delivery";
 
 type TargetType = "feature" | "story" | "bug";
 type ExportPayload = { fields: Record<string, unknown> };
@@ -121,7 +122,7 @@ export async function approveJiraExport(runId: string, selectedItemIds: string[]
   });
 }
 
-async function executeItem(item: Awaited<ReturnType<typeof db.jiraExportItem.findUniqueOrThrow>>, run: { connectionId: string; initiativeId: string; organizationId: string }, connection: { cloudId: string; projectId: string }, accessToken: string) {
+async function executeItem(item: Awaited<ReturnType<typeof db.jiraExportItem.findUniqueOrThrow>>, run: { connectionId: string; initiativeId: string; organizationId: string }, connection: { cloudId: string; projectId: string; projectKey: string | null; fieldMappings: unknown }, accessToken: string) {
   const current = await currentTargetFingerprint({ targetType: item.targetType, targetId: item.targetId } as JiraExternalLink);
   if (current !== item.targetFingerprint) throw new BusinessError("The planning record changed after approval. Create and approve a new export.", 409);
   if (item.externalIssueId && item.expectedSourceHash) {
@@ -137,6 +138,7 @@ async function executeItem(item: Awaited<ReturnType<typeof db.jiraExportItem.fin
   const snapshot = sourceSnapshot(saved);
   const sourceHash = fingerprint(snapshot);
   await db.jiraExternalLink.upsert({ where: { connectionId_targetType_targetId: { connectionId: run.connectionId, targetType: item.targetType, targetId: item.targetId } }, create: { organizationId: run.organizationId, initiativeId: run.initiativeId, connectionId: run.connectionId, externalIssueId: saved.id, externalKey: saved.key, issueTypeName: saved.issueType.name, targetType: item.targetType, targetId: item.targetId, sourceHash, targetFingerprint: item.targetFingerprint, sourceUpdatedAt: saved.updated ? new Date(saved.updated) : null, lastImportedSnapshot: {} }, update: { externalIssueId: saved.id, externalKey: saved.key, issueTypeName: saved.issueType.name, sourceHash, targetFingerprint: item.targetFingerprint, sourceUpdatedAt: saved.updated ? new Date(saved.updated) : null, lastImportedSnapshot: {}, lastImportedAt: new Date() } });
+  await applyJiraDeliverySnapshot(run.connectionId, saved, connection.projectId, connection.projectKey, connection.fieldMappings);
   await db.jiraExportItem.update({ where: { id: item.id }, data: { status: "succeeded", externalIssueId: saved.id, externalKey: saved.key, resultSnapshot: snapshot as unknown as Prisma.InputJsonValue, failureMessage: null } });
 }
 
@@ -150,7 +152,7 @@ export async function executeJiraExportItem(itemId: string) {
   if (run.status !== "executing") throw new BusinessError("This Jira export is not executing.", 409);
   const { connection, accessToken } = await accessTokenFor(run.connectionId);
   if (!connection.cloudId || !connection.projectId) throw new BusinessError("The Jira connection is incomplete.", 422);
-  await executeItem(item, run, { cloudId: connection.cloudId, projectId: connection.projectId }, accessToken);
+  await executeItem(item, run, { cloudId: connection.cloudId, projectId: connection.projectId, projectKey: connection.projectKey, fieldMappings: connection.fieldMappings }, accessToken);
   return db.jiraExportItem.findUniqueOrThrow({ where: { id: item.id } });
 }
 

@@ -1598,6 +1598,17 @@ model JiraImportItem {
 
 model JiraExternalLink {
   fieldBaselines       Json? // hashes only; no retained issue body
+  deliveryStatusId     String?
+  deliveryStatusName   String?
+  deliveryStatusCategory String?
+  deliveryMappedStatus String? // planned | in_progress | done | blocked
+  deliveryPriorityId   String?
+  deliveryPriorityName String?
+  deliveryLabels       Json      @default("[]")
+  deliveryParentKey    String?
+  deliverySourceUpdatedAt DateTime?
+  deliveryObservedAt   DateTime?
+  deliveryRevision     Int       @default(0)
   id                   String    @id @default(cuid())
   organizationId       String
   initiativeId         String
@@ -1619,6 +1630,7 @@ model JiraExternalLink {
   @@unique([connectionId, externalIssueId])
   @@unique([connectionId, targetType, targetId])
   @@index([organizationId, initiativeId, externalKey])
+  @@index([organizationId, initiativeId, deliveryMappedStatus])
 }
 
 // Feature 21B: outbound Jira changes are frozen into a preview, approved by an
@@ -1731,7 +1743,7 @@ model JiraSyncJob {
   organizationId String
   initiativeId   String
   connectionId   String
-  jobType        String // import_preview | webhook_import | export_item | renew_webhook
+  jobType        String // import_preview | webhook_import | export_item | renew_webhook | delivery_reconcile
   payload        Json
   idempotencyKey String    @unique
   status         String    @default("queued") // queued | processing | completed | failed | cancelled

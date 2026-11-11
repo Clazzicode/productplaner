@@ -20,6 +20,8 @@ export interface JiraProjectMetadata {
 export interface JiraIssueSnapshot {
   id: string;
   key: string;
+  projectId?: string | null;
+  projectKey?: string | null;
   summary: string;
   description: unknown;
   issueType: { id: string; name: string; subtask: boolean };
@@ -161,12 +163,15 @@ export function issueSnapshot(value: unknown, storyPointsField: string | null): 
   const statusCategory = object(status.statusCategory);
   const priority = fields.priority ? object(fields.priority) : null;
   const parent = fields.parent ? object(fields.parent) : null;
+  const project = fields.project ? object(fields.project) : null;
   const id = text(row.id);
   const key = text(row.key);
   if (!id || !key) return null;
   return {
     id,
     key,
+    projectId: project ? text(project.id) || null : null,
+    projectKey: project ? text(project.key) || null : null,
     summary: text(fields.summary),
     description: fields.description ?? null,
     issueType: { id: text(issueType.id), name: text(issueType.name), subtask: Boolean(issueType.subtask) },
@@ -179,7 +184,7 @@ export function issueSnapshot(value: unknown, storyPointsField: string | null): 
   };
 }
 
-const ISSUE_FIELDS = ["summary","description","issuetype","status","priority","labels","parent","updated"];
+const ISSUE_FIELDS = ["summary","description","issuetype","status","priority","labels","parent","project","updated"];
 
 export async function getJiraIssue(input: { cloudId: string; accessToken: string; issueIdOrKey: string; storyPointsField?: string | null }, fetcher: Fetcher = fetch) {
   const storyPointsField = input.storyPointsField === undefined ? "customfield_10016" : input.storyPointsField;

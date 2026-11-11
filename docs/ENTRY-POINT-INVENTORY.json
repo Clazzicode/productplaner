@@ -512,6 +512,11 @@
     "reason": "Verified session before the handler; handler retains action-specific access checks."
   },
   {
+    "path": "src/app/api/initiatives/[id]/jira-delivery/route.ts",
+    "classification": "authenticated-api",
+    "reason": "Verified initiative viewer session before returning only that initiative's linked Jira delivery state."
+  },
+  {
     "path": "src/app/api/initiatives/[id]/methodology/route.ts",
     "classification": "authenticated-api",
     "reason": "Verified session before the handler; handler retains action-specific access checks."
@@ -727,7 +732,7 @@
     "path": "src/app/api/integrations/jira/webhooks/[connectionId]/route.ts",
     "classification": "webhook",
     "reason": "Verifies connection webhook secret; delegates enqueue to a narrowly authorized database function. Jira registration remains disabled.",
-    "sourceFingerprint": "20fdf11350d549872f0bb9de3922b6a7196cc22396c096dfca4695920284cee6"
+    "sourceFingerprint": "28ca7eeab5563a5eff46306a63d89942b2007a1e1427e97cfee609469741c72b"
   },
   {
     "path": "src/app/api/integrations/[providerKey]/route.ts",
@@ -744,7 +749,7 @@
     "path": "src/app/api/internal/jira/jobs/run/route.ts",
     "classification": "worker",
     "reason": "Timing-safe cron authentication compares byte lengths before comparison; job actor context and awaited retention/health service contexts are explicit.",
-    "sourceFingerprint": "42989b28f41a181415aeb4473255a0d2dd7aefa87e045a035f5c877b24e87305"
+    "sourceFingerprint": "21922311a5f8436871525a211dfaa5d36635581a534eefce2bc9964da2311d09"
   },
   {
     "path": "src/app/api/projects/route.ts",

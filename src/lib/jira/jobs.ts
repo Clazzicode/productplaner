@@ -6,6 +6,7 @@ import { executeJiraExportItem, finalizeJiraExportRun } from "./export";
 import { previewJiraImport } from "./import";
 import { recordExportExecutionConflict } from "./conflicts";
 import { renewWebhook } from "./webhooks";
+import { refreshJiraDeliveryIssue } from "./delivery";
 import { jiraHash } from "./crypto";
 import { auditInitiative } from "@/lib/audit";
 import type { JiraConnection } from "@prisma/client";
@@ -36,8 +37,18 @@ async function perform(job: { id: string; jobType: string; payload: unknown; con
     if (!event) throw new BusinessError("The webhook event no longer exists.", 404);
     if (event.status === "processed" || event.status === "ignored") return;
     const connection = await db.jiraConnection.findUniqueOrThrow({ where: { id: job.connectionId } });
+    if (event.externalIssueId && event.eventType !== "jira:issue_deleted") {
+      await refreshJiraDeliveryIssue(job.connectionId, event.externalIssueId);
+    }
     await previewJiraImport(job.connectionId, connection.configuredByUserId, job.id, event.id);
     await db.jiraWebhookEvent.update({ where: { id: event.id }, data: { status: "processed", processedAt: new Date(), failureMessage: null } });
+    return;
+  }
+  if (job.jobType === "delivery_reconcile") {
+    const links = await db.jiraExternalLink.findMany({ where: { connectionId: job.connectionId }, orderBy: [{ deliveryObservedAt: "asc" }, { id: "asc" }], take: 25, select: { externalIssueId: true } });
+    for (let start = 0; start < links.length; start += 5) {
+      await Promise.all(links.slice(start, start + 5).map(link => refreshJiraDeliveryIssue(job.connectionId, link.externalIssueId)));
+    }
     return;
   }
   if (job.jobType === "renew_webhook") { await renewWebhook(job.connectionId); return; }

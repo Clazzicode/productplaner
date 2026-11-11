@@ -5,6 +5,7 @@ import AcceptanceCriterionEditor from "@/components/workspace/AcceptanceCriterio
 import StoryDetailsEditor from "@/components/workspace/StoryDetailsEditor";
 import StoryWorkflowControls from "@/components/workspace/StoryWorkflowControls";
 import TraceBadge from "@/components/workspace/TraceBadge";
+import JiraDeliveryLive from "@/components/jira/JiraDeliveryLive";
 import { requireCurrentUser } from "@/lib/auth/session";
 import { db, establishAuthContext } from "@/lib/db";
 import {
@@ -118,6 +119,7 @@ async function StoryPage({ params }: {
         </span>
         <span className="rounded-full bg-neutral-100 px-2.5 py-1 font-medium capitalize">Source: {story.sourceType}</span>
       </div>
+      <div className="mt-4"><JiraDeliveryLive initiativeId={initiativeId} target={{ type: "story", id: story.id }} /></div>
 
       {!archived && !readiness.ready && (
         <ul className="mt-3 list-disc rounded-lg bg-amber-50 p-4 pl-8 text-sm text-amber-900">

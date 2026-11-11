@@ -17,6 +17,12 @@ vi.mock("@/lib/db", () => ({
       mocks.execute();
       resolve(1);
     },
+  }), $queryRaw: () => ({
+    then(resolve: (value: unknown[]) => void, reject: (error: Error) => void) {
+      if (!(mocks.context as AsyncLocalStorage<boolean>).getStore()) return reject(new Error("Missing database context"));
+      mocks.execute();
+      resolve([{ enqueue_due_jira_delivery_reconciliation: 0 }]);
+    },
   }) },
 }));
 
@@ -34,7 +40,7 @@ describe("scheduled Jira worker", () => {
     const response = await GET(new Request("https://app.test/api/internal/jira/jobs/run", { headers: { authorization: "Bearer test-worker-authorization" } }));
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ claimed: 0, completed: 0, retried: 0, failed: 0 });
-    expect(mocks.execute).toHaveBeenCalledOnce();
+    expect(mocks.execute).toHaveBeenCalledTimes(2);
     expect(context.getStore()).toBeUndefined();
   });
   it("rejects an unauthorized call before claiming or retaining data", async () => {

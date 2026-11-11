@@ -9,6 +9,7 @@ import { buildImportFieldReview, fieldBaselines } from "./fieldReview";
 import { emptyRequest, requestSchema } from "@/lib/requests/model";
 import { saveRequest } from "@/lib/requests/service";
 import { searchJiraIssues, type JiraIssueSnapshot as JiraSourceIssue } from "./client";
+import { applyJiraDeliverySnapshot } from "./delivery";
 import { jiraHash } from "./crypto";
 import { accessTokenFor } from "./oauth";
 
@@ -263,7 +264,7 @@ async function importedBug(issue: JiraSourceIssue, initiativeId: string, actorUs
   return saveRequest(initiativeId, request, undefined, { actorUserId, changeReason: `Imported Jira bug ${issue.key}` });
 }
 
-async function applyItem(item: { id: string; targetType: string; targetId: string | null; sourceSnapshot: Prisma.JsonValue; sourceHash: string; externalIssueId: string; externalKey: string; issueTypeName: string }, run: { connectionId: string; initiativeId: string; organizationId: string }, actorUserId: string) {
+async function applyItem(item: { id: string; targetType: string; targetId: string | null; sourceSnapshot: Prisma.JsonValue; sourceHash: string; externalIssueId: string; externalKey: string; issueTypeName: string }, run: { connectionId: string; initiativeId: string; organizationId: string }, actorUserId: string, connection: { projectId: string | null; projectKey: string | null; fieldMappings: unknown }) {
   const issue = item.sourceSnapshot as unknown as JiraSourceIssue;
   let target: { id: string };
   if (item.targetType === "feature") target = await importedFeature(issue, run.initiativeId, item.targetId);
@@ -278,6 +279,7 @@ async function applyItem(item: { id: string; targetType: string; targetId: strin
   linkBase.targetFingerprint = local ? fingerprint(local) : fingerprint({ id: target.id });
   const baselines = fieldBaselines(issue, item.targetType, local) as unknown as Prisma.InputJsonValue;
   await db.jiraExternalLink.upsert({ where: { connectionId_externalIssueId: { connectionId: run.connectionId, externalIssueId: item.externalIssueId } }, create: { ...linkBase, fieldBaselines: baselines }, update: { ...linkBase, fieldBaselines: baselines, lastImportedAt: new Date() } });
+  await applyJiraDeliverySnapshot(run.connectionId, issue, connection.projectId, connection.projectKey, connection.fieldMappings);
   await db.jiraImportItem.update({ where: { id: item.id }, data: { targetId: target.id, status: "imported" } });
 }
 
@@ -307,7 +309,7 @@ export async function applyJiraImport(runId: string, selectedItemIds: string[], 
     }
     const changed = await db.jiraImportRun.updateMany({ where: { id: run.id, status: "previewed" }, data: { status: "applying" } });
     if (changed.count !== 1) throw new BusinessError("This Jira import preview changed. Reload and try again.", 409);
-    for (const item of selected) await applyItem(item, run, actorUserId);
+    for (const item of selected) await applyItem(item, run, actorUserId, connection);
     await db.jiraImportItem.updateMany({ where: { importRunId: run.id, status: "previewed" }, data: { status: "skipped", selected: false } });
     await db.jiraImportRun.update({ where: { id: run.id }, data: { status: "applied", appliedByUserId: actorUserId, appliedAt: new Date() } });
     await db.jiraConnection.update({ where: { id: run.connectionId }, data: { lastImportedAt: new Date(), lastSyncAt: new Date(), lastSyncStatus: "applied" } });

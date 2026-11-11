@@ -3,6 +3,8 @@ import { BusinessError } from "@/lib/businessError";
 import { jiraHash } from "@/lib/jira/crypto";
 import { enqueueWebhook } from "@/lib/jira/webhooks";
 import { withApi } from "@/lib/observability";
+import { after } from "next/server";
+import { processJiraJobs } from "@/lib/jira/jobs";
 
 const object = (value: unknown): Record<string, unknown> => value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 async function handler(request: Request, { params }: { params: Promise<{ connectionId: string }> }) {
@@ -13,6 +15,7 @@ async function handler(request: Request, { params }: { params: Promise<{ connect
   const externalEventId = request.headers.get("x-atlassian-webhook-identifier") || jiraHash(raw);
   try {
     const queued = await enqueueWebhook({ connectionId, token, externalEventId, eventType: String(row.webhookEvent ?? "unknown"), issueId: issue.id ? String(issue.id) : null, issueKey: issue.key ? String(issue.key) : null, payload: { webhookEvent: String(row.webhookEvent ?? "unknown"), issueId: issue.id ? String(issue.id) : null, issueKey: issue.key ? String(issue.key) : null } as Prisma.InputJsonValue, payloadHash: jiraHash(raw) });
+    if (queued.created) after(async () => { await processJiraJobs(25); });
     return Response.json({ accepted: true, duplicate: !queued.created }, { status: queued.created ? 202 : 200 });
   } catch (error) { return Response.json({ error: error instanceof BusinessError ? error.message : "Invalid Jira webhook." }, { status: error instanceof BusinessError ? error.status : 401 }); }
 }

@@ -14,6 +14,7 @@ async function handler(request: Request) {
   if (!authorized(request)) return Response.json({ error: "Unauthorized." }, { status: 401 });
   const result = await observeWorker("jira", async stage => {
     stage("execute");
+    await withServiceContext(async () => await db.$queryRaw`SELECT app_private.enqueue_due_jira_delivery_reconciliation(10)`);
     const data = await processJiraJobs(25);
     stage("retention");
     await withServiceContext(async () => await db.$executeRaw`SELECT app_private.expire_jira_source_data()`);

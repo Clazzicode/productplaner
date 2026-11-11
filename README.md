@@ -21,6 +21,10 @@ same non-production Supabase project before handling requests. Do not copy Produ
 database URLs or keys into Preview. See `docs/JIRA-DATA-BOUNDARY.md` for Jira's read-only
 staging policy.
 
+For the proposed Clarivia-to-Jira delivery flow and Jira-to-Clarivia live execution updates,
+see [the bidirectional Jira sync plan](docs/JIRA-BIDIRECTIONAL-SYNC-PLAN.md). It distinguishes
+the current read-only integration from the write and webhook work still to implement.
+
 ## Scope of this prototype
 
 **In:** real guided intake (5 qualifying + 8 planning questions, extended with risk/cost/budget
