@@ -55,6 +55,7 @@ export default function AppShell(props: {
   const selectedProject = projects.find(project => project.id === routeProjectId) ?? currentInitiative?.project ?? undefined;
   const home = pathname === "/home";
   const roadmap = /^\/initiatives\/[^/]+\/workspace\/roadmap\/?$/.test(pathname);
+  const sprintPlanning = /^\/initiatives\/[^/]+\/workspace\/sprint-preparation\/?$/.test(pathname);
   const demoDetail = /^\/initiatives\/[^/]+\/workspace\/demos(?:\/.*)?$/.test(pathname);
 
   const bare = isBareRoute(pathname, props.signedIn, routeInitiative);
@@ -158,6 +159,7 @@ export default function AppShell(props: {
           <div className={roadmap || demoDetail ? "px-0 pt-0" : "px-4 pt-4 sm:px-6"}>
             <AiUsageBanner />
           </div>
+          {sprintPlanning && <nav aria-label="Sprint planning return" className="px-4 pt-2 sm:px-6"><Link href={`/initiatives/${currentId}/overview`} className="inline-flex min-h-9 items-center rounded-lg border border-[#dfe3f4] bg-white px-3 text-sm font-semibold text-[#5145ed] hover:bg-[#f0efff]">← Back to Five-tool guide</Link></nav>}
           {props.children}
         </main>
       </div>
