@@ -1,6 +1,6 @@
 # Clarivia ↔ Jira: product-to-delivery sync plan
 
-Status: implementation plan, not a description of deployed behavior. The current Jira rollout is read-only. This plan turns the Avery–Rebecca conversation into an executable contract while retaining the existing review and field-ownership safeguards.
+Status: product and field-ownership contract. The Jira delivery mirror, browser polling, reconciliation worker, and outbound duplicate guard are implemented on the `feat/jira-bidirectional` preview branch. Live Jira acceptance and production deployment are pending. Follow [the staging acceptance checklist](JIRA-STAGING-ACCEPTANCE.md) for the release gate.
 
 ## 1. What the conversation establishes
 
@@ -14,9 +14,9 @@ Those statements define the goal, not a complete field mapping. In this plan, Cl
 - `docs/JIRA-DATA-BOUNDARY.md` limits current reads to issue ID/key, summary, description, type, status, priority, labels, parent key, configured story points, and update time, up to 2,000 issues per selected project. Assignee, sprint, version, comments, attachments, and user profiles are not currently read.
 - `docs/JIRA-FIELD-OWNERSHIP.md` defines Jira execution evidence and Clarivia planning ownership. Reviewed imports may copy summary, description, and normalized story estimates; Jira Done does not mean product-owner acceptance.
 - `src/lib/jira/export.ts` contains dormant, gated export preview/approval/execution code. It proposes Epic, Story, and Bug issues; creates can include issue type, summary, and description. Existing-issue updates send only summary and description. Status transitions, assignee, labels, sprint and release assignments, priority, and deletions are omitted.
-- `src/lib/jira/webhooks.ts` and `src/lib/jira/jobs.ts` contain a gated webhook/job path. A webhook currently queues a fresh import preview; it does not automatically apply changes to canonical product records or push an update to an open browser.
+- `src/lib/jira/webhooks.ts` and `src/lib/jira/jobs.ts` contain the gated webhook/job path. On the preview branch, a webhook also fetches a linked issue and updates its Jira-owned delivery mirror, while the open story/backlog/dashboard views poll for revisions. Shared planning changes still require import review.
 
-Therefore “connected” does not yet mean two-way or real-time. Do not turn on a flag and call the requested workflow complete.
+The preview branch has not yet been exercised against a connected, write-scoped Jira account. “Connected” alone is not proof of end-to-end two-way or live behavior.
 
 ## 3. Target user workflow
 
