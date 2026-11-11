@@ -3,7 +3,7 @@ import { auditInitiative } from "@/lib/audit";
 import { BusinessError } from "@/lib/businessError";
 import { db, withTransaction } from "@/lib/db";
 import { getJiraIssue } from "./client";
-import { currentTargetFingerprint, fingerprint, sourceSnapshot } from "./import";
+import { currentTargetFingerprint, exportSourceFingerprint, importSourceFingerprint, sourceSnapshot } from "./import";
 import { accessTokenFor } from "./oauth";
 
 export async function recordJiraConflict(input: { link: JiraExternalLink; jiraSnapshot: Prisma.InputJsonValue; jiraFingerprint: string; planningFingerprint: string; importItemId?: string; exportItemId?: string; explanation: string }) {
@@ -24,7 +24,7 @@ export async function recordExportExecutionConflict(exportItemId: string, explan
   const jiraSnapshot = sourceSnapshot(remote) as unknown as Prisma.InputJsonValue;
   const planningFingerprint = await currentTargetFingerprint(link);
   if (!planningFingerprint) return null;
-  return recordJiraConflict({ link, jiraSnapshot, jiraFingerprint: fingerprint(jiraSnapshot), planningFingerprint, exportItemId: item.id, explanation });
+  return recordJiraConflict({ link, jiraSnapshot, jiraFingerprint: exportSourceFingerprint(remote), planningFingerprint, exportItemId: item.id, explanation });
 }
 
 export async function resolveJiraConflict(conflictId: string, resolution: "keep_planning" | "accept_jira" | "manual", reason: string, actorUserId: string) {
@@ -39,14 +39,16 @@ export async function resolveJiraConflict(conflictId: string, resolution: "keep_
   if (!currentPlanning) throw new BusinessError("The planning record no longer exists.", 409);
   const remote = await getJiraIssue({ cloudId: connection.cloudId, accessToken, issueIdOrKey: conflict.externalIssueId });
   const remoteSnapshot = sourceSnapshot(remote) as unknown as Prisma.InputJsonValue;
-  const currentJira = fingerprint(remoteSnapshot);
+  const currentJira = conflict.exportItemId ? exportSourceFingerprint(remote) : importSourceFingerprint(remote, link.targetType);
   if (resolution !== "manual" && (currentPlanning !== conflict.planningFingerprint || currentJira !== conflict.jiraFingerprint)) throw new BusinessError("Jira or the planning record changed again. Create a fresh preview before resolving.", 409);
   return withTransaction(async () => {
+    const importHash = importSourceFingerprint(remote, link.targetType);
+    const outboundHash = exportSourceFingerprint(remote);
     const linkData = resolution === "keep_planning"
-      ? { sourceHash: currentJira, lastImportedSnapshot: {}, sourceUpdatedAt: remote.updated ? new Date(remote.updated) : null }
+      ? { sourceHash: importHash, exportSourceHash: outboundHash, lastImportedSnapshot: {}, sourceUpdatedAt: remote.updated ? new Date(remote.updated) : null }
       : resolution === "accept_jira"
         ? { targetFingerprint: currentPlanning }
-        : { sourceHash: currentJira, targetFingerprint: currentPlanning, lastImportedSnapshot: {}, sourceUpdatedAt: remote.updated ? new Date(remote.updated) : null };
+        : { sourceHash: importHash, exportSourceHash: outboundHash, targetFingerprint: currentPlanning, lastImportedSnapshot: {}, sourceUpdatedAt: remote.updated ? new Date(remote.updated) : null };
     await db.jiraExternalLink.update({ where: { id: link.id }, data: { ...linkData, lastImportedAt: new Date() } });
     const changed = await db.jiraSyncConflict.updateMany({ where: { id: conflict.id, status: "open" }, data: { status: "resolved", resolution, resolutionReason: reason, resolvedByUserId: actorUserId, resolvedAt: new Date() } });
     if (changed.count !== 1) throw new BusinessError("This Jira conflict changed. Reload and try again.", 409);

@@ -13,7 +13,7 @@ vi.mock("@/lib/db", () => ({
 vi.mock("@/lib/audit", () => ({ auditInitiative: vi.fn() }));
 vi.mock("../oauth", () => ({ accessTokenFor: vi.fn() }));
 vi.mock("../client", () => ({ createJiraIssue: vi.fn(), getJiraIssue: vi.fn(), updateJiraIssue: vi.fn() }));
-vi.mock("../import", () => ({ currentTargetFingerprint: vi.fn(), fingerprint: vi.fn((value: unknown) => JSON.stringify(value)), plainText: vi.fn((value: unknown) => typeof value === "string" ? value : ""), sourceSnapshot: vi.fn() }));
+vi.mock("../import", () => ({ currentTargetFingerprint: vi.fn(), fingerprint: vi.fn((value: unknown) => JSON.stringify(value)), exportSourceFingerprint: vi.fn((value: { summary: string; description: unknown }) => JSON.stringify({ summary: value.summary, description: value.description })), importSourceFingerprint: vi.fn(), sourceSnapshot: vi.fn() }));
 
 import { approveJiraExport, exportSourceFingerprint, fieldsFor } from "../export";
 

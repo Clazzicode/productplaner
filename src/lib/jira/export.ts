@@ -4,7 +4,7 @@ import { BusinessError } from "@/lib/businessError";
 import { db, withTransaction } from "@/lib/db";
 import { createJiraIssue, getJiraIssue, updateJiraIssue } from "./client";
 import { jiraHash } from "./crypto";
-import { currentTargetFingerprint, fingerprint, plainText, sourceSnapshot } from "./import";
+import { currentTargetFingerprint, exportSourceFingerprint, fingerprint, importSourceFingerprint, sourceSnapshot } from "./import";
 import { accessTokenFor } from "./oauth";
 import { recordJiraConflict } from "./conflicts";
 import { applyJiraDeliverySnapshot } from "./delivery";
@@ -17,7 +17,7 @@ type PreviewExportItem = { organizationId: string; targetType: TargetType; targe
 const adf = (value: string) => ({ type: "doc", version: 1, content: value.split(/\n+/).filter(Boolean).map((text) => ({ type: "paragraph", content: [{ type: "text", text: text.slice(0, 32000) }] })) });
 const dataObject = (value: unknown): Record<string, unknown> => value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 const stringValue = (value: unknown) => typeof value === "string" ? value : "";
-export const exportSourceFingerprint = (issue: { summary: string; description: unknown }) => fingerprint({ summary: issue.summary, description: plainText(issue.description).trim() });
+export { exportSourceFingerprint } from "./import";
 
 export function fieldsFor(candidate: Pick<Candidate, "summary" | "description" | "issueType">, projectId: string, update = false): ExportPayload {
   return { fields: { ...(update ? {} : { project: { id: projectId }, issuetype: { name: candidate.issueType } }), summary: candidate.summary, description: adf(candidate.description || candidate.summary) } };
@@ -150,7 +150,7 @@ async function executeItem(item: Awaited<ReturnType<typeof db.jiraExportItem.fin
   if (!identity) throw new BusinessError("The Jira export item has no Jira identity.", 409);
   const saved = await getJiraIssue({ cloudId: connection.cloudId, accessToken, issueIdOrKey: identity.id });
   const snapshot = sourceSnapshot(saved);
-  const sourceHash = fingerprint(snapshot);
+  const sourceHash = importSourceFingerprint(saved, item.targetType);
   await db.jiraExternalLink.upsert({ where: { connectionId_targetType_targetId: { connectionId: run.connectionId, targetType: item.targetType, targetId: item.targetId } }, create: { organizationId: run.organizationId, initiativeId: run.initiativeId, connectionId: run.connectionId, externalIssueId: saved.id, externalKey: saved.key, issueTypeName: saved.issueType.name, targetType: item.targetType, targetId: item.targetId, sourceHash, exportSourceHash: exportSourceFingerprint(saved), targetFingerprint: item.targetFingerprint, sourceUpdatedAt: saved.updated ? new Date(saved.updated) : null, lastImportedSnapshot: {} }, update: { externalIssueId: saved.id, externalKey: saved.key, issueTypeName: saved.issueType.name, sourceHash, exportSourceHash: exportSourceFingerprint(saved), targetFingerprint: item.targetFingerprint, sourceUpdatedAt: saved.updated ? new Date(saved.updated) : null, lastImportedSnapshot: {}, lastImportedAt: new Date() } });
   await applyJiraDeliverySnapshot(run.connectionId, saved, connection.projectId, connection.projectKey, connection.fieldMappings);
   await db.jiraExportItem.update({ where: { id: item.id }, data: { status: "succeeded", externalIssueId: saved.id, externalKey: saved.key, resultSnapshot: snapshot as unknown as Prisma.InputJsonValue, failureMessage: null } });
@@ -187,7 +187,7 @@ export async function reconcileUncertainJiraCreate(itemId: string, jiraKey: stri
     if (current.externalIssueId || !current.createAttemptedAt) throw new BusinessError("This Jira create was already reconciled.", 409);
     const alreadyLinked = await db.jiraExternalLink.findFirst({ where: { connectionId: run.connectionId, OR: [{ externalIssueId: issue.id }, { targetType: item.targetType, targetId: item.targetId }] } });
     if (alreadyLinked) throw new BusinessError("The Jira issue or planning item is already linked. Review the existing mapping.", 409);
-    await db.jiraExternalLink.create({ data: { organizationId: run.organizationId, initiativeId: run.initiativeId, connectionId: run.connectionId, externalIssueId: issue.id, externalKey: issue.key, issueTypeName: issue.issueType.name, targetType: item.targetType, targetId: item.targetId, sourceHash: fingerprint(snapshot), exportSourceHash: exportSourceFingerprint(issue), targetFingerprint: item.targetFingerprint, sourceUpdatedAt: issue.updated ? new Date(issue.updated) : null, lastImportedSnapshot: {} } });
+    await db.jiraExternalLink.create({ data: { organizationId: run.organizationId, initiativeId: run.initiativeId, connectionId: run.connectionId, externalIssueId: issue.id, externalKey: issue.key, issueTypeName: issue.issueType.name, targetType: item.targetType, targetId: item.targetId, sourceHash: importSourceFingerprint(issue, item.targetType), exportSourceHash: exportSourceFingerprint(issue), targetFingerprint: item.targetFingerprint, sourceUpdatedAt: issue.updated ? new Date(issue.updated) : null, lastImportedSnapshot: {} } });
     await db.jiraExportItem.update({ where: { id: item.id }, data: { externalIssueId: issue.id, externalKey: issue.key, status: "succeeded", resultSnapshot: snapshot as unknown as Prisma.InputJsonValue, failureMessage: null } });
     await auditInitiative(run.initiativeId, "jira.create_reconciled", { jiraExportRunId: run.id, jiraExportItemId: item.id, jiraIssueKey: issue.key, actorUserId, reason });
   });

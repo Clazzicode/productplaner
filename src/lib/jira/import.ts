@@ -89,6 +89,14 @@ export function sourceSnapshot(issue: JiraSourceIssue) {
   };
 }
 
+export function importSourceFingerprint(issue: Pick<JiraSourceIssue, "summary" | "description" | "storyPoints">, targetType: string) {
+  return fingerprint({ summary: issue.summary, description: plainText(issue.description).trim(), ...(targetType === "story" ? { storyPoints: issue.storyPoints } : {}) });
+}
+
+export function exportSourceFingerprint(issue: Pick<JiraSourceIssue, "summary" | "description">) {
+  return fingerprint({ summary: issue.summary, description: plainText(issue.description).trim() });
+}
+
 export function deduplicateJiraIssues(issues: JiraSourceIssue[]) {
   const byId = new Map<string, JiraSourceIssue>();
   const byKey = new Map<string, string>();
@@ -133,9 +141,9 @@ export async function previewJiraImport(connectionId: string, actorUserId: strin
   const items: PreviewItem[] = [];
   for (const issue of uniqueIssues) {
     const snapshot = sourceSnapshot(issue);
-    const sourceHash = fingerprint(snapshot);
     const link = byIssue.get(issue.id);
     const mappedTarget = targetType(issue, connection);
+    const sourceHash = importSourceFingerprint(issue, mappedTarget);
     let action: "create" | "update" | "unchanged" | "conflict" | "skip" = mappedTarget === "skip" ? "skip" : link ? "update" : "create";
     let conflictReason: string | null = null;
     const local = link ? await currentTargetSnapshot(link) : null;

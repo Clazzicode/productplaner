@@ -6,7 +6,7 @@ Status: product and field-ownership contract. The Jira delivery mirror, browser 
 
 Rebecca distinguishes the two teams: “This is the product team. They don't work in JIRA. The delivery team works in JIRA. So the stuff that's coming from here is going in JIRA.” When Avery asks whether completed developer work should update his system, Rebecca answers “Yes” and calls for a “bi-directional sync with JIRA.” Avery describes Jira as the source of truth for execution information and wants Clarivia to retain information through a lost connection and catch up when it reconnects.
 
-Those statements define the goal, not a complete field mapping. In this plan, Clarivia owns product planning and product-owner decisions; Jira owns delivery execution. Shared descriptive fields require a reviewed change when both sides have edited them.
+Those statements define the goal, not a complete field mapping. In this plan, Clarivia owns product planning and product-owner decisions; Jira owns delivery execution. Shared descriptive fields require a reviewed change when both sides have edited them. Jira status, priority, labels, parent, and update-time changes alone do not create planning-content conflicts.
 
 ## 2. Current baseline in this repository
 
