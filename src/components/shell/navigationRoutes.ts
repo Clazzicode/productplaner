@@ -29,6 +29,7 @@ export function pageNavigation(path: string, initiatives: NavInitiative[]) {
     if (parts[2] === "workspace") {
       parent = `/initiatives/${parts[1]}/dashboard`;
       parentLabel = "Initiative overview";
+      if (parts[3] === "sprint-preparation") { parent = `/initiatives/${parts[1]}/overview`; parentLabel = "Five-tool guide"; }
       if (parts[3] === "stories") { parent = `/initiatives/${parts[1]}/workspace/features`; parentLabel = "Features"; }
     }
   } else if (parts[0] === "integrations" && parts.length > 1) {

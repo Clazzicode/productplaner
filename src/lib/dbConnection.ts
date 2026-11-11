@@ -3,6 +3,8 @@ export function prismaDatabaseUrl(rawUrl: string | undefined, vercelEnvironment:
   if (!rawUrl || !vercelEnvironment) return rawUrl;
 
   const url = new URL(rawUrl);
-  if (!url.searchParams.has("connection_limit")) url.searchParams.set("connection_limit", "1");
+  // A Vercel function owns its own Prisma pool. An older DATABASE_URL may
+  // already contain a larger limit, so enforce the serverless cap here too.
+  url.searchParams.set("connection_limit", "1");
   return url.toString();
 }

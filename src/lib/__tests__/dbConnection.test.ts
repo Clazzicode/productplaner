@@ -13,9 +13,10 @@ describe("serverless database connection limit", () => {
     expect(result.searchParams.get("connection_limit")).toBe("1");
   });
 
-  it("respects an explicit connection limit and leaves local URLs alone", () => {
-    const explicit = `${staging}&connection_limit=2`;
-    expect(prismaDatabaseUrl(explicit, "production")).toBe(explicit);
+  it("caps an older explicit pool size on Vercel and leaves local URLs alone", () => {
+    const explicit = `${staging}&connection_limit=10`;
+    expect(new URL(prismaDatabaseUrl(explicit, "production")!).searchParams.get("connection_limit")).toBe("1");
+    expect(prismaDatabaseUrl(explicit, undefined)).toBe(explicit);
     expect(prismaDatabaseUrl(staging, undefined)).toBe(staging);
   });
 });
