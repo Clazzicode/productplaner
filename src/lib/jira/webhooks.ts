@@ -15,13 +15,26 @@ function webhookBaseUrl() {
   return value;
 }
 
+export function jiraWebhookCallbackUrl(connectionId: string, secret: string) {
+  const callback = new URL(`/api/integrations/jira/webhooks/${encodeURIComponent(connectionId)}`, webhookBaseUrl());
+  callback.searchParams.set("token", secret);
+  // Jira cannot attach Vercel's trusted OIDC header. Protected Preview
+  // deployments need the automation bypass in the callback query string.
+  if (process.env.VERCEL_ENV === "preview" && callback.hostname.endsWith(".vercel.app")) {
+    const bypass = process.env.VERCEL_AUTOMATION_BYPASS_SECRET?.trim();
+    if (!bypass) throw new BusinessError("Configure Vercel's automation bypass before registering a Jira webhook on a protected Preview deployment.", 503);
+    callback.searchParams.set("x-vercel-protection-bypass", bypass);
+  }
+  return callback.toString();
+}
+
 export async function registerWebhook(connectionId: string) {
   if (process.env.JIRA_WRITE_ENABLED !== "true") throw new BusinessError("Jira webhook registration is disabled while this connection is read-only.", 403);
   const { connection, accessToken } = await accessTokenFor(connectionId);
   if (!connection.initiativeId || !connection.cloudId || !connection.projectKey) throw new BusinessError("Finish the Jira connection before enabling webhooks.", 422);
   if (!connection.scopes.split(/\s+/).includes("manage:jira-webhook")) throw new BusinessError("Reconnect Jira and grant webhook management access.", 422);
   const secret = randomBytes(32).toString("base64url");
-  const callbackUrl = `${webhookBaseUrl()}/api/integrations/jira/webhooks/${encodeURIComponent(connection.id)}?token=${encodeURIComponent(secret)}`;
+  const callbackUrl = jiraWebhookCallbackUrl(connection.id, secret);
   const registered = await registerJiraWebhook({ cloudId: connection.cloudId, accessToken, callbackUrl, projectKey: connection.projectKey });
   const expiresAt = new Date(Date.now() + THIRTY_DAYS_MS);
   const saved = await db.jiraWebhookSubscription.upsert({ where: { connectionId }, create: { organizationId: connection.organizationId, connectionId, externalId: registered.id, callbackSecretHash: jiraHash(secret), expiresAt }, update: { externalId: registered.id, callbackSecretHash: jiraHash(secret), status: "active", expiresAt, lastRenewedAt: new Date() } });
