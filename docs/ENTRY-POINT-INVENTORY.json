@@ -738,20 +738,18 @@
   },
   {
     "path": "src/app/api/integrations/jira/oauth/callback/route.ts",
-    "classification": "authentication-callback",
-    "reason": "Retired callback only redirects with invalid_state; performs no database operations.",
-    "sourceFingerprint": "e413eb9c2a669a04de4863ff5b4becb43bba721ac95419856a0f27f9fbd5da7f"
+    "classification": "authenticated-api",
+    "reason": "Authenticated OAuth callback validates the signed-in organization and consumes a bounded Jira authorization state."
   },
   {
     "path": "src/app/api/integrations/jira/oauth/start/route.ts",
-    "classification": "authenticated-alias",
-    "reason": "Reexports POST from the authenticated /api/atlassian/oauth/start entry point.",
-    "sourceFingerprint": "5aeddf9f546856b3c2a2e74b193727ecf328f70196577090a97eca3175b49ac4"
+    "classification": "authenticated-api",
+    "reason": "Authenticated owner or admin starts Jira OAuth for an initiative in their organization."
   },
   {
     "path": "src/app/api/integrations/jira/webhooks/[connectionId]/route.ts",
     "classification": "webhook",
-    "reason": "Verifies connection webhook secret; delegates enqueue to a narrowly authorized database function. Jira registration remains disabled.",
+    "reason": "Verifies the per-connection webhook secret and enqueues a narrowly scoped, idempotent delivery refresh.",
     "sourceFingerprint": "28ca7eeab5563a5eff46306a63d89942b2007a1e1427e97cfee609469741c72b"
   },
   {

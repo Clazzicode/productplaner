@@ -33,7 +33,7 @@ export default function StoryCreateForm({ initiativeId, epicId }: { initiativeId
   if (!open) {
     return <div className="mt-3">
       <button type="button" onClick={() => setOpen(true)} className="text-xs font-semibold text-indigo-700">+ Create story</button>
-      <p className="mt-1 text-[11px] text-neutral-500">Jira story import will be enabled with the live Jira integration in Feature 21.</p>
+      <p className="mt-1 text-[11px] text-neutral-500">Import Jira stories from the Jira Cloud integration after reviewing the proposed changes.</p>
     </div>;
   }
 
