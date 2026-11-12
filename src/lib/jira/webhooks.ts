@@ -36,13 +36,16 @@ export async function registerWebhook(connectionId: string) {
   const secret = randomBytes(32).toString("base64url");
   const previous = await db.jiraWebhookSubscription.findUnique({ where: { connectionId }, select: { externalId: true } });
   const callbackUrl = jiraWebhookCallbackUrl(connection.id, secret);
+  // Jira permits one callback URL per app. Remove the old registration before
+  // replacing its URL; this can leave the subscription needing re-registration
+  // if Jira rejects the new URL, so record that state first.
+  if (previous) {
+    await db.jiraWebhookSubscription.update({ where: { connectionId }, data: { status: "renewal_required" } });
+    await deleteJiraWebhooks({ cloudId: connection.cloudId, accessToken, webhookIds: [previous.externalId] });
+  }
   const registered = await registerJiraWebhook({ cloudId: connection.cloudId, accessToken, callbackUrl, projectKey: connection.projectKey });
   const expiresAt = new Date(Date.now() + THIRTY_DAYS_MS);
   const saved = await db.jiraWebhookSubscription.upsert({ where: { connectionId }, create: { organizationId: connection.organizationId, connectionId, externalId: registered.id, callbackSecretHash: jiraHash(secret), expiresAt }, update: { externalId: registered.id, callbackSecretHash: jiraHash(secret), status: "active", expiresAt, lastRenewedAt: new Date() } });
-  if (previous && previous.externalId !== registered.id) {
-    try { await deleteJiraWebhooks({ cloudId: connection.cloudId, accessToken, webhookIds: [previous.externalId] }); }
-    catch { await auditInitiative(connection.initiativeId, "jira.webhook_previous_removal_failed", { jiraConnectionId: connection.id, previousWebhookId: previous.externalId }); }
-  }
   await db.jiraSyncJob.updateMany({ where: { connectionId: connection.id, jobType: "renew_webhook", status: "queued" }, data: { status: "cancelled" } });
   await db.jiraSyncJob.upsert({ where: { idempotencyKey: jiraHash(`renew:${saved.id}:${expiresAt.toISOString()}`) }, create: { organizationId: connection.organizationId, initiativeId: connection.initiativeId, connectionId: connection.id, jobType: "renew_webhook", payload: { subscriptionId: saved.id }, idempotencyKey: jiraHash(`renew:${saved.id}:${expiresAt.toISOString()}`), availableAt: new Date(expiresAt.getTime() - 7 * 24 * 60 * 60 * 1000) }, update: {} });
   await auditInitiative(connection.initiativeId, "jira.webhook_registered", { jiraConnectionId: connection.id, jiraWebhookSubscriptionId: saved.id, expiresAt: expiresAt.toISOString() });

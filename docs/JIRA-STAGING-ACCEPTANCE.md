@@ -10,9 +10,19 @@ Clarivia owns product requirements, roadmap placement, risk and decisions, and P
 
 - Branch: `feat/jira-bidirectional`; stable preview URL: `https://productplaner-git-feat-jira-bidirectional-averylovings-projects.vercel.app`.
 - Test-only Supabase project: `qbogvclmehvrtuwiktos`. The additive delivery mirror, reconciliation, create-attempt guard, outbound field-baseline, and delivery freshness migrations have been applied there. The production Supabase project has not been migrated for this release.
-- The preview branch has `JIRA_REDIRECT_URI`, `JIRA_WEBHOOK_BASE_URL`, `JIRA_TOKEN_ENCRYPTION_KEY`, and `JIRA_WRITE_ENABLED=true`. It still needs Jira OAuth client credentials with the callback below registered in the Atlassian developer console. No connected write-scoped Jira account exists in staging as of 2026-11-11.
+- The preview branch has `JIRA_CLIENT_ID`, `JIRA_CLIENT_SECRET`, `JIRA_REDIRECT_URI`, `JIRA_WEBHOOK_BASE_URL`, `JIRA_TOKEN_ENCRYPTION_KEY`, and `JIRA_WRITE_ENABLED=true`, scoped to `feat/jira-bidirectional`.
 - Callback to register: `https://productplaner-git-feat-jira-bidirectional-averylovings-projects.vercel.app/api/integrations/jira/oauth/callback`.
 - Required OAuth scopes in this implementation: `read:jira-work`, `write:jira-work`, `read:jira-user`, `manage:jira-webhook`, and `offline_access`. The exact Atlassian app configuration must be checked against the tenant before use.
+
+## Live staging evidence — 2026-11-12
+
+- Atlassian site `mylifecoachrebecca.atlassian.net`, disposable Jira project `CLVTEST` (project ID `10034`), and the Clarivia test initiative `Jira Sync Test — CLVTEST` are connected using the Clarivia Staging OAuth app. The mapping was reviewed and saved: Epic → feature, Story/Task → story, Bug → bug, Subtask skipped; To Do → planned, In Progress → in_progress, Done → done.
+- Jira Story `CLVTEST-1` was created in Jira and imported into Clarivia following an explicit preview and approval. The first live import exposed a source-reference constraint on synthetic planning containers; both grouping layers now use `sourceType=generated`. The persisted import shows `applied` at 2026-11-12 05:57 UTC.
+- A reviewed Clarivia feature export created Jira Epic `CLVTEST-2`. The queued export completed and linked that key. A second export preview showed zero creates, zero updates, and two unchanged items, confirming that this repeat preview did not produce a duplicate.
+- `CLVTEST-1` was moved from To Do to In Progress in Jira. Clarivia had not reflected the status at the time of inspection. The webhook event table was empty and Vercel runtime logs showed no incoming webhook request. The project protects Preview deployments with Vercel SSO, preventing Jira's unauthenticated callback from reaching the app. The server now appends Vercel's automation bypass query parameter when registering a Preview webhook, and the integration UI can replace the old callback. This path still requires a live re-registration and status-change retest.
+- The workspace header previously read the legacy demo Jira connection and incorrectly displayed `not connected`. It now reads the real Jira Cloud connection. This needs confirmation in the redeployed Preview UI.
+
+Production release remains gated on live webhook delivery, visible status freshness and PO validation separation, remaining update/conflict/recovery scenarios, the full test/build gate, production configuration and migration, and production smoke verification.
 
 ## Acceptance sequence using disposable Jira work
 

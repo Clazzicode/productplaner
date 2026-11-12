@@ -213,7 +213,13 @@ export async function registerJiraWebhook(input: { cloudId: string; accessToken:
   const payload = object(await jiraApi(input.cloudId, input.accessToken, "/rest/api/3/webhook", { method: "POST", body: JSON.stringify({ url: input.callbackUrl, webhooks: [{ events: ["jira:issue_created", "jira:issue_updated", "jira:issue_deleted"], jqlFilter: `project = \"${input.projectKey.replaceAll('"', '\\"')}\"` }] }) }, fetcher));
   const rows = Array.isArray(payload.webhookRegistrationResult) ? payload.webhookRegistrationResult.map(object) : [];
   const id = rows.map((row) => number(row.createdWebhookId)).find((value): value is number => value !== null);
-  if (!id) throw new Error("Jira did not register the webhook. Check the callback URL and OAuth scopes.");
+  if (!id) {
+    const errors = rows.flatMap((row) => Array.isArray(row.errors) ? row.errors.filter((item): item is string => typeof item === "string") : []);
+    // Atlassian may echo the callback URL in validation errors. Its query
+    // contains both the webhook token and the Preview protection bypass.
+    const safeErrors = errors.map((error) => error.replace(/https?:\/\/\S+/gi, "[callback URL]").replace(/(token|x-vercel-protection-bypass)\s*[=:]\s*\S+/gi, "$1=[redacted]"));
+    throw new Error(safeErrors.length ? `Jira webhook registration was rejected: ${safeErrors.join("; ").slice(0, 400)}` : "Jira did not register the webhook. Check the callback URL and OAuth scopes.");
+  }
   return { id: String(id) };
 }
 
