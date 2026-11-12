@@ -42,10 +42,11 @@ async function WorkspaceLayout({
   }
   const methodology = resolveMethodology(ws.initiative.methodology);
   const profile = profileFor(ws.initiative.methodology);
-  const [manualReleaseCount, manualSprintCount, drifted] = await Promise.all([
+  const [manualReleaseCount, manualSprintCount, drifted, jiraConnection] = await Promise.all([
     db.release.count({ where: { prototypeId: ws.prototype.id, origin: "manual" } }),
     db.sprint.count({ where: { prototypeId: ws.prototype.id, origin: "manual" } }),
     hasRoadmapDrifted(initiativeId),
+    db.jiraConnection.findFirst({ where: { initiativeId, status: { not: "revoked" } }, orderBy: { updatedAt: "desc" }, select: { status: true, projectKey: true, lastSyncAt: true } }),
   ]);
 
   const roadmapTools = <div className="space-y-4">
@@ -57,7 +58,7 @@ async function WorkspaceLayout({
       {drifted && <div className="mt-2"><Badge variant="amber" title="Approved inputs changed since this roadmap was generated.">Inputs changed since generated</Badge></div>}
     </div>
     <div className="border-t border-[#e5e7f2] pt-3"><p className="mb-2 text-xs font-bold uppercase tracking-wide text-[#7164d8]">Versions and refresh</p><div className="flex flex-wrap gap-2"><RoadmapVersionPanel initiativeId={initiativeId} /><RefreshBar initiativeId={initiativeId} manualReleaseCount={manualReleaseCount} manualSprintCount={manualSprintCount} /></div></div>
-    <div className="border-t border-[#e5e7f2] pt-3"><p className="mb-2 text-xs font-bold uppercase tracking-wide text-[#7164d8]">Integration</p><JiraSyncPanel initiativeId={initiativeId} status={ws.jira?.status ?? "not_connected"} lastSyncedAt={ws.jira?.lastSyncedAt?.toISOString() ?? null} /></div>
+    <div className="border-t border-[#e5e7f2] pt-3"><p className="mb-2 text-xs font-bold uppercase tracking-wide text-[#7164d8]">Integration</p><JiraSyncPanel status={jiraConnection?.status ?? "not_connected"} projectKey={jiraConnection?.projectKey ?? null} lastSyncedAt={jiraConnection?.lastSyncAt?.toISOString() ?? null} /></div>
     <div className="border-t border-[#e5e7f2] pt-3"><p className="mb-1 text-xs font-bold uppercase tracking-wide text-[#7164d8]">Related work</p><NavTabs initiativeId={initiativeId} methodology={methodology} /></div>
   </div>;
 
@@ -70,7 +71,7 @@ async function WorkspaceLayout({
         />
         <div className="mt-2 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#dfe3f4] bg-white px-4 py-3">
           <div className="flex min-w-0 flex-wrap items-center gap-2 text-xs text-slate-600"><strong className="max-w-64 truncate text-sm text-[#0d1b3e]">{ws.initiative.name}</strong><span>· {profile.label}</span><Link href={`/initiatives/${initiativeId}/intake`} className="font-semibold text-[#5145ed] hover:underline">Context</Link>{ws.prototype.approvedAt && <Badge variant="emerald">Baseline approved {new Date(ws.prototype.approvedAt).toLocaleDateString()}</Badge>}{drifted && <Badge variant="amber" title="Approved inputs changed since this roadmap was generated.">Inputs changed since generated</Badge>}</div>
-          <div className="flex flex-wrap items-center gap-2"><RoadmapVersionPanel initiativeId={initiativeId} /><JiraSyncPanel initiativeId={initiativeId} status={ws.jira?.status ?? "not_connected"} lastSyncedAt={ws.jira?.lastSyncedAt?.toISOString() ?? null} /></div>
+          <div className="flex flex-wrap items-center gap-2"><RoadmapVersionPanel initiativeId={initiativeId} /><JiraSyncPanel status={jiraConnection?.status ?? "not_connected"} projectKey={jiraConnection?.projectKey ?? null} lastSyncedAt={jiraConnection?.lastSyncAt?.toISOString() ?? null} /></div>
         </div>
         <div className="mt-4">
           <RefreshBar
