@@ -737,6 +737,11 @@
     "reason": "Verified session before the handler; handler retains action-specific access checks."
   },
   {
+    "path": "src/app/api/integrations/jira/connections/[connectionId]/reconcile/route.ts",
+    "classification": "authenticated-api",
+    "reason": "Organization Jira managers can queue a scoped delivery reconciliation for their connected initiative."
+  },
+  {
     "path": "src/app/api/integrations/jira/oauth/callback/route.ts",
     "classification": "authenticated-api",
     "reason": "Authenticated OAuth callback validates the signed-in organization and consumes a bounded Jira authorization state."
