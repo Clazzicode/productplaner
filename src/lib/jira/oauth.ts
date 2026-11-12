@@ -3,10 +3,9 @@ import type { Prisma } from "@prisma/client";
 import { auditOrganization } from "@/lib/audit";
 import { BusinessError } from "@/lib/businessError";
 import { db, withTransaction } from "@/lib/db";
-import { accessibleJiraResources, encryptedTokens, exchangeJiraCode, getJiraProjectMetadata, jiraAuthorizationUrl, listJiraProjects, type JiraProject, type JiraProjectMetadata, type JiraResource } from "./client";
+import { accessibleJiraResources, decryptedTokens, encryptedTokens, exchangeJiraCode, getJiraProjectMetadata, jiraAuthorizationUrl, listJiraProjects, refreshJiraTokens, type JiraProject, type JiraProjectMetadata, type JiraResource } from "./client";
 import { encryptJiraSecret, jiraHash } from "./crypto";
 import type { JiraProjectInput } from "./model";
-import { getAtlassianAccessToken } from "@/lib/atlassian/credentials";
 
 const STATE_LIFETIME_MS = 10 * 60 * 1000;
 
@@ -38,6 +37,12 @@ export async function completeJiraOAuth(input: { state: string; code: string; us
   const pending = await db.jiraOAuthState.findUnique({ where: { stateHash } });
   if (!pending || pending.userId !== input.userId || pending.organizationId !== input.organizationId || pending.consumedAt || pending.expiresAt <= new Date()) throw new BusinessError("This Jira authorization request is invalid or expired.", 400);
   const tokens = await exchangeJiraCode(input.code);
+  const requiredScopes = process.env.JIRA_WRITE_ENABLED === "true"
+    ? ["read:jira-work", "write:jira-work", "read:jira-user", "manage:jira-webhook", "offline_access"]
+    : ["read:jira-work", "offline_access"];
+  if (!requiredScopes.every((scope) => tokens.scope.split(/\s+/).includes(scope))) {
+    throw new BusinessError("Atlassian did not grant all required Jira permissions. Review the app scopes and reconnect.", 422);
+  }
   const resources = await accessibleJiraResources(tokens.accessToken);
   if (!resources.length) throw new BusinessError("Atlassian did not grant access to a Jira Cloud site.", 422);
   return withTransaction(async () => {
@@ -55,12 +60,22 @@ export async function completeJiraOAuth(input: { state: string; code: string; us
 export async function accessTokenFor(connectionId: string) {
   const current = await db.jiraConnection.findUnique({ where: { id: connectionId } });
   if (!current || current.status === "revoked") throw new BusinessError("Jira connection not found.", 404);
+  if (current.tokenExpiresAt.getTime() > Date.now() + 60_000) {
+    return { connection: current, accessToken: decryptedTokens(current).accessToken };
+  }
   try {
-    const accessToken = await getAtlassianAccessToken(current.organizationId);
-    return { connection: current, accessToken };
-  } catch {
-    await db.jiraConnection.updateMany({ where: { organizationId: current.organizationId, status: { not: "revoked" } }, data: { status: "reauthorization_required", revision: { increment: 1 } } });
-    throw new BusinessError("Reconnect Atlassian to restore this Jira connection.", 401);
+    const tokens = await refreshJiraTokens(decryptedTokens(current).refreshToken);
+    const changed = await db.jiraConnection.updateMany({
+      where: { id: current.id, refreshTokenCiphertext: current.refreshTokenCiphertext, status: { not: "revoked" } },
+      data: encryptedTokens(tokens),
+    });
+    const connection = await db.jiraConnection.findUnique({ where: { id: current.id } });
+    if (!connection || connection.status === "revoked") throw new BusinessError("Jira connection not found.", 404);
+    return { connection, accessToken: changed.count === 1 ? tokens.accessToken : decryptedTokens(connection).accessToken };
+  } catch (error) {
+    if (error instanceof BusinessError && error.status === 404) throw error;
+    await db.jiraConnection.updateMany({ where: { id: current.id, refreshTokenCiphertext: current.refreshTokenCiphertext, status: { not: "revoked" } }, data: { status: "reauthorization_required", revision: { increment: 1 } } });
+    throw new BusinessError("Reconnect Jira to restore this connection.", 401);
   }
 }
 
