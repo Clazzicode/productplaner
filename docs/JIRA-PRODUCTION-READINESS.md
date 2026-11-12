@@ -5,8 +5,8 @@ This is the remaining release gate for the tested `feat/jira-bidirectional` impl
 ## Observed state on 2026-11-12
 
 - Preview: `CLVTEST-1` Story imported and updated after review; `CLVTEST-2` Epic created by approved export; `CLVTEST-3` Bug imported after review. Webhook delivery, PO validation separation, conflict review, repeat import/export idempotence, and manual delivery recheck were observed. Details and remaining scenario checks are in [JIRA-STAGING-ACCEPTANCE.md](./JIRA-STAGING-ACCEPTANCE.md).
-- Vercel production project `productplaner` serves `https://nextgendepot.online`. Its earlier Atlassian integration is connected to `mylifecoachrebecca.atlassian.net` with `read:jira-work` and `offline_access` through `app_private.AtlassianOAuthConnection`. The new bidirectional integration uses separate `JiraConnection` records; production has none yet and has no `JIRA_*` settings. The existing read-only connection must be preserved during rollout. It does not grant the new writer/webhook scopes.
-- The production database already has the base Jira tables. Preview has five newer additive migrations that production lacks: `jira_delivery_mirror`, `jira_delivery_reconciliation`, `jira_create_attempt_guard`, `jira_export_field_baseline`, and `jira_delivery_freshness`.
+- Vercel production project `productplaner` serves `https://nextgendepot.online`. Its earlier Atlassian integration is connected to `mylifecoachrebecca.atlassian.net` with `read:jira-work` and `offline_access` through `app_private.AtlassianOAuthConnection`. The new bidirectional integration uses separate `JiraConnection` records; production has none yet. The existing read-only connection must be preserved during rollout. It does not grant the new writer/webhook scopes.
+- The production database already had the base Jira tables. After live staging checks, five additive migrations were applied to production on 2026-11-12: `jira_delivery_mirror`, `jira_delivery_reconciliation`, `jira_create_attempt_guard`, `jira_export_field_baseline`, and `jira_delivery_freshness`. The new columns and private reconciliation function were verified. The legacy read-only OAuth connection remained connected.
 
 ## Production OAuth app and Vercel settings
 
@@ -14,9 +14,9 @@ The user prefers to use the existing production Atlassian OAuth 2.0 (3LO) app. I
 
 `https://nextgendepot.online/api/integrations/jira/oauth/callback`
 
-The app must grant classic Jira scopes `read:jira-work`, `write:jira-work`, `read:jira-user`, and `manage:jira-webhook`. The authorization request also asks for `offline_access` to refresh tokens. The user who connects a Jira site must have appropriate access to the selected project.
+The app has the classic Jira scopes `read:jira-work`, `write:jira-work`, `read:jira-user`, and `manage:jira-webhook` configured. The authorization request also asks for `offline_access` to refresh tokens. The user who connects a Jira site must have appropriate access to the selected project.
 
-Set these on Vercel **Production** only. The implementation can explicitly reuse the existing server-side `ATLASSIAN_CLIENT_ID` and `ATLASSIAN_CLIENT_SECRET` pair, so no duplicate copy of that secret is needed:
+These values were added to Vercel **Production** and verified, but a deployment is needed before they take effect. The implementation explicitly reuses the existing server-side `ATLASSIAN_CLIENT_ID` and `ATLASSIAN_CLIENT_SECRET` pair, so no duplicate copy of that secret is needed:
 
 | Key | Value |
 | --- | --- |
@@ -30,9 +30,9 @@ Do not copy Preview's token-encryption key into Production. The same Atlassian a
 
 ## Release sequence
 
-1. Finish the remaining Preview recovery checks listed in staging acceptance, especially a missed webhook state change followed by reconciliation, and access interruption followed by reauthorization.
-2. Verify the production OAuth app's callback and scopes, and add the Production Vercel settings above. Keep the chosen production Jira project separate from `CLVTEST`.
-3. Review and apply the five additive `prisma/migrations/2026111101*` SQL files to the production database in order. Verify columns, job type constraint, and the private reconciliation function before deploying application code.
+1. Review the completed Preview evidence in staging acceptance. The remaining synthetic uncertain-create and duplicate/older-event scenarios are covered by automated tests, not live Jira fault injection.
+2. Verify the prepared production OAuth callback, scopes, and Vercel settings above. Keep the chosen production Jira project separate from `CLVTEST`.
+3. The five additive `prisma/migrations/2026111101*` SQL files have been applied to the production database in order. Verify the migration record as part of the final release audit.
 4. Merge the tested feature branch into the Vercel production branch, deploy, and check `/api/health`, `/api/ready`, worker readiness, and the Jira integration page.
 5. Connect the chosen production Jira site/project/initiative with a production account. Review issue type, status, priority, and story point mappings. Verify a controlled create, update, and status move with explicit approval, then check that PO validation did not change merely because Jira reached Done.
 6. Record the production deployment commit, migration versions, site/project mapping, issue keys, and smoke result. Roll back the deployment if the production checks fail; do not erase production Jira records as a rollback action.
