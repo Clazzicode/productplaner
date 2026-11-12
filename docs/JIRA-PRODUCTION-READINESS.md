@@ -1,6 +1,6 @@
 # Jira production release checklist
 
-This is the remaining release gate for the tested `feat/jira-bidirectional` implementation. The disposable `CLVTEST` connection and `Clarivia Staging` OAuth app stay in Preview.
+This records the release gate for the tested `feat/jira-bidirectional` implementation. The disposable `CLVTEST` project and its Clarivia connection stay in Preview. The Atlassian app named `Clarivia Staging` also backs the existing production read-only connection; the two flows use separate callbacks and tokens.
 
 ## Observed state on 2026-11-12
 
@@ -33,6 +33,6 @@ Do not copy Preview's token-encryption key into Production. The same Atlassian a
 1. Review the completed Preview evidence in staging acceptance. The remaining synthetic uncertain-create and duplicate/older-event scenarios are covered by automated tests, not live Jira fault injection.
 2. Verify the prepared production OAuth callback, scopes, and Vercel settings above. Keep the chosen production Jira project separate from `CLVTEST`.
 3. The five additive `prisma/migrations/2026111101*` SQL files have been applied to the production database in order. Verify the migration record as part of the final release audit.
-4. Merge the tested feature branch into the Vercel production branch, deploy, and check `/api/health`, `/api/ready`, worker readiness, and the Jira integration page.
-5. Connect the chosen production Jira site/project/initiative with a production account. Review issue type, status, priority, and story point mappings. Verify a controlled create, update, and status move with explicit approval, then check that PO validation did not change merely because Jira reached Done.
+4. The tested feature branch was fast-forwarded onto `feat/clarivia-ui-production-review` and commit `da3df56540a0ae19ab03b8c5f7bffacd2b01a055` was built as production deployment `dpl_6dPD5DqBZDgppCTP3dNiUAEt1W6P`. Vercel reported READY with both custom domains assigned. The live domain returned HTTP 200 for `/api/health` and `/api/ready`; readiness reported database, environment isolation, and workers ready, with the expected release commit. Worker observation coverage has not yet accumulated, so it should not be mistaken for a completed sustained worker check. The unauthenticated Jira integration page redirected to sign-in, as expected.
+5. Pending production account sign-in: connect an existing production Jira project to its intended Clarivia initiative. The earlier read-only Atlassian connection still exists, but the new `JiraConnection` table remains empty. The new flow needs its own write-scope OAuth consent and reviewed issue type, status, priority, and story point mappings. Then verify a controlled create, update, and status move with explicit approval, and check that PO validation did not change merely because Jira reached Done.
 6. Record the production deployment commit, migration versions, site/project mapping, issue keys, and smoke result. Roll back the deployment if the production checks fail; do not erase production Jira records as a rollback action.
