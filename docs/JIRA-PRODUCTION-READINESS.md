@@ -5,29 +5,28 @@ This is the remaining release gate for the tested `feat/jira-bidirectional` impl
 ## Observed state on 2026-11-12
 
 - Preview: `CLVTEST-1` Story imported and updated after review; `CLVTEST-2` Epic created by approved export; `CLVTEST-3` Bug imported after review. Webhook delivery, PO validation separation, conflict review, repeat import/export idempotence, and manual delivery recheck were observed. Details and remaining scenario checks are in [JIRA-STAGING-ACCEPTANCE.md](./JIRA-STAGING-ACCEPTANCE.md).
-- Vercel production project `productplaner` serves `https://nextgendepot.online`. It has legacy `ATLASSIAN_*` settings, but none of this integration's `JIRA_*` settings. The legacy settings are not a substitute for a verified production Jira OAuth app.
+- Vercel production project `productplaner` serves `https://nextgendepot.online`. Its earlier Atlassian integration is connected to `mylifecoachrebecca.atlassian.net` with `read:jira-work` and `offline_access` through `app_private.AtlassianOAuthConnection`. The new bidirectional integration uses separate `JiraConnection` records; production has none yet and has no `JIRA_*` settings. The existing read-only connection must be preserved during rollout. It does not grant the new writer/webhook scopes.
 - The production database already has the base Jira tables. Preview has five newer additive migrations that production lacks: `jira_delivery_mirror`, `jira_delivery_reconciliation`, `jira_create_attempt_guard`, `jira_export_field_baseline`, and `jira_delivery_freshness`.
 
 ## Production OAuth app and Vercel settings
 
-Use a dedicated production Atlassian OAuth 2.0 (3LO) app, or first verify that an existing production app is dedicated to this deployment and has the same permissions. Its callback must include exactly:
+The user prefers to use the existing production Atlassian OAuth 2.0 (3LO) app. Its production `ATLASSIAN_CLIENT_ID` matches the app named `Clarivia Staging` in the current developer console. That app already has the four required classic Jira scopes. The new callback was registered and verified after reload without removing the earlier `/api/atlassian/oauth/callback` callback. The new callback is:
 
 `https://nextgendepot.online/api/integrations/jira/oauth/callback`
 
 The app must grant classic Jira scopes `read:jira-work`, `write:jira-work`, `read:jira-user`, and `manage:jira-webhook`. The authorization request also asks for `offline_access` to refresh tokens. The user who connects a Jira site must have appropriate access to the selected project.
 
-Set these on Vercel **Production** only, as Secret values except the nonsecret URL and flag:
+Set these on Vercel **Production** only. The implementation can explicitly reuse the existing server-side `ATLASSIAN_CLIENT_ID` and `ATLASSIAN_CLIENT_SECRET` pair, so no duplicate copy of that secret is needed:
 
 | Key | Value |
 | --- | --- |
-| `JIRA_CLIENT_ID` | Production Atlassian app OAuth client ID |
-| `JIRA_CLIENT_SECRET` | Production Atlassian app OAuth client secret |
+| `JIRA_USE_EXISTING_ATLASSIAN_APP` | `true`; permits reuse of the existing production app credentials only when no dedicated `JIRA_CLIENT_ID`/`JIRA_CLIENT_SECRET` pair exists |
 | `JIRA_REDIRECT_URI` | `https://nextgendepot.online/api/integrations/jira/oauth/callback` |
 | `JIRA_WEBHOOK_BASE_URL` | `https://nextgendepot.online` |
 | `JIRA_TOKEN_ENCRYPTION_KEY` | A new random 32-byte key encoded as 64 hex characters or base64; keep stable after connections are created |
 | `JIRA_WRITE_ENABLED` | `true` after the app scopes and migration are verified; otherwise omit it during read-only setup |
 
-Do not copy Preview's OAuth secret or token-encryption key into Production. Redeploy after changing Vercel environment variables.
+Do not copy Preview's token-encryption key into Production. The same Atlassian app currently serves the earlier production read-only connection and the Preview test, but each flow has its own exact callback and stored tokens. Redeploy after changing Vercel environment variables. The previous read-only connection stays available until the new connection has passed its own consent and mapping checks.
 
 ## Release sequence
 

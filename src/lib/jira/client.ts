@@ -42,8 +42,12 @@ function assertJiraWritesEnabled() {
 }
 
 function config() {
-  const clientId = process.env.JIRA_CLIENT_ID?.trim();
-  const clientSecret = process.env.JIRA_CLIENT_SECRET?.trim();
+  const useExistingApp = process.env.JIRA_USE_EXISTING_ATLASSIAN_APP === "true";
+  const dedicatedId = process.env.JIRA_CLIENT_ID?.trim();
+  const dedicatedSecret = process.env.JIRA_CLIENT_SECRET?.trim();
+  if (Boolean(dedicatedId) !== Boolean(dedicatedSecret)) throw new Error("Jira OAuth client ID and secret must be configured together.");
+  const clientId = dedicatedId || (useExistingApp ? process.env.ATLASSIAN_CLIENT_ID?.trim() : undefined);
+  const clientSecret = dedicatedSecret || (useExistingApp ? process.env.ATLASSIAN_CLIENT_SECRET?.trim() : undefined);
   const redirectUri = process.env.JIRA_REDIRECT_URI?.trim();
   if (!clientId || !clientSecret || !redirectUri) throw new Error("Jira OAuth is not configured.");
   return { clientId, clientSecret, redirectUri };
