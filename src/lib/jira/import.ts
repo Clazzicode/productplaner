@@ -207,7 +207,9 @@ async function epicForCapability(initiativeId: string, capabilityId: string, tit
   const prototype = await db.prototype.findUnique({ where: { initiativeId } });
   if (!prototype) throw new BusinessError("Start the planning workspace before importing Jira stories.", 422);
   if (prototype.approvedAt) throw new BusinessError("Reopen the approved plan before importing Jira stories.", 409);
-  const feature = await ensureFeatureProjection(initiativeId, capabilityId, "jira");
+  // The feature projection represents a local capability, not a Jira issue.
+  // A sourceType of "jira" requires an externalRef on ArtifactLayer.
+  const feature = await ensureFeatureProjection(initiativeId, capabilityId, "generated");
   let epic = await db.artifactLayer.findFirst({ where: { parentId: feature.id, type: "epic", archivedAt: null } });
   // This is a Clarivia grouping container, not a Jira issue. Only artifacts
   // with a real Jira key may use sourceType "jira" (database constraint).
