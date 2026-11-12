@@ -23,8 +23,9 @@ Clarivia owns product requirements, roadmap placement, risk and decisions, and P
 - The workspace header now displays the real connected Jira Cloud project `CLVTEST` rather than the legacy demo badge.
 - Clarivia's imported story title was edited and explicitly approved for export. The frozen request contained only summary and description, and explicitly omitted Jira status, priority, assignee, labels, sprint/release, deletion, project move, and issue type. The export job completed successfully; Jira showed the new title on `CLVTEST-1` while its status remained Done.
 - After the next title edits diverged in both Clarivia and Jira, inbound and outbound previews each showed a conflict and disabled selection. Explicit `keep_planning` decisions with a reason resolved both records. A fresh export preview changed from conflict to one eligible update, which was approved and completed successfully. No automatic overwrite occurred before review.
+- A manual **Recheck Jira delivery** control was deployed at `f64bf50`. In the CLVTEST workspace it queued a `delivery_reconcile` job, which completed on its first attempt at 06:38:46 UTC with no error. Both linked issues were checked at about 06:38:44 UTC: `CLVTEST-1` remained Done and `CLVTEST-2` remained To Do. The browser showed `delivery_read_complete` and a completed recovery job. This verifies the manual read and stored freshness path; a missed-webhook state change still needs a separate live test.
 
-Production release remains gated on remaining conflict/recovery scenarios, the full test/build gate, production configuration and migration, and production smoke verification.
+Production release remains gated on remaining recovery scenarios, production OAuth configuration, the five additive production database migrations, and production smoke verification.
 
 ## Acceptance sequence using disposable Jira work
 
@@ -41,4 +42,4 @@ Production release remains gated on remaining conflict/recovery scenarios, the f
 
 ## Current release gate
 
-The Preview OAuth client, callback, CLVTEST mapping, inbound import, approved outbound create/update, live webhook delivery, PO validation separation, and conflict review have been verified. The full test suite passed (1,068 tests), typecheck passed, and a Webpack production build passed; local Turbopack failed to launch a child process in the sandbox. Remaining live missed-event/reconnection recovery checks and production configuration are still required. Production promotion follows the acceptance sequence above.
+The Preview OAuth client, callback, CLVTEST mapping, inbound import, approved outbound create/update, live webhook delivery, PO validation separation, conflict review, and manual delivery read have been verified. The full test suite passed (1,068 tests), typecheck passed, and a Webpack production build passed; local Turbopack failed to launch a child process in the sandbox. Remaining live missed-event/reconnection recovery checks and production configuration are still required. Vercel production has legacy `ATLASSIAN_*` variables but no `JIRA_*` variables for this implementation. The production database has the base Jira tables but lacks the five additive migrations listed above. Production promotion follows the acceptance sequence above.
