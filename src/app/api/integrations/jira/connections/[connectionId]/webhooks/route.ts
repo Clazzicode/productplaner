@@ -5,7 +5,7 @@ import { BusinessError } from "@/lib/businessError";
 import { establishAuthContext } from "@/lib/db";
 import { jiraWebhookCommandSchema } from "@/lib/jira/model";
 import { jiraConnectionForUser } from "@/lib/jira/routeAccess";
-import { registerWebhook, renewWebhook } from "@/lib/jira/webhooks";
+import { disableWebhook, registerWebhook, renewWebhook } from "@/lib/jira/webhooks";
 
 async function handler(request: Request, { params }: { params: Promise<{ connectionId: string }> }) {
   const auth = await requireCurrentUserApi(); if (!auth.ok) return auth.response; establishAuthContext(auth.user.authUserId);
@@ -15,3 +15,11 @@ async function handler(request: Request, { params }: { params: Promise<{ connect
   catch (error) { return error instanceof BusinessError ? jsonError(error.message, error.status) : jsonError(error instanceof Error ? error.message : "Could not configure the Jira webhook.", 400); }
 }
 export const POST = withAuthenticatedApi(handler);
+
+async function disableHandler(_request: Request, { params }: { params: Promise<{ connectionId: string }> }) {
+  const auth = await requireCurrentUserApi(); if (!auth.ok) return auth.response; establishAuthContext(auth.user.authUserId);
+  const { connectionId } = await params; const access = await jiraConnectionForUser(auth.user, connectionId); if (!access.ok) return access.response;
+  try { return Response.json({ subscription: await disableWebhook(connectionId) }); }
+  catch (error) { return error instanceof BusinessError ? jsonError(error.message, error.status) : jsonError(error instanceof Error ? error.message : "Could not disable the Jira webhook.", 400); }
+}
+export const DELETE = withAuthenticatedApi(disableHandler);

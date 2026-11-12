@@ -34,12 +34,12 @@ export async function registerWebhook(connectionId: string) {
   if (!connection.initiativeId || !connection.cloudId || !connection.projectKey) throw new BusinessError("Finish the Jira connection before enabling webhooks.", 422);
   if (!connection.scopes.split(/\s+/).includes("manage:jira-webhook")) throw new BusinessError("Reconnect Jira and grant webhook management access.", 422);
   const secret = randomBytes(32).toString("base64url");
-  const previous = await db.jiraWebhookSubscription.findUnique({ where: { connectionId }, select: { externalId: true } });
+  const previous = await db.jiraWebhookSubscription.findUnique({ where: { connectionId }, select: { externalId: true, status: true } });
   const callbackUrl = jiraWebhookCallbackUrl(connection.id, secret);
   // Jira permits one callback URL per app. Remove the old registration before
   // replacing its URL; this can leave the subscription needing re-registration
   // if Jira rejects the new URL, so record that state first.
-  if (previous) {
+  if (previous && previous.status !== "disabled") {
     await db.jiraWebhookSubscription.update({ where: { connectionId }, data: { status: "renewal_required" } });
     await deleteJiraWebhooks({ cloudId: connection.cloudId, accessToken, webhookIds: [previous.externalId] });
   }
@@ -62,6 +62,20 @@ export async function renewWebhook(connectionId: string) {
   const saved = await db.jiraWebhookSubscription.update({ where: { id: subscription.id }, data: { expiresAt: result.expiresAt, lastRenewedAt: new Date(), status: "active" } });
   await db.jiraSyncJob.upsert({ where: { idempotencyKey: jiraHash(`renew:${saved.id}:${saved.expiresAt.toISOString()}`) }, create: { organizationId: connection.organizationId, initiativeId: connection.initiativeId, connectionId: connection.id, jobType: "renew_webhook", payload: { subscriptionId: saved.id }, idempotencyKey: jiraHash(`renew:${saved.id}:${saved.expiresAt.toISOString()}`), availableAt: new Date(saved.expiresAt.getTime() - 7 * 24 * 60 * 60 * 1000) }, update: {} });
   await auditInitiative(connection.initiativeId, "jira.webhook_renewed", { jiraWebhookSubscriptionId: saved.id, expiresAt: saved.expiresAt.toISOString() });
+  return saved;
+}
+
+export async function disableWebhook(connectionId: string) {
+  const subscription = await db.jiraWebhookSubscription.findUnique({ where: { connectionId } });
+  if (!subscription || subscription.status === "disabled") throw new BusinessError("No active Jira webhook is registered for this connection.", 404);
+  const { connection, accessToken } = await accessTokenFor(connectionId);
+  if (!connection.cloudId || !connection.initiativeId) throw new BusinessError("The Jira connection is incomplete.", 422);
+  // Delete the remote callback before marking the local subscription disabled.
+  // This preserves a retry path if Atlassian rejects the deletion.
+  await deleteJiraWebhooks({ cloudId: connection.cloudId, accessToken, webhookIds: [subscription.externalId] });
+  const saved = await db.jiraWebhookSubscription.update({ where: { id: subscription.id }, data: { status: "disabled" } });
+  await db.jiraSyncJob.updateMany({ where: { connectionId, jobType: "renew_webhook", status: "queued" }, data: { status: "cancelled", lastError: "Webhook disabled by an administrator." } });
+  await auditInitiative(connection.initiativeId, "jira.webhook_disabled", { jiraConnectionId: connectionId, jiraWebhookSubscriptionId: saved.id });
   return saved;
 }
 
