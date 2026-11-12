@@ -49,10 +49,24 @@ export async function completeJiraOAuth(input: { state: string; code: string; us
     const consumed = await db.jiraOAuthState.updateMany({ where: { id: pending.id, consumedAt: null, expiresAt: { gt: new Date() } }, data: { consumedAt: new Date() } });
     if (consumed.count !== 1) throw new BusinessError("This Jira authorization request was already used.", 409);
     const oldConnections = await db.jiraConnection.findMany({ where: { organizationId: input.organizationId, initiativeId: pending.initiativeId, status: { not: "revoked" } } });
-    await db.jiraConnection.updateMany({ where: { id: { in: oldConnections.map((row) => row.id) } }, data: { status: "revoked", revision: { increment: 1 } } });
-    const saved = await db.jiraConnection.create({ data: { organizationId: input.organizationId, initiativeId: pending.initiativeId, configuredByUserId: input.userId, ...encryptedTokens(tokens), accessibleResources: resources as unknown as Prisma.InputJsonValue, status: resources.length === 1 ? "project_selection_required" : "site_selection_required", ...(resources.length === 1 ? { cloudId: resources[0].id, siteUrl: resources[0].url, siteName: resources[0].name } : {}) } });
+    if (oldConnections.length > 1) throw new BusinessError("Multiple active Jira connections need administrator review before reconnecting.", 409);
+    const prior = oldConnections[0];
+    const selected = prior?.cloudId ? resources.find((resource) => resource.id === prior.cloudId) : resources.length === 1 ? resources[0] : null;
+    if (prior?.cloudId && !selected) throw new BusinessError("Authorize the same Jira site to preserve its linked planning records, or disconnect it before selecting another site.", 422);
+    const saved = prior
+      ? await db.jiraConnection.update({ where: { id: prior.id }, data: {
+        configuredByUserId: input.userId,
+        ...encryptedTokens(tokens),
+        accessibleResources: resources as unknown as Prisma.InputJsonValue,
+        cloudId: selected?.id ?? null,
+        siteUrl: selected?.url ?? null,
+        siteName: selected?.name ?? null,
+        status: selected ? prior.projectKey ? "connected" : "project_selection_required" : "site_selection_required",
+        revision: { increment: 1 },
+      } })
+      : await db.jiraConnection.create({ data: { organizationId: input.organizationId, initiativeId: pending.initiativeId, configuredByUserId: input.userId, ...encryptedTokens(tokens), accessibleResources: resources as unknown as Prisma.InputJsonValue, status: resources.length === 1 ? "project_selection_required" : "site_selection_required", ...(resources.length === 1 ? { cloudId: resources[0].id, siteUrl: resources[0].url, siteName: resources[0].name } : {}) } });
     await mirrorHubConnection(saved);
-    await auditOrganization({ organizationId: input.organizationId, actorUserId: input.userId, entityType: "jira_connection", entityId: saved.id, action: "jira.oauth_connected", metadata: { initiativeId: saved.initiativeId, availableSiteCount: resources.length } });
+    await auditOrganization({ organizationId: input.organizationId, actorUserId: input.userId, entityType: "jira_connection", entityId: saved.id, action: prior ? "jira.oauth_reauthorized" : "jira.oauth_connected", metadata: { initiativeId: saved.initiativeId, availableSiteCount: resources.length } });
     return { connection: saved, returnPath: pending.returnPath };
   });
 }
