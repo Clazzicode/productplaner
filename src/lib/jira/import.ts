@@ -209,7 +209,9 @@ async function epicForCapability(initiativeId: string, capabilityId: string, tit
   if (prototype.approvedAt) throw new BusinessError("Reopen the approved plan before importing Jira stories.", 409);
   const feature = await ensureFeatureProjection(initiativeId, capabilityId, "jira");
   let epic = await db.artifactLayer.findFirst({ where: { parentId: feature.id, type: "epic", archivedAt: null } });
-  if (!epic) epic = await db.artifactLayer.create({ data: { prototypeId: prototype.id, type: "epic", parentId: feature.id, title: `${title} delivery`, sourceCapabilityId: capabilityId, sourceType: "jira", dedupeKey: `jira-epic:${capabilityId}` } });
+  // This is a Clarivia grouping container, not a Jira issue. Only artifacts
+  // with a real Jira key may use sourceType "jira" (database constraint).
+  if (!epic) epic = await db.artifactLayer.create({ data: { prototypeId: prototype.id, type: "epic", parentId: feature.id, title: `${title} delivery`, sourceCapabilityId: capabilityId, sourceType: "generated", dedupeKey: `jira-epic:${capabilityId}` } });
   return epic;
 }
 
