@@ -21,6 +21,12 @@ type PreviewItem = {
   conflictReason: string | null; selected: boolean; reviewSnapshot: Prisma.InputJsonValue;
 };
 
+/** Parent features must exist before their Jira stories are linked. */
+export function orderImportItems<T extends { targetType: string; externalKey: string }>(items: T[]): T[] {
+  const rank = (type: string) => type === "feature" ? 0 : type === "story" ? 1 : 2;
+  return [...items].sort((a, b) => rank(a.targetType) - rank(b.targetType) || a.externalKey.localeCompare(b.externalKey));
+}
+
 export function plainText(value: unknown): string {
   if (typeof value === "string") return value;
   if (Array.isArray(value)) return value.map(plainText).filter(Boolean).join("\n");
@@ -321,11 +327,11 @@ export async function applyJiraImport(runId: string, selectedItemIds: string[], 
     }
     const changed = await db.jiraImportRun.updateMany({ where: { id: run.id, status: "previewed" }, data: { status: "applying" } });
     if (changed.count !== 1) throw new BusinessError("This Jira import preview changed. Reload and try again.", 409);
-    for (const item of selected) await applyItem(item, run, actorUserId, connection);
+    for (const item of orderImportItems(selected)) await applyItem(item, run, actorUserId, connection);
     await db.jiraImportItem.updateMany({ where: { importRunId: run.id, status: "previewed" }, data: { status: "skipped", selected: false } });
     await db.jiraImportRun.update({ where: { id: run.id }, data: { status: "applied", appliedByUserId: actorUserId, appliedAt: new Date() } });
     await db.jiraConnection.update({ where: { id: run.connectionId }, data: { lastImportedAt: new Date(), lastSyncAt: new Date(), lastSyncStatus: "applied" } });
     await auditInitiative(run.initiativeId, "jira.import_applied", { jiraImportRunId: run.id, jiraConnectionId: run.connectionId, workspaceId: run.organizationId, source: "jira", selectedItemIds, importedCount: selected.length, reason });
     return loadJiraImport(run.id);
-  }, { timeout: 30_000 });
+  }, { timeout: 120_000 });
 }
