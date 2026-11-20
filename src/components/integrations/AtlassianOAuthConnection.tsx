@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import { apiFetch } from "@/lib/clientApi";
 
 type Connection = {
@@ -133,6 +134,8 @@ export default function AtlassianOAuthConnection(props: { canManage: boolean }) 
             Permissions: {connection.grantedScopes.join(", ") || "not reported"}. Access token expires {new Date(connection.accessTokenExpiresAt).toLocaleString()}.
           </p>
           <p className="text-xs text-text-secondary">Connected {new Date(connection.connectedAt).toLocaleString()}.</p>
+          <p className="text-text-secondary">Connection grants access to Jira; it does not import issues. To show Jira work in Clarivia, choose an initiative and Jira project, review the import preview, and approve the items to bring in.</p>
+          <Link href="/integrations/jira" className="inline-block font-semibold text-indigo-700 hover:underline">Set up Jira import →</Link>
         </div>
       )}
 

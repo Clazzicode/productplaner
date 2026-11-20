@@ -52,6 +52,7 @@ export default function BacklogWorkspace({ initiativeId, initialFeatures, initia
     (priority === all || item.priorityLabel === priority) &&
     (lane === all || item.roadmapLane === lane)
   ), [items, search, showArchived, workType, readiness, ownerId, status, priority, lane]);
+  const importedStoryCount = items.filter(item => item.recordType === "story" && item.source === "jira" && !item.archived).length;
 
   useEffect(() => {
     if (!editing || editing === "new" || demo) return;
@@ -193,6 +194,7 @@ export default function BacklogWorkspace({ initiativeId, initialFeatures, initia
       <h2 className="font-semibold">Feature change history</h2>
       {history.length ? <ol className="mt-3 space-y-3">{history.map(item => <li key={item.id} className="border-l-2 border-indigo-200 pl-3 text-sm"><p className="font-medium">{item.reason || item.action}</p><p className="text-slate-500">{new Date(item.createdAt).toLocaleString()} · {item.actor?.name ?? "System"} · revision {item.revision}</p><p className="text-xs text-slate-500">Changed: {Object.keys(item.changes).join(", ") || "record created"}</p></li>)}</ol> : <p className="mt-2 text-sm text-slate-500">No saved changes yet.</p>}
     </section>}
+    {view === "features" && importedStoryCount > 0 && <p className="rounded-xl border border-indigo-100 bg-indigo-50 p-3 text-sm text-indigo-950">{importedStoryCount} imported Jira {importedStoryCount === 1 ? "task or story is" : "tasks or stories are"} in <button type="button" className="font-semibold underline" onClick={() => setView("backlog")}>Unified backlog</button>. Jira epics mapped as features appear here after their import is approved.</p>}
     {view === "features" && <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{visibleFeatures.map(feature => card(feature))}</div>}
     {view === "backlog" && visibleItems.length > 0 && <div className="grid min-w-0 gap-3 lg:hidden">{visibleItems.map(item => {
       const key = selectedKey(item);
