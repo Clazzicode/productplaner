@@ -45,7 +45,9 @@ export default function JiraIntegrationManager(props: { initiatives: { id: strin
   const activeImportJob = props.syncJobs.find((row) => row.connectionId === active?.id && row.jobType === "import_preview" && ["queued", "processing"].includes(row.status));
   useEffect(() => {
     if (!activeImportJob) return;
-    const timer = window.setInterval(() => router.refresh(), 5000);
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === "visible") router.refresh();
+    }, 15_000);
     return () => window.clearInterval(timer);
   }, [activeImportJob, router]);
   const [projects, setProjects] = useState<Project[]>([]); const [projectId, setProjectId] = useState(active?.projectId ?? "");

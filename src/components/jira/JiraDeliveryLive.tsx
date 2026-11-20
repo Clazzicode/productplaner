@@ -1,7 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 
 type Item = {
@@ -14,33 +13,34 @@ type Connection = { id: string; projectKey: string | null; status: string; lastS
 type Payload = { items: Item[]; connections: Connection[] };
 
 export default function JiraDeliveryLive({ initiativeId, target }: { initiativeId: string; target?: { type: string; id: string } }) {
-  const router = useRouter();
   const [data, setData] = useState<Payload | null>(null);
   const [error, setError] = useState(false);
-  const prior = useRef<string | null>(null);
+  const [observedAt, setObservedAt] = useState(0);
   useEffect(() => {
     let disposed = false;
+    let inFlight = false;
     async function load() {
-      if (document.visibilityState === "hidden") return;
+      if (disposed || inFlight || document.visibilityState === "hidden") return;
+      inFlight = true;
       try {
         const response = await fetch(`/api/initiatives/${encodeURIComponent(initiativeId)}/jira-delivery`, { cache: "no-store" });
         if (!response.ok) throw new Error("Jira delivery read failed");
         const next = await response.json() as Payload;
         if (disposed) return;
-        const signature = JSON.stringify(next.items.map(item => [item.externalIssueId, item.revision]).sort((a, b) => String(a[0]).localeCompare(String(b[0]))));
-        if (prior.current !== null && prior.current !== signature) router.refresh();
-        prior.current = signature;
         setData(next);
+        setObservedAt(Date.now());
         setError(false);
       } catch {
         if (!disposed) setError(true);
+      } finally {
+        inFlight = false;
       }
     }
     void load();
-    const interval = window.setInterval(() => void load(), 5_000);
+    const timer = window.setInterval(() => void load(), 30_000);
     document.addEventListener("visibilitychange", load);
-    return () => { disposed = true; window.clearInterval(interval); document.removeEventListener("visibilitychange", load); };
-  }, [initiativeId, router]);
+    return () => { disposed = true; window.clearInterval(timer); document.removeEventListener("visibilitychange", load); };
+  }, [initiativeId]);
 
   const items = data?.items.filter(item => !target || item.targetType === target.type && item.targetId === target.id) ?? [];
   const connected = data?.connections.some(connection => connection.status === "connected") ?? false;
@@ -49,7 +49,7 @@ export default function JiraDeliveryLive({ initiativeId, target }: { initiativeI
   const counts = { inProgress: items.filter(item => item.deliveryMappedStatus === "in_progress").length, done: items.filter(item => item.deliveryMappedStatus === "done").length, blocked: items.filter(item => item.deliveryMappedStatus === "blocked").length };
   const awaitingPoValidation = items.filter(item => item.targetType === "story" && item.deliveryMappedStatus === "done" && item.poValidationStatus !== "accepted").length;
   const localHref = (item: Item) => `/initiatives/${encodeURIComponent(initiativeId)}/workspace/${item.targetType === "feature" ? "features" : item.targetType === "bug" ? "bugs" : "stories"}/${encodeURIComponent(item.targetId)}`;
-  const stale = items.some(item => item.connectionStatus !== "connected" || !item.checkedAt || Date.now() - new Date(item.checkedAt).getTime() > 15 * 60_000)
+  const stale = items.some(item => item.connectionStatus !== "connected" || !item.checkedAt || observedAt - new Date(item.checkedAt).getTime() > 15 * 60_000)
     || data.connections.some(connection => connection.lastSyncStatus === "read_failed" || connection.status === "reauthorization_required");
   return <section aria-label="Jira delivery status" className="rounded-lg border border-sky-200 bg-sky-50 p-3 text-sm">
     <div className="flex flex-wrap items-center justify-between gap-2"><strong>Jira delivery</strong><span className="text-xs text-slate-600">{connected ? "Connected" : "Connection needs attention"}{error ? " · Refresh failed" : ""}</span></div>
