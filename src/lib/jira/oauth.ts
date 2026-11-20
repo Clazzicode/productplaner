@@ -5,6 +5,7 @@ import { BusinessError } from "@/lib/businessError";
 import { db, withTransaction } from "@/lib/db";
 import { accessibleJiraResources, decryptedTokens, encryptedTokens, exchangeJiraCode, getJiraProjectMetadata, jiraAuthorizationUrl, listJiraProjects, refreshJiraTokens, type JiraProject, type JiraProjectMetadata, type JiraResource } from "./client";
 import { encryptJiraSecret, jiraHash } from "./crypto";
+import { getAtlassianAccessToken } from "@/lib/atlassian/credentials";
 import type { JiraProjectInput } from "./model";
 
 const STATE_LIFETIME_MS = 10 * 60 * 1000;
@@ -74,6 +75,10 @@ export async function completeJiraOAuth(input: { state: string; code: string; us
 export async function accessTokenFor(connectionId: string) {
   const current = await db.jiraConnection.findUnique({ where: { id: connectionId } });
   if (!current || current.status === "revoked") throw new BusinessError("Jira connection not found.", 404);
+  if (current.accessTokenCiphertext === `vault-reference:${current.organizationId}`
+    && current.refreshTokenCiphertext === `vault-reference:${current.organizationId}`) {
+    return { connection: current, accessToken: await getAtlassianAccessToken(current.organizationId) };
+  }
   if (current.tokenExpiresAt.getTime() > Date.now() + 60_000) {
     return { connection: current, accessToken: decryptedTokens(current).accessToken };
   }
