@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { apiFetch } from "@/lib/clientApi";
 import JiraFieldReview from "./JiraFieldReview";
@@ -70,7 +71,6 @@ export default function JiraIntegrationManager(props: { initiatives: { id: strin
 
   const act = async <T,>(key: string, action: () => Promise<{ ok: boolean; data?: T; error?: string }>, success: string) => { setBusy(key); setError(null); setMessage(null); const result = await action(); setBusy(null); if (!result.ok) { setError(result.error ?? "The Jira action failed."); return result; } setMessage(success); router.refresh(); return result; };
 
-  const connect = async () => { const result = await act<{ authorizationUrl: string }>("connect", () => apiFetch("/api/integrations/jira/oauth/start", { method: "POST", body: { initiativeId: initiativeId || null } }), "Opening Atlassian authorization…"); if (result?.ok && result.data?.authorizationUrl) window.location.assign(result.data.authorizationUrl); };
   const useConnectedGrant = async () => {
     if (!initiativeId) { setError("Choose a planning initiative first."); return; }
     setBusy("grant"); setError(null);
@@ -103,9 +103,8 @@ export default function JiraIntegrationManager(props: { initiatives: { id: strin
     {error && <p className="rounded-lg bg-red-50 p-3 text-sm text-red-800">{error}</p>}
     <JiraOwnershipContract />
     <section className={panel}>
-      <h2 className="font-semibold">1. Authorize Jira Cloud</h2><p className="mt-1 text-sm text-neutral-500">Atlassian OAuth grants Jira access for this connection. Clarivia never asks for or stores an Atlassian password.</p>
-      <div className="mt-4 flex flex-wrap items-end gap-3"><label className="min-w-0 basis-full flex-1 text-sm font-medium sm:basis-64">Planning initiative<select className={input} value={initiativeId} onChange={(event) => setInitiativeId(event.target.value)}><option value="">Organization-wide configuration</option>{props.initiatives.map((initiative) => <option key={initiative.id} value={initiative.id}>{initiative.name}</option>)}</select></label><ButtonLoader variant="primary" loading={busy === "connect"} loadingLabel="Starting OAuth" disabled={!props.canManage} onClick={connect}>{active ? "Reconnect with Atlassian" : "Connect with Atlassian"}</ButtonLoader></div>
-      {!active && <div className="mt-3"><p className="text-sm text-neutral-600">Already connected Atlassian on the Integrations page? Use that access for the selected initiative without authorizing again.</p><ButtonLoader className="mt-2" variant="secondary" loading={busy === "grant"} loadingLabel="Preparing Jira import" disabled={!props.canManage || !initiativeId} onClick={useConnectedGrant}>Use connected Atlassian access</ButtonLoader></div>}
+      <h2 className="font-semibold">1. Use read-only Atlassian access</h2><p className="mt-1 text-sm text-neutral-500">Choose the initiative that will receive imported Jira work. Connect or renew read-only access on the <Link href="/integrations" className="font-semibold text-indigo-700 underline">Integrations page</Link>.</p>
+      <div className="mt-4 flex flex-wrap items-end gap-3"><label className="min-w-0 basis-full flex-1 text-sm font-medium sm:basis-64">Planning initiative<select className={input} value={initiativeId} onChange={(event) => setInitiativeId(event.target.value)}><option value="">Choose an initiative</option>{props.initiatives.map((initiative) => <option key={initiative.id} value={initiative.id}>{initiative.name}</option>)}</select></label>{!active && <ButtonLoader variant="primary" loading={busy === "grant"} loadingLabel="Preparing Jira import" disabled={!props.canManage || !initiativeId} onClick={useConnectedGrant}>Use connected Atlassian access</ButtonLoader>}</div>
       {props.connections.length > 0 && <div className="mt-4 flex items-end gap-3"><label className="block flex-1 text-sm font-medium">Connection<select className={input} value={active?.id ?? ""} onChange={(event) => { const connection = props.connections.find((row) => row.id === event.target.value); setInitiativeId(connection?.initiativeId ?? ""); setProjects([]); setProjectId(""); setMetadata(null); router.replace(`/integrations/jira?connectionId=${encodeURIComponent(event.target.value)}`); }}>{props.connections.map((connection) => <option key={connection.id} value={connection.id}>{connection.siteName ?? "Jira connection"} — {connection.projectKey ?? connection.status}</option>)}</select></label><ButtonLoader variant="secondary" loading={busy === "disconnect"} loadingLabel="Disconnecting" disabled={!props.canManage || !active} onClick={disconnect}>Disconnect Jira</ButtonLoader></div>}
       {active && <p className="mt-3 text-sm text-neutral-600">Current connection: {props.initiatives.find((initiative) => initiative.id === active.initiativeId)?.name ?? "Organization-wide"} / {active.projectKey ?? "no project selected"}. To choose another Jira project, use <a href="#jira-project-setup" className="font-semibold text-indigo-700 underline">Select site and project below</a>.</p>}
     </section>
