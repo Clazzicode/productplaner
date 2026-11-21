@@ -8,7 +8,7 @@ import { pageNavigation } from "./navigationRoutes";
 import { historySnapshot, serverHistorySnapshot, subscribeHistory } from "./navigationHistory";
 import { confirmPageNavigation, useNavigationGuard } from "./unsavedChanges";
 
-const sections = [["/home", "Home"], ["/projects", "Projects"], ["/initiatives", "Initiatives"], ["/teams", "Teams & Stakeholders"], ["/integrations", "Integrations"], ["/activity", "Activity"], ["/account/settings", "Account settings"]];
+const sections = [["/home", "Home"], ["/projects", "Products"], ["/initiatives", "Features"], ["/teams", "Teams & Stakeholders"], ["/integrations", "Integrations"], ["/activity", "Activity"], ["/account/settings", "Account settings"]];
 
 export default function PageNavigation({ initiatives, canManageWorkspace, signedIn }: { initiatives: NavInitiative[]; canManageWorkspace: boolean; signedIn: boolean }) {
   const path = usePathname() ?? "/home";

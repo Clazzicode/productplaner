@@ -6,7 +6,7 @@ import SectionProgress, { QUESTIONNAIRE_SECTIONS } from "./SectionProgress";
 import { assessRoadmapReadiness, type RoadmapReadinessInput } from "@/lib/questionnaire/roadmapReadiness";
 
 const SECTION_DETAILS = [
-  { title: "Product direction", why: "Keeps every recommendation tied to a real customer problem.", asks: ["Initiative name", "Problem statement", "Primary user or customer", "Supporting documents and known context"], output: "A shared product narrative and persona context" },
+  { title: "Product direction", why: "Keeps every recommendation tied to a real customer problem.", asks: ["Feature name", "Problem statement", "Primary user or customer", "Supporting documents and known context"], output: "A shared product narrative and persona context" },
   { title: "Outcomes & constraints", why: "Makes the roadmap accountable to results and real-world limits.", asks: ["Desired outcome", "Success metric", "Target date", "Budget guardrail"], output: "Measurable goals and planning constraints" },
   { title: "Scope & priorities", why: "Turns ideas into sequenced work instead of an unranked wish list.", asks: ["Feature descriptions", "MVP versus later", "Business value", "Effort, risk, and dependencies"], output: "Prioritized features ready for decomposition" },
   { title: "Delivery capacity", why: "Prevents dates and costs from being based on imaginary capacity.", asks: ["Team size", "Sprint or flow assumptions", "Utilization and buffer", "Historical velocity and hourly rate"], output: "Capacity, cost, and forecast assumptions" },

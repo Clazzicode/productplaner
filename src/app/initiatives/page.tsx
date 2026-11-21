@@ -54,14 +54,14 @@ async function InitiativesPage() {
     <ContainedLayout>
       <PageHeader
         eyebrow="Clarivia"
-        title="Your initiatives"
+        title="Your features"
         description="Plan structural status at a glance. Live plan-health against delivery actuals arrives with the v1.1 living-plan release."
         primaryAction={canCreate ? (
           <Link
             href="/initiatives/new"
             className="rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700"
           >
-            + New initiative
+            + New feature
           </Link>
         ) : undefined}
       />
@@ -69,9 +69,9 @@ async function InitiativesPage() {
 
       {initiatives.length === 0 ? (
         <div className="mt-12 rounded-2xl border border-dashed border-neutral-300 bg-white p-12 text-center">
-          <h2 className="text-lg font-semibold">No initiatives yet</h2>
+          <h2 className="text-lg font-semibold">No features yet</h2>
           <p className="mx-auto mt-2 max-w-md text-sm text-neutral-500">
-            {canCreate ? "Save an initiative with a name, then develop its planning work at your own pace." : "Ask a workspace owner to share an initiative or create one for your team."}
+            {canCreate ? "Save a feature with a name, then develop its planning work at your own pace." : "Ask a workspace owner to share a feature or create one for your team."}
           </p>
           {canCreate && (<Link
             href="/initiatives/new"

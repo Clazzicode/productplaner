@@ -36,11 +36,11 @@ export default function TopHeader(props: {
         </button>
         <details className="group relative min-w-0 flex-1 sm:w-[235px] sm:flex-none">
           <summary className="flex h-9 min-w-0 cursor-pointer list-none items-center justify-between gap-4 rounded-md border border-[#d9deeb] bg-white px-3 text-sm font-medium shadow-[0_1px_2px_rgba(15,25,50,0.04)] hover:border-[#a9a9fa] sm:px-4">
-            <span className="truncate">{props.project?.name ?? "Projects"}</span>
+            <span className="truncate">{props.project?.name ?? "Products"}</span>
             <ChevronIcon direction="down" size={13} className="shrink-0 text-[#485673]" />
           </summary>
           <div className="absolute left-0 z-50 mt-2 w-max min-w-full max-w-[min(320px,90vw)] rounded-lg border border-[#d9deeb] bg-white p-1.5 shadow-xl">
-            <Link href="/projects" className="block rounded-md px-3 py-2 text-sm hover:bg-[#f4f4ff]">All projects</Link>
+            <Link href="/projects" className="block rounded-md px-3 py-2 text-sm hover:bg-[#f4f4ff]">All products</Link>
             {props.projects?.map(project => <Link key={project.id} href={`/projects/${project.id}`} className="block truncate rounded-md px-3 py-2 text-sm hover:bg-[#f4f4ff]">{project.name}</Link>)}
           </div>
         </details>

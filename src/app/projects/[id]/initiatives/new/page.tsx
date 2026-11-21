@@ -36,15 +36,15 @@ async function NewInitiativeInProjectPage({ params }: { params: Promise<{ id: st
     <FocusedLayout>
       <Breadcrumb
         items={[
-          { label: "Projects", href: "/projects" },
+          { label: "Products", href: "/projects" },
           { label: project.name, href: `/projects/${project.id}` },
-          { label: "New Initiative" },
+          { label: "New feature" },
         ]}
       />
-      <h1 className="mt-4 text-2xl font-bold">New initiative in {project.name}</h1>
+      <h1 className="mt-4 text-2xl font-bold">New feature in {project.name}</h1>
       <p className="mt-1 mb-8 text-sm text-neutral-500">
         A few questions build straight into your working plan — budget, rate, and target date
-        carry over from the project unless you override them.
+        carry over from the product unless you override them.
       </p>
       <GeneralIntakeForm
         storageScope={`${user.id}:${user.organizationId}`}

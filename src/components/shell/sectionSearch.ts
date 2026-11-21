@@ -14,7 +14,7 @@ const aliases: Record<string, string> = {
   "PO Validation": "product owner approval acceptance",
   "Reports": "insights analytics executive trend",
   "Teams & Stakeholders": "people owners",
-  "Initiatives": "initiative list brief",
+  "Features": "feature list brief initiative",
 };
 
 function hasItems(item: NavigationItemProps | SidebarSubgroup): item is SidebarSubgroup {

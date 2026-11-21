@@ -23,7 +23,7 @@ export default function OrgSummaryStrip(props: { summary: AdminOrgSummary }) {
       href: "/admin/users",
     },
     { label: "Teams", value: s.teams, note: `${s.orgAdmins} admin${s.orgAdmins === 1 ? "" : "s"}`, href: "/teams" },
-    { label: "Initiatives", value: s.activeInitiatives, note: "in portfolio", href: "/initiatives" },
+    { label: "Features", value: s.activeInitiatives, note: "in portfolio", href: "/initiatives" },
     {
       label: "Attention",
       value: s.attentionCount,

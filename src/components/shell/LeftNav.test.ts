@@ -13,12 +13,12 @@ const initiatives = [{
 }];
 
 describe("approved navigation map", () => {
-  it("keeps all 34 destinations with Initiative and Sprint subsections", () => {
+  it("keeps all 34 destinations with Feature and Sprint subsections", () => {
     const html = renderToStaticMarkup(createElement(LeftNav, { initiatives, canManageWorkspace: true }));
     // The brand also links to Home, in addition to the 34 destinations.
     expect((html.match(/<a\s/g) ?? []).length).toBe(35);
     expect(html).toContain("Five-tool guide");
-    expect(html).toContain("Initiative brief");
+    expect(html).toContain("Feature brief");
     expect(html).toContain("Sprint Planning");
     expect(html).toContain("Sprints &amp; Releases");
     expect(html).toContain("Sprint Review");
@@ -27,8 +27,8 @@ describe("approved navigation map", () => {
     expect(html).not.toContain("Planning</summary>");
     expect(html).not.toContain("Delivery</summary>");
     expect(html).not.toContain("Workspace</summary>");
-    expect(html.indexOf("Home</span>")).toBeLessThan(html.indexOf("Projects</span>"));
-    expect(html.indexOf("Projects</span>")).toBeLessThan(html.indexOf("Five-tool guide</span>"));
+    expect(html.indexOf("Home</span>")).toBeLessThan(html.indexOf("Products</span>"));
+    expect(html.indexOf("Products</span>")).toBeLessThan(html.indexOf("Five-tool guide</span>"));
     expect(html.indexOf("Plan</span>")).toBeGreaterThanOrEqual(0);
     expect(html.indexOf("Plan</span>")).toBeLessThan(html.indexOf("Deliver</span>"));
     expect(html.indexOf("Deliver</span>")).toBeLessThan(html.indexOf("Learn</span>"));

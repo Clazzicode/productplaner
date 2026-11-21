@@ -20,7 +20,7 @@ export default function GlobalDashboardHeader(props: {
           href="/initiatives/new"
           className="shrink-0 rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700"
         >
-          + New initiative
+          + New feature
         </Link>
       }
     />

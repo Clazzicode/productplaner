@@ -8,6 +8,7 @@ import { loadPlanningEvidence, planningLabel, commitmentLabel } from "@/lib/plan
 import StartDraftWorkspace from "@/components/workspace/StartDraftWorkspace";
 import { DashboardLayout } from "@/components/layout/PageLayouts";
 import PoWorkflowGuide from "@/components/planning/PoWorkflowGuide";
+import BacklogConnectionPicker from "@/components/backlogs/BacklogConnectionPicker";
 
 async function OverviewPage({ params }: { params: Promise<{ initiativeId: string }> }) {
   const { initiativeId } = await params;
@@ -18,15 +19,28 @@ async function OverviewPage({ params }: { params: Promise<{ initiativeId: string
     loadPlanningEvidence(initiativeId),
     hasCollaborationAction(initiativeId, user.id, "edit"),
   ]);
+  const backlogs = await db.backlog.findMany({
+    where: { projectId: initiative.projectId, organizationId: initiative.organizationId },
+    select: { id: true, name: true, _count: { select: { initiatives: true } } },
+    orderBy: [{ name: "asc" }, { id: "asc" }],
+  });
 
   return <DashboardLayout>
     <div className="mx-auto max-w-[1220px]">
-      <Link href={`/projects/${initiative.project.id}`} className="text-xs font-bold uppercase tracking-widest text-[#5145ed] hover:underline">{initiative.project.name} / Initiative</Link>
+      <Link href={`/projects/${initiative.project.id}`} className="text-xs font-bold uppercase tracking-widest text-[#5145ed] hover:underline">{initiative.project.name} / Feature</Link>
       <div className="mt-1 flex flex-wrap items-end justify-between gap-x-4 gap-y-1">
         <h1 className="break-words text-xl font-bold text-[#0d1b3e]">{initiative.name}</h1>
         <p className="text-xs text-slate-600">Planning: {planningLabel(evidence)} · Delivery: {commitmentLabel(evidence)}</p>
       </div>
     </div>
+
+    <BacklogConnectionPicker
+      key={initiative.backlogId ?? "none"}
+      featureId={initiative.id}
+      currentBacklogId={initiative.backlogId}
+      backlogs={backlogs.map(backlog => ({ id: backlog.id, name: backlog.name, featureCount: backlog._count.initiatives }))}
+      canEdit={canEdit}
+    />
 
     <div className="mt-7"><PoWorkflowGuide initiativeId={initiativeId} hasWorkspace={!!initiative.prototype} /></div>
 
@@ -35,7 +49,7 @@ async function OverviewPage({ params }: { params: Promise<{ initiativeId: string
     <details className="mx-auto mt-8 max-w-[1220px] rounded-2xl border border-[#dfe3f4] bg-white p-5 text-sm text-slate-700">
       <summary className="cursor-pointer font-semibold text-[#0d1b3e]">Planning context for {initiative.name}</summary>
       <div className="mt-4 grid gap-4 border-t border-[#e6e9f4] pt-4 sm:grid-cols-2">
-        <div><h2 className="font-semibold">Goal and target</h2><p className="mt-1">{initiative.project.goal || "No project goal recorded yet."}</p><p className="mt-2 text-xs text-slate-500">Target: {initiative.project.targetLaunchDate?.toLocaleDateString() ?? "Not set"}</p></div>
+        <div><h2 className="font-semibold">Goal and target</h2><p className="mt-1">{initiative.project.goal || "No product goal recorded yet."}</p><p className="mt-2 text-xs text-slate-500">Target: {initiative.project.targetLaunchDate?.toLocaleDateString() ?? "Not set"}</p></div>
         <div><h2 className="font-semibold">Planning evidence</h2><p className="mt-1">{evidence.featureCount} features · {evidence.storyCount} stories · {evidence.criteriaCount} criteria</p><p className="mt-2 text-xs text-slate-500">Generation readiness: {evidence.generationReady ? "Ready for optional proposal" : "More evidence needed"}. Manual planning remains available.</p></div>
       </div>
     </details>

@@ -17,7 +17,7 @@ export default function PlanHealthSummary(props: { primary: PrimaryInitiativeDet
       {!p ? (
         <EmptyState
           title="No planning workspace yet"
-          description="Save an initiative draft or open an existing initiative to start planning."
+          description="Save a feature draft or open an existing feature to start planning."
         />
       ) : (
         <div className="mt-3">

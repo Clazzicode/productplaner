@@ -57,7 +57,7 @@ async function ProjectHomePage({ params }: { params: Promise<{ id: string }> }) 
 
   return (
     <ContainedLayout className="max-w-4xl">
-      <Breadcrumb items={[{ label: "Projects", href: "/projects" }, { label: project.name }]} />
+      <Breadcrumb items={[{ label: "Products", href: "/projects" }, { label: project.name }]} />
       <div className="mt-4 flex flex-wrap items-start justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
@@ -70,7 +70,7 @@ async function ProjectHomePage({ params }: { params: Promise<{ id: string }> }) 
           href={`/projects/${project.id}/initiatives/new`}
           className="rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700"
         >
-          + New initiative
+          + New feature
         </Link>)}
       </div>
 
@@ -85,10 +85,10 @@ async function ProjectHomePage({ params }: { params: Promise<{ id: string }> }) 
       )}
 
       <div className="mt-8">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-indigo-600">Initiatives</h2>
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-indigo-600">Features</h2>
         {project.initiatives.length === 0 ? (
           <div className="mt-3 rounded-2xl border border-dashed border-neutral-300 bg-white p-8 text-center">
-            <p className="text-sm text-neutral-500">No initiatives yet in this project.</p>
+            <p className="text-sm text-neutral-500">No features yet in this product.</p>
 {canCreate && (<Link
               href={`/projects/${project.id}/initiatives/new`}
               className="mt-3 inline-block rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700"

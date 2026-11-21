@@ -13,6 +13,7 @@ export interface NavInitiative {
   id: string;
   name: string;
   status: string;
+  backlogId?: string | null;
   canEdit?: boolean;
   hasWorkspace?: boolean;
   project: { id: string; name: string } | null;
@@ -23,7 +24,7 @@ export interface NavInitiative {
 const ICONS = ["target", "idea", "puzzle", "milestone", "connections", "feedback", "schedule", "people", "approval", "trend"] as const;
 type IconName = typeof ICONS[number];
 const DEFAULT_ICONS: Record<string, IconName> = {
-  Initiatives: "target", "Requests & Priorities": "idea", "Features & Backlog": "puzzle",
+  Features: "target", "Requests & Priorities": "idea", Backlog: "puzzle",
   Roadmap: "milestone", Integrations: "connections", Feedback: "feedback",
   Sprint: "schedule", "Teams & Stakeholders": "people", "PO Validation": "approval",
   Reports: "trend", Demos: "schedule", "Release Readiness": "approval",
@@ -43,16 +44,16 @@ export function buildSidebarGroups(props: { initiatives: NavInitiative[]; canMan
   const current = (match && props.initiatives.find(row => row.id === match[1])) || props.initiatives[0] || null;
   const scoped = (suffix: string, label: string): NavigationItemProps => current
     ? { label, href: `/initiatives/${current.id}/${suffix}` }
-    : { label, href: null, disabled: { reason: "Select or create an initiative first.", cta: { label: "Open initiatives", href: "/initiatives" } } };
+    : { label, href: null, disabled: { reason: "Select or create a feature first.", cta: { label: "Open features", href: "/initiatives" } } };
   return [
-    { title: "", items: [{ label: "Home", href: "/home" }, { label: "Projects", href: "/projects" }, scoped("overview", "Five-tool guide")] },
+    { title: "", items: [{ label: "Home", href: "/home" }, { label: "Products", href: "/projects" }, scoped("overview", "Five-tool guide")] },
     { title: "Plan", collapsible: true, items: [
-      { label: "Initiatives", items: [
-        { label: "All initiatives", href: "/initiatives", exact: true },
-        ...(props.canManageWorkspace ? [{ label: "New initiative", href: "/initiatives/new" }] : []),
-        scoped("intake", "Initiative brief"),
+      { label: "Features", items: [
+        { label: "All features", href: "/initiatives", exact: true },
+        ...(props.canManageWorkspace ? [{ label: "New feature", href: "/initiatives/new" }] : []),
+        scoped("intake", "Feature brief"),
       ] },
-      scoped("requests", "Requests & Priorities"), scoped("backlog", "Features & Backlog"),
+      scoped("requests", "Requests & Priorities"), scoped("backlog", "Backlog"),
       scoped("workspace/epics", "Stories & Criteria"), scoped("workspace/refinement", "Refinement"),
       scoped("workspace/roadmap", "Roadmap"), scoped("workspace/documents", "Documents"),
       ...(current?.canEdit ? [scoped("workspace/regeneration", "Review regeneration")] : []),

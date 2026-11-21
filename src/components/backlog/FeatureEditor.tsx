@@ -32,11 +32,11 @@ export default function FeatureEditor({ feature, owners, features, busy, onSave,
     event.preventDefault();
     const parsed = featureSchema.safeParse(data);
     if (!parsed.success) { setError(parsed.error.issues[0].message); return; }
-    if (feature && reason.trim().length < 3) { setError("Explain why this feature is changing."); return; }
+    if (feature && reason.trim().length < 3) { setError("Explain why this backlog item is changing."); return; }
     setError("");
     await onSave(parsed.data, feature ? reason.trim() : undefined);
   }}>
-    <h2 className="mb-4 text-lg font-semibold">{feature ? `Edit ${feature.backlogKey ?? "feature"}` : "Add feature"}</h2>
+    <h2 className="mb-4 text-lg font-semibold">{feature ? `Edit ${feature.backlogKey ?? "backlog item"}` : "Add backlog item"}</h2>
     {feature?.sourceRequests.length ? <div className="mb-4 rounded-lg border border-indigo-100 bg-white p-3">
       <p className="text-sm font-semibold text-slate-800">Originating request</p>
       {feature.sourceRequests.map(source => <p key={source.id} className="mt-1 text-sm text-slate-600">
@@ -44,7 +44,7 @@ export default function FeatureEditor({ feature, owners, features, busy, onSave,
       </p>)}
     </div> : null}
     <fieldset disabled={busy} className="space-y-4">
-      <label className="block text-sm font-medium">Feature title<input required maxLength={160} className={field} value={data.name} onChange={e => setData({ ...data, name: e.target.value })} /></label>
+      <label className="block text-sm font-medium">Backlog item title<input required maxLength={160} className={field} value={data.name} onChange={e => setData({ ...data, name: e.target.value })} /></label>
       <label className="block text-sm font-medium">Purpose and requirements<textarea rows={5} maxLength={12000} className={field} value={data.description} onChange={e => setData({ ...data, description: e.target.value })} /></label>
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         <label className="text-sm font-medium">Owner<select className={field} value={data.ownerUserId ?? ""} onChange={e => setData({ ...data, ownerUserId: e.target.value || null })}>
@@ -75,12 +75,12 @@ export default function FeatureEditor({ feature, owners, features, busy, onSave,
             })} />
             <span>{option.backlogKey ? `${option.backlogKey} · ` : ""}{option.name}</span>
           </label>)}
-        </div> : <p className="text-sm text-slate-500">No other features are available.</p>}
+        </div> : <p className="text-sm text-slate-500">No other backlog items are available.</p>}
       </fieldset>
       {feature && <label className="block text-sm font-medium">Reason for change<textarea required minLength={3} maxLength={500} rows={2} className={field} value={reason} onChange={e => setReason(e.target.value)} placeholder={data.backlogStatus === "archived" ? "Why is this feature being archived?" : "What changed and why?"} /></label>}
-      {!feature && <p className="text-sm text-slate-600">New features keep their selected scope, owner, value, risk, and dependencies in this one workflow.</p>}
+      {!feature && <p className="text-sm text-slate-600">New backlog items keep their selected scope, owner, value, risk, and dependencies in this one workflow.</p>}
       {error && <p role="alert" className="text-sm text-red-700">{error}</p>}
-      <div className="flex gap-3"><button className="rounded-lg bg-indigo-600 px-4 py-2 font-medium text-white" type="submit">{busy ? "Saving…" : "Save feature"}</button><button type="button" onClick={onCancel} className="rounded-lg border bg-white px-4 py-2">Cancel</button></div>
+      <div className="flex gap-3"><button className="rounded-lg bg-indigo-600 px-4 py-2 font-medium text-white" type="submit">{busy ? "Saving…" : "Save backlog item"}</button><button type="button" onClick={onCancel} className="rounded-lg border bg-white px-4 py-2">Cancel</button></div>
     </fieldset>
   </form>;
 }

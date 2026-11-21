@@ -56,6 +56,7 @@ async function RootLayout({
           id: true,
           name: true,
           status: true,
+          backlogId: true,
           prototype: { select: { id: true } },
           project: { select: { id: true, name: true } },
           syncConnections: { where: { tool: "jira" }, select: { status: true }, take: 1 },

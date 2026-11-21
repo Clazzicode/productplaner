@@ -28,7 +28,7 @@ const ROADMAP_AREAS = [
 export default function RoadmapSetupOverview() {
   return (
     <section className="mb-8 rounded-3xl border border-accent/20 bg-accent/[0.04] p-6 md:p-7" aria-labelledby="roadmap-setup-title">
-      <p className="text-xs font-semibold uppercase tracking-wide text-accent">Initiative created</p>
+      <p className="text-xs font-semibold uppercase tracking-wide text-accent">Feature created</p>
       <h2 id="roadmap-setup-title" className="mt-1.5 text-xl font-semibold tracking-tight text-text-primary">
         Your planning readiness starts here
       </h2>

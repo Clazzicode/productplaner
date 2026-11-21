@@ -70,7 +70,7 @@ export default function BacklogWorkspace({ initiativeId, initialFeatures, initia
   async function call(body: unknown) {
     const response = await fetch(`/api/initiatives/${initiativeId}/backlog`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
     const data = await response.json() as { error?: string; feature?: FeatureRecord; features?: FeatureRecord[] };
-    if (!response.ok) throw new Error(data.error || "The feature backlog could not be saved.");
+    if (!response.ok) throw new Error(data.error || "The backlog could not be saved.");
     return data;
   }
 
@@ -92,13 +92,13 @@ export default function BacklogWorkspace({ initiativeId, initialFeatures, initia
           : { ...input, id: `demo-feature-${Date.now()}`, backlogKey: null, backlogRevision: 1, order: features.length,
               owner: owners.find(owner => owner.id === input.ownerUserId) ?? null, sourceRequests: [] };
         setFeatures(previous => current ? previous.map(item => item.id === saved.id ? saved : item) : [...previous, saved]);
-        setEditing(null); setMessage("Feature saved in this local demo."); return;
+        setEditing(null); setMessage("Backlog item saved in this local demo."); return;
       }
       const result = await call({ action: "save", data: input, reason, ...(current ? { existing: { id: current.id, revision: current.backlogRevision } } : {}) });
       if (result.feature) setFeatures(previous => current ? previous.map(item => item.id === result.feature!.id ? result.feature! : item) : [...previous, result.feature!]);
       await refreshItems();
-      setEditing(null); setMessage(input.backlogStatus === "archived" ? "Feature archived. Turn on Show archived to view it." : "Feature saved.");
-    } catch (error) { setMessage(error instanceof Error ? error.message : "The feature could not be saved."); }
+      setEditing(null); setMessage(input.backlogStatus === "archived" ? "Backlog item archived. Turn on Show archived to view it." : "Backlog item saved.");
+    } catch (error) { setMessage(error instanceof Error ? error.message : "The backlog item could not be saved."); }
     finally { setBusy(false); }
   }
 
@@ -167,7 +167,7 @@ export default function BacklogWorkspace({ initiativeId, initialFeatures, initia
   const selectedKey = (item: BacklogItemRecord) => `${item.recordType}:${item.id}`;
 
   return <div className="space-y-5">
-    <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-slate-50 p-3"><div className="flex flex-wrap gap-2">{tab("features", "Features")}{tab("backlog", "Unified backlog")}{tab("roadmap", "Now / Next / Later")}</div>{canEdit && <button onClick={() => { setHistory([]); setEditing("new"); }} className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white">+ Add feature</button>}</div>
+    <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-slate-50 p-3"><div className="flex flex-wrap gap-2">{tab("features", "Backlog items")}{tab("backlog", "Unified backlog")}{tab("roadmap", "Now / Next / Later")}</div>{canEdit && <button onClick={() => { setHistory([]); setEditing("new"); }} className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white">+ Add backlog item</button>}</div>
     <div className="flex flex-wrap items-center gap-4">
       <label className="min-w-0 basis-full flex-1 sm:basis-64"><span className="sr-only">Search backlog</span><input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search backlog items or owners…" className="w-full min-w-0 rounded-xl border border-slate-300 bg-white px-4 py-3" /></label>
       <label className="flex items-center gap-2 text-sm font-medium"><input type="checkbox" checked={showArchived} onChange={e => setShowArchived(e.target.checked)} /> Show archived</label>
@@ -191,7 +191,7 @@ export default function BacklogWorkspace({ initiativeId, initialFeatures, initia
     {editing && <FeatureEditor key={editing === "new" ? "new" : `${editing.id}-${editing.backlogRevision}`} feature={editing === "new" ? null : editing}
       owners={owners} features={features} busy={busy} onSave={save} onCancel={() => setEditing(null)} />}
     {editing && editing !== "new" && <section className="rounded-xl border bg-white p-4">
-      <h2 className="font-semibold">Feature change history</h2>
+      <h2 className="font-semibold">Backlog item change history</h2>
       {history.length ? <ol className="mt-3 space-y-3">{history.map(item => <li key={item.id} className="border-l-2 border-indigo-200 pl-3 text-sm"><p className="font-medium">{item.reason || item.action}</p><p className="text-slate-500">{new Date(item.createdAt).toLocaleString()} · {item.actor?.name ?? "System"} · revision {item.revision}</p><p className="text-xs text-slate-500">Changed: {Object.keys(item.changes).join(", ") || "record created"}</p></li>)}</ol> : <p className="mt-2 text-sm text-slate-500">No saved changes yet.</p>}
     </section>}
     {view === "features" && importedStoryCount > 0 && <p className="rounded-xl border border-indigo-100 bg-indigo-50 p-3 text-sm text-indigo-950">{importedStoryCount} imported Jira {importedStoryCount === 1 ? "task or story is" : "tasks or stories are"} in <button type="button" className="font-semibold underline" onClick={() => setView("backlog")}>Unified backlog</button>. Jira epics mapped as features appear here after their import is approved.</p>}

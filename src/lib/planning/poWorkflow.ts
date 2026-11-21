@@ -1,20 +1,20 @@
 export const PO_WORKFLOW = [
   {
-    id: "initiative", title: "Initiative", eyebrow: "Define the outcome",
+    id: "initiative", title: "Feature", eyebrow: "Define the outcome",
     summary: "Explain the problem, who needs the change, and what success means.",
     good: ["A specific problem backed by context.", "Named users or customers affected.", "An observable outcome and a way to measure success."],
     example: "Help support agents resolve returns faster; measure the time from request to resolution.",
     readiness: "Save a draft with a name. Add the missing context before requesting a detailed generated plan.",
-    destination: "intake", action: "Review initiative intake",
-    tab: "Initiative intake",
+    destination: "intake", action: "Review feature context",
+    tab: "Feature context",
   },
   {
-    id: "features", title: "Features & Backlog", eyebrow: "Choose valuable work",
+    id: "features", title: "Backlog", eyebrow: "Choose valuable work",
     summary: "Capture requests and maintain a prioritized set of features and bugs.",
     good: ["Each feature describes a user or business capability.", "Its source, owner, value, and dependencies are visible.", "MoSCoW, priority order, roadmap placement, and release assignment stay distinct."],
     example: "Let customers request a return online, linked to the original support request.",
     readiness: "Create work manually or review imported information. Only authorized people finalize priority changes.",
-    destination: "backlog", action: "Open feature backlog", tab: "Feature Backlog",
+    destination: "backlog", action: "Open backlog", tab: "Backlog",
   },
   {
     id: "stories", title: "Stories & Acceptance Criteria", eyebrow: "Make the work testable",

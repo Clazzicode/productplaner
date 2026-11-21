@@ -12,7 +12,7 @@ describe("five-tool guide navigation", () => {
     const links = markup.match(/href="\/initiatives\/initiative-123\/[^"]+"/g) ?? [];
     expect(links).toHaveLength(5);
     expect(PO_WORKFLOW.map((step) => step.title)).toEqual([
-      "Initiative", "Features & Backlog", "Stories & Acceptance Criteria", "Roadmap", "Sprint Planning",
+      "Feature", "Backlog", "Stories & Acceptance Criteria", "Roadmap", "Sprint Planning",
     ]);
     for (const step of PO_WORKFLOW) {
       expect(markup).toContain(`href="/initiatives/initiative-123/${step.destination}"`);

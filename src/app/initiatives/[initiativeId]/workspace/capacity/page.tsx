@@ -87,7 +87,7 @@ async function CapacityPage({
         <StatCard label="Sprint labor cost" value={money(model.sprintLaborCost)} sub={`${Math.round(model.availableTeamHours)} hrs × $${model.averageHourlyRate}/hr`} />
         <StatCard label="Cost per story point" value={money(model.costPerStoryPoint)} sub={`${money(model.sprintLaborCost)} ÷ ${model.sprintPointCapacity} pts`} />
         <StatCard label="Planned work cost" value={money(model.plannedWorkCost)} sub={`${model.totalPlannedPoints} pts × ${money(model.costPerStoryPoint)}`} />
-        <StatCard label="Estimated initiative cost" value={money(model.estimatedInitiativeCost)} sub={`${model.totalSprints} sprints × ${money(model.sprintLaborCost)}`} />
+        <StatCard label="Estimated feature cost" value={money(model.estimatedInitiativeCost)} sub={`${model.totalSprints} sprints × ${money(model.sprintLaborCost)}`} />
         <StatCard label="Unused capacity cost" value={money(model.unusedCapacityCost)} sub="allocated − planned work" />
         {model.budget != null && model.budgetVariance ? (
           <StatCard

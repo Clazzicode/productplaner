@@ -17,7 +17,7 @@ const FIELD_CLASS =
 // GenerationProgress's own contract (src/components/ui/loading/GenerationProgress.tsx)
 // is explicit: every step shown as done must have really happened, never a
 // timer — `step` only ever advances from a real await boundary below.
-const PROJECT_CREATION_STEPS = ["Creating your project", "Opening your project home"];
+const PROJECT_CREATION_STEPS = ["Creating your product", "Opening your product home"];
 
 /**
  * A brand-new Project starts a clean context (directive §6) — nothing here
@@ -57,7 +57,7 @@ export default function CreateProjectForm() {
     });
     if (!res.ok || !res.data) {
       setBusy(false);
-      setError(res.error ?? "Could not create the project.");
+      setError(res.error ?? "Could not create the product.");
       return;
     }
     // Deliberately not resetting `busy` on the success path — it stays true
@@ -70,14 +70,14 @@ export default function CreateProjectForm() {
   };
 
   if (busy) {
-    return <GenerationProgress title="Creating your project" steps={PROJECT_CREATION_STEPS} currentStep={step} />;
+    return <GenerationProgress title="Creating your product" steps={PROJECT_CREATION_STEPS} currentStep={step} />;
   }
 
   return (
     <form onSubmit={submit} className="min-w-0 rounded-3xl border border-neutral-200 bg-white p-4 shadow-md sm:p-8">
       <div className="grid gap-4 sm:grid-cols-2">
         <label className="flex flex-col gap-1 text-sm font-medium text-neutral-700 sm:col-span-2">
-          Project name
+          Product name
           <input
             value={name}
             onChange={(e) => setName(e.target.value)}
@@ -149,7 +149,7 @@ export default function CreateProjectForm() {
           disabled={name.trim().length < 3}
           className="px-6 py-3"
         >
-          Create Project
+          Create product
         </ButtonLoader>
       </div>
     </form>

@@ -53,7 +53,7 @@ async function WorkspaceLayout({
     <div>
       <p className="text-xs font-bold uppercase tracking-wide text-[#7164d8]">Planning context</p>
       <p className="mt-1 text-sm font-semibold text-[#121b34]">{ws.initiative.name} <span className="font-normal text-[#65718b]">· {profile.label}</span></p>
-      <Link href={`/initiatives/${initiativeId}/intake`} className="mt-1 inline-block text-xs font-semibold text-[#5145ed]">Open initiative context →</Link>
+      <Link href={`/initiatives/${initiativeId}/intake`} className="mt-1 inline-block text-xs font-semibold text-[#5145ed]">Open feature context →</Link>
       {ws.prototype.approvedAt && <div className="mt-2"><Badge variant="emerald">Baseline approved {new Date(ws.prototype.approvedAt).toLocaleDateString()}</Badge></div>}
       {drifted && <div className="mt-2"><Badge variant="amber" title="Approved inputs changed since this roadmap was generated.">Inputs changed since generated</Badge></div>}
     </div>

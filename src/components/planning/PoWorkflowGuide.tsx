@@ -5,7 +5,7 @@ const CARD_COPY: Record<PoWorkflowId, { purpose: string; benefit: string; outcom
   initiative: {
     purpose: "Define the problem, the customer who needs the change, and what success means.",
     benefit: "Create a clear, shared starting point for the work.",
-    outcome: "A well-scoped initiative with a defined problem, customer, and success measure.",
+    outcome: "A well-scoped feature with a defined problem, customer, and success measure.",
   },
   features: {
     purpose: "Gather requests and maintain a prioritized set of features and bugs.",

@@ -25,11 +25,11 @@ import SimplifiedIntakeWizard from "./SimplifiedIntakeWizard";
 // really completed.
 const STEPS_NEW_PROFILE = [
   "Saving your setup",
-  "Creating your initiative",
+  "Creating your feature",
   "Saving your answers",
-  "Preparing initiative workspace",
+  "Preparing feature workspace",
 ];
-const STEPS_EXISTING_PROFILE = ["Creating your initiative", "Saving your answers", "Preparing initiative workspace"];
+const STEPS_EXISTING_PROFILE = ["Creating your feature", "Saving your answers", "Preparing feature workspace"];
 
 type StartingPoint = "fresh" | "import" | "use_project_context";
 
@@ -120,7 +120,7 @@ export default function ProductDirectionBootstrap(props: {
     });
     if (!initRes.ok || !initRes.data) {
       setSubmitting(false);
-      setError(initRes.error ?? "Could not create the initiative.");
+      setError(initRes.error ?? "Could not create the feature.");
       return;
     }
 
@@ -145,7 +145,7 @@ export default function ProductDirectionBootstrap(props: {
     return (
       <div>
         <SectionProgress current={0} />
-        <GenerationProgress title="Creating your initiative" steps={creationSteps} currentStep={step} />
+        <GenerationProgress title="Creating your feature" steps={creationSteps} currentStep={step} />
       </div>
     );
   }
@@ -203,8 +203,8 @@ export default function ProductDirectionBootstrap(props: {
                       <ChoiceCard
                         selected={startingPoint === "use_project_context"}
                         onClick={() => setStartingPoint("use_project_context")}
-                        label="Use project context"
-                        hint={`Reuse ${props.project.name}'s budget, rate, and target date — just add this initiative's details.`}
+                        label="Use product context"
+                        hint={`Reuse ${props.project.name}'s budget, rate, and target date — just add this feature's details.`}
                       />
                     ) : (
                       <ChoiceCard
@@ -223,7 +223,7 @@ export default function ProductDirectionBootstrap(props: {
 
                 <div className="mt-7 border-t border-neutral-100 pt-7">
                   <p className="text-xs font-semibold uppercase tracking-wide text-accent">
-                    {props.hasProfile ? "New initiative" : "Question 3"}
+                    {props.hasProfile ? "New feature" : "Question 3"}
                   </p>
                   <h2 className="mt-1.5 text-2xl font-semibold tracking-tight text-text-primary">
                     What&apos;s the core idea?
@@ -251,7 +251,7 @@ export default function ProductDirectionBootstrap(props: {
                     disabled={values.name.trim().length < 3}
                     className="px-6 py-3"
                   >
-                    Create Initiative
+                    Create feature
                   </ButtonLoader>
                 </div>
               </>

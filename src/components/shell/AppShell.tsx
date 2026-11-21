@@ -79,19 +79,19 @@ export default function AppShell(props: {
           href={`/projects/${currentInitiative.project.id}`}
           className="hidden min-w-52 rounded-lg border border-[#d4def1] bg-white px-3 py-2 text-sm font-semibold text-text-primary shadow-sm xl:block"
         >
-          <span className="mb-1 block text-[10px] font-medium text-text-muted">Project</span>
+          <span className="mb-1 block text-[10px] font-medium text-text-muted">Product</span>
           <span className="block max-w-56 truncate">▣ &nbsp;{currentInitiative.project.name}</span>
         </Link>
       )}
       {props.initiatives.length > 0 && (
         <label className="min-w-0 xl:min-w-80">
-          <span className="mb-1 block text-[10px] font-medium text-text-muted">Initiative</span>
+          <span className="mb-1 block text-[10px] font-medium text-text-muted">Feature</span>
           <select
             value={currentInitiative?.id ?? ""}
             onChange={(e) => switchInitiative(e.target.value)}
             className="w-full max-w-96 rounded-lg border border-[#d4def1] bg-white px-3 py-2 text-sm font-semibold text-text-primary shadow-sm focus:border-indigo-500 focus:outline-none"
           >
-            <option value="" disabled>Switch initiative…</option>
+            <option value="" disabled>Switch feature…</option>
             {props.initiatives.map((i) => (
               <option key={i.id} value={i.id}>
                 {i.name}{i.status !== "generated" ? " (intake)" : ""}
@@ -99,6 +99,14 @@ export default function AppShell(props: {
             ))}
           </select>
         </label>
+      )}
+      {currentInitiative && (
+        <Link
+          href={currentInitiative.backlogId ? `/backlogs/${currentInitiative.backlogId}` : `/initiatives/${currentInitiative.id}/backlog`}
+          className="hidden h-[38px] items-center rounded-lg border border-[#d4def1] bg-white px-3 text-sm font-semibold text-text-primary shadow-sm md:flex"
+        >
+          Open backlog
+        </Link>
       )}
       {currentInitiative && props.canManageWorkspace && (
         <Link
@@ -113,7 +121,7 @@ export default function AppShell(props: {
         href="/initiatives/new"
         className="hidden h-[38px] items-center rounded-lg bg-accent px-3 text-sm font-semibold text-white shadow-sm hover:bg-accent-hover 2xl:flex"
       >
-        + New initiative
+        + New feature
       </Link>}
     </div>
   );
@@ -122,8 +130,8 @@ export default function AppShell(props: {
     <details className="group relative">
       <summary className="flex h-9 cursor-pointer list-none items-center gap-2 rounded-md bg-[#5145ed] px-4 text-sm font-medium text-white shadow-[0_2px_5px_rgba(81,69,237,0.2)] hover:bg-[#4238d7] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#5145ed]">Create <ChevronIcon direction="down" size={13} /></summary>
       <div className="absolute right-0 z-50 mt-2 w-44 rounded-xl border border-border-subtle bg-white p-1.5 text-text-primary shadow-xl">
-        <Link href="/projects/new" className="block rounded-lg px-3 py-2 text-sm hover:bg-[#f4f5fe]">New project</Link>
-        <Link href="/initiatives/new" className="block rounded-lg px-3 py-2 text-sm hover:bg-[#f4f5fe]">New initiative</Link>
+        <Link href="/projects/new" className="block rounded-lg px-3 py-2 text-sm hover:bg-[#f4f5fe]">New product</Link>
+        <Link href="/initiatives/new" className="block rounded-lg px-3 py-2 text-sm hover:bg-[#f4f5fe]">New feature</Link>
       </div>
     </details>
   ) : null;

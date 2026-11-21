@@ -1,12 +1,12 @@
 import type { NavInitiative } from "./LeftNav";
 
 const labels: Record<string, string> = {
-  home: "Home", projects: "Projects", initiatives: "Initiatives", new: "Create",
+  home: "Home", projects: "Products", initiatives: "Features", new: "Create",
   integrations: "Integrations", jira: "Atlassian / Jira", teams: "Teams & Stakeholders",
   organizations: "Workspace", settings: "Settings", activity: "Activity", risks: "Risks & Blockers",
   decisions: "Decisions", onboarding: "Workspace setup", welcome: "Experience",
-  role: "Working role", "workflow-preview": "Workflow preview", intake: "Initiative brief",
-  dashboard: "Initiative dashboard", overview: "Five-tool guide", regeneration: "Review regeneration", backlog: "Features & Backlog", requests: "Requests & Priorities",
+  role: "Working role", "workflow-preview": "Workflow preview", intake: "Feature brief",
+  dashboard: "Feature dashboard", overview: "Five-tool guide", regeneration: "Review regeneration", backlog: "Backlog", requests: "Requests & Priorities",
   workspace: "Planning workspace", features: "Feature hierarchy", epics: "Stories & Criteria", stories: "Story",
   roadmap: "Roadmap", documents: "Documents", refinement: "Refinement", capacity: "Capacity & Cost",
   matrix: "Matrix Portal", executive: "Reports", sprints: "Sprints & Releases", demos: "Demos",
@@ -22,13 +22,13 @@ export function pageNavigation(path: string, initiatives: NavInitiative[]) {
   let parentLabel = "Home";
   if (parts[0] === "projects" && parts.length > 1) {
     parent = parts.length > 2 ? `/projects/${parts[1]}` : "/projects";
-    parentLabel = parts.length > 2 ? "Project" : "Projects";
+    parentLabel = parts.length > 2 ? "Product" : "Products";
   } else if (parts[0] === "initiatives" && parts.length > 1) {
     parent = initiative?.project ? `/projects/${initiative.project.id}` : "/initiatives";
-    parentLabel = initiative?.project?.name ?? "Initiatives";
+    parentLabel = initiative?.project?.name ?? "Features";
     if (parts[2] === "workspace") {
       parent = `/initiatives/${parts[1]}/dashboard`;
-      parentLabel = "Initiative overview";
+      parentLabel = "Feature overview";
       if (parts[3] === "sprint-preparation") { parent = `/initiatives/${parts[1]}/overview`; parentLabel = "Five-tool guide"; }
       if (parts[3] === "stories") { parent = `/initiatives/${parts[1]}/workspace/features`; parentLabel = "Features"; }
     }
@@ -42,8 +42,8 @@ export function pageNavigation(path: string, initiatives: NavInitiative[]) {
   } else if (path === "/welcome") { parent = "/onboarding"; parentLabel = "Workspace setup";
   } else if (path === "/onboarding/role") { parent = "/welcome"; parentLabel = "Experience";
   } else if (path === "/workflow-preview") { parent = "/onboarding/role"; parentLabel = "Working role";
-  } else if (path === "/home") { parent = "/projects"; parentLabel = "Projects"; }
+  } else if (path === "/home") { parent = "/projects"; parentLabel = "Products"; }
   const last = parts.at(-1) ?? "home";
-  const title = labels[last] ?? (parts[0] === "projects" ? "Project" : parts[0] === "teams" ? "Team" : parts[0] === "admin" ? "Details" : initiative?.name ?? "Clarivia");
+  const title = labels[last] ?? (parts[0] === "projects" ? "Product" : parts[0] === "teams" ? "Team" : parts[0] === "admin" ? "Details" : initiative?.name ?? "Clarivia");
   return { parent, parentLabel, title };
 }

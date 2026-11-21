@@ -8,7 +8,7 @@ const sections = sectionDestinations(groups);
 describe("section search", () => {
   it("links nested sections to the current initiative", () => {
     expect(searchSections("sprint planning", sections)[0]).toMatchObject({ label: "Sprint Planning", href: "/initiatives/initiative-1/workspace/sprint-preparation" });
-    expect(searchSections("initiative brief", sections)[0]).toMatchObject({ label: "Initiative brief", href: "/initiatives/initiative-1/intake" });
+    expect(searchSections("feature brief", sections)[0]).toMatchObject({ label: "Feature brief", href: "/initiatives/initiative-1/intake" });
     expect(searchSections("sprint", sections)[0]).toMatchObject({ label: "Sprint", href: "/initiatives/initiative-1/workspace/sprint-preparation" });
   });
 
@@ -21,6 +21,6 @@ describe("section search", () => {
   it("does not offer sections that require an initiative when none exists", () => {
     const unscoped = sectionDestinations(buildSidebarGroups({ initiatives: [] }, "/home"));
     expect(searchSections("roadmap", unscoped)).toEqual([]);
-    expect(searchSections("projects", unscoped)[0].href).toBe("/projects");
+    expect(searchSections("products", unscoped)[0].href).toBe("/projects");
   });
 });

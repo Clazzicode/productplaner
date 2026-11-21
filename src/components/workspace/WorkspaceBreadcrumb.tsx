@@ -24,7 +24,7 @@ export default function WorkspaceBreadcrumb(props: {
   return (
     <Breadcrumb
       items={[
-        { label: "Initiatives", href: "/initiatives" },
+        { label: "Features", href: "/initiatives" },
         trail
           ? { label: props.initiativeName, href: `/initiatives/${props.initiativeId}/dashboard` }
           : { label: props.initiativeName },

@@ -56,10 +56,13 @@ export async function saveGeneralIntake(actor: ActorRow, draftId: string, raw: u
         } });
         projectId = project.id;
       }
+      const backlog = await tx.backlog.create({ data: {
+        organizationId: actor.organizationId, projectId, name: `${input.name} backlog`,
+      } });
       // No RETURNING before the owner grant exists: the restrictive SELECT
       // policy intentionally cannot resolve a not-yet-visible initiative.
       await tx.initiative.createMany({ data: {
-        id: draftId, organizationId: actor.organizationId, userId: actor.id, projectId,
+        id: draftId, organizationId: actor.organizationId, userId: actor.id, projectId, backlogId: backlog.id,
         name: input.name, description: input.problemStatement, methodology: input.methodology,
         intakeMethod: "guided", status: "intake_in_progress",
       } });
