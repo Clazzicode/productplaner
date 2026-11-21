@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import Avatar from "@/components/ui/Avatar";
 import ChevronIcon from "@/components/ui/ChevronIcon";
+import DismissibleDetails from "./DismissibleDetails";
 import { searchSections, type SectionDestination } from "./sectionSearch";
 
 export default function TopHeader(props: {
@@ -34,7 +35,7 @@ export default function TopHeader(props: {
         >
           <span className="block h-0.5 w-5 bg-current" /><span className="mt-1 block h-0.5 w-5 bg-current" /><span className="mt-1 block h-0.5 w-5 bg-current" />
         </button>
-        <details className="group relative min-w-0 flex-1 sm:w-[235px] sm:flex-none">
+        <DismissibleDetails className="group relative min-w-0 flex-1 sm:w-[235px] sm:flex-none">
           <summary className="flex h-9 min-w-0 cursor-pointer list-none items-center justify-between gap-4 rounded-md border border-[#d9deeb] bg-white px-3 text-sm font-medium shadow-[0_1px_2px_rgba(15,25,50,0.04)] hover:border-[#a9a9fa] sm:px-4">
             <span className="truncate">{props.project?.name ?? "Products"}</span>
             <ChevronIcon direction="down" size={13} className="shrink-0 text-[#485673]" />
@@ -43,7 +44,7 @@ export default function TopHeader(props: {
             <Link href="/projects" className="block rounded-md px-3 py-2 text-sm hover:bg-[#f4f4ff]">All products</Link>
             {props.projects?.map(project => <Link key={project.id} href={`/projects/${project.id}`} className="block truncate rounded-md px-3 py-2 text-sm hover:bg-[#f4f4ff]">{project.name}</Link>)}
           </div>
-        </details>
+        </DismissibleDetails>
       </div>
 
       <div className="home-header-search relative mx-auto hidden w-full max-w-[600px] flex-1 md:block" onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget)) setSearchFocused(false); }}>
