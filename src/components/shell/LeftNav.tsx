@@ -77,7 +77,7 @@ export function buildSidebarGroups(props: { initiatives: NavInitiative[]; canMan
   ];
 }
 
-export default function LeftNav(props: { initiatives: NavInitiative[]; canManageWorkspace?: boolean; userId?: string; project?: { id: string; name: string } }) {
+export default function LeftNav(props: { initiatives: NavInitiative[]; canManageWorkspace?: boolean; userId?: string; project?: { id: string; name: string }; inDrawer?: boolean }) {
   const pathname = usePathname() ?? "";
   const groups = buildSidebarGroups(props, pathname);
   const activeFeature = props.initiatives.some(initiative => pathname.startsWith(`/initiatives/${initiative.id}/`) || pathname === `/initiatives/${initiative.id}` || (initiative.backlogId && pathname === `/backlogs/${initiative.backlogId}`));
@@ -147,13 +147,13 @@ export default function LeftNav(props: { initiatives: NavInitiative[]; canManage
         </div>}
       </div>;
 
-  return <nav aria-label="Main navigation" className="no-print sticky top-0 flex h-dvh w-[253px] shrink-0 flex-col border-r border-[#243a58] bg-[#071a34] text-white">
+  return <nav aria-label="Main navigation" className={`no-print flex shrink-0 flex-col border-r border-[#243a58] bg-[#071a34] text-white ${props.inDrawer ? "relative h-auto w-full" : "sticky top-0 h-dvh w-[253px]"}`}>
     <Link href="/home" className="block shrink-0 px-[26px] pb-4 pt-2"><span className="block text-[24px] font-semibold leading-7 tracking-[-0.04em]">Clarivia</span><span className="block text-[10px] font-semibold uppercase tracking-[0.2em] text-[#b4c2e6]">Product platform</span></Link>
     <div className="mx-[19px] flex h-[38px] shrink-0 rounded-lg border border-[#405575] p-0.5 text-[13px]">
       <button type="button" onClick={() => setTab("mine")} aria-pressed={tab === "mine"} className={`flex flex-1 items-center justify-center gap-1 rounded-md ${tab === "mine" ? "bg-[#5145ed] font-semibold" : "text-[#dae4f7] hover:bg-white/10"}`}><span aria-hidden>♙</span>My menu</button>
       <button type="button" onClick={() => setTab("all")} aria-pressed={tab === "all"} className={`flex flex-1 items-center justify-center gap-1 rounded-md ${tab === "all" ? "bg-[#5145ed] font-semibold" : "text-[#dae4f7] hover:bg-white/10"}`}><span aria-hidden>▦</span>All sections</button>
     </div>
-    <div className="no-scrollbar min-h-0 flex-1 overflow-y-auto overscroll-contain px-[19px] pb-4">
+    <div className={`no-scrollbar px-[19px] pb-4 ${props.inDrawer ? "flex-none overflow-visible" : "min-h-0 flex-1 overflow-y-auto overscroll-contain"}`}>
       <div className="space-y-0.5 border-b border-[#52627a] py-4">{groups[0].items.map(renderItem)}</div>
       {nextStep?.kind === "product" && <Link href={nextStep.href} className="next-step-glow mt-3 flex items-center gap-2 rounded-lg border border-[#796dff] bg-[#241e68] px-3 py-2 text-xs text-white hover:bg-[#30277e] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"><span aria-hidden="true" className="text-lg">➜</span><span className="min-w-0"><strong className="block">Next: {nextStep.label}</strong><span className="block truncate text-[#d3cfff]">{nextStep.detail}</span></span></Link>}
       {nextStep?.kind === "feature" && <details className="next-step-glow mt-3 rounded-lg border border-[#796dff] bg-[#241e68] text-xs text-white">

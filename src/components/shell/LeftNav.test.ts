@@ -2,6 +2,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import LeftNav, { buildSidebarGroups } from "./LeftNav";
+import MobileNavDrawer from "./MobileNavDrawer";
 import NavTabs from "@/components/workspace/NavTabs";
 
 const route = vi.hoisted(() => ({ pathname: "/initiatives/example/overview" }));
@@ -13,6 +14,13 @@ const initiatives = [{
 }];
 
 describe("approved navigation map", () => {
+  it("gives the compact drawer one scroll area for the full menu", () => {
+    const html = renderToStaticMarkup(createElement(MobileNavDrawer, { open: true, onClose: () => {}, initiatives }));
+    expect(html).toMatch(/role="dialog"[^>]*overflow-y-auto/);
+    expect(html).toMatch(/<nav aria-label="Main navigation" class="[^"]*h-auto/);
+    expect(html).toMatch(/<div class="no-scrollbar px-\[19px\] pb-4 flex-none overflow-visible"/);
+  });
+
   it("does not route global or product pages into the first feature", () => {
     for (const pathname of ["/home", "/projects/project", "/integrations"]) {
       const groups = buildSidebarGroups({ initiatives, canManageWorkspace: true }, pathname);
