@@ -36,13 +36,13 @@ export default function BacklogConnectionPicker({ featureId, currentBacklogId, b
         <h2 id="feature-backlog-heading" className="font-semibold text-[#0d1b3e]">Connected backlog</h2>
         <p className="mt-1 text-sm text-slate-600">{current ? current.name : "No backlog selected"}</p>
       </div>
-      {current && <Link href={`/backlogs/${current.id}`} className="rounded-lg border border-indigo-200 px-3 py-2 text-sm font-semibold text-indigo-700 hover:bg-indigo-50">View shared backlog →</Link>}
+      {current && <Link href={`/backlogs/${current.id}`} className="rounded-lg border border-indigo-200 px-3 py-2 text-sm font-semibold text-indigo-700 hover:bg-indigo-50">View backlog →</Link>}
     </div>
     {canEdit && <div className="mt-4 grid gap-3 border-t border-slate-200 pt-4 md:grid-cols-[minmax(0,1fr)_auto]">
-      <label className="text-sm font-medium text-slate-800">Choose a backlog in this product
+      <label className="text-sm font-medium text-slate-800">Choose an available backlog in this product
         <select value={selectedId} onChange={event => setSelectedId(event.target.value)} className="mt-1 block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm">
           <option value="">Choose a backlog</option>
-          {backlogs.map(backlog => <option key={backlog.id} value={backlog.id}>{backlog.name} ({backlog.featureCount} {backlog.featureCount === 1 ? "feature" : "features"})</option>)}
+          {backlogs.map(backlog => <option key={backlog.id} value={backlog.id}>{backlog.name}{backlog.id === currentBacklogId ? " (current)" : ""}</option>)}
         </select>
       </label>
       <button type="button" disabled={busy || !selectedId || selectedId === currentBacklogId} onClick={() => void save({ action: "select", backlogId: selectedId })} className="self-end rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">Connect feature</button>

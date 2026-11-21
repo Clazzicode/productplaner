@@ -20,7 +20,11 @@ async function OverviewPage({ params }: { params: Promise<{ initiativeId: string
     hasCollaborationAction(initiativeId, user.id, "edit"),
   ]);
   const backlogs = await db.backlog.findMany({
-    where: { projectId: initiative.projectId, organizationId: initiative.organizationId },
+    where: {
+      projectId: initiative.projectId,
+      organizationId: initiative.organizationId,
+      OR: [{ id: initiative.backlogId ?? "" }, { initiatives: { none: {} } }],
+    },
     select: { id: true, name: true, _count: { select: { initiatives: true } } },
     orderBy: [{ name: "asc" }, { id: "asc" }],
   });

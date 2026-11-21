@@ -8,7 +8,7 @@ import { listUnifiedBacklog } from "@/lib/backlog/unified";
 import { ContainedLayout } from "@/components/layout/PageLayouts";
 import Breadcrumb from "@/components/ui/Breadcrumb";
 
-async function SharedBacklogPage({ params }: { params: Promise<{ id: string }> }) {
+async function FeatureBacklogPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const user = await requireCurrentUser();
   establishAuthContext(user.authUserId);
@@ -30,7 +30,7 @@ async function SharedBacklogPage({ params }: { params: Promise<{ id: string }> }
     <Breadcrumb items={[{ label: "Products", href: "/projects" }, { label: backlog.project.name, href: `/projects/${backlog.project.id}` }, { label: backlog.name }]} />
     <div className="mt-5">
       <h1 className="text-3xl font-bold text-slate-950">{backlog.name}</h1>
-      <p className="mt-2 text-sm text-slate-600">Work from the features connected to this backlog. Open a feature to edit its work.</p>
+      <p className="mt-2 text-sm text-slate-600">Work connected to this feature’s backlog. Open the feature to edit its work.</p>
     </div>
     <div className="mt-6 space-y-5">
       {sections.map(section => <section key={section.id} className="rounded-xl border border-slate-200 bg-white p-5">
@@ -49,4 +49,4 @@ async function SharedBacklogPage({ params }: { params: Promise<{ id: string }> }
   </ContainedLayout>;
 }
 
-export default withAuthenticatedPage(SharedBacklogPage);
+export default withAuthenticatedPage(FeatureBacklogPage);

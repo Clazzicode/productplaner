@@ -638,7 +638,7 @@ model Initiative {
   updatedAt                  DateTime                    @updatedAt
 
   @@index([projectId])
-  @@index([backlogId])
+  @@unique([backlogId])
   @@index([organizationId, projectId])
 }
 
