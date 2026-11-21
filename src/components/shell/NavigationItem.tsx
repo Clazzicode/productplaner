@@ -22,6 +22,7 @@ export interface NavigationItemProps {
   href: string | null;
   disabled?: NavDisabledState;
   exact?: boolean;
+  nextStep?: boolean;
 }
 
 const ICONS: Record<string, string> = {
@@ -86,13 +87,14 @@ export default function NavigationItem(props: NavigationItemProps & { nested?: b
       href={props.href}
       prefetch={requestsLink ? false : undefined}
       aria-current={active ? "page" : undefined}
-      className={`flex items-center rounded-md px-3 py-2 transition ${props.nested ? "min-h-8 text-[13px]" : "min-h-10 text-sm"} ${active ? "font-semibold" : "font-normal"} ${
+      className={`flex items-center justify-between rounded-md px-3 py-2 transition ${props.nested ? "min-h-8 text-[13px]" : "min-h-10 text-sm"} ${active ? "font-semibold" : "font-normal"} ${props.nextStep ? "next-step-glow" : ""} ${
         active
           ? "bg-gradient-to-r from-[#5c55f7] to-[#4b45e8] text-white"
           : "text-[#d7e0f3] hover:bg-nav-hover hover:text-white"
       }`}
     >
       <ItemLabel label={props.label} icon={props.icon} />
+      {props.nextStep && <><span className="sr-only">Next step</span><span aria-hidden="true" className="text-lg text-[#c9baff]">➜</span></>}
       {requestsLink && <PendingRequestsNavigation />}
     </Link>
   );

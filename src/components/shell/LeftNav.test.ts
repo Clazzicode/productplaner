@@ -22,6 +22,23 @@ describe("approved navigation map", () => {
     const groups = buildSidebarGroups({ initiatives, canManageWorkspace: true }, "/initiatives/example/backlog");
     expect(JSON.stringify(groups)).toContain("/initiatives/example/overview");
   });
+
+  it("guides from product selection to a feature in that product", () => {
+    route.pathname = "/home";
+    const global = renderToStaticMarkup(createElement(LeftNav, { initiatives, canManageWorkspace: true }));
+    expect(global).toContain("Next: Choose a product");
+    expect(global).toContain("no-scrollbar");
+
+    route.pathname = "/projects/project";
+    const product = renderToStaticMarkup(createElement(LeftNav, { initiatives, project: { id: "project", name: "Project" }, canManageWorkspace: true }));
+    expect(product).toContain("Next: Choose a feature");
+    expect(product).toContain("/initiatives/example/overview");
+    expect(product).toContain("/projects/project#product-features");
+
+    route.pathname = "/initiatives/example/overview";
+    const feature = renderToStaticMarkup(createElement(LeftNav, { initiatives, project: { id: "project", name: "Project" }, canManageWorkspace: true }));
+    expect(feature).not.toContain("Next: Choose a feature");
+  });
   it("keeps all 34 destinations with Feature and Sprint subsections", () => {
     const html = renderToStaticMarkup(createElement(LeftNav, { initiatives, canManageWorkspace: true }));
     // The brand also links to Home, in addition to the 34 destinations.

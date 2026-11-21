@@ -84,7 +84,7 @@ async function ProjectHomePage({ params }: { params: Promise<{ id: string }> }) 
         <p className="mt-3 text-xs text-neutral-500">Planning approach: {project.planningApproach}</p>
       )}
 
-      <div className="mt-8">
+      <div id="product-features" className="mt-8 scroll-mt-20">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-indigo-600">Features</h2>
         {project.initiatives.length === 0 ? (
           <div className="mt-3 rounded-2xl border border-dashed border-neutral-300 bg-white p-8 text-center">

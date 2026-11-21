@@ -141,12 +141,13 @@ export default function AppShell(props: {
   return (
     <div className="flex min-h-dvh w-full min-w-0 bg-surface">
       <div className={roadmap ? "hidden min-[851px]:contents" : "hidden xl:contents"}>
-        <LeftNav initiatives={props.initiatives} canManageWorkspace={props.canManageWorkspace} userId={props.userId} />
+        <LeftNav initiatives={props.initiatives} project={selectedProject} canManageWorkspace={props.canManageWorkspace} userId={props.userId} />
       </div>
       <MobileNavDrawer
         open={drawerOpen}
         onClose={() => setDrawerOpen(false)}
         initiatives={props.initiatives}
+        project={selectedProject}
         canManageWorkspace={props.canManageWorkspace}
         userId={props.userId}
         topContent={switcherAndNew}

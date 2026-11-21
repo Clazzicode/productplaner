@@ -493,6 +493,13 @@ html:has(.roadmap-route-frame)::-webkit-scrollbar { display: none; }
   }
 }
 
+.next-step-glow {
+  box-shadow: 0 0 0 1px #a799ff, 0 0 13px #795dff99;
+}
+.next-step-glow:hover, .next-step-glow:focus-visible {
+  box-shadow: 0 0 0 2px #c5baff, 0 0 19px #987affbb;
+}
+
 /* Loading system (guided-activation restructure — reference doc §14-19).
    Three-dot "working" indicator shared by InlineLoader/ButtonLoader/
    AuthenticationLoader. JS only adds this class when
