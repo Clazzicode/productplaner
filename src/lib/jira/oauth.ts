@@ -173,7 +173,7 @@ export async function disconnectJira(connectionId: string, actorUserId: string) 
       select: { id: true },
     });
     for (const connection of revokedConnections) {
-      await db.$executeRaw`SELECT app_private.purge_jira_source_data(${connection.id})`;
+      await db.$queryRaw`SELECT app_private.purge_jira_source_data(${connection.id})`;
     }
     return revoked;
   });
