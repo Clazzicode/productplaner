@@ -154,6 +154,7 @@ export default function AppShell(props: {
       />
       <div className="flex min-w-0 flex-1 flex-col">
         <TopHeader
+          key={selectedProject?.id ?? "all-products"}
           createActions={createActions}
           accountActions={<AccountMenu userName={props.userName} accessLevel={props.accessLevel} />}
           userName={props.userName}
