@@ -47,7 +47,10 @@ async function RootLayout({
   // Step 8C (docs/V2-RESOURCE-ACCESS.md §16): the switcher/nav initiative list
   // is authorized-scoped too — it drives real navigation targets, so it must
   // never offer an initiative a detail page would then reject.
-  const authorizedInitiativeIds = user ? await listAuthorizedInitiativeIds(user) : [];
+  const [authorizedInitiativeIds, projects] = user ? await Promise.all([
+    listAuthorizedInitiativeIds(user),
+    db.project.findMany({ where: { organizationId: user.organizationId }, select: { id: true, name: true }, orderBy: { name: "asc" } }),
+  ]) : [[], []];
   const initiatives = user
     ? await db.initiative.findMany({
         where: { id: { in: authorizedInitiativeIds ?? [] } },
@@ -99,6 +102,7 @@ async function RootLayout({
             userId={user?.authUserId ?? ""}
             accessLevel={user?.accessLevel ?? "standard_user"}
             initiatives={navigationInitiatives}
+            projects={projects}
           >
             {children}
           </AppShell>

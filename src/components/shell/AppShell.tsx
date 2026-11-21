@@ -29,6 +29,7 @@ export default function AppShell(props: {
   userId: string;
   accessLevel: string;
   initiatives: NavInitiative[];
+  projects: { id: string; name: string }[];
   children: React.ReactNode;
 }) {
   const pathname = usePathname() ?? "";
@@ -47,13 +48,13 @@ export default function AppShell(props: {
 
   const urlMatch = pathname.match(/^\/initiatives\/([^/]+)/);
   const currentId = urlMatch?.[1] ?? "";
-  const routeInitiative = props.initiatives.find((i) => i.id === currentId);
-  const currentInitiative =
-    routeInitiative ??
-    props.initiatives[0];
-  const projects = Array.from(new Map(props.initiatives.filter(row => row.project).map(row => [row.project!.id, row.project!])).values());
+  const backlogId = pathname.match(/^\/backlogs\/([^/]+)/)?.[1];
+  const routeInitiative = props.initiatives.find((i) => i.id === currentId)
+    ?? (backlogId ? props.initiatives.find((i) => i.backlogId === backlogId) : undefined);
+  const currentInitiative = routeInitiative;
   const routeProjectId = pathname.match(/^\/projects\/([^/]+)/)?.[1];
-  const selectedProject = projects.find(project => project.id === routeProjectId) ?? currentInitiative?.project ?? undefined;
+  const selectedProject = props.projects.find(project => project.id === routeProjectId)
+    ?? currentInitiative?.project ?? undefined;
   const home = pathname === "/home";
   const roadmap = /^\/initiatives\/[^/]+\/workspace\/roadmap\/?$/.test(pathname);
   const sprintPlanning = /^\/initiatives\/[^/]+\/workspace\/sprint-preparation\/?$/.test(pathname);
@@ -84,7 +85,7 @@ export default function AppShell(props: {
           <span className="block max-w-56 truncate">▣ &nbsp;{currentInitiative.project.name}</span>
         </Link>
       )}
-      {props.initiatives.length > 0 && (
+      {selectedProject && props.initiatives.some(i => i.project?.id === selectedProject.id) && (
         <label className="min-w-0 xl:min-w-80">
           <span className="mb-1 block text-[10px] font-medium text-text-muted">Feature</span>
           <select
@@ -93,7 +94,7 @@ export default function AppShell(props: {
             className="w-full max-w-96 rounded-lg border border-[#d4def1] bg-white px-3 py-2 text-sm font-semibold text-text-primary shadow-sm focus:border-indigo-500 focus:outline-none"
           >
             <option value="" disabled>Switch feature…</option>
-            {props.initiatives.map((i) => (
+            {props.initiatives.filter(i => i.project?.id === selectedProject.id).map((i) => (
               <option key={i.id} value={i.id}>
                 {i.name}{i.status !== "generated" ? " (intake)" : ""}
               </option>
@@ -161,7 +162,8 @@ export default function AppShell(props: {
           requestHref={currentInitiative ? `/initiatives/${currentInitiative.id}/requests` : undefined}
           featureHref={currentInitiative ? `/initiatives/${currentInitiative.id}/backlog` : undefined}
           project={selectedProject}
-          projects={projects}
+          feature={currentInitiative ? { id: currentInitiative.id, name: currentInitiative.name } : undefined}
+          projects={props.projects}
           destinations={sectionDestinations(buildSidebarGroups(props, pathname))}
         />
         <main className={`min-w-0 flex-1 ${home ? "bg-white" : "bg-[#f4f5fe]"}`}>

@@ -1,10 +1,10 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
-import LeftNav from "./LeftNav";
+import LeftNav, { buildSidebarGroups } from "./LeftNav";
 import NavTabs from "@/components/workspace/NavTabs";
 
-const route = vi.hoisted(() => ({ pathname: "/home" }));
+const route = vi.hoisted(() => ({ pathname: "/initiatives/example/overview" }));
 vi.mock("next/navigation", () => ({ usePathname: () => route.pathname }));
 
 const initiatives = [{
@@ -13,6 +13,15 @@ const initiatives = [{
 }];
 
 describe("approved navigation map", () => {
+  it("does not route global or product pages into the first feature", () => {
+    for (const pathname of ["/home", "/projects/project", "/integrations"]) {
+      const groups = buildSidebarGroups({ initiatives, canManageWorkspace: true }, pathname);
+      expect(JSON.stringify(groups)).not.toContain("/initiatives/example/overview");
+      expect(JSON.stringify(groups)).not.toContain("/initiatives/example/backlog");
+    }
+    const groups = buildSidebarGroups({ initiatives, canManageWorkspace: true }, "/initiatives/example/backlog");
+    expect(JSON.stringify(groups)).toContain("/initiatives/example/overview");
+  });
   it("keeps all 34 destinations with Feature and Sprint subsections", () => {
     const html = renderToStaticMarkup(createElement(LeftNav, { initiatives, canManageWorkspace: true }));
     // The brand also links to Home, in addition to the 34 destinations.

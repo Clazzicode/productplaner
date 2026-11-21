@@ -41,7 +41,9 @@ function isSubgroup(item: NavigationItemProps | SidebarSubgroup): item is Sideba
 
 export function buildSidebarGroups(props: { initiatives: NavInitiative[]; canManageWorkspace?: boolean }, pathname: string): SidebarGroup[] {
   const match = pathname.match(/^\/initiatives\/([^/]+)/);
-  const current = (match && props.initiatives.find(row => row.id === match[1])) || props.initiatives[0] || null;
+  const backlogId = pathname.match(/^\/backlogs\/([^/]+)/)?.[1];
+  const current = (match && props.initiatives.find(row => row.id === match[1]))
+    || (backlogId && props.initiatives.find(row => row.backlogId === backlogId)) || null;
   const scoped = (suffix: string, label: string): NavigationItemProps => current
     ? { label, href: `/initiatives/${current.id}/${suffix}` }
     : { label, href: null, disabled: { reason: "Select or create a feature first.", cta: { label: "Open features", href: "/initiatives" } } };
