@@ -46,6 +46,7 @@ export default function JiraDeliveryLive({ initiativeId, target }: { initiativeI
   const connected = data?.connections.some(connection => connection.status === "connected") ?? false;
   if (!data && !error) return <p className="text-xs text-neutral-500">Loading Jira delivery status…</p>;
   if (!data) return <p role="status" className="text-xs text-amber-800">Jira delivery status could not be refreshed.</p>;
+  if (!target && data.connections.length === 0) return null;
   const counts = { inProgress: items.filter(item => item.deliveryMappedStatus === "in_progress").length, done: items.filter(item => item.deliveryMappedStatus === "done").length, blocked: items.filter(item => item.deliveryMappedStatus === "blocked").length };
   const awaitingPoValidation = items.filter(item => item.targetType === "story" && item.deliveryMappedStatus === "done" && item.poValidationStatus !== "accepted").length;
   const localHref = (item: Item) => `/initiatives/${encodeURIComponent(initiativeId)}/workspace/${item.targetType === "feature" ? "features" : item.targetType === "bug" ? "bugs" : "stories"}/${encodeURIComponent(item.targetId)}`;
