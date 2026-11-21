@@ -30,6 +30,7 @@ export default function AtlassianOAuthConnection(props: { canManage: boolean }) 
   const [connection, setConnection] = useState<Connection | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [awaitingAuthorization, setAwaitingAuthorization] = useState(false);
   const [message, setMessage] = useState<{ text: string; error?: boolean } | null>(null);
 
   const load = useCallback(async (callbackResult?: string | null) => {
@@ -55,11 +56,25 @@ export default function AtlassianOAuthConnection(props: { canManage: boolean }) 
     return () => window.clearTimeout(timer);
   }, [load]);
 
+  useEffect(() => {
+    if (!awaitingAuthorization) return;
+    const onReturn = () => {
+      setAwaitingAuthorization(false);
+      void load();
+    };
+    window.addEventListener("focus", onReturn);
+    return () => window.removeEventListener("focus", onReturn);
+  }, [awaitingAuthorization, load]);
+
   const connect = async () => {
+    // Keep Clarivia available if Atlassian shows its own error page on Cancel.
+    const authorizationTab = window.open("about:blank", "_blank");
+    if (authorizationTab) authorizationTab.opener = null;
     setBusy(true);
     setMessage(null);
     const response = await apiFetch<StartResult>("/api/atlassian/oauth/start", { method: "POST" });
     if (!response.ok || !response.data?.authorizationUrl) {
+      authorizationTab?.close();
       setBusy(false);
       setMessage({ text: response.error ?? "Could not start the Atlassian connection.", error: true });
       return;
@@ -67,8 +82,16 @@ export default function AtlassianOAuthConnection(props: { canManage: boolean }) 
     try {
       const destination = new URL(response.data.authorizationUrl);
       if (destination.origin !== "https://auth.atlassian.com") throw new Error("Invalid authorization destination");
-      window.location.assign(destination.toString());
+      if (authorizationTab) {
+        authorizationTab.location.replace(destination.toString());
+        setAwaitingAuthorization(true);
+        setMessage({ text: "Atlassian authorization opened in a new tab. Return here after approving or cancelling." });
+        setBusy(false);
+      } else {
+        window.location.assign(destination.toString());
+      }
     } catch {
+      authorizationTab?.close();
       setBusy(false);
       setMessage({ text: "The Atlassian authorization destination was invalid.", error: true });
     }

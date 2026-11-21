@@ -14,7 +14,9 @@ async function handler(request: Request) {
   const state = url.searchParams.get("state");
   const code = url.searchParams.get("code");
   let outcome = "connected";
-  if (!state || !code || url.searchParams.has("error")) {
+  if (url.searchParams.has("error")) {
+    outcome = "cancelled";
+  } else if (!state || !code) {
     outcome = "invalid_state";
   } else {
     try {

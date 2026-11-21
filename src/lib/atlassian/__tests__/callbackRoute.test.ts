@@ -51,6 +51,18 @@ beforeEach(() => {
 });
 
 describe("Atlassian OAuth callback connection continuity", () => {
+  it("returns a cancelled outcome without changing the grant when consent is denied", async () => {
+    const request = new Request(`https://preview.example/api/atlassian/oauth/callback?state=${"a".repeat(43)}&error=access_denied`);
+    const response = await GET(request);
+    const redirect = new URL(response.headers.get("location")!);
+
+    expect(response.status).toBe(303);
+    expect(redirect.pathname).toBe("/integrations/jira");
+    expect(redirect.searchParams.get("atlassian")).toBe("cancelled");
+    expect(mocks.resources).not.toHaveBeenCalled();
+    expect(mocks.grant).not.toHaveBeenCalled();
+  });
+
   it("keeps the same connection and project mapping on a same-site reconnect", async () => {
     mocks.findMany.mockResolvedValue([{ id: "connection-old", cloudId: "site-a", projectId: "100", projectKey: "SCRUM", projectName: "Test", status: "connected" }]);
 
