@@ -17,7 +17,7 @@ async function handler(request: Request) {
     await withServiceContext(async () => await db.$queryRaw`SELECT app_private.enqueue_due_jira_delivery_reconciliation(10)`);
     const data = await processJiraJobs(25);
     stage("retention");
-    await withServiceContext(async () => await db.$queryRaw`SELECT app_private.expire_jira_source_data()`);
+    await withServiceContext(async () => await db.$queryRaw`SELECT app_private.expire_jira_source_data()::text AS result`);
     return { data, counts: { processed: data.claimed, completed: data.completed, retried: data.retried, failed: data.failed } };
   });
   return Response.json(result);
