@@ -15,20 +15,10 @@ async function OverviewPage({ params }: { params: Promise<{ initiativeId: string
   const user = await requireCurrentUser();
   await requireInitiativeView(user, initiativeId);
   const [initiative, evidence, canEdit] = await Promise.all([
-    db.initiative.findUniqueOrThrow({ where: { id: initiativeId }, include: { prototype: { select: { id: true } }, project: { select: { id: true, name: true, goal: true, targetLaunchDate: true } } } }),
+    db.initiative.findUniqueOrThrow({ where: { id: initiativeId }, include: { prototype: { select: { id: true } }, backlog: { select: { id: true, name: true } }, project: { select: { id: true, name: true, goal: true, targetLaunchDate: true } } } }),
     loadPlanningEvidence(initiativeId),
     hasCollaborationAction(initiativeId, user.id, "edit"),
   ]);
-  const backlogs = await db.backlog.findMany({
-    where: {
-      projectId: initiative.projectId,
-      organizationId: initiative.organizationId,
-      OR: [{ id: initiative.backlogId ?? "" }, { initiatives: { none: {} } }],
-    },
-    select: { id: true, name: true, _count: { select: { initiatives: true } } },
-    orderBy: [{ name: "asc" }, { id: "asc" }],
-  });
-
   return <DashboardLayout>
     <div className="mx-auto max-w-[1220px]">
       <Link href={`/projects/${initiative.project.id}`} className="text-xs font-bold uppercase tracking-widest text-[#5145ed] hover:underline">{initiative.project.name} / Feature</Link>
@@ -39,10 +29,9 @@ async function OverviewPage({ params }: { params: Promise<{ initiativeId: string
     </div>
 
     <BacklogConnectionPicker
-      key={initiative.backlogId ?? "none"}
+      key={initiative.backlog?.id ?? "none"}
       featureId={initiative.id}
-      currentBacklogId={initiative.backlogId}
-      backlogs={backlogs.map(backlog => ({ id: backlog.id, name: backlog.name, featureCount: backlog._count.initiatives }))}
+      backlog={initiative.backlog}
       canEdit={canEdit}
     />
 

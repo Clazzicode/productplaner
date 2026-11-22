@@ -5,52 +5,46 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { apiFetch } from "@/lib/clientApi";
 
-type BacklogOption = { id: string; name: string; featureCount: number };
-
-export default function BacklogConnectionPicker({ featureId, currentBacklogId, backlogs, canEdit }: {
+export default function BacklogConnectionPicker({ featureId, backlog, canEdit }: {
   featureId: string;
-  currentBacklogId: string | null;
-  backlogs: BacklogOption[];
+  backlog: { id: string; name: string } | null;
   canEdit: boolean;
 }) {
   const router = useRouter();
-  const [selectedId, setSelectedId] = useState(currentBacklogId ?? "");
-  const [newName, setNewName] = useState("");
+  const [editing, setEditing] = useState(false);
+  const [name, setName] = useState(backlog?.name ?? "");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const current = backlogs.find(backlog => backlog.id === currentBacklogId);
 
-  async function save(body: { action: "select"; backlogId: string } | { action: "create"; name: string }) {
+  async function save() {
     setBusy(true);
     setError("");
-    const result = await apiFetch(`/api/initiatives/${featureId}/backlog-connection`, { method: "PATCH", body });
+    const result = await apiFetch(`/api/initiatives/${featureId}/backlog-connection`, {
+      method: "PATCH", body: { action: backlog ? "rename" : "create", name: name.trim() },
+    });
     setBusy(false);
-    if (!result.ok) { setError(result.error ?? "Could not connect the backlog."); return; }
-    setNewName("");
+    if (!result.ok) { setError(result.error ?? "Could not save the backlog."); return; }
+    setEditing(false);
     router.refresh();
   }
 
-  return <section aria-labelledby="feature-backlog-heading" className="mx-auto mt-5 max-w-[1220px] rounded-xl border border-indigo-200 bg-white p-4 shadow-sm">
-    <div className="flex flex-wrap items-center justify-between gap-3">
+  return <section aria-labelledby="feature-backlog-heading" className="mx-auto mt-5 max-w-[1220px] rounded-xl border border-indigo-200 bg-white p-5 shadow-sm">
+    <div className="flex flex-wrap items-center justify-between gap-4">
       <div>
         <h2 id="feature-backlog-heading" className="font-semibold text-[#0d1b3e]">This feature’s backlog</h2>
-        <p className="mt-1 text-sm text-slate-600">{current ? current.name : "No backlog selected"}</p>
-        <p className="mt-1 text-xs text-slate-500">Each feature has its own backlog. You can connect a different available backlog or create one here.</p>
+        <p className="mt-1 text-sm text-slate-600">{backlog?.name ?? "No backlog connected yet"}</p>
+        <p className="mt-1 text-xs text-slate-500">Work planned for this feature stays in its own backlog.</p>
       </div>
-      {current && <Link href={`/backlogs/${current.id}`} className="rounded-lg border border-indigo-200 px-3 py-2 text-sm font-semibold text-indigo-700 hover:bg-indigo-50">View backlog →</Link>}
+      {backlog && <Link href={`/initiatives/${featureId}/backlog`} className="inline-flex min-h-11 items-center rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700">Open backlog →</Link>}
     </div>
-    {canEdit && <div className="mt-4 grid gap-3 border-t border-slate-200 pt-4 md:grid-cols-[minmax(0,1fr)_auto]">
-      <label className="text-sm font-medium text-slate-800">Choose an available backlog in this product
-        <select value={selectedId} onChange={event => setSelectedId(event.target.value)} className="mt-1 block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm">
-          <option value="">Choose a backlog</option>
-          {backlogs.map(backlog => <option key={backlog.id} value={backlog.id}>{backlog.name}{backlog.id === currentBacklogId ? " (current)" : ""}</option>)}
-        </select>
-      </label>
-      <button type="button" disabled={busy || !selectedId || selectedId === currentBacklogId} onClick={() => void save({ action: "select", backlogId: selectedId })} className="self-end rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">Connect feature</button>
-      <label className="text-sm font-medium text-slate-800">Or create a new backlog
-        <input value={newName} onChange={event => setNewName(event.target.value)} maxLength={160} placeholder="Backlog name" className="mt-1 block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm" />
-      </label>
-      <button type="button" disabled={busy || newName.trim().length < 3} onClick={() => void save({ action: "create", name: newName })} className="self-end rounded-lg border border-indigo-300 px-4 py-2 text-sm font-semibold text-indigo-700 disabled:opacity-50">Create and connect</button>
+    {canEdit && <div className="mt-4 border-t border-slate-200 pt-4">
+      {!editing ? <button type="button" onClick={() => setEditing(true)} className="inline-flex min-h-10 items-center rounded-lg border border-indigo-200 px-3 py-2 text-sm font-semibold text-indigo-700 hover:bg-indigo-50">{backlog ? "Rename backlog" : "Create backlog"}</button> : <div className="flex flex-wrap items-end gap-3">
+        <label className="min-w-[220px] flex-1 text-sm font-medium text-slate-800">Backlog name
+          <input value={name} onChange={event => setName(event.target.value)} maxLength={160} className="mt-1 block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm" />
+        </label>
+        <button type="button" disabled={busy || name.trim().length < 3 || name.trim() === backlog?.name} onClick={() => void save()} className="min-h-10 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">Save</button>
+        <button type="button" onClick={() => { setEditing(false); setName(backlog?.name ?? ""); setError(""); }} className="min-h-10 rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700">Cancel</button>
+      </div>}
     </div>}
     {error && <p role="alert" className="mt-3 text-sm text-red-700">{error}</p>}
   </section>;

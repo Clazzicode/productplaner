@@ -44,18 +44,18 @@ export function buildSidebarGroups(props: { initiatives: NavInitiative[]; canMan
   const backlogId = pathname.match(/^\/backlogs\/([^/]+)/)?.[1];
   const current = (match && props.initiatives.find(row => row.id === match[1]))
     || (backlogId && props.initiatives.find(row => row.backlogId === backlogId)) || null;
+  if (!current) return [{ title: "", items: [
+    { label: "Home", href: "/home" },
+    { label: "Products", href: "/projects" },
+    ...(props.canManageWorkspace ? [{ label: "Integrations", href: "/integrations" }] : []),
+  ] }];
   const scoped = (suffix: string, label: string): NavigationItemProps => current
     ? { label, href: `/initiatives/${current.id}/${suffix}` }
     : { label, href: null, disabled: { reason: props.project ? `Choose a feature in ${props.project.name} first.` : "Choose a product, then a feature first.", cta: { label: props.project ? "Choose feature" : "Choose product", href: props.project ? `/projects/${props.project.id}#product-features` : "/projects#product-list" } } };
   return [
     { title: "", items: [{ label: "Home", href: "/home" }, { label: "Products", href: "/projects" }, scoped("overview", "Five-tool guide")] },
     { title: "Plan", collapsible: true, items: [
-      { label: "Features", items: [
-        ...(props.project ? [{ label: "Features in this product", href: `/projects/${props.project.id}#product-features` }] : []),
-        { label: "All products' features", href: "/initiatives", exact: true },
-        ...(props.canManageWorkspace ? [{ label: "New feature", href: `/initiatives?create=feature${props.project ? `&productId=${encodeURIComponent(props.project.id)}` : ""}`, clientSideQuery: true }] : []),
-        scoped("intake", "Feature brief"),
-      ] },
+      scoped("intake", "Feature brief"),
       scoped("requests", "Requests & Priorities"), scoped("backlog", "Backlog"),
       scoped("workspace/epics", "Stories & Criteria"), scoped("workspace/refinement", "Refinement"),
       scoped("workspace/roadmap", "Roadmap"), scoped("workspace/documents", "Documents"),
@@ -81,7 +81,6 @@ export default function LeftNav(props: { initiatives: NavInitiative[]; canManage
   const pathname = usePathname() ?? "";
   const groups = buildSidebarGroups(props, pathname);
   const activeFeature = props.initiatives.some(initiative => pathname.startsWith(`/initiatives/${initiative.id}/`) || pathname === `/initiatives/${initiative.id}` || (initiative.backlogId && pathname === `/backlogs/${initiative.backlogId}`));
-  const productFeatures = props.initiatives.filter(initiative => initiative.project?.id === props.project?.id);
   const nextStep = activeFeature ? null : props.project
     ? { kind: "feature" as const, href: `/projects/${props.project.id}`, label: "Choose a feature", detail: `In ${props.project.name}` }
     : { kind: "product" as const, href: "/projects#product-list", label: "Choose a product", detail: "Then select a feature" };
@@ -149,24 +148,15 @@ export default function LeftNav(props: { initiatives: NavInitiative[]; canManage
 
   return <nav aria-label="Main navigation" className={`no-print flex shrink-0 flex-col border-r border-[#243a58] bg-[#071a34] text-white ${props.inDrawer ? "relative h-auto w-full" : "sticky top-0 h-dvh w-[253px]"}`}>
     <Link href="/home" className="block shrink-0 px-[26px] pb-4 pt-2"><span className="block text-[24px] font-semibold leading-7 tracking-[-0.04em]">Clarivia</span><span className="block text-[10px] font-semibold uppercase tracking-[0.2em] text-[#b4c2e6]">Product platform</span></Link>
-    <div className="mx-[19px] flex h-[38px] shrink-0 rounded-lg border border-[#405575] p-0.5 text-[13px]">
+    {activeFeature && <div className="mx-[19px] flex h-[38px] shrink-0 rounded-lg border border-[#405575] p-0.5 text-[13px]">
       <button type="button" onClick={() => setTab("mine")} aria-pressed={tab === "mine"} className={`flex flex-1 items-center justify-center gap-1 rounded-md ${tab === "mine" ? "bg-[#5145ed] font-semibold" : "text-[#dae4f7] hover:bg-white/10"}`}><span aria-hidden>♙</span>My menu</button>
       <button type="button" onClick={() => setTab("all")} aria-pressed={tab === "all"} className={`flex flex-1 items-center justify-center gap-1 rounded-md ${tab === "all" ? "bg-[#5145ed] font-semibold" : "text-[#dae4f7] hover:bg-white/10"}`}><span aria-hidden>▦</span>All sections</button>
-    </div>
+    </div>}
     <div className={`no-scrollbar px-[19px] pb-4 ${props.inDrawer ? "flex-none overflow-visible" : "min-h-0 flex-1 overflow-y-auto overscroll-contain"}`}>
       <div className="space-y-0.5 border-b border-[#52627a] py-4">{groups[0].items.map(renderItem)}</div>
       {nextStep?.kind === "product" && <Link href={nextStep.href} className="next-step-glow mt-3 flex items-center gap-2 rounded-lg border border-[#796dff] bg-[#241e68] px-3 py-2 text-xs text-white hover:bg-[#30277e] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"><span aria-hidden="true" className="text-lg">➜</span><span className="min-w-0"><strong className="block">Next: {nextStep.label}</strong><span className="block truncate text-[#d3cfff]">{nextStep.detail}</span></span></Link>}
-      {nextStep?.kind === "feature" && <details className="next-step-glow mt-3 rounded-lg border border-[#796dff] bg-[#241e68] text-xs text-white">
-        <summary className="flex cursor-pointer list-none items-center gap-2 px-3 py-2"><span aria-hidden="true" className="text-lg">➜</span><span className="min-w-0"><strong className="block">Next: {nextStep.label}</strong><span className="block truncate text-[#d3cfff]">{nextStep.detail}</span></span></summary>
-        <div className="no-scrollbar max-h-48 space-y-1 overflow-y-auto border-t border-[#796dff] p-2">
-          {productFeatures.map(feature => <Link key={feature.id} href={`/initiatives/${feature.id}/overview`} className="block rounded px-2 py-1.5 hover:bg-white/15">{feature.name}</Link>)}
-          {productFeatures.length === 0 && <p className="px-2 py-1.5 text-[#d3cfff]">No features available to you in this product yet.</p>}
-          {productFeatures.length === 0 && props.canManageWorkspace && props.project && <Link href={`/projects/${props.project.id}/initiatives/new`} className="block rounded px-2 py-1.5 font-semibold hover:bg-white/15">Create a feature</Link>}
-          {productFeatures.length === 0 && !props.canManageWorkspace && <p className="px-2 py-1.5 text-[#d3cfff]">Ask a workspace admin to add or share one.</p>}
-          <Link href={`${nextStep.href}#product-features`} className="block rounded px-2 py-1.5 text-[#d3cfff] hover:bg-white/15">View product overview</Link>
-        </div>
-      </details>}
-      {tab === "mine" && <section className="pt-4" aria-label="Pinned shortcuts">
+      {nextStep?.kind === "feature" && <Link href={`${nextStep.href}#product-features`} className="next-step-glow mt-3 flex items-center gap-2 rounded-lg border border-[#796dff] bg-[#241e68] px-3 py-2 text-xs text-white hover:bg-[#30277e]"><span aria-hidden="true" className="text-lg">➜</span><span><strong className="block">Next: Choose a feature</strong><span className="text-[#d3cfff]">In {props.project?.name}</span></span></Link>}
+      {activeFeature && tab === "mine" && <section className="pt-4" aria-label="Pinned shortcuts">
         <div className="mb-3 flex items-center justify-between"><h2 className="text-[13px] font-semibold">Pinned shortcuts</h2><button type="button" onClick={() => setEditing(!editing)} className="text-[12px] text-[#a68cff] hover:text-white">✎ {editing ? "Done" : "Edit pins"}</button></div>
         <div className="grid grid-cols-2 gap-2">{prefs.pins.filter(pin => destinationFor(pin)).map(pin => { const destination = destinationFor(pin)!; return <div key={pin} className={`relative min-h-[73px] rounded-[10px] border bg-gradient-to-br from-[#162d4d] to-[#102540] ${pathname === destination.href ? "border-[#6657ff] ring-1 ring-[#6657ff]" : "border-[#334864]"}`}>
           <Link href={destination.href} prefetch={destination.href.endsWith("/requests") ? false : undefined} className="flex h-full flex-col justify-end gap-1 px-3 py-2 pr-5 text-[13px] leading-tight hover:bg-white/[0.05]"><SectionIcon name={iconFor(pin)} size={23} /><span className="truncate">{pin === "Requests & Priorities" ? "Requests" : pin}</span>{destination.href.endsWith("/requests") && <PendingRequestsNavigation />}</Link>
@@ -175,9 +165,9 @@ export default function LeftNav(props: { initiatives: NavInitiative[]; canManage
         </div>; })}</div>
         {editing && <p className="mt-2 text-[11px] text-[#b6c6e1]">Open All sections to pin more destinations or change their icons.</p>}
       </section>}
-      <div className="relative mt-6"><span aria-hidden className="absolute left-3 top-2.5 text-[#bfd0ee]">⌕</span><input value={query} onChange={event => setQuery(event.target.value)} placeholder="Find a section..." aria-label="Find a section" className="h-[37px] w-full rounded-lg border border-[#627694] bg-[#1b304d] pl-8 pr-2 text-[13px] text-white placeholder:text-[#bbcae2] focus:border-[#a68cff] focus:outline-none" /></div>
+      {activeFeature && <><div className="relative mt-6"><span aria-hidden className="absolute left-3 top-2.5 text-[#bfd0ee]">⌕</span><input value={query} onChange={event => setQuery(event.target.value)} placeholder="Find a section..." aria-label="Find a section" className="h-[37px] w-full rounded-lg border border-[#627694] bg-[#1b304d] pl-8 pr-2 text-[13px] text-white placeholder:text-[#bbcae2] focus:border-[#a68cff] focus:outline-none" /></div>
       {query.trim() ? <div className="mt-3 space-y-1" aria-live="polite">{matches.slice(0, 12).map(match => <Link key={`${match.label}-${match.href}`} href={match.href} prefetch={match.href.endsWith("/requests") ? false : undefined} className="flex items-center gap-2 rounded-lg px-2 py-2 text-[13px] hover:bg-white/10"><SectionIcon name={iconFor(match.label)} size={17} /><span className="min-w-0 flex-1 truncate">{match.label}</span><span className="text-[10px] text-[#96a9cb]">{match.group}</span>{match.href.endsWith("/requests") && <PendingRequestsNavigation />}</Link>)}{matches.length === 0 && <p className="px-2 py-2 text-xs text-[#b6c6e1]">No matching section</p>}</div>
-      : <section className="mt-5" aria-label="Browse sections"><h2 className="mb-2 text-[12px] font-semibold">Browse sections</h2><div className="space-y-1.5">{groups.slice(1).map(group => <details key={group.title} className="rounded-lg border border-[#344b6b] bg-white/[0.05]"><summary className="flex h-[35px] cursor-pointer list-none items-center gap-3 px-3 text-[13px] font-medium uppercase"><SectionIcon name={group.title === "Plan" ? "puzzle" : group.title === "Deliver" ? "schedule" : "trend"} size={17} /><span className="flex-1">{group.title}</span><span className="text-[#b9c9ee]">⌄</span></summary><div className="space-y-1 border-t border-white/10 p-1">{group.items.map(renderItem)}</div></details>)}</div></section>}
+      : <section className="mt-5" aria-label="Browse sections"><h2 className="mb-2 text-[12px] font-semibold">Browse sections</h2><div className="space-y-1.5">{groups.slice(1).map(group => <details key={group.title} className="rounded-lg border border-[#344b6b] bg-white/[0.05]"><summary className="flex h-[35px] cursor-pointer list-none items-center gap-3 px-3 text-[13px] font-medium uppercase"><SectionIcon name={group.title === "Plan" ? "puzzle" : group.title === "Deliver" ? "schedule" : "trend"} size={17} /><span className="flex-1">{group.title}</span><span className="text-[#b9c9ee]">⌄</span></summary><div className="space-y-1 border-t border-white/10 p-1">{group.items.map(renderItem)}</div></details>)}</div></section>}</>}
     </div>
     <div className="shrink-0 border-t border-[#334864] px-[19px] py-2"><NavigationItem label="Account settings" href="/account/settings" /></div>
   </nav>;

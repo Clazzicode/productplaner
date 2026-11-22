@@ -1,27 +1,52 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useRef, useState } from "react";
 
-type ProjectRow = { id: string; name: string; description: string; goal: string; initiativeCount: number; initiatives: { id: string; name: string }[]; target: string | null; updated: string; health: "green" | "yellow" | "red" | null; healthReason: string };
+type ProjectRow = {
+  id: string;
+  name: string;
+  description: string;
+  goal: string;
+  initiativeCount: number;
+  initiatives: { id: string; name: string }[];
+  target: string | null;
+  updated: string;
+  health: "green" | "yellow" | "red" | null;
+  healthReason: string;
+};
+
 const healthLabel = { green: "On track", yellow: "Attention", red: "At risk" } as const;
-const healthTone = { green: "bg-emerald-50 text-emerald-700", yellow: "bg-amber-50 text-amber-700", red: "bg-red-50 text-red-700" } as const;
 
 export default function ProjectsPortfolio({ projects, canCreateProject }: { projects: ProjectRow[]; canCreateProject: boolean }) {
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const selected = projects.find(project => project.id === selectedId) ?? null;
-  const triggerRef = useRef<HTMLButtonElement | null>(null);
-  const closeRef = useRef<HTMLButtonElement | null>(null);
-  const openProject = (id: string, trigger: HTMLButtonElement) => { triggerRef.current = trigger; setSelectedId(id); };
-  const closeProject = useCallback(() => { setSelectedId(null); requestAnimationFrame(() => triggerRef.current?.focus()); }, []);
-  useEffect(() => { if (!selected) return; closeRef.current?.focus(); const close = (event: KeyboardEvent) => { if (event.key === "Escape") closeProject(); }; window.addEventListener("keydown", close); return () => window.removeEventListener("keydown", close); }, [selected, closeProject]);
   return <div className="space-y-5">
-    <div className="flex flex-wrap items-end justify-between gap-4"><div><p className="text-xs font-bold uppercase tracking-[0.16em] text-[#5145ed]">Portfolio</p><h1 className="mt-1 text-3xl font-bold tracking-tight text-[#0d1b3e]">Products</h1><p className="mt-2 text-sm text-slate-600">Shared context for your features, targets, and decisions.</p></div>{canCreateProject && <Link href="/projects/new" className="rounded-lg bg-[#5145ed] px-4 py-2.5 text-sm font-semibold text-white">+ New product</Link>}</div>
-    <div id="product-list" className="flex scroll-mt-20 flex-wrap items-center gap-3 border-b border-[#dfe3f4] text-sm"><span className="border-b-2 border-[#5145ed] px-3 py-2 font-semibold text-[#5145ed]">List</span><span className="px-3 py-2 text-slate-500">Board · Coming soon</span><span className="px-3 py-2 text-slate-500">Timeline · Coming soon</span></div>
-    {projects.length === 0 ? <section className="rounded-2xl border border-dashed border-[#ccd2e8] bg-white p-12 text-center"><h2 className="font-semibold text-[#0d1b3e]">No products yet</h2><p className="mt-2 text-sm text-slate-600">{canCreateProject ? "Create a product to organize shared goals and features." : "An organization owner or admin can create a product."}</p>{canCreateProject && <Link href="/projects/new" className="mt-4 inline-block rounded-lg bg-[#5145ed] px-4 py-2 text-sm font-semibold text-white">Create product</Link>}</section> : <>
-      <div className="hidden overflow-hidden rounded-2xl border border-[#dfe3f4] bg-white shadow-sm lg:block"><div className="grid grid-cols-[minmax(220px,2fr)_110px_130px_135px_110px] gap-3 border-b border-[#e7e9f4] bg-[#fafaff] px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500"><span>Product</span><span>Features</span><span>Target</span><span>Health</span><span>Updated</span></div>{projects.map(project => <button key={project.id} type="button" onClick={event => openProject(project.id, event.currentTarget)} className={`grid w-full grid-cols-[minmax(220px,2fr)_110px_130px_135px_110px] items-center gap-3 border-b border-[#edf0f8] px-5 py-4 text-left text-sm hover:bg-[#f8f7ff] ${selectedId === project.id ? "bg-[#f3f1ff]" : ""}`}><span className="min-w-0"><span className="block truncate font-semibold text-[#0d1b3e]">{project.name}</span><span className="mt-0.5 block truncate text-xs text-slate-500">{project.description || "No description yet"}</span></span><span>{project.initiativeCount}</span><span>{project.target ?? "Not set"}</span><span>{project.health ? <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${healthTone[project.health]}`}>{healthLabel[project.health]}</span> : <span className="text-slate-500">Not assessed</span>}</span><span className="text-slate-500">{project.updated}</span></button>)}</div>
-      <div className="space-y-3 lg:hidden">{projects.map(project => <button key={project.id} type="button" onClick={event => openProject(project.id, event.currentTarget)} className="w-full rounded-2xl border border-[#dfe3f4] bg-white p-4 text-left shadow-sm"><span className="block font-semibold text-[#0d1b3e]">{project.name}</span><span className="mt-1 line-clamp-2 text-xs text-slate-500">{project.description || "No description yet"}</span><span className="mt-3 flex flex-wrap gap-x-3 gap-y-1 text-xs text-slate-600"><span>{project.initiativeCount} features</span><span>Target: {project.target ?? "Not set"}</span><span>{project.health ? healthLabel[project.health] : "Health not assessed"}</span></span></button>)}</div>
-    </>}
-    {selected && <div className="fixed inset-0 z-50 flex justify-end bg-[#0d1b3e]/40" onMouseDown={event => { if (event.target === event.currentTarget) closeProject(); }}><aside role="dialog" aria-modal="true" aria-label={`${selected.name} details`} onKeyDown={event => { if (event.key !== "Tab") return; const focusable = [...event.currentTarget.querySelectorAll<HTMLElement>("button, a[href]")]; const first = focusable[0]; const last = focusable.at(-1); if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); } else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); } }} className="flex h-full w-full max-w-[460px] flex-col overflow-y-auto bg-white p-6 shadow-2xl"><div className="flex items-start justify-between gap-3"><div><p className="text-xs font-bold uppercase tracking-widest text-[#5145ed]">Product details</p><h2 className="mt-1 text-2xl font-bold text-[#0d1b3e]">{selected.name}</h2></div><button ref={closeRef} type="button" onClick={closeProject} aria-label="Close product details" className="rounded-lg border px-3 py-1.5">×</button></div><div className="mt-6 space-y-5 text-sm"><div><h3 className="font-semibold text-[#0d1b3e]">Goal</h3><p className="mt-1 text-slate-600">{selected.goal || "No goal recorded yet."}</p></div><div><h3 className="font-semibold text-[#0d1b3e]">Target date</h3><p className="mt-1 text-slate-600">{selected.target ?? "Not set"}</p></div><div><h3 className="font-semibold text-[#0d1b3e]">Assessed health</h3><p className="mt-1 text-slate-600">{selected.health ? `${healthLabel[selected.health]}${selected.healthReason ? ` — ${selected.healthReason}` : ""}` : "Not assessed"}</p></div><div><h3 className="font-semibold text-[#0d1b3e]">Linked features</h3>{selected.initiatives.length ? <ul className="mt-2 space-y-2">{selected.initiatives.map(item => <li key={item.id}><Link href={`/initiatives/${item.id}/overview`} className="text-[#5145ed] hover:underline">{item.name} ↗</Link></li>)}</ul> : <p className="mt-1 text-slate-600">No features yet.</p>}</div></div><Link href={`/projects/${selected.id}`} className="mt-auto rounded-lg bg-[#5145ed] px-4 py-3 text-center text-sm font-semibold text-white">Open product</Link></aside></div>}
+    <div className="flex flex-wrap items-end justify-between gap-4">
+      <div>
+        <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#5145ed]">Portfolio</p>
+        <h1 className="mt-1 text-3xl font-bold tracking-tight text-[#0d1b3e]">Products</h1>
+        <p className="mt-2 text-sm text-slate-600">Choose a product to see its goals, decisions, and features.</p>
+      </div>
+      {canCreateProject && <Link href="/projects/new" className="inline-flex min-h-11 items-center rounded-lg bg-[#5145ed] px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-[#4238d7]">Create product</Link>}
+    </div>
+    <div id="product-list" className="scroll-mt-20">
+      {projects.length === 0 ? <section className="rounded-2xl border border-dashed border-[#ccd2e8] bg-white p-8 text-center">
+        <h2 className="font-semibold text-[#0d1b3e]">No products yet</h2>
+        <p className="mt-2 text-sm text-slate-600">{canCreateProject ? "Create a product to organize its goals and features." : "A workspace owner or admin can create a product."}</p>
+      </section> : <ul className="space-y-3">
+        {projects.map(project => <li key={project.id}>
+          <Link href={`/projects/${project.id}`} className="group flex min-h-20 flex-wrap items-center justify-between gap-4 rounded-2xl border border-[#dfe3f4] bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-[#a9a9fa] hover:shadow-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#5145ed] sm:p-5">
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-base font-semibold text-[#0d1b3e] group-hover:text-[#5145ed]">{project.name}</span>
+              <span className="mt-1 block line-clamp-2 text-sm text-slate-600">{project.description || project.goal || "Open this product to see its features."}</span>
+            </span>
+            <span className="flex flex-wrap items-center gap-x-5 gap-y-1 text-sm text-slate-600">
+              <span>{project.initiativeCount} {project.initiativeCount === 1 ? "feature" : "features"}</span>
+              <span>Target: {project.target ?? "Not set"}</span>
+              <span>{project.health ? healthLabel[project.health] : "Health not assessed"}</span>
+              <span className="font-semibold text-[#5145ed]">Open product →</span>
+            </span>
+          </Link>
+        </li>)}
+      </ul>}
+    </div>
   </div>;
 }

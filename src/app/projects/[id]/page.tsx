@@ -106,10 +106,10 @@ async function ProjectHomePage({ params }: { params: Promise<{ id: string }> }) 
                 <li key={initiative.id}>
                   <Link
                     href={href}
-                    className="block rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm transition hover:border-indigo-300 hover:shadow"
+                    className="group block rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-indigo-300 hover:shadow-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
                   >
                     <div className="flex items-center justify-between gap-4">
-                      <h3 className="font-semibold">{initiative.name}</h3>
+                      <h3 className="font-semibold group-hover:text-indigo-700">{initiative.name}</h3>
                       <div className="flex items-center gap-2">
                         <StatusBadge
                           entityType="initiative"
@@ -122,15 +122,9 @@ async function ProjectHomePage({ params }: { params: Promise<{ id: string }> }) 
                     {initiative.description && (
                       <p className="mt-1 line-clamp-2 text-sm text-neutral-500">{initiative.description}</p>
                     )}
+                    <span className="mt-2 block text-sm font-semibold text-indigo-700">Open feature →</span>
                   </Link>
-                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 pt-2 text-sm">
-                    <span className="text-neutral-600">Backlog: {initiative.backlog?.name ?? "Not connected"}</span>
-                    {initiative.backlog ? (
-                      <Link href={`/backlogs/${initiative.backlog.id}`} className="font-semibold text-indigo-700 hover:underline">Open backlog →</Link>
-                    ) : (
-                      <Link href={href} className="font-semibold text-indigo-700 hover:underline">Choose a backlog →</Link>
-                    )}
-                  </div>
+                  <p className="px-4 pt-2 text-sm text-neutral-600">Backlog: {initiative.backlog?.name ?? "Not connected"}</p>
                 </li>
               );
             })}

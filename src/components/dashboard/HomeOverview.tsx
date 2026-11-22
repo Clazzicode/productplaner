@@ -62,7 +62,7 @@ export default function HomeOverview(props: {
           {!props.showDecisions ? (
             <p className="home-empty">The decision queue is hidden in your dashboard settings.</p>
           ) : decisions.length === 0 ? (
-            <div className="home-empty"><Icon name="activity" size={20} /><div><strong>{props.nextAction ? "Start your product plan" : "No decisions waiting"}</strong><p>{props.nextAction ? "Create your first initiative to plan features, releases, and decisions." : "Items that need a decision will appear here as your work progresses."}</p>{props.nextAction && <Link className="home-start-action" href={props.nextAction.href}>{props.nextAction.label}</Link>}</div></div>
+            <div className="home-empty"><Icon name="activity" size={20} /><div><strong>{props.nextAction ? "Start your product plan" : "No decisions waiting"}</strong><p>{props.nextAction ? "Choose a product first. Open or create a feature there to plan its backlog." : "Items that need a decision will appear here as your work progresses."}</p>{props.nextAction && <Link className="home-start-action" href={props.nextAction.href}>{props.nextAction.label}</Link>}</div></div>
           ) : (
             <div className="home-table-scroll">
               <table className="home-decision-table">

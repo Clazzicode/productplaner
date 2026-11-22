@@ -8,7 +8,7 @@ import { auditInitiative } from "@/lib/audit";
 import { db, establishAuthContext, withTransaction } from "@/lib/db";
 
 const commandSchema = z.discriminatedUnion("action", [
-  z.object({ action: z.literal("select"), backlogId: z.string().min(1) }).strict(),
+  z.object({ action: z.literal("rename"), name: z.string().trim().min(3).max(160) }).strict(),
   z.object({ action: z.literal("create"), name: z.string().trim().min(3).max(160) }).strict(),
 ]);
 
@@ -31,18 +31,11 @@ async function GETHandler(_request: Request, { params }: { params: Promise<{ id:
   const { id } = await params;
   const result = await context(id);
   if ("response" in result) return result.response!;
-  const backlogs = await db.backlog.findMany({
-    where: {
-      projectId: result.feature.projectId,
-      organizationId: result.feature.organizationId,
-      OR: [{ id: result.feature.backlogId ?? "" }, { initiatives: { none: {} } }],
-    },
-    select: { id: true, name: true, _count: { select: { initiatives: true } } },
-    orderBy: [{ name: "asc" }, { id: "asc" }],
-  });
-  return NextResponse.json({ backlogId: result.feature.backlogId, backlogs: backlogs.map(row => ({
-    id: row.id, name: row.name, featureCount: row._count.initiatives,
-  })) });
+  const backlog = result.feature.backlogId ? await db.backlog.findFirst({
+    where: { id: result.feature.backlogId, projectId: result.feature.projectId, organizationId: result.feature.organizationId },
+    select: { id: true, name: true },
+  }) : null;
+  return NextResponse.json({ backlog });
 }
 
 async function PATCHHandler(request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -58,26 +51,21 @@ async function PATCHHandler(request: Request, { params }: { params: Promise<{ id
       select: { id: true, projectId: true, backlogId: true },
     });
     if (!feature) return jsonError("Feature not found.", 404);
-    const backlog = parsed.data.action === "select"
-      ? await tx.backlog.findFirst({
-          where: {
-            id: parsed.data.backlogId,
-            organizationId: result.feature.organizationId,
-            projectId: feature.projectId,
-            OR: [{ id: feature.backlogId ?? "" }, { initiatives: { none: {} } }],
-          },
-          select: { id: true, name: true },
-        })
-      : await tx.backlog.create({ data: {
-          organizationId: result.feature.organizationId, projectId: feature.projectId, name: parsed.data.name,
-        }, select: { id: true, name: true } });
-    if (!backlog) return jsonError("Choose an available backlog in this product.", 404);
-    if (feature.backlogId !== backlog.id) {
-      await tx.initiative.update({ where: { id }, data: { backlogId: backlog.id } });
-      await auditInitiative(id, "backlog.connection_changed", {
-        previousBacklogId: feature.backlogId, backlogId: backlog.id,
+    if (parsed.data.action === "rename") {
+      if (!feature.backlogId) return jsonError("Feature backlog not found.", 404);
+      const backlog = await tx.backlog.update({
+        where: { id: feature.backlogId, projectId: feature.projectId, organizationId: result.feature.organizationId },
+        data: { name: parsed.data.name }, select: { id: true, name: true },
       });
+      await auditInitiative(id, "backlog.renamed", { backlogId: backlog.id });
+      return NextResponse.json({ backlogId: backlog.id, name: backlog.name });
     }
+    if (feature.backlogId) return jsonError("This feature already has a backlog.", 409);
+    const backlog = await tx.backlog.create({ data: {
+      organizationId: result.feature.organizationId, projectId: feature.projectId, name: parsed.data.name,
+    }, select: { id: true, name: true } });
+    await tx.initiative.update({ where: { id }, data: { backlogId: backlog.id } });
+    await auditInitiative(id, "backlog.connection_changed", { backlogId: backlog.id });
     return NextResponse.json({ backlogId: backlog.id, name: backlog.name });
   });
 }
