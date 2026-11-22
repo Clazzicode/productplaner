@@ -133,13 +133,13 @@ export default function AtlassianOAuthConnection(props: { canManage: boolean }) 
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0">
           <p className="text-xs font-semibold uppercase tracking-widest text-accent">Secure connection</p>
-          <h2 id="atlassian-connection-title" className="mt-1 text-lg font-semibold text-text-primary">Atlassian / Jira</h2>
+          <h2 id="atlassian-connection-title" className="mt-1 text-lg font-semibold text-text-primary">Atlassian access for this workspace</h2>
           <p className="mt-1 max-w-3xl text-sm text-text-secondary">
             Connect your workspace using Atlassian OAuth. Clarivia requests read-only Jira access; it cannot create, edit, or delete Jira data through this connection.
           </p>
         </div>
         <span className={`rounded-full px-3 py-1 text-xs font-semibold ${connection?.status === "connected" && hasRequiredScopes ? "bg-emerald-50 text-emerald-700" : "bg-neutral-100 text-neutral-600"}`}>
-          {loading ? "Checking status" : connection?.status === "connected" && hasRequiredScopes ? "Connected · read-only" : connection ? "Reconnect required" : "Not connected"}
+          {loading ? "Checking status" : connection?.status === "connected" && hasRequiredScopes ? "Workspace access connected · read-only" : connection ? "Reconnect required" : "Not connected"}
         </span>
       </div>
 

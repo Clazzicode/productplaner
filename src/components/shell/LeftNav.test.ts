@@ -1,10 +1,11 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
-import LeftNav from "./LeftNav";
+import LeftNav, { buildSidebarGroups } from "./LeftNav";
+import MobileNavDrawer from "./MobileNavDrawer";
 import NavTabs from "@/components/workspace/NavTabs";
 
-const route = vi.hoisted(() => ({ pathname: "/home" }));
+const route = vi.hoisted(() => ({ pathname: "/initiatives/example/overview" }));
 vi.mock("next/navigation", () => ({ usePathname: () => route.pathname }));
 
 const initiatives = [{
@@ -13,6 +14,39 @@ const initiatives = [{
 }];
 
 describe("approved navigation map", () => {
+  it("gives the compact drawer one scroll area for the full menu", () => {
+    const html = renderToStaticMarkup(createElement(MobileNavDrawer, { open: true, onClose: () => {}, initiatives }));
+    expect(html).toMatch(/role="dialog"[^>]*overflow-y-auto/);
+    expect(html).toMatch(/<nav aria-label="Main navigation" class="[^"]*h-auto/);
+    expect(html).toMatch(/<div class="no-scrollbar px-\[19px\] pb-4 flex-none overflow-visible"/);
+  });
+
+  it("does not route global or product pages into the first feature", () => {
+    for (const pathname of ["/home", "/projects/project", "/integrations"]) {
+      const groups = buildSidebarGroups({ initiatives, canManageWorkspace: true }, pathname);
+      expect(JSON.stringify(groups)).not.toContain("/initiatives/example/overview");
+      expect(JSON.stringify(groups)).not.toContain("/initiatives/example/backlog");
+    }
+    const groups = buildSidebarGroups({ initiatives, canManageWorkspace: true }, "/initiatives/example/backlog");
+    expect(JSON.stringify(groups)).toContain("/initiatives/example/overview");
+  });
+
+  it("guides from product selection to a feature in that product", () => {
+    route.pathname = "/home";
+    const global = renderToStaticMarkup(createElement(LeftNav, { initiatives, canManageWorkspace: true }));
+    expect(global).toContain("Next: Choose a product");
+    expect(global).toContain("no-scrollbar");
+
+    route.pathname = "/projects/project";
+    const product = renderToStaticMarkup(createElement(LeftNav, { initiatives, project: { id: "project", name: "Project" }, canManageWorkspace: true }));
+    expect(product).toContain("Next: Choose a feature");
+    expect(product).toContain("/initiatives/example/overview");
+    expect(product).toContain("/projects/project#product-features");
+
+    route.pathname = "/initiatives/example/overview";
+    const feature = renderToStaticMarkup(createElement(LeftNav, { initiatives, project: { id: "project", name: "Project" }, canManageWorkspace: true }));
+    expect(feature).not.toContain("Next: Choose a feature");
+  });
   it("keeps all 34 destinations with Feature and Sprint subsections", () => {
     const html = renderToStaticMarkup(createElement(LeftNav, { initiatives, canManageWorkspace: true }));
     // The brand also links to Home, in addition to the 34 destinations.

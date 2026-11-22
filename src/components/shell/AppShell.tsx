@@ -29,6 +29,7 @@ export default function AppShell(props: {
   userId: string;
   accessLevel: string;
   initiatives: NavInitiative[];
+  projects: { id: string; name: string }[];
   children: React.ReactNode;
 }) {
   const pathname = usePathname() ?? "";
@@ -47,13 +48,13 @@ export default function AppShell(props: {
 
   const urlMatch = pathname.match(/^\/initiatives\/([^/]+)/);
   const currentId = urlMatch?.[1] ?? "";
-  const routeInitiative = props.initiatives.find((i) => i.id === currentId);
-  const currentInitiative =
-    routeInitiative ??
-    props.initiatives[0];
-  const projects = Array.from(new Map(props.initiatives.filter(row => row.project).map(row => [row.project!.id, row.project!])).values());
+  const backlogId = pathname.match(/^\/backlogs\/([^/]+)/)?.[1];
+  const routeInitiative = props.initiatives.find((i) => i.id === currentId)
+    ?? (backlogId ? props.initiatives.find((i) => i.backlogId === backlogId) : undefined);
+  const currentInitiative = routeInitiative;
   const routeProjectId = pathname.match(/^\/projects\/([^/]+)/)?.[1];
-  const selectedProject = projects.find(project => project.id === routeProjectId) ?? currentInitiative?.project ?? undefined;
+  const selectedProject = props.projects.find(project => project.id === routeProjectId)
+    ?? currentInitiative?.project ?? undefined;
   const home = pathname === "/home";
   const roadmap = /^\/initiatives\/[^/]+\/workspace\/roadmap\/?$/.test(pathname);
   const sprintPlanning = /^\/initiatives\/[^/]+\/workspace\/sprint-preparation\/?$/.test(pathname);
@@ -84,7 +85,7 @@ export default function AppShell(props: {
           <span className="block max-w-56 truncate">▣ &nbsp;{currentInitiative.project.name}</span>
         </Link>
       )}
-      {props.initiatives.length > 0 && (
+      {selectedProject && props.initiatives.some(i => i.project?.id === selectedProject.id) && (
         <label className="min-w-0 xl:min-w-80">
           <span className="mb-1 block text-[10px] font-medium text-text-muted">Feature</span>
           <select
@@ -93,7 +94,7 @@ export default function AppShell(props: {
             className="w-full max-w-96 rounded-lg border border-[#d4def1] bg-white px-3 py-2 text-sm font-semibold text-text-primary shadow-sm focus:border-indigo-500 focus:outline-none"
           >
             <option value="" disabled>Switch feature…</option>
-            {props.initiatives.map((i) => (
+            {props.initiatives.filter(i => i.project?.id === selectedProject.id).map((i) => (
               <option key={i.id} value={i.id}>
                 {i.name}{i.status !== "generated" ? " (intake)" : ""}
               </option>
@@ -118,12 +119,6 @@ export default function AppShell(props: {
           Jira integration
         </Link>
       )}
-      {props.canManageWorkspace && <Link
-        href="/initiatives/new"
-        className="hidden h-[38px] items-center rounded-lg bg-accent px-3 text-sm font-semibold text-white shadow-sm hover:bg-accent-hover 2xl:flex"
-      >
-        + New feature
-      </Link>}
     </div>
   );
 
@@ -132,7 +127,11 @@ export default function AppShell(props: {
       <summary className="flex h-9 cursor-pointer list-none items-center gap-2 rounded-md bg-[#5145ed] px-4 text-sm font-medium text-white shadow-[0_2px_5px_rgba(81,69,237,0.2)] hover:bg-[#4238d7] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#5145ed]">Create <ChevronIcon direction="down" size={13} /></summary>
       <div className="absolute right-0 z-50 mt-2 w-44 rounded-xl border border-border-subtle bg-white p-1.5 text-text-primary shadow-xl">
         <Link href="/projects/new" className="block rounded-lg px-3 py-2 text-sm hover:bg-[#f4f5fe]">New product</Link>
-        <Link href="/initiatives/new" className="block rounded-lg px-3 py-2 text-sm hover:bg-[#f4f5fe]">New feature</Link>
+        <Link href={`/initiatives?create=feature${selectedProject ? `&productId=${encodeURIComponent(selectedProject.id)}` : ""}`} onClick={event => {
+          if (pathname !== "/initiatives") return;
+          event.preventDefault();
+          window.history.pushState(null, "", event.currentTarget.getAttribute("href") ?? "/initiatives?create=feature");
+        }} className="block rounded-lg px-3 py-2 text-sm hover:bg-[#f4f5fe]">New feature</Link>
       </div>
     </DismissibleDetails>
   ) : null;
@@ -140,12 +139,13 @@ export default function AppShell(props: {
   return (
     <div className="flex min-h-dvh w-full min-w-0 bg-surface">
       <div className={roadmap ? "hidden min-[851px]:contents" : "hidden xl:contents"}>
-        <LeftNav initiatives={props.initiatives} canManageWorkspace={props.canManageWorkspace} userId={props.userId} />
+        <LeftNav initiatives={props.initiatives} project={selectedProject} canManageWorkspace={props.canManageWorkspace} userId={props.userId} />
       </div>
       <MobileNavDrawer
         open={drawerOpen}
         onClose={() => setDrawerOpen(false)}
         initiatives={props.initiatives}
+        project={selectedProject}
         canManageWorkspace={props.canManageWorkspace}
         userId={props.userId}
         topContent={switcherAndNew}
@@ -153,6 +153,7 @@ export default function AppShell(props: {
       />
       <div className="flex min-w-0 flex-1 flex-col">
         <TopHeader
+          key={selectedProject?.id ?? "all-products"}
           createActions={createActions}
           accountActions={<AccountMenu userName={props.userName} accessLevel={props.accessLevel} />}
           userName={props.userName}
@@ -161,7 +162,8 @@ export default function AppShell(props: {
           requestHref={currentInitiative ? `/initiatives/${currentInitiative.id}/requests` : undefined}
           featureHref={currentInitiative ? `/initiatives/${currentInitiative.id}/backlog` : undefined}
           project={selectedProject}
-          projects={projects}
+          feature={currentInitiative ? { id: currentInitiative.id, name: currentInitiative.name } : undefined}
+          projects={props.projects}
           destinations={sectionDestinations(buildSidebarGroups(props, pathname))}
         />
         <main className={`min-w-0 flex-1 ${home ? "bg-white" : "bg-[#f4f5fe]"}`}>

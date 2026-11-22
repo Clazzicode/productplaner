@@ -39,18 +39,21 @@ function SectionIcon({ name, size = 20 }: { name: IconName; size?: number }) {
 
 function isSubgroup(item: NavigationItemProps | SidebarSubgroup): item is SidebarSubgroup { return "items" in item; }
 
-export function buildSidebarGroups(props: { initiatives: NavInitiative[]; canManageWorkspace?: boolean }, pathname: string): SidebarGroup[] {
+export function buildSidebarGroups(props: { initiatives: NavInitiative[]; canManageWorkspace?: boolean; project?: { id: string; name: string } }, pathname: string): SidebarGroup[] {
   const match = pathname.match(/^\/initiatives\/([^/]+)/);
-  const current = (match && props.initiatives.find(row => row.id === match[1])) || props.initiatives[0] || null;
+  const backlogId = pathname.match(/^\/backlogs\/([^/]+)/)?.[1];
+  const current = (match && props.initiatives.find(row => row.id === match[1]))
+    || (backlogId && props.initiatives.find(row => row.backlogId === backlogId)) || null;
   const scoped = (suffix: string, label: string): NavigationItemProps => current
     ? { label, href: `/initiatives/${current.id}/${suffix}` }
-    : { label, href: null, disabled: { reason: "Select or create a feature first.", cta: { label: "Open features", href: "/initiatives" } } };
+    : { label, href: null, disabled: { reason: props.project ? `Choose a feature in ${props.project.name} first.` : "Choose a product, then a feature first.", cta: { label: props.project ? "Choose feature" : "Choose product", href: props.project ? `/projects/${props.project.id}#product-features` : "/projects#product-list" } } };
   return [
     { title: "", items: [{ label: "Home", href: "/home" }, { label: "Products", href: "/projects" }, scoped("overview", "Five-tool guide")] },
     { title: "Plan", collapsible: true, items: [
       { label: "Features", items: [
-        { label: "All features", href: "/initiatives", exact: true },
-        ...(props.canManageWorkspace ? [{ label: "New feature", href: "/initiatives/new" }] : []),
+        ...(props.project ? [{ label: "Features in this product", href: `/projects/${props.project.id}#product-features` }] : []),
+        { label: "All products' features", href: "/initiatives", exact: true },
+        ...(props.canManageWorkspace ? [{ label: "New feature", href: `/initiatives?create=feature${props.project ? `&productId=${encodeURIComponent(props.project.id)}` : ""}`, clientSideQuery: true }] : []),
         scoped("intake", "Feature brief"),
       ] },
       scoped("requests", "Requests & Priorities"), scoped("backlog", "Backlog"),
@@ -74,9 +77,14 @@ export function buildSidebarGroups(props: { initiatives: NavInitiative[]; canMan
   ];
 }
 
-export default function LeftNav(props: { initiatives: NavInitiative[]; canManageWorkspace?: boolean; userId?: string }) {
+export default function LeftNav(props: { initiatives: NavInitiative[]; canManageWorkspace?: boolean; userId?: string; project?: { id: string; name: string }; inDrawer?: boolean }) {
   const pathname = usePathname() ?? "";
   const groups = buildSidebarGroups(props, pathname);
+  const activeFeature = props.initiatives.some(initiative => pathname.startsWith(`/initiatives/${initiative.id}/`) || pathname === `/initiatives/${initiative.id}` || (initiative.backlogId && pathname === `/backlogs/${initiative.backlogId}`));
+  const productFeatures = props.initiatives.filter(initiative => initiative.project?.id === props.project?.id);
+  const nextStep = activeFeature ? null : props.project
+    ? { kind: "feature" as const, href: `/projects/${props.project.id}`, label: "Choose a feature", detail: `In ${props.project.name}` }
+    : { kind: "product" as const, href: "/projects#product-list", label: "Choose a product", detail: "Then select a feature" };
   const destinations = sectionDestinations(groups);
   const [tab, setTab] = useState<"mine" | "all">("mine");
   const [query, setQuery] = useState("");
@@ -127,26 +135,37 @@ export default function LeftNav(props: { initiatives: NavInitiative[]; canManage
   </details>;
 
   const renderItem = (item: NavigationItemProps | SidebarSubgroup) => isSubgroup(item)
-    ? <details key={item.label} className="group relative rounded-lg border border-white/10 bg-white/[0.04]" open={item.items.some(child => child.href === pathname) || undefined}>
-        <summary className={`flex min-h-9 cursor-pointer list-none items-center gap-2 rounded-lg px-3 text-[13px] text-[#e2e9f8] hover:bg-white/10 ${tab === "all" ? "pr-14" : ""}`}><span className="text-[#aebce0] group-open:rotate-90">›</span><SectionIcon name={iconFor(item.label)} size={17} /><span>{item.label}</span></summary>
+    ? <details key={item.label} className={`group relative rounded-lg border border-white/10 bg-white/[0.04] ${item.label === "Features" && nextStep?.kind === "feature" ? "next-step-glow" : ""}`} open={item.items.some(child => child.href === pathname) || undefined}>
+        <summary className={`flex min-h-9 cursor-pointer list-none items-center gap-2 rounded-lg px-3 text-[13px] text-[#e2e9f8] hover:bg-white/10 ${tab === "all" ? "pr-14" : ""}`}><span className="text-[#aebce0] group-open:rotate-90">›</span><SectionIcon name={iconFor(item.label)} size={17} /><span>{item.label}</span>{item.label === "Features" && nextStep?.kind === "feature" && <span aria-hidden="true" className="ml-auto text-lg text-[#c9baff]">➜</span>}</summary>
         {tab === "all" && <div className="absolute right-1 top-1 flex items-center gap-0.5">{iconPicker(item.label)}<button type="button" onClick={() => togglePin(item.label)} aria-label={`${prefs.pins.includes(item.label) ? "Unpin" : "Pin"} ${item.label}`} title={prefs.pins.includes(item.label) ? "Unpin" : "Pin"} className="p-1 text-[#a9b8e5] hover:text-white">{prefs.pins.includes(item.label) ? "◆" : "◇"}</button></div>}
         <div className="space-y-0.5 border-t border-white/10 py-1 pl-4 pr-1">{item.items.map(child => renderItem(child))}</div>
       </details>
     : <div key={item.label} className="group/row flex items-center gap-1 rounded-lg hover:bg-white/[0.06]">
-        <div className="min-w-0 flex-1"><NavigationItem {...item} icon={groups[0].items.includes(item) ? undefined : <SectionIcon name={iconFor(item.label)} size={19} />} /></div>
+        <div className="min-w-0 flex-1"><NavigationItem {...item} nextStep={item.label === "Products" && nextStep?.kind === "product"} icon={groups[0].items.includes(item) ? undefined : <SectionIcon name={iconFor(item.label)} size={19} />} /></div>
         {tab === "all" && <div className="flex shrink-0 items-center pr-1 opacity-0 focus-within:opacity-100 group-hover/row:opacity-100">
           {iconPicker(item.label)}<button type="button" onClick={() => togglePin(item.label)} aria-label={`${prefs.pins.includes(item.label) ? "Unpin" : "Pin"} ${item.label}`} title={prefs.pins.includes(item.label) ? "Unpin" : "Pin"} className="p-1 text-[#a9b8e5] hover:text-white">{prefs.pins.includes(item.label) ? "◆" : "◇"}</button>
         </div>}
       </div>;
 
-  return <nav aria-label="Main navigation" className="no-print sticky top-0 flex h-dvh w-[253px] shrink-0 flex-col border-r border-[#243a58] bg-[#071a34] text-white">
+  return <nav aria-label="Main navigation" className={`no-print flex shrink-0 flex-col border-r border-[#243a58] bg-[#071a34] text-white ${props.inDrawer ? "relative h-auto w-full" : "sticky top-0 h-dvh w-[253px]"}`}>
     <Link href="/home" className="block shrink-0 px-[26px] pb-4 pt-2"><span className="block text-[24px] font-semibold leading-7 tracking-[-0.04em]">Clarivia</span><span className="block text-[10px] font-semibold uppercase tracking-[0.2em] text-[#b4c2e6]">Product platform</span></Link>
     <div className="mx-[19px] flex h-[38px] shrink-0 rounded-lg border border-[#405575] p-0.5 text-[13px]">
       <button type="button" onClick={() => setTab("mine")} aria-pressed={tab === "mine"} className={`flex flex-1 items-center justify-center gap-1 rounded-md ${tab === "mine" ? "bg-[#5145ed] font-semibold" : "text-[#dae4f7] hover:bg-white/10"}`}><span aria-hidden>♙</span>My menu</button>
       <button type="button" onClick={() => setTab("all")} aria-pressed={tab === "all"} className={`flex flex-1 items-center justify-center gap-1 rounded-md ${tab === "all" ? "bg-[#5145ed] font-semibold" : "text-[#dae4f7] hover:bg-white/10"}`}><span aria-hidden>▦</span>All sections</button>
     </div>
-    <div className="min-h-0 flex-1 overflow-y-auto px-[19px] pb-4">
+    <div className={`no-scrollbar px-[19px] pb-4 ${props.inDrawer ? "flex-none overflow-visible" : "min-h-0 flex-1 overflow-y-auto overscroll-contain"}`}>
       <div className="space-y-0.5 border-b border-[#52627a] py-4">{groups[0].items.map(renderItem)}</div>
+      {nextStep?.kind === "product" && <Link href={nextStep.href} className="next-step-glow mt-3 flex items-center gap-2 rounded-lg border border-[#796dff] bg-[#241e68] px-3 py-2 text-xs text-white hover:bg-[#30277e] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"><span aria-hidden="true" className="text-lg">➜</span><span className="min-w-0"><strong className="block">Next: {nextStep.label}</strong><span className="block truncate text-[#d3cfff]">{nextStep.detail}</span></span></Link>}
+      {nextStep?.kind === "feature" && <details className="next-step-glow mt-3 rounded-lg border border-[#796dff] bg-[#241e68] text-xs text-white">
+        <summary className="flex cursor-pointer list-none items-center gap-2 px-3 py-2"><span aria-hidden="true" className="text-lg">➜</span><span className="min-w-0"><strong className="block">Next: {nextStep.label}</strong><span className="block truncate text-[#d3cfff]">{nextStep.detail}</span></span></summary>
+        <div className="no-scrollbar max-h-48 space-y-1 overflow-y-auto border-t border-[#796dff] p-2">
+          {productFeatures.map(feature => <Link key={feature.id} href={`/initiatives/${feature.id}/overview`} className="block rounded px-2 py-1.5 hover:bg-white/15">{feature.name}</Link>)}
+          {productFeatures.length === 0 && <p className="px-2 py-1.5 text-[#d3cfff]">No features available to you in this product yet.</p>}
+          {productFeatures.length === 0 && props.canManageWorkspace && props.project && <Link href={`/projects/${props.project.id}/initiatives/new`} className="block rounded px-2 py-1.5 font-semibold hover:bg-white/15">Create a feature</Link>}
+          {productFeatures.length === 0 && !props.canManageWorkspace && <p className="px-2 py-1.5 text-[#d3cfff]">Ask a workspace admin to add or share one.</p>}
+          <Link href={`${nextStep.href}#product-features`} className="block rounded px-2 py-1.5 text-[#d3cfff] hover:bg-white/15">View product overview</Link>
+        </div>
+      </details>}
       {tab === "mine" && <section className="pt-4" aria-label="Pinned shortcuts">
         <div className="mb-3 flex items-center justify-between"><h2 className="text-[13px] font-semibold">Pinned shortcuts</h2><button type="button" onClick={() => setEditing(!editing)} className="text-[12px] text-[#a68cff] hover:text-white">✎ {editing ? "Done" : "Edit pins"}</button></div>
         <div className="grid grid-cols-2 gap-2">{prefs.pins.filter(pin => destinationFor(pin)).map(pin => { const destination = destinationFor(pin)!; return <div key={pin} className={`relative min-h-[73px] rounded-[10px] border bg-gradient-to-br from-[#162d4d] to-[#102540] ${pathname === destination.href ? "border-[#6657ff] ring-1 ring-[#6657ff]" : "border-[#334864]"}`}>

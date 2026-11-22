@@ -17,7 +17,7 @@ export default function Sidebar(props: {
   compact?: boolean;
 }) {
   return (
-    <nav className={`no-print sticky top-0 flex h-dvh shrink-0 flex-col overflow-y-auto border-r border-border-nav bg-[#07172f] px-3 pb-5 ${props.compact ? "roadmap-sidebar w-[196px] gap-4" : "w-[220px] gap-3"}`}>
+    <nav className={`no-print no-scrollbar sticky top-0 flex h-dvh shrink-0 flex-col overflow-y-auto border-r border-border-nav bg-[#07172f] px-3 pb-5 ${props.compact ? "roadmap-sidebar w-[196px] gap-4" : "w-[220px] gap-3"}`}>
       <Link href={props.titleHref ?? "/home"} className="-mx-3 flex h-16 shrink-0 flex-col justify-center border-b border-white/10 px-5">
         {props.compact ? <span className="roadmap-brand"><span className="roadmap-brand-mark" aria-hidden><i /><i /></span><strong>CLARIVIA</strong></span> : <>
           <span className="text-[19px] font-semibold leading-6 tracking-tight text-white">{props.title ?? "Clarivia"}</span>
