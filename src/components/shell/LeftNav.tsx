@@ -53,7 +53,7 @@ export function buildSidebarGroups(props: { initiatives: NavInitiative[]; canMan
       { label: "Features", items: [
         ...(props.project ? [{ label: "Features in this product", href: `/projects/${props.project.id}#product-features` }] : []),
         { label: "All products' features", href: "/initiatives", exact: true },
-        ...(props.canManageWorkspace ? [{ label: "New feature", href: "/initiatives/new" }] : []),
+        ...(props.canManageWorkspace ? [{ label: "New feature", href: `/initiatives?create=feature${props.project ? `&productId=${encodeURIComponent(props.project.id)}` : ""}`, clientSideQuery: true }] : []),
         scoped("intake", "Feature brief"),
       ] },
       scoped("requests", "Requests & Priorities"), scoped("backlog", "Backlog"),

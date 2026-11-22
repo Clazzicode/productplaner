@@ -23,6 +23,7 @@ export interface NavigationItemProps {
   disabled?: NavDisabledState;
   exact?: boolean;
   nextStep?: boolean;
+  clientSideQuery?: boolean;
 }
 
 const ICONS: Record<string, string> = {
@@ -85,6 +86,13 @@ export default function NavigationItem(props: NavigationItemProps & { nested?: b
   return (
     <Link
       href={props.href}
+      onClick={event => {
+        if (!props.clientSideQuery) return;
+        const target = new URL(props.href ?? pathname, window.location.origin);
+        if (target.pathname !== pathname) return;
+        event.preventDefault();
+        window.history.pushState(null, "", `${target.pathname}${target.search}`);
+      }}
       prefetch={requestsLink ? false : undefined}
       aria-current={active ? "page" : undefined}
       className={`flex items-center justify-between rounded-md px-3 py-2 transition ${props.nested ? "min-h-8 text-[13px]" : "min-h-10 text-sm"} ${active ? "font-semibold" : "font-normal"} ${props.nextStep ? "next-step-glow" : ""} ${

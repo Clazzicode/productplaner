@@ -64,6 +64,9 @@ export default function MobileNavDrawer(props: {
       />
       <div
         ref={dialogRef}
+        onClickCapture={event => {
+          if (event.target instanceof Element && event.target.closest("a[href]")) onClose();
+        }}
         role="dialog"
         aria-modal="true"
         aria-label="Navigation"

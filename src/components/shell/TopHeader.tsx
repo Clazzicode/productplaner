@@ -67,7 +67,7 @@ export default function TopHeader(props: {
       </div>
 
       <div className="ml-auto flex shrink-0 items-center gap-2 sm:gap-3">
-        <div className="hidden sm:block">{props.createActions}</div>
+        <div>{props.createActions}</div>
         <Link href="/activity" aria-label="Activity" title="Activity" className="hidden h-9 w-9 place-items-center rounded-md text-[#273451] hover:bg-[#f4f5ff] sm:grid">
           <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"/><path d="M10 21h4"/></svg>
         </Link>

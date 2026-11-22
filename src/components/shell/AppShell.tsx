@@ -119,12 +119,6 @@ export default function AppShell(props: {
           Jira integration
         </Link>
       )}
-      {props.canManageWorkspace && <Link
-        href="/initiatives/new"
-        className="hidden h-[38px] items-center rounded-lg bg-accent px-3 text-sm font-semibold text-white shadow-sm hover:bg-accent-hover 2xl:flex"
-      >
-        + New feature
-      </Link>}
     </div>
   );
 
@@ -133,7 +127,11 @@ export default function AppShell(props: {
       <summary className="flex h-9 cursor-pointer list-none items-center gap-2 rounded-md bg-[#5145ed] px-4 text-sm font-medium text-white shadow-[0_2px_5px_rgba(81,69,237,0.2)] hover:bg-[#4238d7] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#5145ed]">Create <ChevronIcon direction="down" size={13} /></summary>
       <div className="absolute right-0 z-50 mt-2 w-44 rounded-xl border border-border-subtle bg-white p-1.5 text-text-primary shadow-xl">
         <Link href="/projects/new" className="block rounded-lg px-3 py-2 text-sm hover:bg-[#f4f5fe]">New product</Link>
-        <Link href="/initiatives/new" className="block rounded-lg px-3 py-2 text-sm hover:bg-[#f4f5fe]">New feature</Link>
+        <Link href={`/initiatives?create=feature${selectedProject ? `&productId=${encodeURIComponent(selectedProject.id)}` : ""}`} onClick={event => {
+          if (pathname !== "/initiatives") return;
+          event.preventDefault();
+          window.history.pushState(null, "", event.currentTarget.getAttribute("href") ?? "/initiatives?create=feature");
+        }} className="block rounded-lg px-3 py-2 text-sm hover:bg-[#f4f5fe]">New feature</Link>
       </div>
     </DismissibleDetails>
   ) : null;
