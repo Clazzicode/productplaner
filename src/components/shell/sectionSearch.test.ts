@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { buildSidebarGroups } from "./LeftNav";
 import { searchSections, sectionDestinations } from "./sectionSearch";
 
-const groups = buildSidebarGroups({ initiatives: [{ id: "initiative-1", name: "Demo", status: "generated", canEdit: true, project: null, syncConnections: [] }], canManageWorkspace: true }, "/home");
+const groups = buildSidebarGroups({ initiatives: [{ id: "initiative-1", name: "Demo", status: "generated", canEdit: true, project: null, syncConnections: [] }], canManageWorkspace: true }, "/initiatives/initiative-1/overview");
 const sections = sectionDestinations(groups);
 
 describe("section search", () => {
