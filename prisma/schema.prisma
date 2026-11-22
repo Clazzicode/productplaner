@@ -639,6 +639,7 @@ model Initiative {
 
   @@index([projectId])
   @@unique([backlogId])
+  @@index([backlogId])
   @@index([organizationId, projectId])
 }
 
