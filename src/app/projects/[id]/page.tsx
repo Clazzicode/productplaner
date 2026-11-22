@@ -43,7 +43,7 @@ async function ProjectHomePage({ params }: { params: Promise<{ id: string }> }) 
   const project = await db.project.findUnique({
     where: { id },
     include: {
-      initiatives: { select: { id: true, name: true, description: true, status: true }, orderBy: { updatedAt: "desc" } },
+      initiatives: { select: { id: true, name: true, description: true, status: true, backlog: { select: { id: true, name: true } } }, orderBy: { updatedAt: "desc" } },
       decisions: { orderBy: { createdAt: "desc" } },
       risks: { orderBy: { createdAt: "desc" } },
     },
@@ -123,6 +123,14 @@ async function ProjectHomePage({ params }: { params: Promise<{ id: string }> }) 
                       <p className="mt-1 line-clamp-2 text-sm text-neutral-500">{initiative.description}</p>
                     )}
                   </Link>
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 pt-2 text-sm">
+                    <span className="text-neutral-600">Backlog: {initiative.backlog?.name ?? "Not connected"}</span>
+                    {initiative.backlog ? (
+                      <Link href={`/backlogs/${initiative.backlog.id}`} className="font-semibold text-indigo-700 hover:underline">Open backlog →</Link>
+                    ) : (
+                      <Link href={href} className="font-semibold text-indigo-700 hover:underline">Choose a backlog →</Link>
+                    )}
+                  </div>
                 </li>
               );
             })}

@@ -33,8 +33,9 @@ export default function BacklogConnectionPicker({ featureId, currentBacklogId, b
   return <section aria-labelledby="feature-backlog-heading" className="mx-auto mt-5 max-w-[1220px] rounded-xl border border-indigo-200 bg-white p-4 shadow-sm">
     <div className="flex flex-wrap items-center justify-between gap-3">
       <div>
-        <h2 id="feature-backlog-heading" className="font-semibold text-[#0d1b3e]">Connected backlog</h2>
+        <h2 id="feature-backlog-heading" className="font-semibold text-[#0d1b3e]">This feature’s backlog</h2>
         <p className="mt-1 text-sm text-slate-600">{current ? current.name : "No backlog selected"}</p>
+        <p className="mt-1 text-xs text-slate-500">Each feature has its own backlog. You can connect a different available backlog or create one here.</p>
       </div>
       {current && <Link href={`/backlogs/${current.id}`} className="rounded-lg border border-indigo-200 px-3 py-2 text-sm font-semibold text-indigo-700 hover:bg-indigo-50">View backlog →</Link>}
     </div>
