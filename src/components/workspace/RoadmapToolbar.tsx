@@ -12,10 +12,12 @@ export default function RoadmapToolbar(props: {
   children: React.ReactNode;
 }) {
   return (
-    <div>
-      <h2 className="text-xl font-bold text-text-primary">{props.title}</h2>
-      {props.description && <p className="mt-1 text-sm text-text-muted">{props.description}</p>}
-      <div className="mt-4">{props.children}</div>
+    <div className="roadmap-page">
+      <div className="roadmap-page-heading">
+        <h1>{props.title}</h1>
+        {props.description && <p>{props.description}</p>}
+      </div>
+      {props.children}
     </div>
   );
 }

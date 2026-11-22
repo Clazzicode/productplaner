@@ -1,4 +1,5 @@
 import type { Explanation } from "@/lib/explainability/types";
+import { cache } from "react";
 import { db } from "@/lib/db";
 import { PRIORITY_WEIGHTS } from "@/lib/generation/constants";
 import { buildCostModel, type CostModel } from "@/lib/generation/cost";
@@ -11,7 +12,10 @@ import type { TraceCapabilityView, TraceIntakeView } from "@/lib/trace";
 
 /** Shared workspace loader: initiative, prototype, locks, and the intake
  * views the trace drawer needs. Pages layer their own artifact queries on top. */
-export async function loadWorkspace(initiativeId: string) {
+// The workspace layout and its page both need this data. React's request-scoped
+// cache shares the one database read during a render without retaining data
+// across users, requests, or subsequent navigation.
+export const loadWorkspace = cache(async function loadWorkspace(initiativeId: string) {
   const initiative = await db.initiative.findUnique({
     where: { id: initiativeId },
     include: {
@@ -74,7 +78,7 @@ export async function loadWorkspace(initiativeId: string) {
     isLocked,
     jira: initiative.syncConnections.find((c) => c.tool === "jira") ?? null,
   };
-}
+});
 
 export interface WorkspaceCostContext {
   model: CostModel;

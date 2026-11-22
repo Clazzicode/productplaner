@@ -39,7 +39,7 @@ type MethodologyChoice = "agile_scrum" | "waterfall" | "hybrid" | "recommend";
 // first, then the user is taken through the full roadmap setup workflow. A
 // roadmap is only generated after that workflow's review and validation step.
 const CREATION_STEPS = [
-  "Creating your initiative",
+  "Creating your feature",
   "Saving your starting answers",
   "Preparing the guided planning intake",
 ];
@@ -246,7 +246,7 @@ export default function SimplifiedIntakeWizard(props: {
     });
     if (!initRes.ok || !initRes.data) {
       setSubmitting(false);
-      setError(initRes.error ?? "Could not create the initiative.");
+      setError(initRes.error ?? "Could not create the feature.");
       return;
     }
     const { initiativeId } = initRes.data;
@@ -483,7 +483,7 @@ export default function SimplifiedIntakeWizard(props: {
             {step === reviewStep && (
               <div>
                 {submitting ? (
-                  <GenerationProgress title="Creating your initiative" steps={CREATION_STEPS} currentStep={genStep} />
+                  <GenerationProgress title="Creating your feature" steps={CREATION_STEPS} currentStep={genStep} />
                 ) : (
                   <>
                     <h2 className="text-2xl font-semibold tracking-tight text-text-primary">{reviewCopy.title}</h2>
@@ -675,7 +675,7 @@ export default function SimplifiedIntakeWizard(props: {
             {step === reviewStep && (
               <div>
                 {submitting ? (
-                  <GenerationProgress title="Creating your initiative" steps={CREATION_STEPS} currentStep={genStep} />
+                  <GenerationProgress title="Creating your feature" steps={CREATION_STEPS} currentStep={genStep} />
                 ) : (
                   <>
                     <h2 className="text-2xl font-semibold tracking-tight text-text-primary">{reviewCopy.title}</h2>

@@ -3,10 +3,10 @@ import type { Prisma } from "@prisma/client";
 import { auditOrganization } from "@/lib/audit";
 import { BusinessError } from "@/lib/businessError";
 import { db, withTransaction } from "@/lib/db";
-import { accessibleJiraResources, encryptedTokens, exchangeJiraCode, getJiraProjectMetadata, jiraAuthorizationUrl, listJiraProjects, type JiraProject, type JiraProjectMetadata, type JiraResource } from "./client";
+import { accessibleJiraResources, decryptedTokens, encryptedTokens, exchangeJiraCode, getJiraProjectMetadata, jiraAuthorizationUrl, listJiraProjects, refreshJiraTokens, type JiraProject, type JiraProjectMetadata, type JiraResource } from "./client";
 import { encryptJiraSecret, jiraHash } from "./crypto";
-import type { JiraProjectInput } from "./model";
 import { getAtlassianAccessToken } from "@/lib/atlassian/credentials";
+import type { JiraProjectInput } from "./model";
 
 const STATE_LIFETIME_MS = 10 * 60 * 1000;
 
@@ -38,16 +38,36 @@ export async function completeJiraOAuth(input: { state: string; code: string; us
   const pending = await db.jiraOAuthState.findUnique({ where: { stateHash } });
   if (!pending || pending.userId !== input.userId || pending.organizationId !== input.organizationId || pending.consumedAt || pending.expiresAt <= new Date()) throw new BusinessError("This Jira authorization request is invalid or expired.", 400);
   const tokens = await exchangeJiraCode(input.code);
+  const requiredScopes = process.env.JIRA_WRITE_ENABLED === "true"
+    ? ["read:jira-work", "write:jira-work", "read:jira-user", "manage:jira-webhook", "offline_access"]
+    : ["read:jira-work", "offline_access"];
+  if (!requiredScopes.every((scope) => tokens.scope.split(/\s+/).includes(scope))) {
+    throw new BusinessError("Atlassian did not grant all required Jira permissions. Review the app scopes and reconnect.", 422);
+  }
   const resources = await accessibleJiraResources(tokens.accessToken);
   if (!resources.length) throw new BusinessError("Atlassian did not grant access to a Jira Cloud site.", 422);
   return withTransaction(async () => {
     const consumed = await db.jiraOAuthState.updateMany({ where: { id: pending.id, consumedAt: null, expiresAt: { gt: new Date() } }, data: { consumedAt: new Date() } });
     if (consumed.count !== 1) throw new BusinessError("This Jira authorization request was already used.", 409);
     const oldConnections = await db.jiraConnection.findMany({ where: { organizationId: input.organizationId, initiativeId: pending.initiativeId, status: { not: "revoked" } } });
-    await db.jiraConnection.updateMany({ where: { id: { in: oldConnections.map((row) => row.id) } }, data: { status: "revoked", revision: { increment: 1 } } });
-    const saved = await db.jiraConnection.create({ data: { organizationId: input.organizationId, initiativeId: pending.initiativeId, configuredByUserId: input.userId, ...encryptedTokens(tokens), accessibleResources: resources as unknown as Prisma.InputJsonValue, status: resources.length === 1 ? "project_selection_required" : "site_selection_required", ...(resources.length === 1 ? { cloudId: resources[0].id, siteUrl: resources[0].url, siteName: resources[0].name } : {}) } });
+    if (oldConnections.length > 1) throw new BusinessError("Multiple active Jira connections need administrator review before reconnecting.", 409);
+    const prior = oldConnections[0];
+    const selected = prior?.cloudId ? resources.find((resource) => resource.id === prior.cloudId) : resources.length === 1 ? resources[0] : null;
+    if (prior?.cloudId && !selected) throw new BusinessError("Authorize the same Jira site to preserve its linked planning records, or disconnect it before selecting another site.", 422);
+    const saved = prior
+      ? await db.jiraConnection.update({ where: { id: prior.id }, data: {
+        configuredByUserId: input.userId,
+        ...encryptedTokens(tokens),
+        accessibleResources: resources as unknown as Prisma.InputJsonValue,
+        cloudId: selected?.id ?? null,
+        siteUrl: selected?.url ?? null,
+        siteName: selected?.name ?? null,
+        status: selected ? prior.projectKey ? "connected" : "project_selection_required" : "site_selection_required",
+        revision: { increment: 1 },
+      } })
+      : await db.jiraConnection.create({ data: { organizationId: input.organizationId, initiativeId: pending.initiativeId, configuredByUserId: input.userId, ...encryptedTokens(tokens), accessibleResources: resources as unknown as Prisma.InputJsonValue, status: resources.length === 1 ? "project_selection_required" : "site_selection_required", ...(resources.length === 1 ? { cloudId: resources[0].id, siteUrl: resources[0].url, siteName: resources[0].name } : {}) } });
     await mirrorHubConnection(saved);
-    await auditOrganization({ organizationId: input.organizationId, actorUserId: input.userId, entityType: "jira_connection", entityId: saved.id, action: "jira.oauth_connected", metadata: { initiativeId: saved.initiativeId, availableSiteCount: resources.length } });
+    await auditOrganization({ organizationId: input.organizationId, actorUserId: input.userId, entityType: "jira_connection", entityId: saved.id, action: prior ? "jira.oauth_reauthorized" : "jira.oauth_connected", metadata: { initiativeId: saved.initiativeId, availableSiteCount: resources.length } });
     return { connection: saved, returnPath: pending.returnPath };
   });
 }
@@ -55,12 +75,26 @@ export async function completeJiraOAuth(input: { state: string; code: string; us
 export async function accessTokenFor(connectionId: string) {
   const current = await db.jiraConnection.findUnique({ where: { id: connectionId } });
   if (!current || current.status === "revoked") throw new BusinessError("Jira connection not found.", 404);
+  if (current.accessTokenCiphertext === `vault-reference:${current.organizationId}`
+    && current.refreshTokenCiphertext === `vault-reference:${current.organizationId}`) {
+    return { connection: current, accessToken: await getAtlassianAccessToken(current.organizationId) };
+  }
+  if (current.tokenExpiresAt.getTime() > Date.now() + 60_000) {
+    return { connection: current, accessToken: decryptedTokens(current).accessToken };
+  }
   try {
-    const accessToken = await getAtlassianAccessToken(current.organizationId);
-    return { connection: current, accessToken };
-  } catch {
-    await db.jiraConnection.updateMany({ where: { organizationId: current.organizationId, status: { not: "revoked" } }, data: { status: "reauthorization_required", revision: { increment: 1 } } });
-    throw new BusinessError("Reconnect Atlassian to restore this Jira connection.", 401);
+    const tokens = await refreshJiraTokens(decryptedTokens(current).refreshToken);
+    const changed = await db.jiraConnection.updateMany({
+      where: { id: current.id, refreshTokenCiphertext: current.refreshTokenCiphertext, status: { not: "revoked" } },
+      data: encryptedTokens(tokens),
+    });
+    const connection = await db.jiraConnection.findUnique({ where: { id: current.id } });
+    if (!connection || connection.status === "revoked") throw new BusinessError("Jira connection not found.", 404);
+    return { connection, accessToken: changed.count === 1 ? tokens.accessToken : decryptedTokens(connection).accessToken };
+  } catch (error) {
+    if (error instanceof BusinessError && error.status === 404) throw error;
+    await db.jiraConnection.updateMany({ where: { id: current.id, refreshTokenCiphertext: current.refreshTokenCiphertext, status: { not: "revoked" } }, data: { status: "reauthorization_required", revision: { increment: 1 } } });
+    throw new BusinessError("Reconnect Jira to restore this connection.", 401);
   }
 }
 
@@ -102,7 +136,13 @@ export async function configureJiraProject(connectionId: string, input: JiraProj
   const projects = await listJiraProjects(connection.cloudId, accessToken);
   const project = projects.find((item) => item.id === input.projectId && item.key === input.projectKey);
   if (!project) throw new BusinessError("Choose a Jira project available to this connection.", 422);
-  const changed = await db.jiraConnection.updateMany({ where: { id: connectionId, revision: input.expectedRevision, status: { not: "revoked" } }, data: { projectId: project.id, projectKey: project.key, projectName: project.name, issueTypeMappings: input.issueTypeMappings, fieldMappings: { storyPointsField: input.storyPointsField, statusMappings: input.statusMappings, priorityMappings: input.priorityMappings }, status: "connected", revision: { increment: 1 } } });
+  const metadata = await getJiraProjectMetadata({ cloudId: connection.cloudId, accessToken, projectId: project.id, projectKey: project.key });
+  const availableTypes = new Map(metadata.issueTypes.filter((type) => !type.subtask).map((type) => [type.id, type]));
+  for (const [localType, jiraTypeId] of Object.entries(input.outboundIssueTypeIds)) {
+    if (!jiraTypeId) continue;
+    if (!availableTypes.has(jiraTypeId) || input.issueTypeMappings[jiraTypeId] !== localType) throw new BusinessError(`The outbound ${localType} issue type must match a reviewed, non-subtask Jira mapping.`, 422);
+  }
+  const changed = await db.jiraConnection.updateMany({ where: { id: connectionId, revision: input.expectedRevision, status: { not: "revoked" } }, data: { projectId: project.id, projectKey: project.key, projectName: project.name, issueTypeMappings: input.issueTypeMappings, fieldMappings: { storyPointsField: input.storyPointsField, statusMappings: input.statusMappings, priorityMappings: input.priorityMappings, outboundIssueTypeIds: input.outboundIssueTypeIds }, status: "connected", revision: { increment: 1 } } });
   if (changed.count !== 1) throw new BusinessError("The Jira connection changed. Reload and try again.", 409);
   const saved = await db.jiraConnection.findUniqueOrThrow({ where: { id: connectionId } });
   await mirrorHubConnection(saved);
@@ -133,7 +173,7 @@ export async function disconnectJira(connectionId: string, actorUserId: string) 
       select: { id: true },
     });
     for (const connection of revokedConnections) {
-      await db.$executeRaw`SELECT app_private.purge_jira_source_data(${connection.id})`;
+      await db.$queryRaw`SELECT app_private.purge_jira_source_data(${connection.id})::text AS result`;
     }
     return revoked;
   });

@@ -54,6 +54,8 @@ export async function observeWorker<T>(worker: WorkerName, work: (stage: (value:
     return data;
   } catch (error) {
     const errorCode = safeWorkerCode(error);
+    const rawDatabaseCode = error && typeof error === "object" && "meta" in error && error.meta && typeof error.meta === "object" && "code" in error.meta ? error.meta.code : null;
+    const databaseCode = typeof rawDatabaseCode === "string" && /^[A-Z0-9]{5}$/.test(rawDatabaseCode) ? rawDatabaseCode : undefined;
     try {
       const rows = await withServiceContext(async () => await withTransaction(async () => {
         await db.$executeRaw`UPDATE app_private."WorkerExecution" SET "finishedAt"=now(),outcome='failed',stage=${stage},"errorCode"=${errorCode},"durationMs"=${Date.now()-started}::integer WHERE "runId"=${runId} AND outcome IS NULL`;
@@ -66,7 +68,7 @@ export async function observeWorker<T>(worker: WorkerName, work: (stage: (value:
       }));
       if ((rows[0]?.consecutiveFailures ?? 0) >= 2) serverLog("worker.alert.consecutive_failures", { status: 503, worker, stage, errorCode });
     } catch { serverLog("worker.health_unavailable", { status: 503, worker, stage, errorCode }); }
-    serverLog("worker.failed", { status: 500, worker, stage, errorCode, durationMs: Date.now()-started });
+    serverLog("worker.failed", { status: 500, worker, stage, errorCode, databaseCode, durationMs: Date.now()-started });
     throw error;
   }
 }

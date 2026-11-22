@@ -1,0 +1,79 @@
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { describe, expect, it, vi } from "vitest";
+import LeftNav, { buildSidebarGroups } from "./LeftNav";
+import MobileNavDrawer from "./MobileNavDrawer";
+import NavTabs from "@/components/workspace/NavTabs";
+
+const route = vi.hoisted(() => ({ pathname: "/initiatives/example/overview" }));
+vi.mock("next/navigation", () => ({ usePathname: () => route.pathname }));
+
+const initiatives = [{
+  id: "example", name: "Example", status: "generated", canEdit: true,
+  project: { id: "project", name: "Project" }, syncConnections: [],
+}];
+
+describe("approved navigation map", () => {
+  it("gives the compact drawer one scroll area for the full menu", () => {
+    const html = renderToStaticMarkup(createElement(MobileNavDrawer, { open: true, onClose: () => {}, initiatives }));
+    expect(html).toMatch(/role="dialog"[^>]*overflow-y-auto/);
+    expect(html).toMatch(/<nav aria-label="Main navigation" class="[^"]*h-auto/);
+    expect(html).toMatch(/<div class="no-scrollbar px-\[19px\] pb-4 flex-none overflow-visible"/);
+  });
+
+  it("does not route global or product pages into the first feature", () => {
+    for (const pathname of ["/home", "/projects/project", "/integrations"]) {
+      const groups = buildSidebarGroups({ initiatives, canManageWorkspace: true }, pathname);
+      expect(JSON.stringify(groups)).not.toContain("/initiatives/example/overview");
+      expect(JSON.stringify(groups)).not.toContain("/initiatives/example/backlog");
+    }
+    const groups = buildSidebarGroups({ initiatives, canManageWorkspace: true }, "/initiatives/example/backlog");
+    expect(JSON.stringify(groups)).toContain("/initiatives/example/overview");
+  });
+
+  it("guides from product selection to a feature in that product", () => {
+    route.pathname = "/home";
+    const global = renderToStaticMarkup(createElement(LeftNav, { initiatives, canManageWorkspace: true }));
+    expect(global).toContain("Next: Choose a product");
+    expect(global).toContain("no-scrollbar");
+
+    route.pathname = "/projects/project";
+    const product = renderToStaticMarkup(createElement(LeftNav, { initiatives, project: { id: "project", name: "Project" }, canManageWorkspace: true }));
+    expect(product).toContain("Next: Choose a feature");
+    expect(product).toContain("/projects/project#product-features");
+    expect(product).not.toContain("/initiatives/example/overview");
+    expect(product).not.toContain("All products&#x27; features");
+
+    route.pathname = "/initiatives/example/overview";
+    const feature = renderToStaticMarkup(createElement(LeftNav, { initiatives, project: { id: "project", name: "Project" }, canManageWorkspace: true }));
+    expect(feature).not.toContain("Next: Choose a feature");
+  });
+  it("shows feature work only when a feature is selected", () => {
+    route.pathname = "/initiatives/example/overview";
+    const html = renderToStaticMarkup(createElement(LeftNav, { initiatives, canManageWorkspace: true }));
+    expect(html).toContain("Five-tool guide");
+    expect(html).toContain("Feature brief");
+    expect(html).toContain("Sprint Planning");
+    expect(html).toContain("Sprints &amp; Releases");
+    expect(html).toContain("Sprint Review");
+    expect(html).toContain("Account settings");
+    expect(html).not.toContain("All products&#x27; features");
+    expect(html).not.toContain("Features in this product");
+    expect(html.indexOf("Home</span>")).toBeLessThan(html.indexOf("Products</span>"));
+    expect(html.indexOf("Products</span>")).toBeLessThan(html.indexOf("Five-tool guide</span>"));
+    expect(html.indexOf("Plan</span>")).toBeGreaterThanOrEqual(0);
+    expect(html.indexOf("Plan</span>")).toBeLessThan(html.indexOf("Deliver</span>"));
+    expect(html.indexOf("Deliver</span>")).toBeLessThan(html.indexOf("Learn</span>"));
+    expect(html.indexOf("Learn</span>")).toBeLessThan(html.indexOf("Account settings</span>"));
+  });
+
+  it.each(["epics", "refinement", "documents", "regeneration", "features", "sprint-preparation", "sprints", "sprint-review", "demos", "validation", "capacity", "release-readiness", "matrix", "executive"])("hides the shared link strip on %s", section => {
+    route.pathname = `/initiatives/example/workspace/${section}`;
+    expect(renderToStaticMarkup(createElement(NavTabs, { initiativeId: "example" }))).toBe("");
+  });
+
+  it("retains the related-work link strip on Roadmap", () => {
+    route.pathname = "/initiatives/example/workspace/roadmap";
+    expect(renderToStaticMarkup(createElement(NavTabs, { initiativeId: "example" }))).toContain("Sprint Planning");
+  });
+});

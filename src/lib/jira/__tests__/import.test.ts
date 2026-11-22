@@ -15,7 +15,7 @@ vi.mock("@/lib/requests/service", () => ({ saveRequest: vi.fn() }));
 vi.mock("../oauth", () => ({ accessTokenFor: vi.fn() }));
 vi.mock("../client", () => ({ searchJiraIssues: vi.fn() }));
 
-import { applyJiraImport, deduplicateJiraIssues, previewJiraImport, sourceSnapshot } from "../import";
+import { applyJiraImport, deduplicateJiraIssues, importSourceFingerprint, previewJiraImport, sourceSnapshot } from "../import";
 
 describe("Jira import approval boundary", () => {
   it("never applies a selected conflict automatically", async () => {
@@ -52,6 +52,14 @@ it("stores only the approved Jira issue fields and plain text description", () =
   expect(snapshot.description).toBe("Error");
   expect(snapshot).not.toHaveProperty("assignee");
   expect(snapshot).not.toHaveProperty("rawFields");
+});
+
+it("treats Jira execution changes as separate from reviewed import fields", () => {
+  const baseline = { summary: "Story", description: "Requirements", storyPoints: 3, status: "To Do", updated: "2026-11-10" };
+  const deliveryChange = { ...baseline, status: "Done", updated: "2026-11-11" };
+  expect(importSourceFingerprint(baseline, "story")).toBe(importSourceFingerprint(deliveryChange, "story"));
+  expect(importSourceFingerprint({ ...deliveryChange, storyPoints: 5 }, "story")).not.toBe(importSourceFingerprint(baseline, "story"));
+  expect(importSourceFingerprint({ ...deliveryChange, summary: "New title" }, "story")).not.toBe(importSourceFingerprint(baseline, "story"));
 });
 
 it("reuses the saved preview on a retried job without rereading Jira", async () => {

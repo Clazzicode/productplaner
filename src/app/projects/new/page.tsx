@@ -13,10 +13,10 @@ async function NewProjectPage() {
 
   return (
     <FocusedLayout>
-      <Breadcrumb items={[{ label: "Projects", href: "/projects" }, { label: "New Project" }]} />
-      <h1 className="mt-4 text-2xl font-bold">New project</h1>
+      <Breadcrumb items={[{ label: "Products", href: "/projects" }, { label: "New product" }]} />
+      <h1 className="mt-4 text-2xl font-bold">New product</h1>
       <p className="mt-1 mb-8 text-sm text-neutral-500">
-        A clean start — nothing here is inherited from any other project. Every initiative you
+        A clean start — nothing here is inherited from any other product. Every feature you
         create inside it can reuse what you enter here.
       </p>
       <CreateProjectForm />

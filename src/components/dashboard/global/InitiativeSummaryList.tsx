@@ -19,7 +19,7 @@ export default function InitiativeSummaryList(props: { initiatives: InitiativeOv
   return (
     <Card>
       <div className="flex items-center justify-between">
-        <CardTitle>Your Initiatives</CardTitle>
+        <CardTitle>Your Features</CardTitle>
         {props.initiatives.length > 0 && (
           <Link href="/initiatives" className="text-xs font-medium text-indigo-600 hover:underline">
             View all →
@@ -28,8 +28,8 @@ export default function InitiativeSummaryList(props: { initiatives: InitiativeOv
       </div>
       {props.initiatives.length === 0 ? (
         <EmptyState
-          title="No initiatives yet"
-          description="Start with an initiative draft and develop the planning work as evidence becomes available."
+          title="No features yet"
+          description="Start with a feature draft and develop the planning work as evidence becomes available."
           action={
             <Link
               href="/initiatives/new"

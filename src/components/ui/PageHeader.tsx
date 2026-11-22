@@ -26,7 +26,7 @@ export default function PageHeader(props: {
         {props.eyebrow && (
           <p className="text-xs font-semibold uppercase tracking-widest text-accent">{props.eyebrow}</p>
         )}
-        <h1 className={`break-words text-2xl font-bold tracking-[-0.02em] text-text-primary lg:text-3xl ${props.eyebrow ? "mt-1" : ""}`}>
+        <h1 className={`break-words text-[23px] font-semibold tracking-[-0.02em] text-text-primary lg:text-[27px] ${props.eyebrow ? "mt-1" : ""}`}>
           {props.title}
         </h1>
         {props.description && <p className="mt-1 max-w-3xl break-words text-sm text-text-secondary">{props.description}</p>}

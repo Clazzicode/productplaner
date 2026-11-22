@@ -4,7 +4,7 @@ import { BusinessError } from "@/lib/businessError";
 
 /** Reuse the representation of a canonical Capability without rewriting its
  * editorial content. The database partial index arbitrates concurrent creators. */
-export async function ensureFeatureProjection(initiativeId: string, capabilityId: string, sourceType: "manual" | "jira" = "manual") {
+export async function ensureFeatureProjection(initiativeId: string, capabilityId: string, sourceType: "manual" | "generated" = "manual") {
   const capability = await db.capability.findFirst({ where: { id: capabilityId, intakeAnswerSet: { initiativeId } }, select: { id: true, name: true } });
   if (!capability) throw new BusinessError("Feature not found.", 404);
   const prototype = await db.prototype.findUnique({ where: { initiativeId }, select: { id: true, approvedAt: true } });

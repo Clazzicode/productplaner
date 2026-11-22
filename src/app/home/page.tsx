@@ -87,7 +87,7 @@ async function HomePage() {
     }
   }
 
-  const extras = mainOrder.filter(id => !["attention", "recent_activity"].includes(id));
+  const extras = mainOrder.filter(id => !["attention", "recent_activity", "initiative_summary"].includes(id));
   return <HomeOverview data={data} showDecisions={visibility.attention} showActivity={visibility.recent_activity} extraWidgets={
     <div className="grid gap-4 lg:grid-cols-2">{extras.map(id => <div key={id} className="min-w-0">{widget(id)}</div>)}</div>
   } />;

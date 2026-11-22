@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { confirmPageNavigation } from "@/components/shell/unsavedChanges";
 
 export type RoadmapView = "planning" | "timeline" | "milestones" | "connections";
 
@@ -28,20 +29,35 @@ export default function RoadmapViewSwitcher(props: {
 
   return (
     <div>
-      <div className="inline-flex rounded-lg border border-neutral-200 bg-neutral-50 p-0.5 text-sm">
+      <div className="roadmap-view-tabs" role="tablist" aria-label="Roadmap views">
         {VIEWS.map((v) => (
           <button
             key={v.value}
-            onClick={() => setView(v.value)}
-            className={`rounded-md px-3 py-1.5 font-medium transition ${
-              view === v.value ? "bg-white text-accent shadow-sm" : "text-text-secondary hover:text-text-primary"
-            }`}
+            id={`roadmap-tab-${v.value}`}
+            onClick={() => { if (confirmPageNavigation()) setView(v.value); }}
+            onKeyDown={(event) => {
+              const index = VIEWS.findIndex((item) => item.value === v.value);
+              const next = event.key === "ArrowRight" ? (index + 1) % VIEWS.length
+                : event.key === "ArrowLeft" ? (index - 1 + VIEWS.length) % VIEWS.length
+                  : event.key === "Home" ? 0 : event.key === "End" ? VIEWS.length - 1 : -1;
+              if (next < 0) return;
+              event.preventDefault();
+              if (confirmPageNavigation()) {
+                setView(VIEWS[next].value);
+                event.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>('[role="tab"]')[next]?.focus();
+              }
+            }}
+            role="tab"
+            aria-selected={view === v.value}
+            aria-controls="roadmap-tab-panel"
+            tabIndex={view === v.value ? 0 : -1}
+            className={view === v.value ? "is-active" : ""}
           >
             {v.label}
           </button>
         ))}
       </div>
-      <div className="mt-4">
+      <div id="roadmap-tab-panel" className="roadmap-view-content" role="tabpanel" aria-labelledby={`roadmap-tab-${view}`}>
         {view === "planning" && props.planning}
         {view === "timeline" && props.timeline}
         {view === "milestones" && props.milestones}

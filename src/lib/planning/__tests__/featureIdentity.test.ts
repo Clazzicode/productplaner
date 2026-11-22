@@ -19,8 +19,8 @@ describe("canonical feature representations", () => {
     expect(state.insert).not.toHaveBeenCalled();
   });
   it("keeps one representation across repeated synchronization", async () => {
-    const first = await ensureFeatureProjection("init-a", "cap-a", "jira");
-    expect(await ensureFeatureProjection("init-a", "cap-a", "jira")).toBe(first);
+    const first = await ensureFeatureProjection("init-a", "cap-a", "generated");
+    expect(await ensureFeatureProjection("init-a", "cap-a", "generated")).toBe(first);
     expect(state.insert).toHaveBeenCalledOnce();
   });
   it("accepts the winner of a concurrent insertion without creating a Capability", async () => {

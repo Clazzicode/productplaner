@@ -1,7 +1,7 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const mocks = vi.hoisted(() => ({ process: vi.fn(), execute: vi.fn(), context: null as unknown }));
+const mocks = vi.hoisted(() => ({ process: vi.fn(), query: vi.fn(), execute: vi.fn(), context: null as unknown }));
 const context = new AsyncLocalStorage<boolean>();
 mocks.context = context;
 vi.mock("@/lib/jira/jobs", () => ({ processJiraJobs: mocks.process }));
@@ -16,6 +16,12 @@ vi.mock("@/lib/db", () => ({
       if (!(mocks.context as AsyncLocalStorage<boolean>).getStore()) return reject(new Error("Missing database context"));
       mocks.execute();
       resolve(1);
+    },
+  }), $queryRaw: () => ({
+    then(resolve: (value: unknown[]) => void, reject: (error: Error) => void) {
+      if (!(mocks.context as AsyncLocalStorage<boolean>).getStore()) return reject(new Error("Missing database context"));
+      mocks.query();
+      resolve([{ enqueue_due_jira_delivery_reconciliation: 0 }]);
     },
   }) },
 }));
@@ -34,12 +40,14 @@ describe("scheduled Jira worker", () => {
     const response = await GET(new Request("https://app.test/api/internal/jira/jobs/run", { headers: { authorization: "Bearer test-worker-authorization" } }));
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ claimed: 0, completed: 0, retried: 0, failed: 0 });
-    expect(mocks.execute).toHaveBeenCalledOnce();
+    expect(mocks.query).toHaveBeenCalledTimes(2);
+    expect(mocks.execute).not.toHaveBeenCalled();
     expect(context.getStore()).toBeUndefined();
   });
   it("rejects an unauthorized call before claiming or retaining data", async () => {
     expect((await GET(new Request("https://app.test/api/internal/jira/jobs/run"))).status).toBe(401);
     expect(mocks.process).not.toHaveBeenCalled();
+    expect(mocks.query).not.toHaveBeenCalled();
     expect(mocks.execute).not.toHaveBeenCalled();
   });
   it("rejects multibyte credentials without throwing a timing-safe comparison error", async () => {

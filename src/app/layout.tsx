@@ -2,7 +2,6 @@ import { withOptionalAuthenticatedPage } from "@/lib/auth/entryPoints";
 import type { Metadata } from "next";
 import localFont from "next/font/local";
 import AppShell from "@/components/shell/AppShell";
-import PageNavigation from "@/components/shell/PageNavigation";
 import { CoachMarkProvider } from "@/components/coachmarks/CoachMarkProvider";
 import { listAuthorizedInitiativeIds } from "@/lib/access/initiativeAccess";
 import { getCurrentUser } from "@/lib/auth/session";
@@ -48,7 +47,10 @@ async function RootLayout({
   // Step 8C (docs/V2-RESOURCE-ACCESS.md §16): the switcher/nav initiative list
   // is authorized-scoped too — it drives real navigation targets, so it must
   // never offer an initiative a detail page would then reject.
-  const authorizedInitiativeIds = user ? await listAuthorizedInitiativeIds(user) : [];
+  const [authorizedInitiativeIds, projects] = user ? await Promise.all([
+    listAuthorizedInitiativeIds(user),
+    db.project.findMany({ where: { organizationId: user.organizationId }, select: { id: true, name: true }, orderBy: { name: "asc" } }),
+  ]) : [[], []];
   const initiatives = user
     ? await db.initiative.findMany({
         where: { id: { in: authorizedInitiativeIds ?? [] } },
@@ -57,6 +59,7 @@ async function RootLayout({
           id: true,
           name: true,
           status: true,
+          backlogId: true,
           prototype: { select: { id: true } },
           project: { select: { id: true, name: true } },
           syncConnections: { where: { tool: "jira" }, select: { status: true }, take: 1 },
@@ -96,10 +99,11 @@ async function RootLayout({
             signedIn={user != null}
             canManageWorkspace={canManageWorkspace}
             userName={user?.name ?? ""}
+            userId={user?.authUserId ?? ""}
             accessLevel={user?.accessLevel ?? "standard_user"}
             initiatives={navigationInitiatives}
+            projects={projects}
           >
-            {user && <PageNavigation signedIn canManageWorkspace={canManageWorkspace} initiatives={navigationInitiatives} />}
             {children}
           </AppShell>
         </CoachMarkProvider>

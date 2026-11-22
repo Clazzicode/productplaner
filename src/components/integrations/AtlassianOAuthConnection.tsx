@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import { apiFetch } from "@/lib/clientApi";
 
 type Connection = {
@@ -29,6 +30,7 @@ export default function AtlassianOAuthConnection(props: { canManage: boolean }) 
   const [connection, setConnection] = useState<Connection | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [awaitingAuthorization, setAwaitingAuthorization] = useState(false);
   const [message, setMessage] = useState<{ text: string; error?: boolean } | null>(null);
 
   const load = useCallback(async (callbackResult?: string | null) => {
@@ -54,11 +56,25 @@ export default function AtlassianOAuthConnection(props: { canManage: boolean }) 
     return () => window.clearTimeout(timer);
   }, [load]);
 
+  useEffect(() => {
+    if (!awaitingAuthorization) return;
+    const onReturn = () => {
+      setAwaitingAuthorization(false);
+      void load();
+    };
+    window.addEventListener("focus", onReturn);
+    return () => window.removeEventListener("focus", onReturn);
+  }, [awaitingAuthorization, load]);
+
   const connect = async () => {
+    // Keep Clarivia available if Atlassian shows its own error page on Cancel.
+    const authorizationTab = window.open("about:blank", "_blank");
+    if (authorizationTab) authorizationTab.opener = null;
     setBusy(true);
     setMessage(null);
     const response = await apiFetch<StartResult>("/api/atlassian/oauth/start", { method: "POST" });
     if (!response.ok || !response.data?.authorizationUrl) {
+      authorizationTab?.close();
       setBusy(false);
       setMessage({ text: response.error ?? "Could not start the Atlassian connection.", error: true });
       return;
@@ -66,8 +82,16 @@ export default function AtlassianOAuthConnection(props: { canManage: boolean }) 
     try {
       const destination = new URL(response.data.authorizationUrl);
       if (destination.origin !== "https://auth.atlassian.com") throw new Error("Invalid authorization destination");
-      window.location.assign(destination.toString());
+      if (authorizationTab) {
+        authorizationTab.location.replace(destination.toString());
+        setAwaitingAuthorization(true);
+        setMessage({ text: "Atlassian authorization opened in a new tab. Return here after approving or cancelling." });
+        setBusy(false);
+      } else {
+        window.location.assign(destination.toString());
+      }
     } catch {
+      authorizationTab?.close();
       setBusy(false);
       setMessage({ text: "The Atlassian authorization destination was invalid.", error: true });
     }
@@ -109,13 +133,13 @@ export default function AtlassianOAuthConnection(props: { canManage: boolean }) 
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0">
           <p className="text-xs font-semibold uppercase tracking-widest text-accent">Secure connection</p>
-          <h2 id="atlassian-connection-title" className="mt-1 text-lg font-semibold text-text-primary">Atlassian / Jira</h2>
+          <h2 id="atlassian-connection-title" className="mt-1 text-lg font-semibold text-text-primary">Atlassian access for this workspace</h2>
           <p className="mt-1 max-w-3xl text-sm text-text-secondary">
             Connect your workspace using Atlassian OAuth. Clarivia requests read-only Jira access; it cannot create, edit, or delete Jira data through this connection.
           </p>
         </div>
         <span className={`rounded-full px-3 py-1 text-xs font-semibold ${connection?.status === "connected" && hasRequiredScopes ? "bg-emerald-50 text-emerald-700" : "bg-neutral-100 text-neutral-600"}`}>
-          {loading ? "Checking status" : connection?.status === "connected" && hasRequiredScopes ? "Connected · read-only" : connection ? "Reconnect required" : "Not connected"}
+          {loading ? "Checking status" : connection?.status === "connected" && hasRequiredScopes ? "Workspace access connected · read-only" : connection ? "Reconnect required" : "Not connected"}
         </span>
       </div>
 
@@ -133,6 +157,8 @@ export default function AtlassianOAuthConnection(props: { canManage: boolean }) 
             Permissions: {connection.grantedScopes.join(", ") || "not reported"}. Access token expires {new Date(connection.accessTokenExpiresAt).toLocaleString()}.
           </p>
           <p className="text-xs text-text-secondary">Connected {new Date(connection.connectedAt).toLocaleString()}.</p>
+          <p className="text-text-secondary">Connection grants access to Jira; it does not import issues. To show Jira work in Clarivia, choose an initiative and Jira project, review the import preview, and approve the items to bring in.</p>
+          <Link href="/integrations/jira" className="inline-block font-semibold text-indigo-700 hover:underline">Set up Jira import →</Link>
         </div>
       )}
 

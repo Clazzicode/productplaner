@@ -96,10 +96,10 @@ export default function GeneralIntakeForm(props: { storageScope: string; project
   return <form onSubmit={submit} className="rounded-2xl border border-indigo-100 bg-white p-6 shadow-sm sm:p-8">
     <div className="mb-6 rounded-xl bg-indigo-50 p-4 text-sm text-indigo-950">
       Start with what you know. Save incomplete context now and add detail as you prepare your sprint roadmap.
-      {props.project && <p className="mt-2">This initiative belongs to <strong>{props.project.name}</strong>. Its shared budget and target date stay attached.</p>}
+      {props.project && <p className="mt-2">This feature belongs to <strong>{props.project.name}</strong>. Its shared budget and target date stay attached.</p>}
     </div>
     <fieldset disabled={!loaded || continuing} className="space-y-6 disabled:opacity-60">
-      <label className="block text-sm font-semibold text-slate-900">Initiative name <span className="font-normal text-slate-500">(required)</span>
+      <label className="block text-sm font-semibold text-slate-900">Feature name <span className="font-normal text-slate-500">(required)</span>
         <input className={fieldClass} value={values.name} onChange={e => change("name", e.target.value)} required minLength={3} maxLength={160} placeholder="For example, customer self-service returns" />
       </label>
       <label className="block text-sm font-semibold text-slate-900">What problem are you solving?

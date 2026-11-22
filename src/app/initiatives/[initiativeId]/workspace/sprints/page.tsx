@@ -2,6 +2,7 @@ import { withAuthenticatedPage } from "@/lib/auth/entryPoints";
 import { formatCalendarDate } from "@/lib/calendarDate";
 import { notFound } from "next/navigation";
 import CoachMark from "@/components/coachmarks/CoachMark";
+import JiraDeliveryLive from "@/components/jira/JiraDeliveryLive";
 import AiAssistPanel from "@/components/ai/AiAssistPanel";
 import CreateReleaseForm from "@/components/workspace/CreateReleaseForm";
 import CreateSprintForm from "@/components/workspace/CreateSprintForm";
@@ -227,6 +228,7 @@ async function SprintsPage({
             : "Create releases and plan sprints directly here — nothing is auto-assigned. Regenerating the plan from Living Plan rebuilds everything, including releases and sprints you've created."}
       </p>
       <CoachMark coachMarkKey="sprints_releases" className="mt-4" />
+      <div className="mt-4"><JiraDeliveryLive initiativeId={initiativeId} /></div>
       {/* Releases strip */}
       <div className="mt-5 flex flex-wrap items-start gap-3">
         {releases.map((rel) => (

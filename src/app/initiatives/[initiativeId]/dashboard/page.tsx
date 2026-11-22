@@ -7,6 +7,7 @@ import { Badge, healthBadgeVariant } from "@/components/ui/Badge";
 import CapacityCostPanel from "@/components/dashboard/CapacityCostPanel";
 import ConnectedToolsWidget, { type ToolStatusView } from "@/components/dashboard/ConnectedToolsWidget";
 import DashboardHeader from "@/components/dashboard/DashboardHeader";
+import JiraDeliveryLive from "@/components/jira/JiraDeliveryLive";
 import DecisionsRequiredPanel, { type DecisionItem } from "@/components/dashboard/DecisionsRequiredPanel";
 import RecentActivity, { type ActivityItem } from "@/components/dashboard/RecentActivity";
 import RoadmapTimeline, { type TimelinePhase } from "@/components/dashboard/RoadmapTimeline";
@@ -487,6 +488,8 @@ async function DashboardPage({
         status={initiativeStatus}
         isOrgAdmin={user.accessLevel === "org_admin"}
       />
+
+      <div className="mt-4"><JiraDeliveryLive initiativeId={initiativeId} /></div>
 
       <div className="mt-6 grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
         <div className="min-w-0 space-y-4">

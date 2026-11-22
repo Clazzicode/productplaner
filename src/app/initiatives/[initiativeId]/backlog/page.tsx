@@ -9,6 +9,7 @@ import { listFeatures } from "@/lib/backlog/service";
 import { listUnifiedBacklog } from "@/lib/backlog/unified";
 import BacklogWorkspace from "@/components/backlog/BacklogWorkspace";
 import { ContainedLayout } from "@/components/layout/PageLayouts";
+import JiraDeliveryLive from "@/components/jira/JiraDeliveryLive";
 
 async function BacklogPage({ params }: { params: Promise<{ initiativeId: string }> }) {
   const { initiativeId } = await params;
@@ -27,9 +28,10 @@ async function BacklogPage({ params }: { params: Promise<{ initiativeId: string 
   ]);
   return <ContainedLayout>
     <div className="mb-6 space-y-2"><Link href={`/initiatives/${initiativeId}/requests`} className="text-sm text-indigo-700">{initiative.name} / Requests & priorities</Link>
-      <h1 className="text-3xl font-bold">Product feature backlog</h1>
+      <h1 className="text-3xl font-bold">{initiative.name} backlog</h1>
       <p className="text-slate-500">Maintain work, apply explainable priority decisions, and organize features, requests, bugs, and stories for delivery.</p>
     </div>
+    <div className="mb-4"><JiraDeliveryLive initiativeId={initiativeId} /></div>
     <BacklogWorkspace initiativeId={initiativeId} initialFeatures={features.map(featureRecord)} initialItems={items} owners={owners} canEdit={access.level === "edit" || access.level === "owner"} canPrioritize={(access.level === "edit" || access.level === "owner") && user.memberType === "internal"} />
   </ContainedLayout>;
 }

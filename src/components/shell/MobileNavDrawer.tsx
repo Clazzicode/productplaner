@@ -5,8 +5,8 @@ import LeftNav, { type NavInitiative } from "./LeftNav";
 
 /**
  * Off-canvas nav for constrained viewports (below `xl:`). Mounts the
- * existing, unmodified `LeftNav` — this component owns only the backdrop,
- * slide transform, and close affordances, so nav logic (active-link
+ * existing `LeftNav` in drawer mode — this component owns the backdrop,
+ * slide transform, and one scroll container, so nav logic (active-link
  * matching, disabled reasons, initiative derivation) lives in exactly one
  * place. `topContent`/`bottomContent` are the header controls relocated out
  * of the compact mobile top bar (initiative switcher/+New above the nav
@@ -16,7 +16,9 @@ export default function MobileNavDrawer(props: {
   open: boolean;
   onClose: () => void;
   initiatives: NavInitiative[];
+  project?: { id: string; name: string };
   canManageWorkspace?: boolean;
+  userId?: string;
   topContent?: React.ReactNode;
   bottomContent?: React.ReactNode;
 }) {
@@ -62,16 +64,19 @@ export default function MobileNavDrawer(props: {
       />
       <div
         ref={dialogRef}
+        onClickCapture={event => {
+          if (event.target instanceof Element && event.target.closest("a[href]")) onClose();
+        }}
         role="dialog"
         aria-modal="true"
         aria-label="Navigation"
         aria-hidden={!open}
         inert={!open}
-        className={`fixed inset-y-0 left-0 z-40 flex w-[min(20rem,100vw)] transform flex-col overflow-hidden bg-white shadow-xl transition-transform duration-300 ease-in-out xl:hidden ${
+        className={`no-scrollbar fixed inset-y-0 left-0 z-40 flex w-[min(20rem,100vw)] transform flex-col overflow-x-hidden overflow-y-auto overscroll-contain bg-white shadow-xl touch-pan-y transition-transform duration-300 ease-in-out xl:hidden ${
           open ? "translate-x-0" : "-translate-x-full"
         }`}
       >
-        <div className="flex items-center justify-between border-b border-neutral-200 px-3 py-3">
+        <div className="sticky top-0 z-10 flex shrink-0 items-center justify-between border-b border-neutral-200 bg-white px-3 py-3">
           <span className="text-xs font-semibold uppercase tracking-widest text-indigo-600">
             Menu
           </span>
@@ -85,13 +90,13 @@ export default function MobileNavDrawer(props: {
           </button>
         </div>
         {props.topContent && (
-          <div className="border-b border-neutral-200 px-3 py-3">{props.topContent}</div>
+          <div className="shrink-0 border-b border-neutral-200 px-3 py-3">{props.topContent}</div>
         )}
-        <div className="min-h-0 min-w-0 flex-1 overflow-y-auto [&>nav]:h-auto [&>nav]:min-h-full [&>nav]:w-full [&>nav]:overflow-visible">
-          <LeftNav initiatives={props.initiatives} canManageWorkspace={props.canManageWorkspace} />
+        <div className="min-w-0 shrink-0">
+          <LeftNav inDrawer initiatives={props.initiatives} project={props.project} canManageWorkspace={props.canManageWorkspace} userId={props.userId} />
         </div>
         {props.bottomContent && (
-          <div className="border-t border-neutral-200 px-3 py-3">{props.bottomContent}</div>
+          <div className="shrink-0 border-t border-neutral-200 px-3 py-3">{props.bottomContent}</div>
         )}
       </div>
     </>

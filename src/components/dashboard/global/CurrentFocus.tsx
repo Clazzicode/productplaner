@@ -19,7 +19,7 @@ export default function CurrentFocus(props: { primary: PrimaryInitiativeDetail |
       {!p ? (
         <EmptyState
           title="Nothing planned yet"
-          description="Current-sprint work will appear here once an initiative's plan is generated."
+          description="Current-sprint work will appear here once a feature's plan is generated."
         />
       ) : p.focusStories.length === 0 ? (
         <p className="mt-3 text-sm text-neutral-400">No stories planned yet.</p>

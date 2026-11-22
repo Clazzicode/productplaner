@@ -19,6 +19,7 @@ export const jiraProjectSchema = z.object({
   storyPointsField: z.string().trim().regex(/^customfield_\d+$/).nullable().default(null),
   statusMappings: z.record(z.string(), z.enum(["planned", "in_progress", "done", "blocked"])).default({}),
   priorityMappings: z.record(z.string(), z.enum(["critical", "high", "medium", "low"])).default({}),
+  outboundIssueTypeIds: z.object({ feature: z.string().trim().min(1).nullable(), story: z.string().trim().min(1).nullable(), bug: z.string().trim().min(1).nullable() }).default({ feature: null, story: null, bug: null }),
 });
 
 export const jiraImportPreviewSchema = z.object({ connectionId: z.string().trim().min(1), idempotencyKey: z.string().uuid().optional() });
@@ -38,6 +39,8 @@ export const jiraExportApprovalSchema = z.object({
 });
 
 export const jiraExportExecuteSchema = z.object({ expectedStatus: z.literal("approved") });
+
+export const jiraCreateReconcileSchema = z.object({ jiraKey: z.string().trim().regex(/^[A-Za-z][A-Za-z0-9_]*-\d+$/).max(100), reason: z.string().trim().min(5).max(1000) }).strict();
 
 export const jiraWebhookCommandSchema = z.object({ action: z.enum(["register", "renew"]) });
 

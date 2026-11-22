@@ -17,7 +17,7 @@ async function POSTHandler(request: Request) {
   const user = authGuard.user;
   establishAuthContext(user.authUserId);
   if (user.memberType !== "internal") return jsonError("Only internal workspace members can create planning work.", 403);
-  if (!["owner", "admin"].includes(user.permissionRole)) return jsonError("A workspace owner or administrator must create the initiative.", 403);
+  if (!["owner", "admin"].includes(user.permissionRole)) return jsonError("A workspace owner or administrator must create the feature.", 403);
   return withTransaction(async tx => {
   // Never trust a client-supplied projectId on its own (directive: the
   // application decides tenancy, not the request) — it must resolve to a
@@ -30,7 +30,7 @@ async function POSTHandler(request: Request) {
       select: { id: true, organizationId: true },
     });
     if (!project || project.organizationId !== user.organizationId) {
-      return jsonError("Project not found.", 404);
+      return jsonError("Product not found.", 404);
     }
     projectId = project.id;
   } else {
@@ -41,7 +41,7 @@ async function POSTHandler(request: Request) {
       data: {
         organizationId: user.organizationId,
         createdByUserId: user.id,
-        name: `${parsed.data.name} — Project`,
+        name: `${parsed.data.name} — Product`,
         targetLaunchDate: parsed.data.targetLaunchDate ?? null,
         budget: parsed.data.budget ?? null,
         averageHourlyRate: parsed.data.averageHourlyRate,
@@ -51,11 +51,15 @@ async function POSTHandler(request: Request) {
   }
 
   const initiativeId = randomUUID();
+  const backlog = await db.backlog.create({ data: {
+    organizationId: user.organizationId, projectId, name: `${parsed.data.name} backlog`,
+  } });
   await db.initiative.createMany({
     data: {
       id: initiativeId,
       organizationId: user.organizationId,
       projectId,
+      backlogId: backlog.id,
       userId: user.id,
       name: parsed.data.name,
       description: parsed.data.description,

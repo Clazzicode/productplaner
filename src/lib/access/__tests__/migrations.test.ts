@@ -591,8 +591,8 @@ describe.sequential("migration replay and real PostgreSQL RLS", () => {
     await asUser(authA, () => pg.exec(`
       INSERT INTO "JiraExportRun" (id,"organizationId","initiativeId","connectionId","sourceFingerprint","itemCount","createCount","initiatedByUserId","updatedAt")
       VALUES ('jira-export-a','org-a','init-a','jira-a',repeat('e',64),1,1,'user-org-a',now());
-      INSERT INTO "JiraExportItem" (id,"organizationId","exportRunId","targetType","targetId",summary,action,"requestPayload","targetFingerprint","idempotencyKey","reviewSnapshot","updatedAt")
-      VALUES ('jira-export-item-a','org-a','jira-export-a','feature','capability-a','Approved feature','create','{"fields":{"summary":"Approved feature"}}',repeat('f',64),repeat('1',64),'{"schemaVersion":1,"before":"source prose"}',now());
+      INSERT INTO "JiraExportItem" (id,"organizationId","connectionId","exportRunId","targetType","targetId",summary,action,"requestPayload","targetFingerprint","idempotencyKey","reviewSnapshot","updatedAt")
+      VALUES ('jira-export-item-a','org-a','jira-a','jira-export-a','feature','capability-a','Approved feature','create','{"fields":{"summary":"Approved feature"}}',repeat('f',64),repeat('1',64),'{"schemaVersion":1,"before":"source prose"}',now());
       UPDATE "JiraExportRun" SET status='approved' WHERE id='jira-export-a';
       INSERT INTO "JiraExportApproval" (id,"organizationId","exportRunId","selectedItemIds",reason,"snapshotHash","approvedByUserId")
       VALUES ('jira-export-approval-a','org-a','jira-export-a','["jira-export-item-a"]','PO reviewed the frozen export.',repeat('2',64),'user-org-a');

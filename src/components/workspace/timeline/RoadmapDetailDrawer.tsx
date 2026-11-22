@@ -1,7 +1,7 @@
 "use client";
 
-import { format } from "date-fns";
 import Link from "next/link";
+import { formatCalendarDate } from "@/lib/calendarDate";
 import { Badge, riskBadgeVariant, timelineHealthTokenVariant, valueBadgeVariant } from "@/components/ui/Badge";
 import type { BusinessValue, RiskLevel } from "@/lib/generation/types";
 import { businessValueGuidance, riskLevelGuidance } from "@/lib/questionnaire/valueRiskGuidance";
@@ -25,6 +25,8 @@ export default function RoadmapDetailDrawer(props: {
   feature: ClientTimelineFeature | null;
   initiativeId: string;
   onClose: () => void;
+  roadmap?: boolean;
+  mobileOpen?: boolean;
 }) {
   const { feature } = props;
   if (!feature) return null;
@@ -34,12 +36,12 @@ export default function RoadmapDetailDrawer(props: {
   const releaseDate = feature.releaseTargetDate ? new Date(feature.releaseTargetDate) : null;
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-end bg-neutral-900/40" onClick={props.onClose}>
+    <div className={props.roadmap ? `roadmap-detail roadmap-timeline-detail ${props.mobileOpen ? "is-mobile-open" : ""}` : "fixed inset-0 z-50 flex justify-end bg-neutral-900/40"} onClick={props.roadmap ? undefined : props.onClose}>
       <div
         role="dialog"
-        aria-modal="true"
+        aria-modal={props.roadmap ? undefined : true}
         aria-label={feature.title}
-        className="flex h-full w-full flex-col overflow-y-auto bg-white shadow-xl sm:max-w-md"
+        className={props.roadmap ? "roadmap-timeline-detail-inner" : "flex h-full w-full flex-col overflow-y-auto bg-white shadow-xl sm:max-w-md"}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-start justify-between gap-4 border-b border-border-subtle p-5">
@@ -80,23 +82,23 @@ export default function RoadmapDetailDrawer(props: {
                 </Badge>
               )}
             </div>
-            {feature.description && <p className="mt-3 text-sm text-text-secondary">{feature.description}</p>}
+            {feature.description && <p className="roadmap-timeline-description mt-3 text-sm text-text-secondary">{feature.description}</p>}
           </section>
 
           <section>
             <h3 className="text-xs font-semibold uppercase tracking-wide text-text-muted">Timing</h3>
             <dl className="mt-2 space-y-1.5 text-sm">
-              <Row label="Phase" value={feature.phaseName} />
+              <Row label="Phase" value={feature.phaseName} compactExtra />
               <Row
                 label="Derived start"
-                value={start ? format(start, "MMM d, yyyy") : "—"}
+                value={start ? formatCalendarDate(start, { month: "short", day: "numeric", year: "numeric" }) : "—"}
               />
-              <Row label="Derived end" value={end ? format(end, "MMM d, yyyy") : "—"} />
+              <Row label="Derived end" value={end ? formatCalendarDate(end, { month: "short", day: "numeric", year: "numeric" }) : "—"} />
               <Row label="Basis" value={SCHEDULE_SOURCE_LABEL[feature.scheduleSource]} />
               {feature.releaseName && (
                 <Row
                   label="Release"
-                  value={releaseDate ? `${feature.releaseName} · ${format(releaseDate, "MMM d, yyyy")}` : feature.releaseName}
+                  value={releaseDate ? `${feature.releaseName} · ${formatCalendarDate(releaseDate, { month: "short", day: "numeric", year: "numeric" })}` : feature.releaseName}
                 />
               )}
             </dl>
@@ -112,7 +114,17 @@ export default function RoadmapDetailDrawer(props: {
               <Row
                 label="Depended on by"
                 value={feature.dependedOnByNames.length > 0 ? feature.dependedOnByNames.join(", ") : "None"}
+                compactExtra
               />
+            </dl>
+          </section>
+
+          <section>
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-text-muted">Delivery</h3>
+            <dl className="mt-2 space-y-1.5 text-sm">
+              <Row label="Epics" value={String(feature.epicCount)} compactExtra />
+              <Row label="Stories" value={String(feature.storyCount)} compactExtra />
+              <Row label="Sprint span" value={feature.sprintRange ?? "Not yet packed"} />
             </dl>
           </section>
 
@@ -128,14 +140,10 @@ export default function RoadmapDetailDrawer(props: {
             </section>
           )}
 
-          <section>
-            <h3 className="text-xs font-semibold uppercase tracking-wide text-text-muted">Delivery</h3>
-            <dl className="mt-2 space-y-1.5 text-sm">
-              <Row label="Epics" value={String(feature.epicCount)} />
-              <Row label="Stories" value={String(feature.storyCount)} />
-              <Row label="Sprint span" value={feature.sprintRange ?? "Not yet packed"} />
-            </dl>
-          </section>
+          {feature.description && <details className="roadmap-timeline-about"><summary>About this feature</summary><p>{feature.description}</p></details>}
+          <details className="roadmap-timeline-about"><summary>More feature details</summary>
+            <dl><Row label="Phase" value={feature.phaseName} /><Row label="Used by" value={feature.dependedOnByNames.length > 0 ? feature.dependedOnByNames.join(", ") : "None"} /><Row label="Epics" value={String(feature.epicCount)} /><Row label="Stories" value={String(feature.storyCount)} /></dl>
+          </details>
         </div>
 
         <div className="flex flex-wrap gap-2 border-t border-border-subtle p-5">
@@ -157,9 +165,9 @@ export default function RoadmapDetailDrawer(props: {
   );
 }
 
-function Row(props: { label: string; value: string }) {
+function Row(props: { label: string; value: string; compactExtra?: boolean }) {
   return (
-    <div className="flex items-start justify-between gap-4">
+    <div className={`flex items-start justify-between gap-4 ${props.compactExtra ? "roadmap-timeline-extra-row" : ""}`}>
       <dt className="shrink-0 text-text-muted">{props.label}</dt>
       <dd className="text-right text-text-primary">{props.value}</dd>
     </div>

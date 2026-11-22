@@ -32,7 +32,15 @@ const LABEL_OVERRIDES: Record<string, Partial<Record<(typeof BASE_TABS)[number][
 export function currentTabLabel(pathname: string | null, methodology?: string): string | null {
   const overrides = LABEL_OVERRIDES[methodology ?? ""] ?? {};
   const match = BASE_TABS.find((tab) => pathname?.includes(`/workspace/${tab.slug}`));
-  return match ? (overrides[match.slug] ?? match.label) : null;
+  if (!match) return null;
+  // Preserve Roadmap's existing terminology and link strip while matching
+  // the standalone sections' breadcrumbs to their sidebar labels.
+  if (match.slug === "roadmap") return overrides.roadmap ?? match.label;
+  const sectionLabels: Partial<Record<(typeof BASE_TABS)[number]["slug"], string>> = {
+    features: "Feature hierarchy", epics: "Stories & Criteria", sprints: "Sprints & Releases",
+    executive: "Reports",
+  };
+  return sectionLabels[match.slug] ?? overrides[match.slug] ?? match.label;
 }
 
 export default function NavTabs({
@@ -43,6 +51,9 @@ export default function NavTabs({
   methodology?: string;
 }) {
   const pathname = usePathname();
+  // The Roadmap retains its existing related-work strip. Other workspace
+  // sections now use the persistent sidebar as their sole section navigation.
+  if (!/^\/initiatives\/[^/]+\/workspace\/roadmap\/?$/.test(pathname ?? "")) return null;
   const overrides = LABEL_OVERRIDES[methodology ?? ""] ?? {};
   const currentSlug = BASE_TABS.find((tab) => pathname?.includes(`/workspace/${tab.slug}`))?.slug;
   const visibleTabs = BASE_TABS.filter(tab => ["features", "epics", "roadmap", "sprint-preparation"].includes(tab.slug)

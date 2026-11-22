@@ -9,6 +9,7 @@ import { buildImportFieldReview, fieldBaselines } from "./fieldReview";
 import { emptyRequest, requestSchema } from "@/lib/requests/model";
 import { saveRequest } from "@/lib/requests/service";
 import { searchJiraIssues, type JiraIssueSnapshot as JiraSourceIssue } from "./client";
+import { applyJiraDeliverySnapshot } from "./delivery";
 import { jiraHash } from "./crypto";
 import { accessTokenFor } from "./oauth";
 
@@ -19,6 +20,12 @@ type PreviewItem = {
   sourceSnapshot: Prisma.InputJsonValue; sourceHash: string; action: "create" | "update" | "unchanged" | "conflict" | "skip";
   conflictReason: string | null; selected: boolean; reviewSnapshot: Prisma.InputJsonValue;
 };
+
+/** Parent features must exist before their Jira stories are linked. */
+export function orderImportItems<T extends { targetType: string; externalKey: string }>(items: T[]): T[] {
+  const rank = (type: string) => type === "feature" ? 0 : type === "story" ? 1 : 2;
+  return [...items].sort((a, b) => rank(a.targetType) - rank(b.targetType) || a.externalKey.localeCompare(b.externalKey));
+}
 
 export function plainText(value: unknown): string {
   if (typeof value === "string") return value;
@@ -88,6 +95,14 @@ export function sourceSnapshot(issue: JiraSourceIssue) {
   };
 }
 
+export function importSourceFingerprint(issue: Pick<JiraSourceIssue, "summary" | "description" | "storyPoints">, targetType: string) {
+  return fingerprint({ summary: issue.summary, description: plainText(issue.description).trim(), ...(targetType === "story" ? { storyPoints: issue.storyPoints } : {}) });
+}
+
+export function exportSourceFingerprint(issue: Pick<JiraSourceIssue, "summary" | "description">) {
+  return fingerprint({ summary: issue.summary, description: plainText(issue.description).trim() });
+}
+
 export function deduplicateJiraIssues(issues: JiraSourceIssue[]) {
   const byId = new Map<string, JiraSourceIssue>();
   const byKey = new Map<string, string>();
@@ -132,9 +147,9 @@ export async function previewJiraImport(connectionId: string, actorUserId: strin
   const items: PreviewItem[] = [];
   for (const issue of uniqueIssues) {
     const snapshot = sourceSnapshot(issue);
-    const sourceHash = fingerprint(snapshot);
     const link = byIssue.get(issue.id);
     const mappedTarget = targetType(issue, connection);
+    const sourceHash = importSourceFingerprint(issue, mappedTarget);
     let action: "create" | "update" | "unchanged" | "conflict" | "skip" = mappedTarget === "skip" ? "skip" : link ? "update" : "create";
     let conflictReason: string | null = null;
     const local = link ? await currentTargetSnapshot(link) : null;
@@ -198,9 +213,13 @@ async function epicForCapability(initiativeId: string, capabilityId: string, tit
   const prototype = await db.prototype.findUnique({ where: { initiativeId } });
   if (!prototype) throw new BusinessError("Start the planning workspace before importing Jira stories.", 422);
   if (prototype.approvedAt) throw new BusinessError("Reopen the approved plan before importing Jira stories.", 409);
-  const feature = await ensureFeatureProjection(initiativeId, capabilityId, "jira");
+  // The feature projection represents a local capability, not a Jira issue.
+  // A sourceType of "jira" requires an externalRef on ArtifactLayer.
+  const feature = await ensureFeatureProjection(initiativeId, capabilityId, "generated");
   let epic = await db.artifactLayer.findFirst({ where: { parentId: feature.id, type: "epic", archivedAt: null } });
-  if (!epic) epic = await db.artifactLayer.create({ data: { prototypeId: prototype.id, type: "epic", parentId: feature.id, title: `${title} delivery`, sourceCapabilityId: capabilityId, sourceType: "jira", dedupeKey: `jira-epic:${capabilityId}` } });
+  // This is a Clarivia grouping container, not a Jira issue. Only artifacts
+  // with a real Jira key may use sourceType "jira" (database constraint).
+  if (!epic) epic = await db.artifactLayer.create({ data: { prototypeId: prototype.id, type: "epic", parentId: feature.id, title: `${title} delivery`, sourceCapabilityId: capabilityId, sourceType: "generated", dedupeKey: `jira-epic:${capabilityId}` } });
   return epic;
 }
 
@@ -263,7 +282,7 @@ async function importedBug(issue: JiraSourceIssue, initiativeId: string, actorUs
   return saveRequest(initiativeId, request, undefined, { actorUserId, changeReason: `Imported Jira bug ${issue.key}` });
 }
 
-async function applyItem(item: { id: string; targetType: string; targetId: string | null; sourceSnapshot: Prisma.JsonValue; sourceHash: string; externalIssueId: string; externalKey: string; issueTypeName: string }, run: { connectionId: string; initiativeId: string; organizationId: string }, actorUserId: string) {
+async function applyItem(item: { id: string; targetType: string; targetId: string | null; sourceSnapshot: Prisma.JsonValue; sourceHash: string; externalIssueId: string; externalKey: string; issueTypeName: string }, run: { connectionId: string; initiativeId: string; organizationId: string }, actorUserId: string, connection: { projectId: string | null; projectKey: string | null; fieldMappings: unknown }) {
   const issue = item.sourceSnapshot as unknown as JiraSourceIssue;
   let target: { id: string };
   if (item.targetType === "feature") target = await importedFeature(issue, run.initiativeId, item.targetId);
@@ -272,12 +291,13 @@ async function applyItem(item: { id: string; targetType: string; targetId: strin
     const request = await importedBug(issue, run.initiativeId, actorUserId, item.targetId);
     target = await db.bugPlanningRecord.findUniqueOrThrow({ where: { requestId: request.id } });
   } else throw new BusinessError("Skipped Jira items cannot be imported.", 422);
-  const linkBase = { organizationId: run.organizationId, initiativeId: run.initiativeId, connectionId: run.connectionId, externalIssueId: item.externalIssueId, externalKey: item.externalKey, issueTypeName: item.issueTypeName, targetType: item.targetType, targetId: target.id, sourceHash: item.sourceHash, targetFingerprint: "", sourceUpdatedAt: issue.updated ? new Date(issue.updated) : null, lastImportedSnapshot: {} as Prisma.InputJsonValue, lastSyncStatus: "imported" };
+  const linkBase = { organizationId: run.organizationId, initiativeId: run.initiativeId, connectionId: run.connectionId, externalIssueId: item.externalIssueId, externalKey: item.externalKey, issueTypeName: item.issueTypeName, targetType: item.targetType, targetId: target.id, sourceHash: item.sourceHash, exportSourceHash: fingerprint({ summary: issue.summary, description: plainText(issue.description).trim() }), targetFingerprint: "", sourceUpdatedAt: issue.updated ? new Date(issue.updated) : null, lastImportedSnapshot: {} as Prisma.InputJsonValue, lastSyncStatus: "imported" };
   const temporary = { ...linkBase, id: "", createdAt: new Date(), updatedAt: new Date(), lastImportedAt: new Date() } as JiraExternalLink;
   const local = await currentTargetSnapshot(temporary);
   linkBase.targetFingerprint = local ? fingerprint(local) : fingerprint({ id: target.id });
   const baselines = fieldBaselines(issue, item.targetType, local) as unknown as Prisma.InputJsonValue;
   await db.jiraExternalLink.upsert({ where: { connectionId_externalIssueId: { connectionId: run.connectionId, externalIssueId: item.externalIssueId } }, create: { ...linkBase, fieldBaselines: baselines }, update: { ...linkBase, fieldBaselines: baselines, lastImportedAt: new Date() } });
+  await applyJiraDeliverySnapshot(run.connectionId, issue, connection.projectId, connection.projectKey, connection.fieldMappings);
   await db.jiraImportItem.update({ where: { id: item.id }, data: { targetId: target.id, status: "imported" } });
 }
 
@@ -307,11 +327,11 @@ export async function applyJiraImport(runId: string, selectedItemIds: string[], 
     }
     const changed = await db.jiraImportRun.updateMany({ where: { id: run.id, status: "previewed" }, data: { status: "applying" } });
     if (changed.count !== 1) throw new BusinessError("This Jira import preview changed. Reload and try again.", 409);
-    for (const item of selected) await applyItem(item, run, actorUserId);
+    for (const item of orderImportItems(selected)) await applyItem(item, run, actorUserId, connection);
     await db.jiraImportItem.updateMany({ where: { importRunId: run.id, status: "previewed" }, data: { status: "skipped", selected: false } });
     await db.jiraImportRun.update({ where: { id: run.id }, data: { status: "applied", appliedByUserId: actorUserId, appliedAt: new Date() } });
     await db.jiraConnection.update({ where: { id: run.connectionId }, data: { lastImportedAt: new Date(), lastSyncAt: new Date(), lastSyncStatus: "applied" } });
     await auditInitiative(run.initiativeId, "jira.import_applied", { jiraImportRunId: run.id, jiraConnectionId: run.connectionId, workspaceId: run.organizationId, source: "jira", selectedItemIds, importedCount: selected.length, reason });
     return loadJiraImport(run.id);
-  }, { timeout: 30_000 });
+  }, { timeout: 120_000 });
 }

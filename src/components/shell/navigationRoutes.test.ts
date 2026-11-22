@@ -24,7 +24,7 @@ describe("navigation coverage", () => {
     expect(pageNavigation("/initiatives/missing/intake", []).parent).toBe("/initiatives");
     expect(pageNavigation("/integrations/jira", []).parent).toBe("/integrations");
   });
-  it("avoids the workspace index redirect when leaving Sprint Planning", () => {
-    expect(pageNavigation("/initiatives/example/workspace/sprint-preparation", initiatives).parent).toBe("/initiatives/example/dashboard");
+  it("returns from Sprint Planning to the Five-tool guide that opens it", () => {
+    expect(pageNavigation("/initiatives/example/workspace/sprint-preparation", initiatives)).toMatchObject({ parent: "/initiatives/example/overview", parentLabel: "Five-tool guide" });
   });
 });

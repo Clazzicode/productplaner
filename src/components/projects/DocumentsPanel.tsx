@@ -18,7 +18,7 @@ export default function DocumentsPanel(props: { projectId: string; experienceLev
           <button
             type="button"
             onClick={() => setOpen(true)}
-            className="text-xs font-medium text-indigo-600 hover:underline"
+            className="inline-flex min-h-10 items-center rounded-lg border border-indigo-200 px-3 py-2 text-sm font-semibold text-indigo-700 hover:bg-indigo-50"
           >
             + Add document
           </button>
@@ -43,7 +43,7 @@ export default function DocumentsPanel(props: { projectId: string; experienceLev
       ) : (
         <p className="mt-2 text-xs text-neutral-400">
           Upload a business case, requirements doc, or planning document shared across this
-          project&apos;s initiatives.
+          product&apos;s features.
         </p>
       )}
     </div>

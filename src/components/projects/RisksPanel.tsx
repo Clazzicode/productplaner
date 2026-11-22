@@ -49,7 +49,7 @@ export default function RisksPanel(props: { projectId: string; risks: RiskView[]
           <button
             type="button"
             onClick={() => setAdding(true)}
-            className="text-xs font-medium text-indigo-600 hover:underline"
+            className="inline-flex min-h-10 items-center rounded-lg border border-indigo-200 px-3 py-2 text-sm font-semibold text-indigo-700 hover:bg-indigo-50"
           >
             + Add risk
           </button>

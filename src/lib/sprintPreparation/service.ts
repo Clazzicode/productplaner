@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import type { Prisma } from "@prisma/client";
+import type { Prisma, WorkDependency } from "@prisma/client";
 import { auditInitiative } from "@/lib/audit";
 import { BusinessError } from "@/lib/businessError";
 import { db, withTransaction } from "@/lib/db";
@@ -10,12 +10,47 @@ export type ReadinessCheckResult = { checkKey: string; status: "pass" | "fail" |
 
 const fingerprint = (value: unknown) => createHash("sha256").update(JSON.stringify(value)).digest("hex");
 
-export async function evaluateSprintReadiness(initiativeId: string, target: SprintItemTarget) {
-  const obstacles = await readinessObstacles(initiativeId, target);
+const storyReadinessInclude = {
+  children: { where: { type: "acceptance_criterion", archivedAt: null } },
+  sourceCapability: { select: { ownerUserId: true, backlogLane: true } },
+  refinementSessionItems: { include: { session: { select: { status: true } } } },
+} as const;
+const bugReadinessInclude = {
+  request: true,
+  refinementSessionItems: { include: { session: { select: { status: true } } } },
+} as const;
+type ReadinessStory = Prisma.ArtifactLayerGetPayload<{ include: typeof storyReadinessInclude }>;
+type ReadinessBug = Prisma.BugPlanningRecordGetPayload<{ include: typeof bugReadinessInclude }>;
+type ReadinessBlocker = { id: string; description: string; status: string; storyId: string | null; bugId: string | null };
+type ReadinessSnapshot = {
+  stories: Map<string, ReadinessStory>;
+  bugs: Map<string, ReadinessBug>;
+  blockers: ReadinessBlocker[];
+  dependencies: WorkDependency[];
+};
+
+/** One set of reads for a whole sprint page instead of three reads per item. */
+export async function loadReadinessSnapshot(initiativeId: string, targets: SprintItemTarget[]): Promise<ReadinessSnapshot> {
+  const storyIds = targets.filter((target) => target.type === "story").map((target) => target.id);
+  const bugIds = targets.filter((target) => target.type === "bug").map((target) => target.id);
+  const [stories, bugs, blockers, dependencies] = await Promise.all([
+    db.artifactLayer.findMany({ where: { id: { in: storyIds }, type: "story", archivedAt: null, prototype: { initiativeId } }, include: storyReadinessInclude }),
+    db.bugPlanningRecord.findMany({ where: { id: { in: bugIds }, initiativeId, archivedAt: null }, include: bugReadinessInclude }),
+    db.planningBlocker.findMany({ where: { initiativeId, status: { in: ["open", "in_progress"] }, OR: [{ storyId: { in: storyIds } }, { bugId: { in: bugIds } }] }, select: { id: true, description: true, status: true, storyId: true, bugId: true } }),
+    db.workDependency.findMany({ where: { initiativeId, OR: [{ dependentStoryId: { in: storyIds } }, { dependentBugId: { in: bugIds } }] } }),
+  ]);
+  return { stories: new Map(stories.map((story) => [story.id, story])), bugs: new Map(bugs.map((bug) => [bug.id, bug])), blockers, dependencies };
+}
+
+export async function evaluateSprintReadiness(initiativeId: string, target: SprintItemTarget, snapshot?: ReadinessSnapshot) {
+  const blockers = snapshot?.blockers.filter((row) => target.type === "story" ? row.storyId === target.id : row.bugId === target.id)
+    .map(({ id, description, status }) => ({ id, description, status }));
+  const dependencies = snapshot?.dependencies.filter((row) => target.type === "story" ? row.dependentStoryId === target.id : row.dependentBugId === target.id);
+  const obstacles = snapshot ? { blockers: blockers ?? [], dependencies: dependencies ?? [] } : await readinessObstacles(initiativeId, target);
   const checks: ReadinessCheckResult[] = [];
   let source: unknown;
   if (target.type === "story") {
-    const story = await db.artifactLayer.findFirst({ where: { id: target.id, type: "story", archivedAt: null, prototype: { initiativeId } }, include: { children: { where: { type: "acceptance_criterion", archivedAt: null } }, sourceCapability: { select: { ownerUserId: true, backlogLane: true } }, refinementSessionItems: { include: { session: { select: { status: true } } } } } });
+    const story = snapshot ? snapshot.stories.get(target.id) : await db.artifactLayer.findFirst({ where: { id: target.id, type: "story", archivedAt: null, prototype: { initiativeId } }, include: storyReadinessInclude });
     if (!story) throw new BusinessError("Story not found.", 404); source = story;
     checks.push({ checkKey: "story_detail", status: story.title.trim() && story.body.trim().length >= 20 ? "pass" : "fail", explanation: story.body.trim().length >= 20 ? "The story has a title and useful detail." : "Add a clear story outcome and enough detail for engineering." });
     const approvedCriteria = story.children.filter((criterion) => criterion.approvedAt);
@@ -26,7 +61,7 @@ export async function evaluateSprintReadiness(initiativeId: string, target: Spri
     checks.push({ checkKey: "priority", status: story.sourceCapability && story.sourceCapability.backlogLane !== "unscheduled" ? "pass" : "review", explanation: story.sourceCapability && story.sourceCapability.backlogLane !== "unscheduled" ? `The parent feature is placed in ${story.sourceCapability.backlogLane}.` : "Prioritize and place the parent feature before sprint commitment." });
     checks.push({ checkKey: "owner", status: story.sourceCapability?.ownerUserId ? "pass" : "review", explanation: story.sourceCapability?.ownerUserId ? "The parent feature has an owner." : "Assign an accountable owner." });
   } else {
-    const bug = await db.bugPlanningRecord.findFirst({ where: { id: target.id, initiativeId, archivedAt: null }, include: { request: true, refinementSessionItems: { include: { session: { select: { status: true } } } } } });
+    const bug = snapshot ? snapshot.bugs.get(target.id) : await db.bugPlanningRecord.findFirst({ where: { id: target.id, initiativeId, archivedAt: null }, include: bugReadinessInclude });
     if (!bug) throw new BusinessError("Bug not found.", 404); source = bug;
     const data = bug.request.data as Prisma.JsonObject; const detail = [data.observedBehavior, data.expectedBehavior, data.reproductionDetails].filter((value) => typeof value === "string" && value.trim()).length;
     checks.push({ checkKey: "bug_detail", status: detail >= 2 ? "pass" : "fail", explanation: detail >= 2 ? "Observed, expected, or reproduction details are recorded." : "Record observed behavior, expected behavior, and reproduction details." });

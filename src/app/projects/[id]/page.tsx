@@ -43,7 +43,7 @@ async function ProjectHomePage({ params }: { params: Promise<{ id: string }> }) 
   const project = await db.project.findUnique({
     where: { id },
     include: {
-      initiatives: { select: { id: true, name: true, description: true, status: true }, orderBy: { updatedAt: "desc" } },
+      initiatives: { select: { id: true, name: true, description: true, status: true, backlog: { select: { id: true, name: true } } }, orderBy: { updatedAt: "desc" } },
       decisions: { orderBy: { createdAt: "desc" } },
       risks: { orderBy: { createdAt: "desc" } },
     },
@@ -57,7 +57,7 @@ async function ProjectHomePage({ params }: { params: Promise<{ id: string }> }) 
 
   return (
     <ContainedLayout className="max-w-4xl">
-      <Breadcrumb items={[{ label: "Projects", href: "/projects" }, { label: project.name }]} />
+      <Breadcrumb items={[{ label: "Products", href: "/projects" }, { label: project.name }]} />
       <div className="mt-4 flex flex-wrap items-start justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
@@ -70,7 +70,7 @@ async function ProjectHomePage({ params }: { params: Promise<{ id: string }> }) 
           href={`/projects/${project.id}/initiatives/new`}
           className="rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700"
         >
-          + New initiative
+          + New feature
         </Link>)}
       </div>
 
@@ -84,11 +84,11 @@ async function ProjectHomePage({ params }: { params: Promise<{ id: string }> }) 
         <p className="mt-3 text-xs text-neutral-500">Planning approach: {project.planningApproach}</p>
       )}
 
-      <div className="mt-8">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-indigo-600">Initiatives</h2>
+      <div id="product-features" className="mt-8 scroll-mt-20">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-indigo-600">Features</h2>
         {project.initiatives.length === 0 ? (
           <div className="mt-3 rounded-2xl border border-dashed border-neutral-300 bg-white p-8 text-center">
-            <p className="text-sm text-neutral-500">No initiatives yet in this project.</p>
+            <p className="text-sm text-neutral-500">No features yet in this product.</p>
 {canCreate && (<Link
               href={`/projects/${project.id}/initiatives/new`}
               className="mt-3 inline-block rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700"
@@ -106,10 +106,10 @@ async function ProjectHomePage({ params }: { params: Promise<{ id: string }> }) 
                 <li key={initiative.id}>
                   <Link
                     href={href}
-                    className="block rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm transition hover:border-indigo-300 hover:shadow"
+                    className="group block rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-indigo-300 hover:shadow-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
                   >
                     <div className="flex items-center justify-between gap-4">
-                      <h3 className="font-semibold">{initiative.name}</h3>
+                      <h3 className="font-semibold group-hover:text-indigo-700">{initiative.name}</h3>
                       <div className="flex items-center gap-2">
                         <StatusBadge
                           entityType="initiative"
@@ -122,7 +122,9 @@ async function ProjectHomePage({ params }: { params: Promise<{ id: string }> }) 
                     {initiative.description && (
                       <p className="mt-1 line-clamp-2 text-sm text-neutral-500">{initiative.description}</p>
                     )}
+                    <span className="mt-2 block text-sm font-semibold text-indigo-700">Open feature →</span>
                   </Link>
+                  <p className="px-4 pt-2 text-sm text-neutral-600">Backlog: {initiative.backlog?.name ?? "Not connected"}</p>
                 </li>
               );
             })}

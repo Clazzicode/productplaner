@@ -17,7 +17,7 @@ export default function ProductDirectionFields(props: {
   return (
     <div className="space-y-5">
       <label className="block text-sm font-medium text-text-primary">
-        Initiative name
+        Feature name
         <input
           value={values.name}
           onChange={(e) => onChange({ name: e.target.value })}

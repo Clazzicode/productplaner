@@ -16,12 +16,12 @@
     "reason": "Verified session and scoped database execution; existing initiative/page guards retained."
   },
   {
-    "path": "src/app/admin/access/page.tsx",
+    "path": "src/app/admin/access/[initiativeId]/page.tsx",
     "classification": "authenticated-page",
     "reason": "Verified session and scoped database execution; existing initiative/page guards retained."
   },
   {
-    "path": "src/app/admin/access/[initiativeId]/page.tsx",
+    "path": "src/app/admin/access/page.tsx",
     "classification": "authenticated-page",
     "reason": "Verified session and scoped database execution; existing initiative/page guards retained."
   },
@@ -41,12 +41,12 @@
     "reason": "Verified session and scoped database execution; existing initiative/page guards retained."
   },
   {
-    "path": "src/app/admin/users/page.tsx",
+    "path": "src/app/admin/users/[userId]/page.tsx",
     "classification": "authenticated-page",
     "reason": "Verified session and scoped database execution; existing initiative/page guards retained."
   },
   {
-    "path": "src/app/admin/users/[userId]/page.tsx",
+    "path": "src/app/admin/users/page.tsx",
     "classification": "authenticated-page",
     "reason": "Verified session and scoped database execution; existing initiative/page guards retained."
   },
@@ -61,17 +61,17 @@
     "reason": "Verified session before the handler; handler retains action-specific access checks."
   },
   {
+    "path": "src/app/api/admin/access/[initiativeId]/grants/route.ts",
+    "classification": "authenticated-api",
+    "reason": "Verified session before the handler; handler retains action-specific access checks."
+  },
+  {
     "path": "src/app/api/admin/access/grants/[grantId]/preview/route.ts",
     "classification": "authenticated-api",
     "reason": "Verified session before the handler; handler retains action-specific access checks."
   },
   {
     "path": "src/app/api/admin/access/grants/[grantId]/route.ts",
-    "classification": "authenticated-api",
-    "reason": "Verified session before the handler; handler retains action-specific access checks."
-  },
-  {
-    "path": "src/app/api/admin/access/[initiativeId]/grants/route.ts",
     "classification": "authenticated-api",
     "reason": "Verified session before the handler; handler retains action-specific access checks."
   },
@@ -86,7 +86,7 @@
     "reason": "Verified session before the handler; handler retains action-specific access checks."
   },
   {
-    "path": "src/app/api/admin/teams/route.ts",
+    "path": "src/app/api/admin/teams/[teamId]/members/[userId]/route.ts",
     "classification": "authenticated-api",
     "reason": "Verified session before the handler; handler retains action-specific access checks."
   },
@@ -96,7 +96,7 @@
     "reason": "Verified session before the handler; handler retains action-specific access checks."
   },
   {
-    "path": "src/app/api/admin/teams/[teamId]/members/[userId]/route.ts",
+    "path": "src/app/api/admin/teams/route.ts",
     "classification": "authenticated-api",
     "reason": "Verified session before the handler; handler retains action-specific access checks."
   },
@@ -271,12 +271,12 @@
     "reason": "Verified session before the handler; handler retains action-specific access checks."
   },
   {
-    "path": "src/app/api/coach-marks/route.ts",
+    "path": "src/app/api/coach-marks/[key]/route.ts",
     "classification": "authenticated-api",
     "reason": "Verified session before the handler; handler retains action-specific access checks."
   },
   {
-    "path": "src/app/api/coach-marks/[key]/route.ts",
+    "path": "src/app/api/coach-marks/route.ts",
     "classification": "authenticated-api",
     "reason": "Verified session before the handler; handler retains action-specific access checks."
   },
@@ -326,6 +326,11 @@
     "reason": "Verified session before the handler; handler retains action-specific access checks."
   },
   {
+    "path": "src/app/api/feedback-suggestions/[suggestionId]/route.ts",
+    "classification": "authenticated-api",
+    "reason": "Verified session before the handler; handler retains action-specific access checks."
+  },
+  {
     "path": "src/app/api/feedback/[feedbackId]/ai/route.ts",
     "classification": "authenticated-api",
     "reason": "Verified session before the handler; handler retains action-specific access checks."
@@ -336,20 +341,10 @@
     "reason": "Verified session before the handler; handler retains action-specific access checks."
   },
   {
-    "path": "src/app/api/feedback-suggestions/[suggestionId]/route.ts",
-    "classification": "authenticated-api",
-    "reason": "Verified session before the handler; handler retains action-specific access checks."
-  },
-  {
     "path": "src/app/api/health/route.ts",
     "classification": "diagnostic",
     "reason": "Process-liveness response; deliberately independent of database and worker readiness.",
     "sourceFingerprint": "4ecf7e5ef43147ecb79bfd7f31624162efadf1f2ff4149d8f3384c4a771dc324"
-  },
-  {
-    "path": "src/app/api/initiatives/route.ts",
-    "classification": "authenticated-api",
-    "reason": "Verified session before the handler; handler retains action-specific access checks."
   },
   {
     "path": "src/app/api/initiatives/[id]/ai-assist/content/route.ts",
@@ -412,6 +407,11 @@
     "reason": "Verified session before the handler; handler retains action-specific access checks."
   },
   {
+    "path": "src/app/api/initiatives/[id]/backlog/[featureId]/history/route.ts",
+    "classification": "authenticated-api",
+    "reason": "Verified session before the handler; handler retains action-specific access checks."
+  },
+  {
     "path": "src/app/api/initiatives/[id]/backlog/priority/recommend/route.ts",
     "classification": "authenticated-api",
     "reason": "Verified session before the handler; handler retains action-specific access checks."
@@ -428,11 +428,6 @@
   },
   {
     "path": "src/app/api/initiatives/[id]/backlog/triage/route.ts",
-    "classification": "authenticated-api",
-    "reason": "Verified session before the handler; handler retains action-specific access checks."
-  },
-  {
-    "path": "src/app/api/initiatives/[id]/backlog/[featureId]/history/route.ts",
     "classification": "authenticated-api",
     "reason": "Verified session before the handler; handler retains action-specific access checks."
   },
@@ -507,6 +502,11 @@
     "reason": "Verified session before the handler; handler retains action-specific access checks."
   },
   {
+    "path": "src/app/api/initiatives/[id]/jira-delivery/route.ts",
+    "classification": "authenticated-api",
+    "reason": "Verified initiative viewer session before returning only that initiative's linked Jira delivery state."
+  },
+  {
     "path": "src/app/api/initiatives/[id]/jira-mapping/route.ts",
     "classification": "authenticated-api",
     "reason": "Verified session before the handler; handler retains action-specific access checks."
@@ -542,22 +542,22 @@
     "reason": "Verified session before the handler; handler retains action-specific access checks."
   },
   {
+    "path": "src/app/api/initiatives/[id]/regeneration-proposals/[proposalId]/route.ts",
+    "classification": "authenticated-api",
+    "reason": "Verified identity and initiative editing action required; reviewed regeneration evidence remains inside its initiative boundary."
+  },
+  {
+    "path": "src/app/api/initiatives/[id]/regeneration-proposals/route.ts",
+    "classification": "authenticated-api",
+    "reason": "Verified identity and initiative editing action required; reviewed regeneration evidence remains inside its initiative boundary."
+  },
+  {
     "path": "src/app/api/initiatives/[id]/release-readiness/route.ts",
     "classification": "authenticated-api",
     "reason": "Verified session before the handler; handler retains action-specific access checks."
   },
   {
     "path": "src/app/api/initiatives/[id]/releases/route.ts",
-    "classification": "authenticated-api",
-    "reason": "Verified session before the handler; handler retains action-specific access checks."
-  },
-  {
-    "path": "src/app/api/initiatives/[id]/requests/route.ts",
-    "classification": "authenticated-api",
-    "reason": "Verified session before the handler; handler retains action-specific access checks."
-  },
-  {
-    "path": "src/app/api/initiatives/[id]/requests/spreadsheet/route.ts",
     "classification": "authenticated-api",
     "reason": "Verified session before the handler; handler retains action-specific access checks."
   },
@@ -572,7 +572,12 @@
     "reason": "Verified session before the handler; handler retains action-specific access checks."
   },
   {
-    "path": "src/app/api/initiatives/[id]/roadmap/features/[capabilityId]/route.ts",
+    "path": "src/app/api/initiatives/[id]/requests/route.ts",
+    "classification": "authenticated-api",
+    "reason": "Verified session before the handler; handler retains action-specific access checks."
+  },
+  {
+    "path": "src/app/api/initiatives/[id]/requests/spreadsheet/route.ts",
     "classification": "authenticated-api",
     "reason": "Verified session before the handler; handler retains action-specific access checks."
   },
@@ -583,6 +588,11 @@
   },
   {
     "path": "src/app/api/initiatives/[id]/roadmap-versions/route.ts",
+    "classification": "authenticated-api",
+    "reason": "Verified session before the handler; handler retains action-specific access checks."
+  },
+  {
+    "path": "src/app/api/initiatives/[id]/roadmap/features/[capabilityId]/route.ts",
     "classification": "authenticated-api",
     "reason": "Verified session before the handler; handler retains action-specific access checks."
   },
@@ -612,11 +622,6 @@
     "reason": "Verified session before the handler; handler retains action-specific access checks."
   },
   {
-    "path": "src/app/api/initiatives/[id]/stories/route.ts",
-    "classification": "authenticated-api",
-    "reason": "Verified session before the handler; handler retains action-specific access checks."
-  },
-  {
     "path": "src/app/api/initiatives/[id]/stories/[storyId]/criteria/reorder/route.ts",
     "classification": "authenticated-api",
     "reason": "Verified session before the handler; handler retains action-specific access checks."
@@ -637,6 +642,11 @@
     "reason": "Verified session before the handler; handler retains action-specific access checks."
   },
   {
+    "path": "src/app/api/initiatives/[id]/stories/route.ts",
+    "classification": "authenticated-api",
+    "reason": "Verified session before the handler; handler retains action-specific access checks."
+  },
+  {
     "path": "src/app/api/initiatives/[id]/sync/jira/route.ts",
     "classification": "authenticated-api",
     "reason": "Verified session before the handler; handler retains action-specific access checks."
@@ -648,6 +658,16 @@
   },
   {
     "path": "src/app/api/initiatives/[id]/validations/route.ts",
+    "classification": "authenticated-api",
+    "reason": "Verified session before the handler; handler retains action-specific access checks."
+  },
+  {
+    "path": "src/app/api/initiatives/route.ts",
+    "classification": "authenticated-api",
+    "reason": "Verified session before the handler; handler retains action-specific access checks."
+  },
+  {
+    "path": "src/app/api/integrations/[providerKey]/route.ts",
     "classification": "authenticated-api",
     "reason": "Verified session before the handler; handler retains action-specific access checks."
   },
@@ -677,14 +697,14 @@
     "reason": "Verified session before the handler; handler retains action-specific access checks."
   },
   {
-    "path": "src/app/api/integrations/jira/exports/preview/route.ts",
+    "path": "src/app/api/integrations/jira/exports/[runId]/execute/route.ts",
     "classification": "authenticated-api",
     "reason": "Verified session before the handler; handler retains action-specific access checks."
   },
   {
-    "path": "src/app/api/integrations/jira/exports/[runId]/execute/route.ts",
+    "path": "src/app/api/integrations/jira/exports/[runId]/items/[itemId]/reconcile/route.ts",
     "classification": "authenticated-api",
-    "reason": "Verified session before the handler; handler retains action-specific access checks."
+    "reason": "Verified organization administrator and initiative editing access; reconciles an uncertain Jira create against an explicitly supplied issue key."
   },
   {
     "path": "src/app/api/integrations/jira/exports/[runId]/route.ts",
@@ -692,7 +712,7 @@
     "reason": "Verified session before the handler; handler retains action-specific access checks."
   },
   {
-    "path": "src/app/api/integrations/jira/imports/preview/route.ts",
+    "path": "src/app/api/integrations/jira/exports/preview/route.ts",
     "classification": "authenticated-api",
     "reason": "Verified session before the handler; handler retains action-specific access checks."
   },
@@ -702,7 +722,7 @@
     "reason": "Verified session before the handler; handler retains action-specific access checks."
   },
   {
-    "path": "src/app/api/integrations/jira/jobs/run/route.ts",
+    "path": "src/app/api/integrations/jira/imports/preview/route.ts",
     "classification": "authenticated-api",
     "reason": "Verified session before the handler; handler retains action-specific access checks."
   },
@@ -712,27 +732,30 @@
     "reason": "Verified session before the handler; handler retains action-specific access checks."
   },
   {
+    "path": "src/app/api/integrations/jira/jobs/run/route.ts",
+    "classification": "authenticated-api",
+    "reason": "Verified session before the handler; handler retains action-specific access checks."
+  },
+  {
+    "path": "src/app/api/integrations/jira/connections/[connectionId]/reconcile/route.ts",
+    "classification": "authenticated-api",
+    "reason": "Organization Jira managers can queue a scoped delivery reconciliation for their connected initiative."
+  },
+  {
     "path": "src/app/api/integrations/jira/oauth/callback/route.ts",
-    "classification": "authentication-callback",
-    "reason": "Retired callback only redirects with invalid_state; performs no database operations.",
-    "sourceFingerprint": "e413eb9c2a669a04de4863ff5b4becb43bba721ac95419856a0f27f9fbd5da7f"
+    "classification": "authenticated-api",
+    "reason": "Authenticated OAuth callback validates the signed-in organization and consumes a bounded Jira authorization state."
   },
   {
     "path": "src/app/api/integrations/jira/oauth/start/route.ts",
-    "classification": "authenticated-alias",
-    "reason": "Reexports POST from the authenticated /api/atlassian/oauth/start entry point.",
-    "sourceFingerprint": "5aeddf9f546856b3c2a2e74b193727ecf328f70196577090a97eca3175b49ac4"
+    "classification": "authenticated-api",
+    "reason": "Authenticated owner or admin starts Jira OAuth for an initiative in their organization."
   },
   {
     "path": "src/app/api/integrations/jira/webhooks/[connectionId]/route.ts",
     "classification": "webhook",
-    "reason": "Verifies connection webhook secret; delegates enqueue to a narrowly authorized database function. Jira registration remains disabled.",
-    "sourceFingerprint": "20fdf11350d549872f0bb9de3922b6a7196cc22396c096dfca4695920284cee6"
-  },
-  {
-    "path": "src/app/api/integrations/[providerKey]/route.ts",
-    "classification": "authenticated-api",
-    "reason": "Verified session before the handler; handler retains action-specific access checks."
+    "reason": "Verifies the per-connection webhook secret and enqueues a narrowly scoped, idempotent delivery refresh.",
+    "sourceFingerprint": "28ca7eeab5563a5eff46306a63d89942b2007a1e1427e97cfee609469741c72b"
   },
   {
     "path": "src/app/api/internal/background-jobs/run/route.ts",
@@ -744,12 +767,17 @@
     "path": "src/app/api/internal/jira/jobs/run/route.ts",
     "classification": "worker",
     "reason": "Timing-safe cron authentication compares byte lengths before comparison; job actor context and awaited retention/health service contexts are explicit.",
-    "sourceFingerprint": "42989b28f41a181415aeb4473255a0d2dd7aefa87e045a035f5c877b24e87305"
+    "sourceFingerprint": "21922311a5f8436871525a211dfaa5d36635581a534eefce2bc9964da2311d09"
   },
   {
-    "path": "src/app/api/projects/route.ts",
+    "path": "src/app/api/planning-drafts/[id]/route.ts",
     "classification": "authenticated-api",
-    "reason": "Verified session before the handler; handler retains action-specific access checks."
+    "reason": "Verified user/workspace context; draft edits and explicit workspace initialization require current initiative editing authority."
+  },
+  {
+    "path": "src/app/api/planning-drafts/[id]/workspace/route.ts",
+    "classification": "authenticated-api",
+    "reason": "Verified user/workspace context; draft edits and explicit workspace initialization require current initiative editing authority."
   },
   {
     "path": "src/app/api/projects/[id]/decisions/route.ts",
@@ -768,6 +796,11 @@
   },
   {
     "path": "src/app/api/projects/[id]/route.ts",
+    "classification": "authenticated-api",
+    "reason": "Verified session before the handler; handler retains action-specific access checks."
+  },
+  {
+    "path": "src/app/api/projects/route.ts",
     "classification": "authenticated-api",
     "reason": "Verified session before the handler; handler retains action-specific access checks."
   },
@@ -793,17 +826,17 @@
     "reason": "Verified session before the handler; handler retains action-specific access checks."
   },
   {
+    "path": "src/app/api/release-readiness-suggestions/[suggestionId]/route.ts",
+    "classification": "authenticated-api",
+    "reason": "Verified session before the handler; handler retains action-specific access checks."
+  },
+  {
     "path": "src/app/api/release-readiness/[assessmentId]/draft-summary/route.ts",
     "classification": "authenticated-api",
     "reason": "Verified session before the handler; handler retains action-specific access checks."
   },
   {
     "path": "src/app/api/release-readiness/[assessmentId]/route.ts",
-    "classification": "authenticated-api",
-    "reason": "Verified session before the handler; handler retains action-specific access checks."
-  },
-  {
-    "path": "src/app/api/release-readiness-suggestions/[suggestionId]/route.ts",
     "classification": "authenticated-api",
     "reason": "Verified session before the handler; handler retains action-specific access checks."
   },
@@ -818,12 +851,12 @@
     "reason": "Verified session before the handler; handler retains action-specific access checks."
   },
   {
-    "path": "src/app/api/roadmap-status/route.ts",
+    "path": "src/app/api/roadmap-status/[entityType]/[entityId]/route.ts",
     "classification": "authenticated-api",
     "reason": "Verified session before the handler; handler retains action-specific access checks."
   },
   {
-    "path": "src/app/api/roadmap-status/[entityType]/[entityId]/route.ts",
+    "path": "src/app/api/roadmap-status/route.ts",
     "classification": "authenticated-api",
     "reason": "Verified session before the handler; handler retains action-specific access checks."
   },
@@ -863,17 +896,17 @@
     "reason": "Verified session before the handler; handler retains action-specific access checks."
   },
   {
+    "path": "src/app/api/workspace-invitations/[invitationId]/route.ts",
+    "classification": "authenticated-api",
+    "reason": "Verified session before the handler; handler retains action-specific access checks."
+  },
+  {
     "path": "src/app/api/workspace-invitations/accept/route.ts",
     "classification": "authenticated-api",
     "reason": "Verified session before the handler; handler retains action-specific access checks."
   },
   {
     "path": "src/app/api/workspace-invitations/route.ts",
-    "classification": "authenticated-api",
-    "reason": "Verified session before the handler; handler retains action-specific access checks."
-  },
-  {
-    "path": "src/app/api/workspace-invitations/[invitationId]/route.ts",
     "classification": "authenticated-api",
     "reason": "Verified session before the handler; handler retains action-specific access checks."
   },
@@ -900,16 +933,6 @@
     "reason": "Verified session and scoped database execution; existing initiative/page guards retained."
   },
   {
-    "path": "src/app/initiatives/new/page.tsx",
-    "classification": "authenticated-page",
-    "reason": "Verified session and scoped database execution; existing initiative/page guards retained."
-  },
-  {
-    "path": "src/app/initiatives/page.tsx",
-    "classification": "authenticated-page",
-    "reason": "Verified session and scoped database execution; existing initiative/page guards retained."
-  },
-  {
     "path": "src/app/initiatives/[initiativeId]/backlog/page.tsx",
     "classification": "authenticated-page",
     "reason": "Verified session and scoped database execution; existing initiative/page guards retained."
@@ -925,6 +948,11 @@
     "reason": "Verified session and scoped database execution; existing initiative/page guards retained."
   },
   {
+    "path": "src/app/initiatives/[initiativeId]/overview/page.tsx",
+    "classification": "authenticated-page",
+    "reason": "Verified user/workspace context; draft edits and explicit workspace initialization require current initiative editing authority."
+  },
+  {
     "path": "src/app/initiatives/[initiativeId]/requests/page.tsx",
     "classification": "authenticated-page",
     "reason": "Verified session and scoped database execution; existing initiative/page guards retained."
@@ -938,6 +966,31 @@
     "path": "src/app/initiatives/[initiativeId]/workspace/capacity/page.tsx",
     "classification": "authenticated-page",
     "reason": "Verified session and scoped database execution; existing initiative/page guards retained."
+  },
+  {
+    "path": "src/app/initiatives/[initiativeId]/workspace/bugs/[bugId]/page.tsx",
+    "classification": "authenticated-page",
+    "reason": "Verified initiative view access and scoped bug lookup before rendering planning and Jira delivery data."
+  },
+  {
+    "path": "src/app/initiatives/[initiativeId]/workspace/demos/[demoId]/google-calendar/page.tsx",
+    "classification": "authenticated-page",
+    "reason": "Verified session and scoped database execution; demo detail component checks initiative access."
+  },
+  {
+    "path": "src/app/initiatives/[initiativeId]/workspace/demos/[demoId]/google-meet/page.tsx",
+    "classification": "authenticated-page",
+    "reason": "Verified session and scoped database execution; demo detail component checks initiative access."
+  },
+  {
+    "path": "src/app/initiatives/[initiativeId]/workspace/demos/[demoId]/page.tsx",
+    "classification": "authenticated-page",
+    "reason": "Verified session and scoped database execution; demo detail component checks initiative access."
+  },
+  {
+    "path": "src/app/initiatives/[initiativeId]/workspace/demos/[demoId]/zoom/page.tsx",
+    "classification": "authenticated-page",
+    "reason": "Verified session and scoped database execution; demo detail component checks initiative access."
   },
   {
     "path": "src/app/initiatives/[initiativeId]/workspace/demos/page.tsx",
@@ -963,6 +1016,11 @@
     "path": "src/app/initiatives/[initiativeId]/workspace/executive/print/page.tsx",
     "classification": "authenticated-page",
     "reason": "Verified session and scoped database execution; existing initiative/page guards retained."
+  },
+  {
+    "path": "src/app/initiatives/[initiativeId]/workspace/features/[featureId]/page.tsx",
+    "classification": "authenticated-page",
+    "reason": "Verified initiative view access and scoped feature lookup before rendering planning and Jira delivery data."
   },
   {
     "path": "src/app/initiatives/[initiativeId]/workspace/features/page.tsx",
@@ -994,6 +1052,11 @@
     "path": "src/app/initiatives/[initiativeId]/workspace/refinement/page.tsx",
     "classification": "authenticated-page",
     "reason": "Verified session and scoped database execution; existing initiative/page guards retained."
+  },
+  {
+    "path": "src/app/initiatives/[initiativeId]/workspace/regeneration/page.tsx",
+    "classification": "authenticated-page",
+    "reason": "Verified identity and initiative editing action required; reviewed regeneration evidence remains inside its initiative boundary."
   },
   {
     "path": "src/app/initiatives/[initiativeId]/workspace/release-readiness/page.tsx",
@@ -1031,6 +1094,16 @@
     "reason": "Verified session and scoped database execution; existing initiative/page guards retained."
   },
   {
+    "path": "src/app/initiatives/new/page.tsx",
+    "classification": "authenticated-page",
+    "reason": "Verified session and scoped database execution; existing initiative/page guards retained."
+  },
+  {
+    "path": "src/app/initiatives/page.tsx",
+    "classification": "authenticated-page",
+    "reason": "Verified session and scoped database execution; existing initiative/page guards retained."
+  },
+  {
     "path": "src/app/integrations/jira/page.tsx",
     "classification": "authenticated-page",
     "reason": "Verified session and scoped database execution; existing initiative/page guards retained."
@@ -1057,6 +1130,11 @@
     "sourceFingerprint": "ae48a71bc9c361f2a131acc7f7a2a1a62e5ae452a4e2ee2855b560aec2cd3722"
   },
   {
+    "path": "src/app/onboarding/connections/page.tsx",
+    "classification": "authenticated-page",
+    "reason": "Verified signed-in session before showing integration onboarding choices."
+  },
+  {
     "path": "src/app/onboarding/page.tsx",
     "classification": "public-page",
     "reason": "Workspace setup form shell only; mutations go through authenticated APIs.",
@@ -1079,22 +1157,22 @@
     "reason": "Verified session and scoped database execution; existing initiative/page guards retained."
   },
   {
-    "path": "src/app/projects/new/page.tsx",
-    "classification": "authenticated-page",
-    "reason": "Verified session and scoped database execution; existing initiative/page guards retained."
-  },
-  {
-    "path": "src/app/projects/page.tsx",
-    "classification": "authenticated-page",
-    "reason": "Verified session and scoped database execution; existing initiative/page guards retained."
-  },
-  {
     "path": "src/app/projects/[id]/initiatives/new/page.tsx",
     "classification": "authenticated-page",
     "reason": "Verified session and scoped database execution; existing initiative/page guards retained."
   },
   {
     "path": "src/app/projects/[id]/page.tsx",
+    "classification": "authenticated-page",
+    "reason": "Verified session and scoped database execution; existing initiative/page guards retained."
+  },
+  {
+    "path": "src/app/projects/new/page.tsx",
+    "classification": "authenticated-page",
+    "reason": "Verified session and scoped database execution; existing initiative/page guards retained."
+  },
+  {
+    "path": "src/app/projects/page.tsx",
     "classification": "authenticated-page",
     "reason": "Verified session and scoped database execution; existing initiative/page guards retained."
   },
@@ -1110,12 +1188,12 @@
     "reason": "Verified session and scoped database execution; existing initiative/page guards retained."
   },
   {
-    "path": "src/app/teams/page.tsx",
+    "path": "src/app/teams/[teamId]/page.tsx",
     "classification": "authenticated-page",
     "reason": "Verified session and scoped database execution; existing initiative/page guards retained."
   },
   {
-    "path": "src/app/teams/[teamId]/page.tsx",
+    "path": "src/app/teams/page.tsx",
     "classification": "authenticated-page",
     "reason": "Verified session and scoped database execution; existing initiative/page guards retained."
   },
@@ -1129,36 +1207,6 @@
     "path": "src/app/workflow-preview/page.tsx",
     "classification": "public-demo",
     "reason": "Static workflow samples only; five-tool, meeting, and attendance preview variants are development-only behind PO_DEMO_ENABLED and supply no authenticated data or bypass.",
-    "sourceFingerprint": "524d1d10ac0fc8b0d87551cd16187056edc9b48b340a4e3bd3680bf6d2be6973"
-  },
-  {
-    "path": "src/app/api/initiatives/[id]/regeneration-proposals/[proposalId]/route.ts",
-    "classification": "authenticated-api",
-    "reason": "Verified identity and initiative editing action required; reviewed regeneration evidence remains inside its initiative boundary."
-  },
-  {
-    "path": "src/app/api/initiatives/[id]/regeneration-proposals/route.ts",
-    "classification": "authenticated-api",
-    "reason": "Verified identity and initiative editing action required; reviewed regeneration evidence remains inside its initiative boundary."
-  },
-  {
-    "path": "src/app/initiatives/[initiativeId]/workspace/regeneration/page.tsx",
-    "classification": "authenticated-page",
-    "reason": "Verified identity and initiative editing action required; reviewed regeneration evidence remains inside its initiative boundary."
-  },
-  {
-    "path": "src/app/api/planning-drafts/[id]/route.ts",
-    "classification": "authenticated-api",
-    "reason": "Verified user/workspace context; draft edits and explicit workspace initialization require current initiative editing authority."
-  },
-  {
-    "path": "src/app/api/planning-drafts/[id]/workspace/route.ts",
-    "classification": "authenticated-api",
-    "reason": "Verified user/workspace context; draft edits and explicit workspace initialization require current initiative editing authority."
-  },
-  {
-    "path": "src/app/initiatives/[initiativeId]/overview/page.tsx",
-    "classification": "authenticated-page",
-    "reason": "Verified user/workspace context; draft edits and explicit workspace initialization require current initiative editing authority."
+    "sourceFingerprint": "94c9517c14587d0f17fd3860e00a6c082736b2d50a708830a7dea2ac2ed005be"
   }
 ]

@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { accessibleJiraResources, createJiraIssue, deleteJiraWebhooks, exchangeJiraCode, getJiraProjectMetadata, jiraAuthorizationUrl, refreshJiraWebhook, registerJiraWebhook, searchJiraIssues, updateJiraIssue } from "../client";
 
-const original = { id: process.env.JIRA_CLIENT_ID, secret: process.env.JIRA_CLIENT_SECRET, redirect: process.env.JIRA_REDIRECT_URI, writes: process.env.JIRA_WRITE_ENABLED };
+const original = { id: process.env.JIRA_CLIENT_ID, secret: process.env.JIRA_CLIENT_SECRET, redirect: process.env.JIRA_REDIRECT_URI, writes: process.env.JIRA_WRITE_ENABLED, reuse: process.env.JIRA_USE_EXISTING_ATLASSIAN_APP, legacyId: process.env.ATLASSIAN_CLIENT_ID, legacySecret: process.env.ATLASSIAN_CLIENT_SECRET };
 beforeEach(() => { process.env.JIRA_CLIENT_ID = "client-a"; process.env.JIRA_CLIENT_SECRET = "secret-a"; process.env.JIRA_REDIRECT_URI = "https://app.example/api/integrations/jira/oauth/callback"; process.env.JIRA_WRITE_ENABLED = "true"; });
-afterEach(() => { for (const [key, value] of [["JIRA_CLIENT_ID",original.id],["JIRA_CLIENT_SECRET",original.secret],["JIRA_REDIRECT_URI",original.redirect],["JIRA_WRITE_ENABLED",original.writes]] as const) { if (value === undefined) delete process.env[key]; else process.env[key] = value; } });
+afterEach(() => { for (const [key, value] of [["JIRA_CLIENT_ID",original.id],["JIRA_CLIENT_SECRET",original.secret],["JIRA_REDIRECT_URI",original.redirect],["JIRA_WRITE_ENABLED",original.writes],["JIRA_USE_EXISTING_ATLASSIAN_APP",original.reuse],["ATLASSIAN_CLIENT_ID",original.legacyId],["ATLASSIAN_CLIENT_SECRET",original.legacySecret]] as const) { if (value === undefined) delete process.env[key]; else process.env[key] = value; } });
 
 describe("Atlassian OAuth and Jira REST client", () => {
   it("blocks Jira writes by default before making a provider request", async () => {
@@ -25,6 +25,17 @@ describe("Atlassian OAuth and Jira REST client", () => {
     expect(url.searchParams.get("scope")).toContain("write:jira-work");
     expect(url.searchParams.get("scope")).toContain("manage:jira-webhook");
     expect(url.searchParams.get("redirect_uri")).toBe(process.env.JIRA_REDIRECT_URI);
+  });
+  it("uses the existing Atlassian app only when explicitly enabled and the dedicated pair is absent", () => {
+    delete process.env.JIRA_CLIENT_ID;
+    delete process.env.JIRA_CLIENT_SECRET;
+    process.env.ATLASSIAN_CLIENT_ID = "existing-production-client";
+    process.env.ATLASSIAN_CLIENT_SECRET = "existing-production-secret";
+    expect(() => jiraAuthorizationUrl("state")).toThrow("Jira OAuth is not configured");
+    process.env.JIRA_USE_EXISTING_ATLASSIAN_APP = "true";
+    expect(new URL(jiraAuthorizationUrl("state")).searchParams.get("client_id")).toBe("existing-production-client");
+    process.env.JIRA_CLIENT_ID = "partial-dedicated-client";
+    expect(() => jiraAuthorizationUrl("state")).toThrow("must be configured together");
   });
   it("exchanges the code and loads accessible resources", async () => {
     const fetcher = vi.fn()

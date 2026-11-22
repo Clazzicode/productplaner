@@ -111,6 +111,6 @@ export async function updatePlanningBlocker(blockerId: string, input: BlockerUpd
 export async function readinessObstacles(initiativeId: string, target: WorkTarget) {
   const columns = blockerColumns(target);
   const blockers = await db.planningBlocker.findMany({ where: { initiativeId, ...columns, status: { in: ["open", "in_progress"] } }, select: { id: true, description: true, status: true } });
-  const dependencies = (await db.workDependency.findMany({ where: { initiativeId } })).filter((row) => dependencyEndpoints(row)[1] === key(target));
+  const dependencies = await db.workDependency.findMany({ where: { initiativeId, ...targetColumns("dependent", target) } });
   return { blockers, dependencies };
 }

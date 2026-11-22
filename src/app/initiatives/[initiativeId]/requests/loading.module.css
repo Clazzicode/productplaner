@@ -1,0 +1,117 @@
+.scene {
+  position: relative;
+  isolation: isolate;
+  min-height: min(760px, calc(100dvh - 100px));
+  padding: 24px;
+  overflow: hidden;
+  border-radius: 18px;
+  background: #f1f0ff;
+}
+
+.backdrop {
+  filter: blur(1.5px);
+  opacity: .67;
+  pointer-events: none;
+}
+
+.summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
+.summaryCard, .list, .details {
+  border: 1px solid #dfe0f7;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 5px 15px #3530790b;
+}
+.summaryCard { min-height: 108px; padding: 18px; display: grid; grid-template-columns: 46px 1fr; gap: 12px; }
+.summaryIcon, .summaryLines span, .summaryFooter, .listToolbar span, .listRow div span, .detailLine, .detailLineShort, .detailBoxes span {
+  display: block;
+  border-radius: 7px;
+  background: #deddf5;
+}
+.summaryIcon { width: 42px; height: 42px; }
+.summaryLines { display: grid; align-content: center; gap: 8px; }
+.summaryLines span:first-child { width: 58%; height: 13px; }
+.summaryLines span:last-child { width: 36%; height: 10px; }
+.summaryFooter { grid-column: 1 / -1; width: 88%; height: 10px; }
+.workarea { display: grid; grid-template-columns: 41% minmax(0, 1fr); gap: 18px; margin-top: 20px; }
+.list, .details { min-height: 560px; padding: 18px; }
+.listToolbar { display: flex; gap: 12px; padding-bottom: 14px; }
+.listToolbar span { height: 22px; width: 100px; }
+.listToolbar span:last-child { width: 70px; }
+.listRow { display: flex; gap: 14px; align-items: center; padding: 20px 4px; border-top: 1px solid #ecebfa; }
+.checkbox { width: 17px; height: 17px; border: 2px solid #c8c9ed; border-radius: 4px; }
+.listRow div { flex: 1; display: grid; gap: 8px; }
+.listRow div span:first-child { width: 60%; height: 13px; }
+.listRow div span:last-child { width: 40%; height: 10px; }
+.detailLine { width: 70%; height: 14px; margin: 9px 0 14px; }
+.detailLineShort { width: 40%; height: 11px; margin-bottom: 36px; }
+.detailBoxes { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 0 0 40px; }
+.detailBoxes span { height: 80px; }
+
+.card {
+  position: absolute;
+  z-index: 1;
+  top: 50%;
+  left: 50%;
+  width: min(900px, calc(100% - 48px));
+  transform: translate(-50%, -50%);
+  padding: 34px 36px 24px;
+  border: 1px solid #e2e2ef;
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 18px 44px #26315a22, 0 2px 8px #26315a15;
+}
+.cardBody { display: flex; align-items: center; gap: 38px; }
+.progressRing {
+  position: relative;
+  flex: 0 0 220px;
+  width: 220px;
+  height: 220px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: #eeecff;
+  color: #101b3c;
+  font-weight: 700;
+  font-size: 18px;
+}
+.progressRing::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: conic-gradient(#5145ed 0 220deg, transparent 220deg 360deg);
+  animation: turn 2.2s linear infinite;
+}
+.progressRing::after { content: ""; position: absolute; inset: 14px; border-radius: inherit; background: #fff; }
+.progressRing span { position: relative; z-index: 1; }
+.cardText { flex: 1; min-width: 0; }
+.cardText h1 { font-size: clamp(21px, 2.3vw, 30px); line-height: 1.2; font-weight: 750; letter-spacing: -.035em; color: #0c1736; }
+.cardText > p { margin: 7px 0 18px; font-size: 17px; color: #60708e; }
+.steps { display: grid; gap: 9px; }
+.steps > div { display: flex; align-items: center; gap: 14px; min-height: 39px; padding: 5px 13px; border-radius: 9px; background: #f1f0ff; color: #111a37; font-size: 14px; font-weight: 650; }
+.stepIcon { display: grid; place-items: center; flex: 0 0 24px; height: 24px; border-radius: 50%; background: #5145ed; color: white; font-size: 10px; letter-spacing: -2px; padding-right: 2px; }
+.progressTrack { height: 5px; overflow: hidden; margin: 25px 4px 13px; border-radius: 99px; background: #e6e4ff; }
+.progressTrack span { display: block; height: 100%; width: 35%; border-radius: inherit; background: #5145ed; animation: slide 1.6s ease-in-out infinite alternate; }
+.footer { margin: 0; text-align: center; color: #71809d; font-size: 13px; }
+
+@keyframes turn { to { transform: rotate(360deg); } }
+@keyframes slide { from { transform: translateX(0); } to { transform: translateX(180%); } }
+
+@media (max-width: 700px) {
+  .scene { min-height: 610px; padding: 12px; }
+  .summary { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .summaryCard:last-child { display: none; }
+  .workarea { grid-template-columns: 1fr; gap: 10px; }
+  .details { display: none; }
+  .card { width: calc(100% - 24px); padding: 24px 20px 20px; }
+  .cardBody { flex-direction: column; gap: 20px; text-align: center; }
+  .progressRing { flex-basis: 132px; width: 132px; height: 132px; font-size: 15px; }
+  .progressRing::after { inset: 10px; }
+  .cardText { width: 100%; }
+  .cardText > p { font-size: 15px; }
+  .steps > div { text-align: left; font-size: 12px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .progressRing::before, .progressTrack span { animation: none; }
+}

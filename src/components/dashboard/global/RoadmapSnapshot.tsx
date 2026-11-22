@@ -17,7 +17,7 @@ export default function RoadmapSnapshot(props: { primary: PrimaryInitiativeDetai
       {!p ? (
         <EmptyState
           title="No delivery outlook yet"
-          description="Prepare an initiative's backlog foundation to see delivery context here."
+          description="Prepare a feature's backlog foundation to see delivery context here."
         />
       ) : (
         <div className="mt-3 space-y-2">

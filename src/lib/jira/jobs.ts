@@ -6,6 +6,7 @@ import { executeJiraExportItem, finalizeJiraExportRun } from "./export";
 import { previewJiraImport } from "./import";
 import { recordExportExecutionConflict } from "./conflicts";
 import { renewWebhook } from "./webhooks";
+import { refreshJiraDeliveryIssue } from "./delivery";
 import { jiraHash } from "./crypto";
 import { auditInitiative } from "@/lib/audit";
 import type { JiraConnection } from "@prisma/client";
@@ -36,8 +37,18 @@ async function perform(job: { id: string; jobType: string; payload: unknown; con
     if (!event) throw new BusinessError("The webhook event no longer exists.", 404);
     if (event.status === "processed" || event.status === "ignored") return;
     const connection = await db.jiraConnection.findUniqueOrThrow({ where: { id: job.connectionId } });
+    if (event.externalIssueId && event.eventType !== "jira:issue_deleted") {
+      await refreshJiraDeliveryIssue(job.connectionId, event.externalIssueId);
+    }
     await previewJiraImport(job.connectionId, connection.configuredByUserId, job.id, event.id);
     await db.jiraWebhookEvent.update({ where: { id: event.id }, data: { status: "processed", processedAt: new Date(), failureMessage: null } });
+    return;
+  }
+  if (job.jobType === "delivery_reconcile") {
+    const links = await db.jiraExternalLink.findMany({ where: { connectionId: job.connectionId }, orderBy: [{ deliveryCheckedAt: "asc" }, { id: "asc" }], take: 25, select: { externalIssueId: true } });
+    for (let start = 0; start < links.length; start += 5) {
+      await Promise.all(links.slice(start, start + 5).map(link => refreshJiraDeliveryIssue(job.connectionId, link.externalIssueId)));
+    }
     return;
   }
   if (job.jobType === "renew_webhook") { await renewWebhook(job.connectionId); return; }
@@ -117,9 +128,9 @@ export async function processJiraJobs(limit = 10, workerId = `jira-${randomUUID(
       } else if (job.jobType === "renew_webhook" && terminal) {
         await db.jiraWebhookSubscription.updateMany({ where: { connectionId: job.connectionId, status: { not: "disabled" } }, data: { status: "renewal_required" } });
       }
-      if (job.jobType === "import_preview" || job.jobType === "webhook_import") {
+      if (job.jobType === "import_preview" || job.jobType === "webhook_import" || job.jobType === "delivery_reconcile") {
         await db.jiraConnection.update({ where: { id: job.connectionId }, data: { lastSyncAt: new Date(), lastSyncStatus: "read_failed", ...(error instanceof BusinessError && [401, 403].includes(error.status) ? { status: "reauthorization_required", revision: { increment: 1 } } : {}) } });
-        await auditInitiative(job.initiativeId, "jira.import_read_failed", { jiraJobId: job.id, jiraConnectionId: job.connectionId, workspaceId: job.organizationId, attempt: job.attemptCount, terminal, occurredAt: new Date().toISOString() });
+        await auditInitiative(job.initiativeId, job.jobType === "delivery_reconcile" ? "jira.delivery_read_failed" : "jira.import_read_failed", { jiraJobId: job.id, jiraConnectionId: job.connectionId, workspaceId: job.organizationId, attempt: job.attemptCount, terminal, occurredAt: new Date().toISOString() });
       }
       if (terminal) result.failed += 1; else result.retried += 1;
     }
@@ -150,6 +161,13 @@ export async function manageJiraJob(jobId: string, action: "replay" | "cancel", 
       return db.jiraSyncJob.findUniqueOrThrow({ where: { id: job.id } });
     }
     if (!["failed", "cancelled"].includes(job.status)) throw new BusinessError("Only failed or cancelled Jira work can be replayed.", 409);
+    if (job.jobType === "export_item") {
+      const exportItemId = String(payloadObject(job.payload).exportItemId ?? "");
+      const item = exportItemId ? await db.jiraExportItem.findUnique({ where: { id: exportItemId } }) : null;
+      if (item?.action === "create" && item.createAttemptedAt && !item.externalIssueId) {
+        throw new BusinessError("The Jira create outcome is uncertain. Find and reconcile the issue before retrying.", 409);
+      }
+    }
     const replay = await db.jiraSyncJob.create({ data: { organizationId: job.organizationId, initiativeId: job.initiativeId, connectionId: job.connectionId, jobType: job.jobType, payload: (job.payload ?? {}) as Prisma.InputJsonValue, idempotencyKey: jiraHash(`replay:${job.id}:${randomUUID()}`), maxAttempts: job.maxAttempts } });
     const payload = payloadObject(job.payload);
     if (job.jobType === "export_item") {

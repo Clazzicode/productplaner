@@ -20,6 +20,8 @@ export interface JiraProjectMetadata {
 export interface JiraIssueSnapshot {
   id: string;
   key: string;
+  projectId?: string | null;
+  projectKey?: string | null;
   summary: string;
   description: unknown;
   issueType: { id: string; name: string; subtask: boolean };
@@ -40,8 +42,12 @@ function assertJiraWritesEnabled() {
 }
 
 function config() {
-  const clientId = process.env.JIRA_CLIENT_ID?.trim();
-  const clientSecret = process.env.JIRA_CLIENT_SECRET?.trim();
+  const useExistingApp = process.env.JIRA_USE_EXISTING_ATLASSIAN_APP === "true";
+  const dedicatedId = process.env.JIRA_CLIENT_ID?.trim();
+  const dedicatedSecret = process.env.JIRA_CLIENT_SECRET?.trim();
+  if (Boolean(dedicatedId) !== Boolean(dedicatedSecret)) throw new Error("Jira OAuth client ID and secret must be configured together.");
+  const clientId = dedicatedId || (useExistingApp ? process.env.ATLASSIAN_CLIENT_ID?.trim() : undefined);
+  const clientSecret = dedicatedSecret || (useExistingApp ? process.env.ATLASSIAN_CLIENT_SECRET?.trim() : undefined);
   const redirectUri = process.env.JIRA_REDIRECT_URI?.trim();
   if (!clientId || !clientSecret || !redirectUri) throw new Error("Jira OAuth is not configured.");
   return { clientId, clientSecret, redirectUri };
@@ -161,12 +167,15 @@ export function issueSnapshot(value: unknown, storyPointsField: string | null): 
   const statusCategory = object(status.statusCategory);
   const priority = fields.priority ? object(fields.priority) : null;
   const parent = fields.parent ? object(fields.parent) : null;
+  const project = fields.project ? object(fields.project) : null;
   const id = text(row.id);
   const key = text(row.key);
   if (!id || !key) return null;
   return {
     id,
     key,
+    projectId: project ? text(project.id) || null : null,
+    projectKey: project ? text(project.key) || null : null,
     summary: text(fields.summary),
     description: fields.description ?? null,
     issueType: { id: text(issueType.id), name: text(issueType.name), subtask: Boolean(issueType.subtask) },
@@ -179,7 +188,7 @@ export function issueSnapshot(value: unknown, storyPointsField: string | null): 
   };
 }
 
-const ISSUE_FIELDS = ["summary","description","issuetype","status","priority","labels","parent","updated"];
+const ISSUE_FIELDS = ["summary","description","issuetype","status","priority","labels","parent","project","updated"];
 
 export async function getJiraIssue(input: { cloudId: string; accessToken: string; issueIdOrKey: string; storyPointsField?: string | null }, fetcher: Fetcher = fetch) {
   const storyPointsField = input.storyPointsField === undefined ? "customfield_10016" : input.storyPointsField;
@@ -208,7 +217,13 @@ export async function registerJiraWebhook(input: { cloudId: string; accessToken:
   const payload = object(await jiraApi(input.cloudId, input.accessToken, "/rest/api/3/webhook", { method: "POST", body: JSON.stringify({ url: input.callbackUrl, webhooks: [{ events: ["jira:issue_created", "jira:issue_updated", "jira:issue_deleted"], jqlFilter: `project = \"${input.projectKey.replaceAll('"', '\\"')}\"` }] }) }, fetcher));
   const rows = Array.isArray(payload.webhookRegistrationResult) ? payload.webhookRegistrationResult.map(object) : [];
   const id = rows.map((row) => number(row.createdWebhookId)).find((value): value is number => value !== null);
-  if (!id) throw new Error("Jira did not register the webhook. Check the callback URL and OAuth scopes.");
+  if (!id) {
+    const errors = rows.flatMap((row) => Array.isArray(row.errors) ? row.errors.filter((item): item is string => typeof item === "string") : []);
+    // Atlassian may echo the callback URL in validation errors. Its query
+    // contains both the webhook token and the Preview protection bypass.
+    const safeErrors = errors.map((error) => error.replace(/https?:\/\/\S+/gi, "[callback URL]").replace(/(token|x-vercel-protection-bypass)\s*[=:]\s*\S+/gi, "$1=[redacted]"));
+    throw new Error(safeErrors.length ? `Jira webhook registration was rejected: ${safeErrors.join("; ").slice(0, 400)}` : "Jira did not register the webhook. Check the callback URL and OAuth scopes.");
+  }
   return { id: String(id) };
 }
 
